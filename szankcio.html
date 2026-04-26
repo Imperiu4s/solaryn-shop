@@ -1,0 +1,375 @@
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<div class="page-wrapper">
+    <nav class="side-navigation">
+        <div class="nav-brand">
+            <div class="brand-logo">S</div>
+            <span class="brand-name">SOLARYN<br><small>NETWORK</small></span>
+        </div>
+
+        <div class="nav-menu">
+            <p class="menu-label">Navigáció</p>
+            <ul>
+                <li><a href="http://bolt.solaryn.hu/" class="nav-link"><i class="fa-solid fa-house"></i> <span>Főoldal</span></a></li>
+                <li><a href="http://bolt.solaryn.hu/category/536188" class="nav-link"><i class="fa-solid fa-coins"></i> <span>SolarynCoin</span></a></li>
+                <li><a href="http://bolt.solaryn.hu/category/539475" class="nav-link active"><i class="fa-solid fa-shield"></i> <span>Kitiltásfeloldás</span></a></li>
+                <li><a href="http://bolt.solaryn.hu/checkout/basket" class="nav-link"><i class="fa-solid fa-cart-shopping"></i> <span>Kosár</span></a></li>
+            </ul>
+
+            <p class="menu-label">Közösség</p>
+            <ul>
+                <li><a href="http://dc.solaryn.hu" target="_blank" class="nav-link"><i class="fa-brands fa-discord"></i> <span>Discord</span></a></li>
+                <li><a href="http://bolt.solaryn.hu/legal/terms" class="nav-link"><i class="fa-solid fa-file-contract"></i> <span>Tájékoztatók</span></a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <div class="content-grid">
+            <div class="main-panel">
+                <div class="welcome-header">
+                    <h1><span class="highlight"><i class="fa-solid fa-microchip"></i> Szankció Feloldás</span></h1>
+                </div>
+
+                <div class="info-section">
+                    <p class="intro-text">Vásárolj Szankció Feloldást, hogy eltöröld a szerverről a
+                        rád kiszabott szankciót! A vásárlás után automatikusan jóváíródik a feloldás a játékban.</p>
+                </div>
+
+                <div class="package-selection">
+                    <p class="selection-title"><i class="fa-solid fa-layer-group"></i> Válassz az alábbi csomagok közül:</p>
+
+                    <div class="category-section">
+                        <h2 class="category-header">Némítás Feloldás</h2>
+                        <div class="cards-container">
+                            <div class="package-card">
+                                <div class="card-icon"><i class="fa-solid fa-microphone-slash"></i></div>
+                                <div class="card-name">Korlátlan</div>
+                                <div class="card-price">2.290 SolarynCoin</div>
+                                <a href="http://bolt.solaryn.hu/package/1530196" class="btn-buy">Vásárlás</a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="category-section" style="margin-top: 50px;">
+                        <h2 class="category-header">Kitiltás Feloldás</h2>
+                        <div class="cards-container">
+                            <div class="package-card">
+                                <div class="card-icon"><i class="fa-solid fa-ban"></i></div>
+                                <div class="card-name">Korlátlan</div>
+                                <div class="card-price">16.990 SolarynCoin</div>
+                                <a href="http://bolt.solaryn.hu/package/1531561" class="btn-buy">Vásárlás</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="side-panel-container">
+                <div class="discord-card">
+                    <div class="discord-header">
+                        <i class="fa-brands fa-discord"></i>
+                        <span>Support Center</span>
+                    </div>
+                    <div class="discord-content">
+                        <p>Kérdésed van a feloldásról?</p>
+                        <p class="small-text">Segítünk a Discord szerverünkön!</p>
+                        <a href="http://dc.solaryn.hu" target="_blank" class="btn-discord">Csatlakozás</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+    :root {
+        --main-orange: #f39c12;
+        --orange-glow: rgba(243, 156, 18, 0.4);
+        --sidebar-bg: #0f0f16;
+        --content-bg: #0a0a0f;
+        --card-bg: #161624;
+    }
+
+    body {
+        margin: 0;
+        background-color: var(--content-bg);
+        color: #cfd2d6;
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        line-height: 1.6;
+    }
+
+    header, footer, .navbar, .powered-by, .navbar-default, .header-banner {
+        display: none !important;
+    }
+
+    .page-wrapper {
+        display: flex;
+        min-height: 100vh;
+    }
+
+    .side-navigation {
+        width: 280px;
+        background: var(--sidebar-bg);
+        display: flex;
+        flex-direction: column;
+        border-right: 1px solid rgba(255, 255, 255, 0.05);
+        position: sticky;
+        top: 0;
+        height: 100vh;
+    }
+
+    .nav-brand {
+        padding: 40px 30px;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+
+    .brand-logo {
+        width: 40px;
+        height: 40px;
+        background: var(--main-orange);
+        color: #000;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        font-size: 22px;
+        box-shadow: 0 0 20px var(--orange-glow);
+    }
+
+    .brand-name {
+        font-weight: 800;
+        font-size: 18px;
+        letter-spacing: 1px;
+        line-height: 1;
+    }
+
+    .brand-name small {
+        font-size: 10px;
+        color: #666;
+        text-transform: uppercase;
+    }
+
+    .nav-menu {
+        flex: 1;
+        padding: 0 20px;
+    }
+
+    .menu-label {
+        font-size: 11px;
+        text-transform: uppercase;
+        color: #444;
+        font-weight: 700;
+        letter-spacing: 2px;
+        margin: 25px 0 10px 15px;
+    }
+
+    .nav-link {
+        display: flex;
+        align-items: center;
+        padding: 14px 18px;
+        color: #888;
+        text-decoration: none;
+        border-radius: 12px;
+        margin-bottom: 5px;
+        transition: 0.3s;
+        font-weight: 600;
+        font-size: 14px;
+    }
+
+    .nav-link i {
+        margin-right: 15px;
+        font-size: 18px;
+    }
+
+    .nav-link:hover {
+        background: rgba(255, 255, 255, 0.03);
+        color: #fff;
+    }
+
+    .nav-link.active {
+        background: linear-gradient(90deg, rgba(243, 156, 18, 0.15) 0%, rgba(243, 156, 18, 0) 100%);
+        color: var(--main-orange);
+        box-shadow: inset 4px 0 0 var(--main-orange);
+    }
+
+    .main-content {
+        flex: 1;
+        padding: 40px;
+    }
+
+    .content-grid {
+        display: grid;
+        grid-template-columns: 1fr 340px;
+        align-items: start;
+        gap: 0;
+    }
+
+    .main-panel {
+        background: var(--card-bg);
+        border-radius: 24px;
+        padding: 40px;
+        border: 1px solid rgba(255, 255, 255, 0.03);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    }
+
+    .highlight {
+        color: var(--main-orange);
+        font-weight: bold;
+    }
+
+    .intro-text {
+        color: #bbb;
+        font-size: 15px;
+        margin-bottom: 30px;
+    }
+
+    .selection-title {
+        font-weight: 700;
+        color: #fff;
+        margin-bottom: 20px;
+        font-size: 18px;
+    }
+
+    /* ÚJ KÁRTYA DESIGN KONSTRUKCIÓ */
+    .category-header {
+        font-size: 16px;
+        color: var(--main-orange);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .cards-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+    }
+
+    .package-card {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 16px;
+        padding: 30px 20px;
+        text-align: center;
+        transition: 0.3s ease;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .package-card:hover {
+        background: rgba(243, 156, 18, 0.05);
+        transform: translateY(-5px);
+        border-color: var(--main-orange);
+    }
+
+    .package-card.featured {
+        border: 1px solid var(--main-orange);
+        box-shadow: 0 0 15px rgba(243, 156, 18, 0.1);
+        position: relative;
+    }
+
+    .card-icon {
+        font-size: 32px;
+        color: var(--main-orange);
+        margin-bottom: 15px;
+    }
+
+    .card-name {
+        font-weight: 700;
+        font-size: 15px;
+        color: #fff;
+        margin-bottom: 10px;
+    }
+
+    .card-price {
+        font-size: 20px;
+        font-weight: 800;
+        color: #fff;
+        margin-bottom: 20px;
+    }
+
+    /* GOMBOK MARADTAK AZ EREDETIEK */
+    .btn-buy {
+        background: var(--main-orange) !important;
+        color: #000 !important;
+        border: none !important;
+        border-radius: 8px !important;
+        padding: 10px 20px !important;
+        font-weight: 800 !important;
+        text-transform: uppercase;
+        font-size: 11px;
+        transition: 0.3s;
+        text-decoration: none;
+        display: inline-block;
+        width: 80%;
+    }
+
+    .btn-buy:hover {
+        box-shadow: 0 0 15px var(--orange-glow);
+    }
+
+    /* SIDEBAR ÉS EGYÉB ELEMEK MARADTAK */
+    .side-panel-container {
+        padding-left: 30px;
+    }
+
+    .discord-card {
+        background: var(--card-bg);
+        border-radius: 20px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.03);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    }
+
+    .discord-header {
+        background: #5865F2;
+        padding: 15px 25px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: white;
+    }
+
+    .discord-content {
+        padding: 30px 25px;
+        text-align: center;
+    }
+
+    .btn-discord {
+        display: block;
+        background: #5865F2;
+        color: white;
+        padding: 12px;
+        border-radius: 12px;
+        text-decoration: none;
+        font-weight: 700;
+        margin-top: 20px;
+        transition: 0.3s;
+    }
+
+    @media (max-width: 1200px) {
+        .content-grid {
+            grid-template-columns: 1fr;
+        }
+        .side-panel-container {
+            padding: 30px 0 0 0;
+        }
+        .side-navigation {
+            width: 100%;
+            height: auto;
+            position: relative;
+        }
+    }
+</style>
