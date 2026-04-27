@@ -1,5 +1,16 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
+<div id="loader-wrapper">
+    <div class="loader-content">
+        <div class="loader-logo">S</div>
+        <div class="loader-text">SOLARYN<span>NETWORK</span></div>
+        <div class="loader-bar">
+            <div class="loader-progress"></div>
+        </div>
+        <div class="loader-status">Adatok betöltése...</div>
+    </div>
+</div>
+
 <div class="page-wrapper">
     <nav class="side-navigation">
         <div class="nav-brand">
@@ -110,6 +121,30 @@
         --card-bg: #161624;
     }
 
+
+    #loader-wrapper {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: #0a0a0f; display: flex; justify-content: center;
+        align-items: center; z-index: 10000;
+    }
+    .loader-content { text-align: center; }
+    .loader-logo {
+        width: 80px; height: 80px; background: var(--main-orange); color: #000;
+        border-radius: 20px; display: flex; align-items: center; justify-content: center;
+        font-size: 40px; font-weight: 900; margin: 0 auto 20px;
+        box-shadow: 0 0 30px var(--orange-glow);
+        animation: pulse-logo 2s infinite ease-in-out;
+    }
+    .loader-text { color: #fff; font-size: 24px; font-weight: 800; letter-spacing: 2px; }
+    .loader-text span { color: var(--main-orange); display: block; font-size: 12px; letter-spacing: 5px; }
+    .loader-bar { width: 200px; height: 4px; background: rgba(255, 255, 255, 0.05); border-radius: 10px; margin: 20px auto; overflow: hidden; }
+    .loader-progress { width: 0%; height: 100%; background: var(--main-orange); box-shadow: 0 0 10px var(--main-orange); animation: load-progress 3s forwards linear; }
+    .loader-status { color: #555; font-size: 11px; text-transform: uppercase; }
+    @keyframes pulse-logo { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.1); opacity: 0.8; } }
+    @keyframes load-progress { 0% { width: 0%; } 100% { width: 100%; } }
+    #loader-wrapper.fade-out { opacity: 0; visibility: hidden; transition: opacity 0.8s ease, visibility 0.8s; }
+
+
     body {
         margin: 0;
         background-color: var(--content-bg);
@@ -118,7 +153,6 @@
         line-height: 1.6;
     }
 
-    /* Gyári elemek törlése */
     header,
     footer,
     .navbar,
@@ -133,7 +167,6 @@
         min-height: 100vh;
     }
 
-    /* OLDALSÁV DESIGN */
     .side-navigation {
         width: 280px;
         background: var(--sidebar-bg);
@@ -222,7 +255,6 @@
         box-shadow: inset 4px 0 0 var(--main-orange);
     }
 
-    /* TARTALOM TERÜLET */
     .main-content {
         flex: 1;
         padding: 40px;
@@ -261,7 +293,6 @@
         font-size: 18px;
     }
 
-    /* TÁBLÁZAT JAVÍTÁSA */
     .table {
         width: 100% !important;
         border-collapse: separate !important;
@@ -304,7 +335,6 @@
         transform: translateY(-2px);
     }
 
-    /* GOMBOK */
     .btn-buy,
     .btn-primary,
     .btn-info {
@@ -324,7 +354,6 @@
         box-shadow: 0 0 15px var(--orange-glow);
     }
 
-    /* JOBB OLDALI SÁV */
     .side-panel-container {
         padding-left: 30px;
     }
@@ -402,3 +431,22 @@
         }
     }
 </style>
+
+<script>
+    window.addEventListener('DOMContentLoaded', () => {
+        document.body.style.overflow = 'hidden';
+        
+        setTimeout(() => {
+            const loader = document.getElementById('loader-wrapper');
+            const mainContent = document.getElementById('solaryn-main-site');
+
+            loader.classList.add('fade-out');
+
+            setTimeout(() => {
+                loader.style.display = 'none';
+                mainContent.style.display = 'flex';
+                document.body.style.overflow = 'auto';
+            }, 1);
+        }, 3000);
+    });
+</script>

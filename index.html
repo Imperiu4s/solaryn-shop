@@ -1,6 +1,17 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-<div class="page-wrapper">
+<div id="loader-wrapper">
+    <div class="loader-content">
+        <div class="loader-logo">S</div>
+        <div class="loader-text">SOLARYN<span>NETWORK</span></div>
+        <div class="loader-bar">
+            <div class="loader-progress"></div>
+        </div>
+        <div class="loader-status">Adatok betöltése...</div>
+    </div>
+</div>
+
+<div class="page-wrapper" id="solaryn-main-site" style="display: none;">
     <nav class="side-navigation">
         <div class="nav-brand">
             <div class="brand-logo">S</div>
@@ -90,6 +101,30 @@
         --card-bg: #161624;
     }
 
+
+    #loader-wrapper {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: #0a0a0f; display: flex; justify-content: center;
+        align-items: center; z-index: 10000;
+    }
+    .loader-content { text-align: center; }
+    .loader-logo {
+        width: 80px; height: 80px; background: var(--main-orange); color: #000;
+        border-radius: 20px; display: flex; align-items: center; justify-content: center;
+        font-size: 40px; font-weight: 900; margin: 0 auto 20px;
+        box-shadow: 0 0 30px var(--orange-glow);
+        animation: pulse-logo 2s infinite ease-in-out;
+    }
+    .loader-text { color: #fff; font-size: 24px; font-weight: 800; letter-spacing: 2px; }
+    .loader-text span { color: var(--main-orange); display: block; font-size: 12px; letter-spacing: 5px; }
+    .loader-bar { width: 200px; height: 4px; background: rgba(255, 255, 255, 0.05); border-radius: 10px; margin: 20px auto; overflow: hidden; }
+    .loader-progress { width: 0%; height: 100%; background: var(--main-orange); box-shadow: 0 0 10px var(--main-orange); animation: load-progress 3s forwards linear; }
+    .loader-status { color: #555; font-size: 11px; text-transform: uppercase; }
+    @keyframes pulse-logo { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.1); opacity: 0.8; } }
+    @keyframes load-progress { 0% { width: 0%; } 100% { width: 100%; } }
+    #loader-wrapper.fade-out { opacity: 0; visibility: hidden; transition: opacity 0.8s ease, visibility 0.8s; }
+
+
     body {
         margin: 0;
         background-color: var(--content-bg);
@@ -97,7 +132,6 @@
         font-family: 'Plus Jakarta Sans', sans-serif;
         line-height: 1.6;
     }
-
     .container, .row, .panel, .panel-body {
         width: 100% !important;
         max-width: 100% !important;
@@ -106,24 +140,14 @@
         background: transparent !important;
         border: none !important;
     }
-
-    /* Gyári elemek elrejtése */
     header, .header, footer, .navbar, .powered-by { display: none !important; }
-
     .page-wrapper { display: flex; min-height: 100vh; }
-
-    /* BAL OLDALSÁV */
     .side-navigation {
-        width: 280px;
-        background: var(--sidebar-bg);
-        display: flex;
-        flex-direction: column;
+        width: 280px; background: var(--sidebar-bg);
+        display: flex; flex-direction: column;
         border-right: 1px solid rgba(255,255,255,0.05);
-        position: sticky;
-        top: 0;
-        height: 100vh;
+        position: sticky; top: 0; height: 100vh;
     }
-
     .nav-brand { padding: 40px 30px; display: flex; align-items: center; gap: 15px; }
     .brand-logo {
         width: 40px; height: 40px; background: var(--main-orange); color: #000;
@@ -132,7 +156,6 @@
     }
     .brand-name { font-weight: 800; font-size: 18px; letter-spacing: 1px; line-height: 1; }
     .brand-name small { font-size: 10px; color: #666; text-transform: uppercase; }
-
     .nav-menu { flex: 1; padding: 0 20px; }
     .menu-label { font-size: 11px; text-transform: uppercase; color: #444; font-weight: 700; letter-spacing: 2px; margin: 25px 0 10px 15px; }
     .nav-link {
@@ -146,48 +169,55 @@
         background: linear-gradient(90deg, rgba(243, 156, 18, 0.15) 0%, rgba(243, 156, 18, 0) 100%);
         color: var(--main-orange); box-shadow: inset 4px 0 0 var(--main-orange);
     }
-
-    /* TARTALOM */
     .main-content { flex: 1; padding: 40px; }
-
     .content-grid { display: grid; grid-template-columns: 1fr 340px; align-items: start; gap: 0; }
-    
     .main-panel {
         background: var(--card-bg); border-radius: 24px; padding: 40px;
         border: 1px solid rgba(255,255,255,0.03);
         box-shadow: 0 10px 30px rgba(0,0,0,0.3);
     }
-
     .highlight { color: var(--main-orange); font-weight: bold; }
     .welcome-header h2 { margin-top: 0; color: #fff; font-size: 28px; }
     .intro-text { color: #bbb; font-size: 15px; margin-bottom: 20px; }
     .original-list { padding-left: 20px; margin: 0; line-height: 2; }
     .original-list li { margin-bottom: 10px; }
-
     .alert-box {
         background: rgba(243, 156, 18, 0.05); border-left: 4px solid var(--main-orange);
         padding: 25px; border-radius: 0 15px 15px 0; margin: 30px 0;
     }
     .alert-box h4 { margin-top: 0; color: var(--main-orange); font-size: 18px; margin-bottom: 15px; }
-
     .side-panel-container { padding-left: 30px; }
     .discord-card { background: var(--card-bg); border-radius: 20px; overflow: hidden; border: 1px solid rgba(255,255,255,0.03); box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
     .discord-header { background: #5865F2; padding: 15px 25px; font-weight: 700; display: flex; align-items: center; gap: 10px; color: white; }
     .discord-content { padding: 30px 25px; text-align: center; }
-    .small-text { font-size: 13px; color: #777; margin-top: 10px; }
     .btn-discord {
         display: block; background: #5865F2; color: white; padding: 12px;
         border-radius: 12px; text-decoration: none; font-weight: 700; margin-top: 20px; transition: 0.3s;
     }
     .btn-discord:hover { background: #4752c4; transform: translateY(-2px); }
-
-    .nav-footer { padding: 30px; border-top: 1px solid rgba(255,255,255,0.05); margin-top: auto; }
-    .user-status { display: flex; align-items: center; gap: 10px; font-size: 12px; color: #666; }
-    .status-dot { width: 8px; height: 8px; background: #2ecc71; border-radius: 50%; box-shadow: 0 0 10px #2ecc71; }
-
     @media (max-width: 1200px) {
         .content-grid { grid-template-columns: 1fr; }
         .side-panel-container { padding: 30px 0 0 0; }
         .side-navigation { width: 100%; height: auto; position: relative; }
+        .page-wrapper { flex-direction: column; }
     }
 </style>
+
+<script>
+    window.addEventListener('DOMContentLoaded', () => {
+        document.body.style.overflow = 'hidden';
+        
+        setTimeout(() => {
+            const loader = document.getElementById('loader-wrapper');
+            const mainContent = document.getElementById('solaryn-main-site');
+
+            loader.classList.add('fade-out');
+
+            setTimeout(() => {
+                loader.style.display = 'none';
+                mainContent.style.display = 'flex';
+                document.body.style.overflow = 'auto';
+            }, 1);
+        }, 3000);
+    });
+</script>
