@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SolarCenter</title>
+  <link rel="icon" href="assets/solaryn-icon.png" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Hulló parázs-szemcse animáció háttere - ugyanaz, mint a SolarLauncherben. -->
+  <canvas id="particleCanvas" class="particle-canvas"></canvas>
+
+  <!-- ── BEJELENTKEZŐ / REGISZTRÁCIÓS KÉPERNYŐ ── -->
+  <section id="authScreen" class="auth-screen">
+    <div class="auth-split">
+      <div class="auth-form-side">
+        <div class="auth-brand">
+          <img class="brand-logo-img" src="assets/solaryn-icon.png" alt="Solaryn" />
+          <div class="auth-brand-name">SOLARCENTER<small>Solaryn Network</small></div>
+        </div>
+
+        <div class="auth-tabs">
+          <button class="auth-tab active" data-tab="login">Bejelentkezés</button>
+          <button class="auth-tab" data-tab="register">Regisztráció</button>
+        </div>
+
+        <!-- Bejelentkezés -->
+        <div class="auth-form" id="loginForm">
+          <label>Felhasználónév</label>
+          <input id="authUser" type="text" autocomplete="off" placeholder="Játékosneved" />
+          <label>Jelszó</label>
+          <input id="authPass" type="password" autocomplete="off" placeholder="••••••••" />
+          <div id="authError" class="auth-error"></div>
+          <button id="authSubmit" class="btn-glow">Bejelentkezés</button>
+        </div>
+
+        <!-- Regisztráció -->
+        <div class="auth-form hidden" id="registerForm">
+          <label>Játékos név *</label>
+          <input id="regUser" type="text" autocomplete="off" placeholder="Játékos név" />
+
+          <div class="form-row-2">
+            <div>
+              <label>Email cím *</label>
+              <input id="regEmail" type="email" autocomplete="off" placeholder="Valós email cím" />
+            </div>
+            <div>
+              <label>Email cím újra *</label>
+              <input id="regEmail2" type="email" autocomplete="off" placeholder="Valós email cím újra" />
+            </div>
+          </div>
+
+          <label>Születési dátum *</label>
+          <div class="form-row-3">
+            <select id="regYear"><option value="">- év -</option></select>
+            <select id="regMonth"><option value="">- hónap -</option></select>
+            <select id="regDay"><option value="">- nap -</option></select>
+          </div>
+
+          <div class="form-row-2">
+            <div>
+              <label>Jelszó *</label>
+              <input id="regPass" type="password" autocomplete="off" placeholder="Jelszó" />
+            </div>
+            <div>
+              <label>Jelszó újra *</label>
+              <input id="regPass2" type="password" autocomplete="off" placeholder="Jelszó újra" />
+            </div>
+          </div>
+
+          <label>Support / Creator kód</label>
+          <input id="regCreatorCode" type="text" autocomplete="off" placeholder="Nem kötelező" />
+
+          <div class="form-checks">
+            <label class="check-row">
+              <input type="checkbox" id="regTerms" />
+              <span>Elfogadom az <span class="link-inline" id="linkTerms">ÁSZF</span>-et és az Adatvédelmi nyilatkozatot.</span>
+            </label>
+            <label class="check-row">
+              <input type="checkbox" id="regMarketing" />
+              <span>Hozzájárulok a marketing célú
+                <select id="regMarketingChannel" class="inline-select">
+                  <option value="email_sms">Email és SMS</option>
+                  <option value="email">Csak Email</option>
+                  <option value="sms">Csak SMS</option>
+                </select>
+                megkeresésekhez.
+              </span>
+            </label>
+            <label class="check-row">
+              <input type="checkbox" id="regAge" />
+              <span>Megerősítem, hogy betöltöttem a 14. életévemet, vagy szülőm/törvényes képviselőm hozzájárult.</span>
+            </label>
+          </div>
+
+          <div id="registerError" class="auth-error"></div>
+          <button id="registerSubmit" class="btn-glow btn-glow-orange">Regisztráció &#8594;</button>
+          <p class="auth-switch-hint">Már van fiókod? <span class="link-inline" id="switchToLogin">Jelentkezz be!</span></p>
+        </div>
+      </div>
+
+      <div class="auth-info-side">
+        <div class="auth-info-title">Minden egy helyen.</div>
+
+        <div class="auth-feature">
+          <div class="auth-feature-icon">
+            <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-4 0-8 2-8 5v1h16v-1c0-3-4-5-8-5z"/></svg>
+          </div>
+          <div>
+            <div class="auth-feature-title">Fiókod és a skined</div>
+            <div class="auth-feature-desc">Tölts fel egyedi skint, ami azonnal megjelenik a szerveren és a launcherben is - mindkettő ugyanazt a fiókot használja.</div>
+          </div>
+        </div>
+
+        <div class="auth-feature">
+          <div class="auth-feature-icon">
+            <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 2l8 3.5v6c0 5-3.4 8.6-8 10.5-4.6-1.9-8-5.5-8-10.5v-6z"/></svg>
+          </div>
+          <div>
+            <div class="auth-feature-title">Kitiltáscsökkentés</div>
+            <div class="auth-feature-desc">Ha szankciót kaptál, itt tudod feloldani vagy csökkenteni - gyors, automatikus jóváírással.</div>
+          </div>
+        </div>
+
+        <div class="auth-feature">
+          <div class="auth-feature-icon">
+            <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 21s-6.7-4.3-9.3-8.8C.6 8.7 2 4.9 5.6 4.1c2-.5 3.9.3 5 1.9C11.7 4.4 13.6 3.6 15.6 4.1c3.6.8 5 4.6 2.9 8.1C18.7 16.7 12 21 12 21z"/></svg>
+          </div>
+          <div>
+            <div class="auth-feature-title">Támogasd a szervert</div>
+            <div class="auth-feature-desc">SolarynCoin vásárlásával közvetlenül a szerver fejlesztését és a személyzet munkáját támogatod.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── APP HÉJ (bejelentkezés után) ── -->
+  <main id="appScreen" class="app-shell hidden">
+    <nav class="app-sidebar">
+      <div class="app-brand">
+        <img class="brand-logo-img" src="assets/solaryn-icon.png" alt="Solaryn" />
+        <div class="auth-brand-name">SOLARCENTER<small>Solaryn Network</small></div>
+      </div>
+
+      <div class="app-nav">
+        <button class="app-nav-item active" data-view="home">
+          <svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>
+          <span>Főoldal</span>
+        </button>
+        <button class="app-nav-item" data-view="coin">
+          <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 15.9v1.1h-2v-1.1a3.6 3.6 0 0 1-2.8-2.4l1.8-.7a1.8 1.8 0 0 0 1.8 1.3c.8 0 1.4-.4 1.4-1s-.5-.9-1.7-1.2c-1.8-.5-3-1.2-3-2.9a2.8 2.8 0 0 1 2.5-2.6V7.3h2v1.1a3.2 3.2 0 0 1 2.3 2l-1.8.7a1.5 1.5 0 0 0-1.5-1.1c-.7 0-1.2.3-1.2.9s.6.8 1.8 1.2c1.9.5 2.9 1.3 2.9 2.9a2.9 2.9 0 0 1-2.5 2.9z"/></svg>
+          <span>SolarynCoin</span>
+        </button>
+        <button class="app-nav-item" data-view="redeem">
+          <svg viewBox="0 0 24 24"><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6m9-9v9m0-9L8 7m4-4l4 4M4 12h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Kódbeváltás</span>
+        </button>
+        <button class="app-nav-item" data-view="skin">
+          <svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-4 0-8 2-8 5v1h16v-1c0-3-4-5-8-5z"/></svg>
+          <span>Skin</span>
+        </button>
+        <button class="app-nav-item" data-view="sanction">
+          <svg viewBox="0 0 24 24"><path d="M12 2l8 3.5v6c0 5-3.4 8.6-8 10.5-4.6-1.9-8-5.5-8-10.5v-6z"/></svg>
+          <span>Kitiltáscsökkentés</span>
+        </button>
+        <button class="app-nav-item" data-view="players">
+          <svg viewBox="0 0 24 24"><path d="M11 2a5 5 0 1 0 5 5 5 5 0 0 0-5-5zm-8.5 20a8.5 8.5 0 0 1 17 0zM19 8a3.5 3.5 0 1 0 0 7 .5.5 0 0 0 0-1 2.5 2.5 0 1 1 0-5 .5.5 0 0 0 0-1z"/></svg>
+          <span>Játékosok</span>
+        </button>
+      </div>
+
+      <div class="app-nav-spacer"></div>
+
+      <div class="app-nav-bottom">
+        <a class="app-nav-item" href="https://dc.solaryn.hu" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24"><path d="M20 5.5A17 17 0 0 0 15.7 4l-.3.6a13 13 0 0 1 3.6 1.3A15 15 0 0 0 12 4a15 15 0 0 0-7 1.9A13 13 0 0 1 8.6 4.6L8.3 4A17 17 0 0 0 4 5.5C1.8 9 1.2 12.4 1.4 15.8a17 17 0 0 0 4.9 2.4l.8-1.3a10 10 0 0 1-1.6-.7l.4-.3a12 12 0 0 0 10.2 0l.4.3a10 10 0 0 1-1.6.7l.8 1.3a17 17 0 0 0 4.9-2.4c.3-4.2-.6-7.6-2.6-10.3zM8.9 14.3c-.8 0-1.5-.8-1.5-1.7s.6-1.7 1.5-1.7 1.5.8 1.5 1.7-.6 1.7-1.5 1.7zm6.2 0c-.8 0-1.5-.8-1.5-1.7s.6-1.7 1.5-1.7 1.5.8 1.5 1.7-.7 1.7-1.5 1.7z"/></svg>
+          <span>Discord</span>
+        </a>
+      </div>
+    </nav>
+
+    <div class="app-main">
+      <div class="app-topbar">
+        <div class="topbar-user" id="topbarUserBtn">
+          <canvas class="topbar-avatar" id="topbarAvatar" width="32" height="32"></canvas>
+          <span id="topbarUsername"></span>
+          <svg class="topbar-caret" viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M7 10l5 5 5-5z"/></svg>
+
+          <div class="topbar-dropdown hidden" id="topbarDropdown">
+            <button id="btnLogout">
+              <svg viewBox="0 0 24 24" width="15" height="15"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M16 17l5-5-5-5M21 12H9m3 9H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7"/></svg>
+              <span>Kijelentkezés</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="app-content">
+
+        <!-- FŐOLDAL -->
+        <section class="view active" data-view="home">
+          <h1 class="page-title">Üdvözlünk, <span id="homeUsername"></span>!</h1>
+          <p class="page-note">Innen érheted el a fiókodhoz kapcsolódó összes SolarynNetwork-szolgáltatást.</p>
+
+          <div id="statBadgeGrid" class="stat-badge-grid"></div>
+
+          <div class="content-grid">
+            <div>
+              <div class="card">
+                <div class="card-title">Profilod</div>
+                <div class="profile-card">
+                  <div class="profile-skin-col">
+                    <canvas id="homeSkinCanvas" width="170" height="220"></canvas>
+                  </div>
+                  <div class="profile-info">
+                    <div class="profile-name" id="profileName"></div>
+                    <p class="profile-empty-skin" id="profileSkinNote"></p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card discord-card">
+              <div class="discord-card-header">
+                <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M20 5.5A17 17 0 0 0 15.7 4l-.3.6a13 13 0 0 1 3.6 1.3A15 15 0 0 0 12 4a15 15 0 0 0-7 1.9A13 13 0 0 1 8.6 4.6L8.3 4A17 17 0 0 0 4 5.5C1.8 9 1.2 12.4 1.4 15.8a17 17 0 0 0 4.9 2.4l.8-1.3a10 10 0 0 1-1.6-.7l.4-.3a12 12 0 0 0 10.2 0l.4.3a10 10 0 0 1-1.6.7l.8 1.3a17 17 0 0 0 4.9-2.4c.3-4.2-.6-7.6-2.6-10.3zM8.9 14.3c-.8 0-1.5-.8-1.5-1.7s.6-1.7 1.5-1.7 1.5.8 1.5 1.7-.6 1.7-1.5 1.7zm6.2 0c-.8 0-1.5-.8-1.5-1.7s.6-1.7 1.5-1.7 1.5.8 1.5 1.7-.7 1.7-1.5 1.7z"/></svg>
+                <span>Discord közösség</span>
+              </div>
+              <div class="discord-card-body">
+                <iframe class="discord-widget-frame" src="https://discord.com/widget?id=1458836378493391046&theme=dark" width="100%" height="420" allowtransparency="true" frameborder="0" sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"></iframe>
+                <a href="https://dc.solaryn.hu" target="_blank" rel="noopener" class="btn-discord">Csatlakozás</a>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- SOLARYNCOIN -->
+        <section class="view" data-view="coin">
+          <h1 class="page-title">SolarynCoin</h1>
+          <p class="page-note">Vásárolj SolarynCoin csomagokat, hogy hozzáférj a szerver exkluzív tartalmaihoz - a vásárlás után a coinok automatikusan jóváíródnak a játékban.</p>
+
+          <div class="content-grid">
+            <div>
+              <div class="pkg-grid" id="coinPkgGrid"></div>
+
+              <div class="info-box info-box-warn">
+                <div class="info-box-title">
+                  <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M12 2L1 21h22zm0 5l7.5 13h-15zM11 10h2v5h-2zm0 6h2v2h-2z"/></svg>
+                  Figyelem, mielőtt vásárolsz
+                </div>
+                <ul class="info-list">
+                  <li>Ellenőrizd le, hogy helyesen írtad-e be a játékosnevedet.</li>
+                  <li>Legyen elegendő hely az eszköztáradban a tárgyaknak.</li>
+                  <li>A vásárlások feldolgozása maximum 30 percet vesz igénybe.</li>
+                  <li>Vásárláskor és a jóváírás alatt legyél elérhető a szerveren.</li>
+                </ul>
+              </div>
+
+              <div class="info-box">
+                <div class="info-box-title">
+                  <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 4l-8 5-8-5V6l8 5 8-5z"/></svg>
+                  Fizetési módok
+                </div>
+                <ul class="info-list">
+                  <li>A webáruházunk a <b>CraftingStore</b> szolgáltatását használja.</li>
+                  <li>Bankkártyás (Stripe) és PayPal fizetés közül is választhatsz.</li>
+                  <li>Minden fizetési adat titkosítva és védve van.</li>
+                  <li>PayPal-lal csak manuálisan tudsz fizetni - írj Discordon egy ticketet!</li>
+                </ul>
+              </div>
+
+              <div class="info-box">
+                <div class="info-box-title">
+                  <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 15h-2v-6h2zm0-8h-2V7h2z"/></svg>
+                  Nem kaptam meg amit vásároltam
+                </div>
+                <p class="info-text">A webáruházunknak 30 percen belül automatikusan jóvá kell írnia a megvásárolt tételeidet - ehhez elérhetőnek kell lenned a szerveren. Ha 2 órán belül sem érkezik meg, keresd a csapatot a Discordon.</p>
+              </div>
+            </div>
+
+            <div class="side-rail" data-side-rail="coin"></div>
+          </div>
+        </section>
+
+        <!-- KÓDBEVÁLTÁS -->
+        <section class="view" data-view="redeem">
+          <h1 class="page-title">Kódbeváltás</h1>
+          <p class="page-note">Írd be a hívásban vagy ajándékba kapott kódodat az alábbi mezőbe.</p>
+
+          <div class="content-grid">
+            <div>
+              <div class="card redeem-card">
+                <div class="redeem-icon">
+                  <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M20 12v7a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-7m16-4H4a1 1 0 0 0-1 1v3h18v-3a1 1 0 0 0-1-1zm-9 0V6a2 2 0 1 0-2 2m4-2v2m0-2a2 2 0 1 1 2 2"/></svg>
+                </div>
+                <div class="card-title" style="justify-content:center;">Ajándékkód</div>
+                <input type="text" id="redeemInput" class="redeem-input" placeholder="XXXX-XXXX-XXXX" />
+                <button class="btn-glow" id="redeemSubmit">Beváltás</button>
+                <p class="redeem-result" id="redeemResult"></p>
+              </div>
+
+              <div class="how-it-works">
+                <div class="how-step">
+                  <div class="how-step-num">1</div>
+                  <div class="how-step-title">Szerezd meg a kódot</div>
+                  <div class="how-step-desc">Discord eseményből, hívásból, vagy ajándékba kaptad valakitől.</div>
+                </div>
+                <div class="how-step">
+                  <div class="how-step-num">2</div>
+                  <div class="how-step-title">Add meg itt</div>
+                  <div class="how-step-desc">Írd be pontosan, ahogy kaptad, majd kattints a Beváltásra.</div>
+                </div>
+                <div class="how-step">
+                  <div class="how-step-num">3</div>
+                  <div class="how-step-title">Vedd át a szerveren</div>
+                  <div class="how-step-desc">A jutalom automatikusan jóváíródik a fiókodon, amint csatlakozol.</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="side-rail" data-side-rail="redeem"></div>
+          </div>
+        </section>
+
+        <!-- SKIN -->
+        <section class="view" data-view="skin">
+          <h1 class="page-title">Skin</h1>
+          <p class="page-note">Egyedi skin feltöltés (.png, 64x64 vagy 64x32, klasszikus vagy slim modell) - ugyanaz a skin jelenik meg a szerveren és a SolarLauncherben is.</p>
+
+          <div class="content-grid">
+            <div class="card">
+              <div class="skin-layout">
+                <div class="skin-upload-col">
+                  <input type="file" id="skinFileInput" accept=".png,image/png" hidden />
+                  <div class="skin-drop" id="skinDrop">Húzd ide a .png skinedet, vagy kattints a tallózáshoz</div>
+                  <div class="skin-model-toggle">
+                    <button class="pill active" data-model="classic">Klasszikus</button>
+                    <button class="pill" data-model="slim">Vékony (slim)</button>
+                  </div>
+                  <p class="skin-status" id="skinStatus"></p>
+                </div>
+                <div class="skin-preview-col">
+                  <canvas id="skinPreview3d" width="220" height="280"></canvas>
+                  <p class="skin-preview-hint">Húzással forgatható</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="side-rail" data-side-rail="skin"></div>
+          </div>
+        </section>
+
+        <!-- KITILTÁSCSÖKKENTÉS -->
+        <section class="view" data-view="sanction">
+          <h1 class="page-title">Kitiltáscsökkentés</h1>
+          <p class="page-note">Vásárolj szankció feloldást, hogy eltöröld a szerverről a rád kiszabott némítást vagy kitiltást - a vásárlás után automatikusan jóváíródik a feloldás a játékban.</p>
+
+          <div class="content-grid">
+            <div id="sanctionPkgWrap"></div>
+            <div class="side-rail" data-side-rail="sanction"></div>
+          </div>
+        </section>
+
+        <!-- JÁTÉKOSOK -->
+        <section class="view" data-view="players">
+          <div class="card player-search-panel">
+            <h1 class="player-search-title">Játékosok <span class="text-accent">keresése</span></h1>
+            <label class="player-search-label">Játékosnév</label>
+            <div class="player-search-row">
+              <div class="player-search-field">
+                <input type="text" id="playerSearchInput" placeholder="Játékosnév" />
+                <svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M21 21l-4.3-4.3M18 11a7 7 0 1 1-14 0 7 7 0 0 1 14 0z"/></svg>
+              </div>
+              <button class="btn-search" id="playerSearchBtn">
+                <svg viewBox="0 0 24 24" width="15" height="15"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M21 21l-4.3-4.3M18 11a7 7 0 1 1-14 0 7 7 0 0 1 14 0z"/></svg>
+                Keresés
+              </button>
+            </div>
+          </div>
+
+          <h2 id="playerResultHeading" class="player-result-heading hidden">Talált <span class="text-accent">játékosok</span></h2>
+          <div id="playerResult" class="player-result-grid"></div>
+        </section>
+
+        <!-- JÁTÉKOS PROFIL (egy találatra kattintva) -->
+        <section class="view" data-view="playerProfile">
+          <button class="btn-back" id="btnBackToPlayers">
+            <svg viewBox="0 0 24 24" width="14" height="14"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M15 18l-6-6 6-6"/></svg>
+            Vissza a kereséshez
+          </button>
+          <h1 class="page-title" id="playerProfileTitle"></h1>
+
+          <div id="playerProfileStats" class="stat-badge-grid"></div>
+
+          <div class="card">
+            <div class="card-title">Profilja</div>
+            <div class="profile-card">
+              <div class="profile-skin-col">
+                <canvas id="playerProfileSkinCanvas" width="170" height="220"></canvas>
+              </div>
+              <div class="profile-info">
+                <div class="profile-name" id="playerProfileName"></div>
+                <p class="profile-empty-skin" id="playerProfileSkinNote"></p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- JOGI DOKUMENTUMOK (lábléc linkjeiről nyílik) -->
+        <section class="view" data-view="legal">
+          <button class="btn-back" id="btnBackFromLegal">
+            <svg viewBox="0 0 24 24" width="14" height="14"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M15 18l-6-6 6-6"/></svg>
+            Vissza
+          </button>
+          <h1 class="page-title">Jogi <span class="text-accent">dokumentumok</span></h1>
+          <p class="page-note">Az alábbiakban találod a SolarynNetwork hivatalos dokumentumait.</p>
+
+          <div class="legal-tabs">
+            <button class="legal-tab active" data-legal="aszf">ÁSZF</button>
+            <button class="legal-tab" data-legal="adatkezeles">Adatkezelés</button>
+            <button class="legal-tab" data-legal="impresszum">Impresszum</button>
+          </div>
+
+          <div class="card legal-card">
+            <div class="legal-panel active" data-legal-panel="aszf">
+              <h3>Általános Szerződési Feltételek</h3>
+
+              <h4>1. Szolgáltató adatai</h4>
+              <p><b>Szolgáltató neve:</b> SolarynNetwork<br><b>Székhely:</b> Budapest, Magyarország<br><b>Weboldal:</b> www.solaryn.hu<br><b>Kapcsolattartó:</b> Nagy Szabolcs<br><b>Jogi státusz:</b> magánszemély által üzemeltetett online szolgáltatás</p>
+
+              <h4>2. A szolgáltatás leírása</h4>
+              <p>A SolarynNetwork egy online Minecraft játékszerver, amely a következő szolgáltatásokat nyújtja:</p>
+              <ul>
+                <li>Minecraft szerver elérés biztosítása</li>
+                <li>Játékbeli rangok, csomagok, kozmetikai elemek és digitális termékek értékesítése</li>
+                <li>Események, játékmódok és egyedi rendszerek biztosítása</li>
+                <li>Közösségi platformok működtetése (Discord, weboldal)</li>
+              </ul>
+              <p>A szolgáltatás igénybevételéhez a játékosnak Minecraft fiókkal kell rendelkeznie.</p>
+
+              <h4>3. Fizetési feltételek</h4>
+              <ul>
+                <li>A vásárlás a weboldalon keresztül történik.</li>
+                <li>Elfogadott fizetési módok: Stripe (bankkártyás fizetés), PayPal.</li>
+                <li>A megvásárolt termékek digitális terméknek minősülnek, amelyek teljesítése automatikusan történik.</li>
+                <li>A digitális termékek nem visszatéríthetők, kivéve ha a szolgáltató hibájából nem kerülnek teljesítésre.</li>
+              </ul>
+
+              <h4>4. Felhasználói fiók és szabályok</h4>
+              <ul>
+                <li>A játékos a Minecraft szerveren regisztrál fiókot.</li>
+                <li>A felhasználó felelős a fiókja biztonságáért.</li>
+                <li>Tiltott tevékenységek többek között: csalás, exploitok használata; visszaélés fizetési rendszerekkel (pl. chargeback); más játékosok zaklatása; a szerver működésének szándékos megzavarása.</li>
+                <li>Szabálysértés esetén a szolgáltató jogosult a felhasználó fiókját korlátozni vagy törölni, a játékbeli rangokat/előnyöket visszavonni, vagy a szolgáltatásból kizárni.</li>
+              </ul>
+              <p>A tiltás vagy rangvesztés nem jogosít visszatérítésre, kivéve ha a szolgáltató hibájából történt.</p>
+
+              <h4>5. Adatkezelés</h4>
+              <p>A SolarynNetwork a működéséhez szükséges minimális adatokat kezeli: Minecraft felhasználónév, IP cím (technikai és biztonsági okokból), vásárlási adatok (a fizetési szolgáltató kezeli; bankkártyaadatokat a SolarynNetwork nem tárol). Az adatkezelés céljai: a szolgáltatás technikai működtetése, csalások és visszaélések megelőzése, vásárlások teljesítése, szerverbiztonság fenntartása.</p>
+
+              <h4>6. Felelősségkorlátozás</h4>
+              <p>A szolgáltatás "jelen állapotában" érhető el, a szolgáltató nem garantál folyamatos, hibamentes működést, és nem vállal felelősséget szerverhibákból eredő adatvesztésért vagy játékbeli veszteségekért. Kártérítés kizárólag akkor jár, ha a hiba bizonyíthatóan a szolgáltató hibájából következett be, és a felhasználó igazolni tudja a veszteséget.</p>
+
+              <h4>7. Digitális termékek teljesítése</h4>
+              <p>A vásárló a fizetés után 2-5 percen belül automatikusan megkapja a digitális terméket. Ha a teljesítés technikai hiba miatt nem történik meg, a felhasználó köteles jelezni a szolgáltatónak, aki a hibát kijavítja vagy a terméket manuálisan biztosítja.</p>
+
+              <h4>8. Az ÁSZF hatálya és módosítása</h4>
+              <p>Jelen ÁSZF 2026.04.04. 18:00 időponttól érvényes. A szolgáltató jogosult az ÁSZF-et bármikor módosítani - a felhasználók a módosításokról a Discord szerveren értesülhetnek.</p>
+
+              <h4>9. Jogviták rendezése</h4>
+              <p>A szolgáltatásra a magyar jog az irányadó. Jogvita esetén a felek elsősorban békés úton próbálják rendezni a problémát, ha ez nem sikerül, a jogvita magyar bíróság előtt folytatható.</p>
+
+              <h4>10. Kapcsolat</h4>
+              <p>Bármilyen kérdés, probléma vagy hibabejelentés esetén a felhasználók a Discord szerveren vagy a weboldalon keresztül vehetik fel a kapcsolatot a szolgáltatóval.</p>
+            </div>
+
+            <div class="legal-panel" data-legal-panel="adatkezeles">
+              <h3>Adatkezelési Tájékoztató</h3>
+
+              <h4>1. Bevezetés</h4>
+              <p>Jelen Adatkezelési Tájékoztató célja, hogy a SolarynNetwork szolgáltatásait igénybe vevő felhasználókat tájékoztassa arról, milyen adatokat kezelünk, milyen célból, milyen jogalapon, mennyi ideig, és milyen jogok illetik meg a felhasználót. A SolarynNetwork a működéséhez szükséges minimális adatot kezeli.</p>
+
+              <h4>2. Adatkezelő adatai</h4>
+              <p><b>Adatkezelő neve:</b> SolarynNetwork<br><b>Székhely:</b> Budapest, Magyarország<br><b>Weboldal:</b> www.solaryn.hu<br><b>Kapcsolattartó:</b> Nagy Szabolcs</p>
+
+              <h4>3. Kezelt adatok köre</h4>
+              <p><b>Technikai adatok:</b> Minecraft felhasználónév, IP cím, szervernaplók.<br><b>Vásárlási adatok:</b> vásárlás időpontja, vásárolt termék típusa, fizetési azonosító (Stripe/PayPal által biztosított).</p>
+              <p><i>A SolarynNetwork nem tárol bankkártyaadatokat, azokat kizárólag a fizetési szolgáltatók (Stripe, PayPal) kezelik.</i></p>
+
+              <h4>4. Az adatkezelés céljai</h4>
+              <ul>
+                <li>a szolgáltatás technikai működtetése</li>
+                <li>a felhasználói fiókok azonosítása</li>
+                <li>a digitális termékek teljesítése</li>
+                <li>csalások, visszaélések és szerverbiztonsági incidensek megelőzése</li>
+                <li>hibák kivizsgálása és javítása, fizetések ellenőrzése és adminisztrációja</li>
+              </ul>
+              <p>A SolarynNetwork nem használja fel az adatokat marketing célokra, és nem adja át harmadik félnek kereskedelmi célból.</p>
+
+              <h4>5. Az adatkezelés jogalapja</h4>
+              <p><b>Szerződés teljesítése</b> (GDPR 6. cikk (1) b)): a felhasználó és a szolgáltató közötti szolgáltatás biztosítása.<br><b>Jogszerű érdek</b> (GDPR 6. cikk (1) f)): a szerver biztonságának fenntartása, visszaélések megelőzése.</p>
+
+              <h4>6. Adatmegőrzési idő</h4>
+              <p>Technikai adatok: legfeljebb 90 nap. Vásárlási adatok: legfeljebb 1 év. IP címek: legfeljebb 30 nap. Jogvita vagy visszaélés gyanúja esetén az adatok megőrzési ideje meghosszabbodhat.</p>
+
+              <h4>7. Adatok továbbítása</h4>
+              <p>Fizetési szolgáltatók (Stripe, PayPal) - kizárólag a fizetés lebonyolításához szükséges adatokat kezelik. Hatóságok - kizárólag jogszabályi kötelezettség esetén. A SolarynNetwork nem értékesít, nem ad bérbe és nem oszt meg adatot kereskedelmi célból.</p>
+
+              <h4>8. Adatbiztonság</h4>
+              <p>Szerverbiztonsági rendszerek, naplózás és visszaélésfigyelés, korlátozott hozzáférés, titkosított kommunikáció a fizetési szolgáltatókkal.</p>
+
+              <h4>9. Felhasználói jogok</h4>
+              <p>Hozzáférés, helyesbítés, törlés, korlátozás és tiltakozás joga - a kérelmeket a Discord szerveren vagy a weboldalon keresztül jelezheted.</p>
+
+              <h4>10. Panasz benyújtása</h4>
+              <p>Ha úgy érzed, hogy az adatkezelés nem felel meg a jogszabályoknak, panaszt tehetsz a Nemzeti Adatvédelmi és Információszabadság Hatóságnál (NAIH).</p>
+
+              <h4>11. A Tájékoztató módosítása</h4>
+              <p>A SolarynNetwork fenntartja a jogot, hogy a jelen Adatkezelési Tájékoztatót bármikor módosítsa. A módosításokról a felhasználók a Discord szerveren értesülhetnek.</p>
+            </div>
+
+            <div class="legal-panel" data-legal-panel="impresszum">
+              <h3>Impresszum</h3>
+
+              <h4>Üzemeltető adatai</h4>
+              <p><b>Üzemeltető neve:</b> SolarynNetwork<br><b>Képviselő:</b> Nagy Szabolcs<br><b>Székhely:</b> Budapest, Magyarország<br><b>Weboldal:</b> www.solaryn.hu<br><b>Kapcsolat:</b> Discord szerveren keresztül</p>
+              <p>A SolarynNetwork magánszemély által üzemeltetett online szolgáltatás és Minecraft játékszerver.</p>
+
+              <h4>Kapcsolattartás</h4>
+              <p>A felhasználók Discord szerveren vagy a weboldalon keresztüli üzenetküldéssel vehetik fel a kapcsolatot az üzemeltetővel, aki a beérkező megkeresésekre ésszerű időn belül válaszol.</p>
+
+              <h4>A szolgáltatás jellege</h4>
+              <p>A SolarynNetwork egy online Minecraft játékszerver, amely digitális termékeket, rangokat, csomagokat és egyéb játékbeli szolgáltatásokat kínál.</p>
+
+              <h4>Felelősség</h4>
+              <p>Az üzemeltető mindent megtesz a weboldal és a szerver zavartalan működéséért, azonban a szolgáltatás esetleges hibáiért, leállásaiért vagy adatvesztésért felelősséget nem vállal, kivéve ha a hiba bizonyíthatóan az üzemeltető hibájából ered.</p>
+
+              <h4>Jognyilatkozat</h4>
+              <p>A weboldalon és a szerveren található tartalmak a SolarynNetwork tulajdonát képezik. A tartalmak másolása, terjesztése vagy felhasználása kizárólag az üzemeltető engedélyével lehetséges.</p>
+
+              <h4>Jogviták rendezése</h4>
+              <p>A szolgáltatásra a magyar jog az irányadó. Jogvita esetén a felek elsősorban békés úton próbálják rendezni a problémát.</p>
+            </div>
+          </div>
+        </section>
+
+      </div>
+
+      <footer class="app-footer">
+        <span>&copy; 2026 <a href="#" data-legal-link="impresszum">Impresszum</a> | <a href="#" data-legal-link="aszf">ÁSZF</a> | <a href="#" data-legal-link="adatkezeles">Adatvédelem</a></span>
+        <span class="app-footer-right"><a href="#" id="btnCookieSettings">Süti beállítások</a></span>
+      </footer>
+    </div>
+  </main>
+
+  <!-- Süti beállítások modál -->
+  <div class="modal-overlay hidden" id="cookieModal">
+    <div class="modal-card cookie-modal">
+      <h3>Süti beállítások</h3>
+      <p>A SolarCenter a bejelentkezésed megtartásához nélkülözhetetlen sütiket használ. Ezeken felül nem gyűjtünk követő vagy marketing célú adatokat.</p>
+      <div class="cookie-options">
+        <label class="check-row"><input type="checkbox" checked disabled /> Nélkülözhetetlen sütik (bejelentkezés) - mindig aktív</label>
+        <label class="check-row"><input type="checkbox" id="cookieAnalytics" /> Anonim, összesített használati statisztika</label>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-outline" id="cookieRejectAll">Csak a szükséges</button>
+        <button class="btn-glow" id="cookieSaveBtn">Mentés</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="skin3d.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
