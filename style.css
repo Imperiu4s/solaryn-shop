@@ -301,6 +301,23 @@ a { color: inherit; }
 .btn-buy:hover { filter: brightness(1.06); }
 .btn-buy:disabled { cursor: default; opacity: .7; filter: none; }
 
+/* Rangkártyák (PrémiumPontból vásárolhatók, nem Stripe-fizetéssel) - a
+   .pkg-card-hoz hasonló alapstílus, de magasabb, hogy elférjen benne a
+   jogosultság-lista is. Szándékosan a SolarCenter saját, meleg arany/sötét
+   témáját követi, nem egy máshonnan átvett dizájnt. */
+.rank-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+.rank-card {
+  background: rgba(255,255,255,.02); border: 1px solid var(--line); border-radius: 15px;
+  padding: 24px 20px; display: flex; flex-direction: column; align-items: center; text-align: center;
+  transition: transform .16s, border-color .16s, background .16s;
+}
+.rank-card:hover { transform: translateY(-4px); border-color: var(--gold-2); background: rgba(255,176,32,.05); }
+.rank-card.featured { border-color: var(--gold); box-shadow: 0 0 20px rgba(255,176,32,.12); }
+.rank-card-head { display: flex; flex-direction: column; align-items: center; }
+.rank-card-name { font-weight: 800; font-size: 16px; margin-top: 4px; }
+.rank-card-duration { font-size: 12px; color: var(--text-dim); margin: 4px 0 10px; }
+.rank-perm-list { width: 100%; text-align: left; margin: 4px 0 18px; flex: 1; }
+
 /* Vásárlás visszajelzés (toast) - a Stripe checkoutból való visszatéréskor
    és a vásárlás indításakor felugró üzenetek. */
 .shop-toast {

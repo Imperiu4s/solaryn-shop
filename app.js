@@ -207,7 +207,7 @@ async function tryAutoLogin() {
 // JAVÍTVA: a felhasználó KÉTSZER is kifejezetten kérte, hogy a Zseton és a
 // Szint NE szerepeljen a főoldalon (ahogy a Guild sem, ld. az eredeti kérést:
 // "szint, guild, zseton nem kell") - ez a lista most már tényleg csak azt a
-// hármat tartalmazza, amit kért: Rang, SolarynCoin, Online töltött idő. A
+// hármat tartalmazza, amit kért: Rang, PrémiumPont, Online töltött idő. A
 // SolarBungee (playtime) és SolarLobby (SC/rang) szerver-oldali pluginok
 // töltik fel ezeket a /api/game/report végponton keresztül - innentől valódi
 // adatok, nem helykitöltő 0/"-" érték.
@@ -220,7 +220,7 @@ const STAT_ICONS = {
 function renderStatBadges(container, values) {
   const items = [
     { icon: 'rank', label: 'Rang', value: values.rank },
-    { icon: 'coin', label: 'SolarynCoin', value: values.coin },
+    { icon: 'coin', label: 'PrémiumPont', value: values.coin },
     { icon: 'time', label: 'Online töltött idő', value: values.time }
   ];
   container.innerHTML = items.map((it) => `
@@ -274,7 +274,7 @@ async function enterApp(meData) {
   renderSideRails();
 }
 
-// ── Oldalsó "side rail" - minden alfülön (SolarynCoin/Kódbeváltás/Skin/
+// ── Oldalsó "side rail" - minden alfülön (PrémiumPont/Rangok/Kódbeváltás/Skin/
 // Kitiltáscsökkentés) egy support/Discord kártya jelenik meg jobb oldalt, hogy
 // a tartalomterület sose maradjon kihasználatlanul üresen. JAVÍTVA: a korábbi
 // "Gyors elérés" gyorslink-kártyát a felhasználó kérésére eltávolítottuk.
@@ -558,9 +558,8 @@ async function openPlayerProfile(username) {
 
 $('#btnBackToPlayers').addEventListener('click', () => switchView('players'));
 
-// ── SolarynCoin csomagok (ugyanazok a CraftingStore vásárlási linkek/árak,
-// mint a korábbi solaryncoin.html-ben - EZEKET nem szabad megváltoztatni,
-// mert ez a tényleges, működő vásárlási folyamat). ──
+// ── Csomag-ikonok (PrémiumPont, kitiltáscsökkentés, rangok mind ezt
+// használják). ──
 // JAVÍTVA: a "ban"/"micMute" ikonok korábban kézzel rajzolt, bonyolult bezier-
 // útvonalak voltak, amik torzan/elcsúszva jelentek meg - most egyszerű,
 // garantáltan szimmetrikus SVG alapformákból (kör, vonal, téglalap) épülnek fel.
@@ -581,7 +580,7 @@ const ICONS = {
   </svg>`
 };
 
-// ── Bolt (SolarynCoin + kitiltáscsökkentés) - Stripe Checkout ──
+// ── Bolt (PrémiumPont + kitiltáscsökkentés) - Stripe Checkout ──
 // A katalógus (nevek/árak) a backendtől jön (GET /api/shop/catalog) - a
 // SolarBackend src/shop.js az EGYETLEN hiteles forrás, itt csak
 // megjelenítjük, hogy a két hely (backend/frontend) sose kerülhessen
@@ -630,6 +629,74 @@ async function loadShopCatalog() {
   `;
 }
 loadShopCatalog();
+
+// ── Rangok - NEM Stripe-fizetés, a játékos MÁR meglévő PrémiumPont-
+// egyenlegéből vonja le a beváltó plugin (ld. POST /api/shop/purchase-rank) -
+// ezért itt nincs redirect, csak egy visszajelzés, hogy a kérés elindult
+// (a tényleges fedezet-ellenőrzés a pluginban, aszinkron történik). ──
+function formatPp(n) {
+  return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ' PP';
+}
+
+function renderRankCard(rank) {
+  return `
+    <div class="rank-card${rank.id === 'solaryn' ? ' featured' : ''}">
+      <div class="rank-card-head">
+        <div class="pkg-icon">${ICONS.crown}</div>
+        <div class="rank-card-name">${rank.label}</div>
+      </div>
+      <div class="rank-card-duration">${rank.duration}</div>
+      <div class="pkg-price">${formatPp(rank.priceCoins)}</div>
+      <ul class="info-list rank-perm-list">${rank.perms.map((p) => `<li>${p}</li>`).join('')}</ul>
+      <button type="button" class="btn-buy" data-rank-id="${rank.id}">Vásárlás</button>
+    </div>
+  `;
+}
+
+async function loadRanks() {
+  try {
+    const res = await fetch(BACKEND_URL + '/api/shop/ranks');
+    const data = await res.json();
+    const ranks = data.ok && Array.isArray(data.ranks) ? data.ranks : [];
+    $('#rankGrid').innerHTML = ranks.map(renderRankCard).join('');
+  } catch {
+    $('#rankGrid').innerHTML = '';
+  }
+}
+loadRanks();
+
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.btn-buy[data-rank-id]');
+  if (btn) buyRank(btn.dataset.rankId, btn);
+});
+
+async function buyRank(rankId, buttonEl) {
+  if (!session || !session.token) {
+    showToast('A vásárláshoz jelentkezz be.', true);
+    return;
+  }
+  const originalText = buttonEl.textContent;
+  buttonEl.disabled = true;
+  buttonEl.textContent = 'Vásárlás...';
+  try {
+    const res = await fetch(BACKEND_URL + '/api/shop/purchase-rank', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ rankId })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      showToast(data.message || 'Nem sikerült elindítani a vásárlást.', true);
+    } else {
+      showToast('Vásárlás elindítva - ha elég PrémiumPontod van, kb. 1 percen belül megkapod a rangot.');
+    }
+  } catch {
+    showToast('Nem sikerült elérni a szervert.', true);
+  } finally {
+    buttonEl.disabled = false;
+    buttonEl.textContent = originalText;
+  }
+}
 
 function showToast(message, isError) {
   const el = document.createElement('div');

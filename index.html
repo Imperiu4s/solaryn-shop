@@ -129,7 +129,7 @@
           </div>
           <div>
             <div class="auth-feature-title">Támogasd a szervert</div>
-            <div class="auth-feature-desc">SolarynCoin vásárlásával közvetlenül a szerver fejlesztését és a személyzet munkáját támogatod.</div>
+            <div class="auth-feature-desc">PrémiumPont vásárlásával közvetlenül a szerver fejlesztését és a személyzet munkáját támogatod.</div>
           </div>
         </div>
       </div>
@@ -151,7 +151,11 @@
         </button>
         <button class="app-nav-item" data-view="coin">
           <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 15.9v1.1h-2v-1.1a3.6 3.6 0 0 1-2.8-2.4l1.8-.7a1.8 1.8 0 0 0 1.8 1.3c.8 0 1.4-.4 1.4-1s-.5-.9-1.7-1.2c-1.8-.5-3-1.2-3-2.9a2.8 2.8 0 0 1 2.5-2.6V7.3h2v1.1a3.2 3.2 0 0 1 2.3 2l-1.8.7a1.5 1.5 0 0 0-1.5-1.1c-.7 0-1.2.3-1.2.9s.6.8 1.8 1.2c1.9.5 2.9 1.3 2.9 2.9a2.9 2.9 0 0 1-2.5 2.9z"/></svg>
-          <span>SolarynCoin</span>
+          <span>PrémiumPont</span>
+        </button>
+        <button class="app-nav-item" data-view="ranks">
+          <svg viewBox="0 0 24 24"><path d="M3 8l4 3 5-6 5 6 4-3-2 11H5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          <span>Rangok</span>
         </button>
         <button class="app-nav-item" data-view="redeem">
           <svg viewBox="0 0 24 24"><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6m9-9v9m0-9L8 7m4-4l4 4M4 12h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -235,25 +239,24 @@
           </div>
         </section>
 
-        <!-- SOLARYNCOIN -->
+        <!-- PRÉMIUMPONT -->
         <section class="view" data-view="coin">
-          <h1 class="page-title">SolarynCoin</h1>
-          <p class="page-note">Vásárolj SolarynCoin csomagokat, hogy hozzáférj a szerver exkluzív tartalmaihoz - a vásárlás után a coinok automatikusan jóváíródnak a játékban.</p>
+          <h1 class="page-title">PrémiumPont</h1>
+          <p class="page-note">Vásárolj PrémiumPont (PP) csomagokat, hogy hozzáférj a szerver exkluzív tartalmaihoz - a vásárlás után a PP automatikusan, jellemzően 1 percen belül jóváíródik a játékban.</p>
 
           <div class="content-grid">
             <div>
               <div class="pkg-grid" id="coinPkgGrid"></div>
 
-              <div class="info-box info-box-warn">
+              <div class="info-box">
                 <div class="info-box-title">
-                  <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M12 2L1 21h22zm0 5l7.5 13h-15zM11 10h2v5h-2zm0 6h2v2h-2z"/></svg>
-                  Figyelem, mielőtt vásárolsz
+                  <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 15h-2v-6h2zm0-8h-2V7h2z"/></svg>
+                  Hogyan működik?
                 </div>
                 <ul class="info-list">
-                  <li>Ellenőrizd le, hogy helyesen írtad-e be a játékosnevedet.</li>
-                  <li>Legyen elegendő hely az eszköztáradban a tárgyaknak.</li>
-                  <li>A vásárlások feldolgozása maximum 30 percet vesz igénybe.</li>
-                  <li>Vásárláskor és a jóváírás alatt legyél elérhető a szerveren.</li>
+                  <li>A vásárlás a bejelentkezett fiókodhoz kerül jóváírásra - nem kell külön beírnod a neved.</li>
+                  <li>A jóváírás automatikus, jellemzően <b>1 percen belül</b> megtörténik.</li>
+                  <li>Nem kell elérhetőnek lenned a szerveren sem a vásárláskor, sem a jóváíráskor.</li>
                 </ul>
               </div>
 
@@ -263,10 +266,8 @@
                   Fizetési módok
                 </div>
                 <ul class="info-list">
-                  <li>A webáruházunk a <b>CraftingStore</b> szolgáltatását használja.</li>
-                  <li>Bankkártyás (Stripe) és PayPal fizetés közül is választhatsz.</li>
-                  <li>Minden fizetési adat titkosítva és védve van.</li>
-                  <li>PayPal-lal csak manuálisan tudsz fizetni - írj Discordon egy ticketet!</li>
+                  <li>Bankkártyás fizetés (Stripe) áll rendelkezésre.</li>
+                  <li>Minden fizetési adat titkosítva és védve van - bankkártyaadatot mi nem tárolunk.</li>
                 </ul>
               </div>
 
@@ -275,11 +276,37 @@
                   <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 15h-2v-6h2zm0-8h-2V7h2z"/></svg>
                   Nem kaptam meg amit vásároltam
                 </div>
-                <p class="info-text">A webáruházunknak 30 percen belül automatikusan jóvá kell írnia a megvásárolt tételeidet - ehhez elérhetőnek kell lenned a szerveren. Ha 2 órán belül sem érkezik meg, keresd a csapatot a Discordon.</p>
+                <p class="info-text">A jóváírás rendszerint 1 percen belül automatikusan megtörténik. Ha ennél tovább tart, keresd a csapatot a Discordon.</p>
               </div>
             </div>
 
             <div class="side-rail" data-side-rail="coin"></div>
+          </div>
+        </section>
+
+        <!-- RANGOK -->
+        <section class="view" data-view="ranks">
+          <h1 class="page-title">Rangok</h1>
+          <p class="page-note">Vásárolj rangot a felgyűjtött PrémiumPontodból - a rangot a plugin automatikusan beállítja, amint levonásra kerül a PP.</p>
+
+          <div class="content-grid">
+            <div>
+              <div class="rank-grid" id="rankGrid"></div>
+
+              <div class="info-box">
+                <div class="info-box-title">
+                  <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 15h-2v-6h2zm0-8h-2V7h2z"/></svg>
+                  Hogyan működik?
+                </div>
+                <ul class="info-list">
+                  <li>A rangokat kizárólag a <b>PrémiumPont</b>-egyenlegedből tudod megvásárolni, nem bankkártyával.</li>
+                  <li>Ha nincs elég PP-d, a vásárlás nem történik meg, és a PP-d sem vonódik le.</li>
+                  <li>A jóváírás automatikus, jellemzően 1 percen belül megtörténik.</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="side-rail" data-side-rail="ranks"></div>
           </div>
         </section>
 
