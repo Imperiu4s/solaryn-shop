@@ -671,6 +671,10 @@ async function loadAdminPlayerPanel(username) {
   $('#adminLockReasonInput').value = '';
   $('#adminPlayerLoginsBody').innerHTML = '';
   $('#adminPlayerDevicesBody').innerHTML = '';
+  $('#adminDeleteUsernameHint').textContent = username;
+  $('#adminDeleteConfirmInput').value = '';
+  $('#adminDeleteResult').textContent = '';
+  $('#adminDeleteBtn').disabled = true;
   setAdminEmailEditing(false);
   try {
     const res = await fetch(BACKEND_URL + '/api/admin/player/' + encodeURIComponent(username), {
@@ -801,6 +805,45 @@ $('#adminUnlockBtn').addEventListener('click', async () => {
     }
   } catch {
     showToast('Nem sikerült elérni a szervert.', true);
+  }
+});
+
+// A törlés gomb CSAK akkor engedélyezett, ha a beírt szöveg PONTOSAN egyezik
+// a felhasználónévvel - ez a szándékos "beírásos" plusz megerősítés (a
+// szokásos Igen/Mégse ablakon felül) egy VISSZAVONHATATLAN művelethez.
+$('#adminDeleteConfirmInput').addEventListener('input', (e) => {
+  $('#adminDeleteBtn').disabled = e.target.value !== lastAdminPlayerUsername;
+});
+
+$('#adminDeleteBtn').addEventListener('click', async () => {
+  if (!lastAdminPlayerUsername || $('#adminDeleteConfirmInput').value !== lastAdminPlayerUsername) return;
+  const resultEl = $('#adminDeleteResult');
+  resultEl.textContent = '';
+  resultEl.className = 'redeem-result';
+
+  const confirmed = await confirmModal(
+    'Fiók végleges törlése',
+    `Ez <b>VÉGLEGES</b> - biztosan törlöd <b>${lastAdminPlayerUsername}</b> fiókját, a skinjét, vásárlási előzményét és PrémiumPont-egyenlegét? Ez NEM vonható vissza.`,
+    'Igen, törlöm véglegesen'
+  );
+  if (!confirmed) return;
+
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/player/' + encodeURIComponent(lastAdminPlayerUsername) + '/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      resultEl.textContent = data.message || 'Nem sikerült törölni a fiókot.';
+      resultEl.className = 'redeem-result error';
+      return;
+    }
+    showToast('Fiók véglegesen törölve.');
+    switchView('players');
+  } catch {
+    resultEl.textContent = 'Nem sikerült elérni a szervert.';
+    resultEl.className = 'redeem-result error';
   }
 });
 

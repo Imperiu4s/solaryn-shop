@@ -586,6 +586,15 @@
                 </div>
               </div>
             </div>
+
+            <div class="admin-subsection-title admin-danger-title">Fiók végleges törlése</div>
+            <div class="ban-panel admin-delete-panel">
+              <p class="redeem-result error">Ez a művelet VÉGLEGES és VISSZAVONHATATLAN - törli a fiókot, a skint, a vásárlási előzményt és a PrémiumPont-egyenleget. Nem lehet visszaállítani.</p>
+              <label>Írd be a felhasználónevet a megerősítéshez (<span id="adminDeleteUsernameHint">-</span>)</label>
+              <input type="text" id="adminDeleteConfirmInput" placeholder="felhasználónév" autocomplete="off" />
+              <button type="button" class="btn-glow admin-delete-btn" id="adminDeleteBtn" disabled>Fiók végleges törlése</button>
+              <p class="redeem-result" id="adminDeleteResult"></p>
+            </div>
           </div>
         </section>
 
