@@ -409,7 +409,12 @@ a { color: inherit; }
 .ledger-filter-field input:focus { border-color: var(--gold); }
 
 .ledger-table-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; overflow-x: auto; }
-.ledger-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 720px; }
+.ledger-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+/* A Napló táblának (6 oszlop) van szüksége minimum szélességre, hogy ne
+   zsúfolódjon össze - az Admin/Gép-panelek 2-3 oszlopos táblái viszont NEM
+   kaphatják meg ugyanezt, mert egy fél-szélességű rácsban ez vízszintes
+   túlcsordulást ("kilógást") okozott. */
+[data-view="ledger"] .ledger-table { min-width: 720px; }
 .ledger-table th {
   text-align: left; padding: 14px 18px; font-size: 11px; text-transform: uppercase; letter-spacing: .5px;
   color: var(--text-faint); border-bottom: 1px solid var(--line); white-space: nowrap;
