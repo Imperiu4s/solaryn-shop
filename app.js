@@ -263,6 +263,13 @@ function formatStats(data) {
 // mutathat egy frissítésig.
 let currentPpBalance = 0;
 
+// A "tulajdonos" rangú felhasználóknak jelenik meg a játékos-profilon az
+// Admin panel (email, regisztráció, kliens-eszközök, kliens-tiltás) - a
+// backend a SAJÁT jogosultság-ellenőrzést is elvégzi minden admin
+// végponton (ld. SolarBackend src/client.js requireOwner), ez a kliens-
+// oldali flag csak azt dönti el, MEGJELENÍTSÜK-e egyáltalán a panelt.
+let isOwner = false;
+
 function renderProfilePpBadge() {
   $('#topbarPpValue').textContent = formatPp(currentPpBalance);
 }
@@ -280,6 +287,7 @@ async function enterApp(meData) {
   renderStatBadges($('#statBadgeGrid'), formatStats(meData));
   currentPpBalance = typeof meData?.scBalance === 'number' ? meData.scBalance : 0;
   renderProfilePpBadge();
+  isOwner = typeof meData?.rank === 'string' && meData.rank.toLowerCase() === 'tulajdonos';
 
   loadTopbarAvatar();
   loadHomeSkinPreview();
@@ -571,6 +579,10 @@ async function drawFaceForPlayer(canvas, player) {
   }
 }
 
+// A "Vissza" gomb az eszköz-részletekről mindig ide (a legutóbb megnyitott
+// játékos-profilra) tér vissza, ld. openDeviceDetail/btnBackFromDevice.
+let lastAdminPlayerUsername = null;
+
 async function openPlayerProfile(username) {
   switchView('playerProfile');
   $('#playerProfileTitle').textContent = username;
@@ -579,6 +591,10 @@ async function openPlayerProfile(username) {
   apiGetProfile(username).then((profile) => {
     renderStatBadges($('#playerProfileStats'), profile.ok ? formatStats(profile) : emptyStats());
   });
+
+  lastAdminPlayerUsername = username;
+  $('#playerProfileAdminPanel').classList.toggle('hidden', !isOwner);
+  if (isOwner) loadAdminPlayerPanel(username);
 
   const noteEl = $('#playerProfileSkinNote');
   const img = await loadSkinImage(username);
@@ -590,6 +606,166 @@ async function openPlayerProfile(username) {
   if (stopPlayerPreview) stopPlayerPreview();
   stopPlayerPreview = SkinPreview.start($('#playerProfileSkinCanvas'), img, false);
 }
+
+// ── Admin panel (csak "tulajdonos" rangnak) - email/regisztráció + kliens-
+// eszközök (ld. SolarBackend src/client.js /api/admin/*). ──
+async function loadAdminPlayerPanel(username) {
+  $('#adminPlayerEmail').textContent = '…';
+  $('#adminPlayerCreatedAt').textContent = '…';
+  $('#adminPlayerLoginsBody').innerHTML = '';
+  $('#adminPlayerDevicesBody').innerHTML = '';
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/player/' + encodeURIComponent(username), {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      $('#adminPlayerEmail').textContent = '-';
+      $('#adminPlayerCreatedAt').textContent = '-';
+      return;
+    }
+    $('#adminPlayerEmail').textContent = data.email || '-';
+    $('#adminPlayerCreatedAt').textContent = formatLedgerDate(data.createdAt);
+    $('#adminPlayerLoginsBody').innerHTML = data.logins.map((l) => `
+      <tr>
+        <td>${formatLedgerDate(l.created_at)}</td>
+        <td><button type="button" class="device-link" data-device-id="${l.device_id}">#${l.device_id}</button></td>
+      </tr>
+    `).join('') || '<tr><td colspan="2">Nincs rögzített belépés.</td></tr>';
+    $('#adminPlayerDevicesBody').innerHTML = data.devices.map((d) => `
+      <tr>
+        <td>${formatLedgerDate(d.last_seen)}</td>
+        <td><button type="button" class="device-link" data-device-id="${d.device_id}">#${d.device_id}</button></td>
+        <td>${d.login_count}</td>
+      </tr>
+    `).join('') || '<tr><td colspan="3">Nincs rögzített eszköz.</td></tr>';
+  } catch {
+    $('#adminPlayerEmail').textContent = '-';
+    $('#adminPlayerCreatedAt').textContent = '-';
+  }
+}
+
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.device-link[data-device-id]');
+  if (btn) openDeviceDetail(Number(btn.dataset.deviceId));
+});
+
+let currentDeviceId = null;
+let currentDeviceBan = null;
+
+async function openDeviceDetail(deviceId) {
+  currentDeviceId = deviceId;
+  switchView('deviceDetail');
+  $('#deviceDetailId').textContent = '#' + deviceId;
+  $('#deviceDetailBanStatus').textContent = '';
+  $('#deviceLoginsBody').innerHTML = '';
+  $('#deviceUsersBody').innerHTML = '';
+  $('#banResult').textContent = '';
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/device/' + deviceId, {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      $('#deviceDetailBanStatus').textContent = data.message || 'Nem sikerült betölteni az eszköz adatait.';
+      return;
+    }
+    currentDeviceBan = data.ban;
+    renderDeviceBanStatus();
+    $('#deviceLoginsBody').innerHTML = data.logins.map((l) => `
+      <tr><td>${formatLedgerDate(l.created_at)}</td><td>${l.username}</td></tr>
+    `).join('') || '<tr><td colspan="2">Nincs rögzített belépés.</td></tr>';
+    $('#deviceUsersBody').innerHTML = data.users.map((u) => `
+      <tr><td>${formatLedgerDate(u.last_seen)}</td><td>${u.username}</td><td>${u.login_count}</td></tr>
+    `).join('') || '<tr><td colspan="3">Nincs rögzített felhasználó.</td></tr>';
+  } catch {
+    $('#deviceDetailBanStatus').textContent = 'Nem sikerült elérni a szervert.';
+  }
+}
+
+function renderDeviceBanStatus() {
+  if (!currentDeviceBan) {
+    $('#deviceDetailBanStatus').textContent = 'Ez az eszköz jelenleg nincs kliens-tiltás alatt.';
+    $('#deviceBanCurrentNote').textContent = '';
+    return;
+  }
+  // A "until" ISO-formában jön (a backend Date.toISOString()-jével generálva,
+  // ld. src/client.js /ban), ezért itt közvetlenül new Date()-tel olvassuk,
+  // NEM a formatLedgerDate()-tel (az a "YYYY-MM-DD HH:MM:SS" SQLite-formát vár).
+  const untilText = currentDeviceBan.permanent ? 'Végleges tiltás.' : `Lejár: ${new Date(currentDeviceBan.until).toLocaleString('hu-HU')}.`;
+  $('#deviceDetailBanStatus').textContent = `Ez az eszköz jelenleg TILTVA van. Indok: ${currentDeviceBan.reason}. ${untilText}`;
+  $('#deviceBanCurrentNote').textContent = `Jelenlegi tiltás - tiltotta: ${currentDeviceBan.bannedBy}, ekkor: ${formatLedgerDate(currentDeviceBan.bannedAt)}.`;
+}
+
+$('#btnBackFromDevice').addEventListener('click', () => switchView('playerProfile'));
+
+$('#banPermanentCheck').addEventListener('change', (e) => {
+  $('#banDurationValue').disabled = e.target.checked;
+  $('#banDurationUnit').disabled = e.target.checked;
+});
+
+$('#banSubmitBtn').addEventListener('click', async () => {
+  const resultEl = $('#banResult');
+  resultEl.textContent = '';
+  resultEl.className = 'redeem-result';
+  if (!currentDeviceId) return;
+
+  const permanent = $('#banPermanentCheck').checked;
+  const reason = $('#banReasonInput').value.trim();
+  if (!reason) {
+    resultEl.textContent = 'Adj meg indoklást.';
+    resultEl.className = 'redeem-result error';
+    return;
+  }
+  const durationValue = Number($('#banDurationValue').value);
+  const durationUnit = $('#banDurationUnit').value;
+  const unitLabel = { perc: 'perc', ora: 'óra', nap: 'nap', het: 'hét' }[durationUnit] || durationUnit;
+  const confirmMsg = permanent
+    ? `Biztosan <b>véglegesen</b> tiltod ezt az eszközt (#${currentDeviceId})?`
+    : `Biztosan tiltod ezt az eszközt (#${currentDeviceId}) <b>${durationValue} ${unitLabel}</b>-ra?`;
+  const confirmed = await confirmModal('Kliens-tiltás megerősítése', confirmMsg);
+  if (!confirmed) return;
+
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/device/' + currentDeviceId + '/ban', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify(permanent ? { permanent: true, reason } : { durationValue, durationUnit, reason })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      resultEl.textContent = data.message || 'Nem sikerült végrehajtani a tiltást.';
+      resultEl.className = 'redeem-result error';
+      return;
+    }
+    showToast('Kliens-tiltás alkalmazva.');
+    openDeviceDetail(currentDeviceId);
+  } catch {
+    resultEl.textContent = 'Nem sikerült elérni a szervert.';
+    resultEl.className = 'redeem-result error';
+  }
+});
+
+$('#unbanSubmitBtn').addEventListener('click', async () => {
+  if (!currentDeviceId) return;
+  const confirmed = await confirmModal('Tiltás feloldása', `Biztosan feloldod ennek az eszköznek (#${currentDeviceId}) a kliens-tiltását?`);
+  if (!confirmed) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/device/' + currentDeviceId + '/unban', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showToast('Tiltás feloldva.');
+      openDeviceDetail(currentDeviceId);
+    } else {
+      showToast(data.message || 'Nem sikerült feloldani a tiltást.', true);
+    }
+  } catch {
+    showToast('Nem sikerült elérni a szervert.', true);
+  }
+});
 
 $('#btnBackToPlayers').addEventListener('click', () => switchView('players'));
 

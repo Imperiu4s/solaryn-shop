@@ -511,6 +511,99 @@
               </div>
             </div>
           </div>
+
+          <!-- Csak "tulajdonos" rangú felhasználóknak jelenik meg, ld. app.js isOwner -->
+          <div class="card admin-panel hidden" id="playerProfileAdminPanel">
+            <div class="card-title">Admin</div>
+            <div class="admin-info-grid">
+              <div class="admin-info-item">
+                <span class="admin-info-label">Email</span>
+                <span id="adminPlayerEmail">-</span>
+              </div>
+              <div class="admin-info-item">
+                <span class="admin-info-label">Regisztrált</span>
+                <span id="adminPlayerCreatedAt">-</span>
+              </div>
+            </div>
+
+            <div class="admin-subsection-title">Kliens</div>
+            <div class="admin-tables-grid">
+              <div>
+                <div class="admin-table-title">Belépések</div>
+                <div class="ledger-table-wrap">
+                  <table class="ledger-table">
+                    <thead><tr><th>Dátum</th><th>Gép</th></tr></thead>
+                    <tbody id="adminPlayerLoginsBody"></tbody>
+                  </table>
+                </div>
+              </div>
+              <div>
+                <div class="admin-table-title">Összes gép</div>
+                <div class="ledger-table-wrap">
+                  <table class="ledger-table">
+                    <thead><tr><th>Utoljára látva</th><th>Gép</th><th>Belépések</th></tr></thead>
+                    <tbody id="adminPlayerDevicesBody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- GÉP RÉSZLETEK (Admin panelen egy gépre kattintva) -->
+        <section class="view" data-view="deviceDetail">
+          <button class="btn-back" id="btnBackFromDevice">
+            <svg viewBox="0 0 24 24" width="14" height="14"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M15 18l-6-6 6-6"/></svg>
+            Vissza
+          </button>
+          <h1 class="page-title">Gép <span class="text-accent" id="deviceDetailId"></span></h1>
+          <p class="page-note" id="deviceDetailBanStatus"></p>
+
+          <div class="content-grid">
+            <div>
+              <div class="admin-table-title">Legutolsó belépések</div>
+              <div class="ledger-table-wrap">
+                <table class="ledger-table">
+                  <thead><tr><th>Dátum</th><th>Játékos</th></tr></thead>
+                  <tbody id="deviceLoginsBody"></tbody>
+                </table>
+              </div>
+
+              <div class="admin-table-title" style="margin-top:26px;">Összes felhasználó</div>
+              <div class="ledger-table-wrap">
+                <table class="ledger-table">
+                  <thead><tr><th>Utoljára látva</th><th>Játékos</th><th>Belépések</th></tr></thead>
+                  <tbody id="deviceUsersBody"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div>
+              <div class="card ban-panel">
+                <div class="card-title">Kliens-tiltás</div>
+                <p class="redeem-result" id="deviceBanCurrentNote"></p>
+                <label>Időtartam</label>
+                <div class="ban-duration-row">
+                  <input type="number" id="banDurationValue" min="1" value="7" />
+                  <select id="banDurationUnit">
+                    <option value="perc">perc</option>
+                    <option value="ora">óra</option>
+                    <option value="nap" selected>nap</option>
+                    <option value="het">hét</option>
+                  </select>
+                </div>
+                <label class="check-row" style="margin-top:14px;">
+                  <input type="checkbox" id="banPermanentCheck" />
+                  <span>Végleges tiltás</span>
+                </label>
+                <label>Indoklás</label>
+                <input type="text" id="banReasonInput" placeholder="Pl. multi-account, csalás..." />
+                <button type="button" class="btn-glow" id="banSubmitBtn">Kliens tiltása</button>
+                <button type="button" class="btn-outline" id="unbanSubmitBtn" style="margin-top:10px; width:100%;">Tiltás feloldása</button>
+                <p class="redeem-result" id="banResult"></p>
+              </div>
+            </div>
+          </div>
         </section>
 
         <!-- JOGI DOKUMENTUMOK (lábléc linkjeiről nyílik) -->
