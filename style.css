@@ -533,6 +533,7 @@ a { color: inherit; }
   transition: all .16s;
 }
 .pill.active { background: rgba(255,176,32,.12); color: var(--gold); border-color: rgba(255,176,32,.4); }
+.skin-upload-col .btn-outline { width: 100%; margin-top: 16px; }
 .skin-preview-col { display: flex; flex-direction: column; align-items: center; gap: 10px; flex-shrink: 0; }
 #skinPreview3d { border-radius: 16px; background: var(--panel-2); border: 1px solid var(--line); cursor: grab; }
 #skinPreview3d:active { cursor: grabbing; }

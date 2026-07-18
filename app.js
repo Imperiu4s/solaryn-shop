@@ -226,6 +226,11 @@ async function tryAutoLogin() {
     session = null;
     saveSession();
     $('#authScreen').classList.remove('hidden');
+    // A törölt fiókokat (ld. requireAuth "deleted: true" válasza) külön
+    // üzenettel jelezzük - a zárolással ellentétben ez nem visszavonható,
+    // úgyhogy nincs értelme egy külön "zárolt" képernyőnek, csak a login
+    // formra dobjuk vissza egy magyarázó szöveggel.
+    if (res.deleted) $('#authError').textContent = 'A fiókod törölve lett.';
   }
 }
 
@@ -446,6 +451,12 @@ async function loadHomeSkinPreview() {
   const img = await loadSkinImage(session.username);
   const noteEl = $('#profileSkinNote');
   if (!img) {
+    // Nincs (már) feltöltött skin - pl. épp most lett visszaállítva
+    // alapértelmezettre. A korábban elindított forgó előnézetet le kell
+    // állítani, különben a régi skin tovább forogna a törlés után is.
+    if (stopHomeSkinPreview) { stopHomeSkinPreview(); stopHomeSkinPreview = null; }
+    const canvas = $('#homeSkinCanvas');
+    canvas.width = canvas.width;
     noteEl.textContent = 'Még nincs feltöltött skinred - tölts fel egyet a Skin fülön!';
     return;
   }
@@ -461,7 +472,12 @@ let skinModel = 'classic';
 async function loadSkinPreview3d() {
   if (!session) return;
   const img = await loadSkinImage(session.username);
-  if (!img) return;
+  if (!img) {
+    if (stopSkinPreview) { stopSkinPreview(); stopSkinPreview = null; }
+    const canvas = $('#skinPreview3d');
+    canvas.width = canvas.width;
+    return;
+  }
   if (stopSkinPreview) stopSkinPreview();
   stopSkinPreview = SkinPreview.start($('#skinPreview3d'), img, skinModel === 'slim');
 }
@@ -487,6 +503,34 @@ skinFileInput.addEventListener('change', () => {
   const file = skinFileInput.files && skinFileInput.files[0];
   if (file) uploadSkinFile(file);
   skinFileInput.value = '';
+});
+
+// ── Skin visszaállítása alapértelmezettre ──
+$('#skinResetBtn').addEventListener('click', async () => {
+  const statusEl = $('#skinStatus');
+  const confirmed = await confirmModal('Alapértelmezett skin visszaállítása', 'Biztosan törlöd a jelenlegi skinedet, és visszaállsz az alapértelmezett megjelenésre?', 'Igen, visszaállítás');
+  if (!confirmed) return;
+  statusEl.classList.remove('error');
+  statusEl.textContent = 'Visszaállítás...';
+  try {
+    const res = await fetch(BACKEND_URL + '/api/skin/reset', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    if (data.ok) {
+      statusEl.textContent = 'Alapértelmezett skin visszaállítva.';
+      loadSkinPreview3d();
+      loadHomeSkinPreview();
+      loadTopbarAvatar();
+    } else {
+      statusEl.classList.add('error');
+      statusEl.textContent = data.message || 'A visszaállítás sikertelen.';
+    }
+  } catch {
+    statusEl.classList.add('error');
+    statusEl.textContent = 'Nem sikerült elérni a szervert.';
+  }
 });
 
 async function uploadSkinFile(file) {

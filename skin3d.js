@@ -42,9 +42,15 @@ const SkinPreview = (() => {
     return {
       top:    [u + d, v, w, d],
       bottom: [u + d + w, v, w, d],
-      right:  [u, v + d, d, h],
+      // JAVÍTVA: a "right"/"left" UV-régiók fel voltak cserélve a geometriával -
+      // a textúra "right" (a karakter TÉNYLEGES jobb oldala) a +X (nézőnek jobbra
+      // eső) dobozlapra került, holott szemből nézve a karakter jobb oldala a
+      // néző BAL oldalán látszik (ugyanaz a szabály, amit a kar/láb elhelyezése
+      // már eddig is helyesen követett - ld. buildGeometry "jobb kar" megjegyzése).
+      // Emiatt a fej mindkét oldala (haj/fül-mintázat) tükrözve jelent meg.
+      right:  [u + d + w, v + d, d, h],
       front:  [u + d, v + d, w, h],
-      left:   [u + d + w, v + d, d, h],
+      left:   [u, v + d, d, h],
       back:   [u + d + w + d, v + d, w, h]
     };
   }
