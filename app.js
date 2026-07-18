@@ -256,6 +256,17 @@ function formatStats(data) {
   };
 }
 
+// A rangvásárlás gombjai (ld. renderRankCard/refreshPpBalance) ebből olvassák
+// ki, hogy a játékosnak van-e elég fedezete - ez csak kliens-oldali UX-segéd
+// (a tényleges, biztonságos ellenőrzést a beváltó plugin végzi élő adaton),
+// ezért egy kicsit elavult érték sem okoz problémát, csak rossz gombállapotot
+// mutathat egy frissítésig.
+let currentPpBalance = 0;
+
+function renderProfilePpBadge() {
+  $('#profilePpValue').textContent = formatPp(currentPpBalance);
+}
+
 // meData: opcionálisan előre lekért /api/me válasz (pl. tryAutoLogin()-ból,
 // hogy ne kelljen kétszer lekérdezni) - ha nincs átadva, itt kérjük le.
 async function enterApp(meData) {
@@ -267,11 +278,26 @@ async function enterApp(meData) {
 
   if (!meData) meData = await apiGetMe(session.token);
   renderStatBadges($('#statBadgeGrid'), formatStats(meData));
+  currentPpBalance = typeof meData?.scBalance === 'number' ? meData.scBalance : 0;
+  renderProfilePpBadge();
 
   loadTopbarAvatar();
   loadHomeSkinPreview();
   loadDiscordWidget();
   renderSideRails();
+}
+
+// A Rangok fül megnyitásakor (ld. switchView) hívjuk - friss egyenleget kér
+// le, majd újrarajzolja a profil-jelvényt ÉS a rangkártyákat (hogy a "Nincs
+// elég PP" gombállapot is naprakész legyen).
+async function refreshPpBalance() {
+  if (!session || !session.token) return;
+  const res = await apiGetMe(session.token);
+  if (res.ok) {
+    currentPpBalance = typeof res.scBalance === 'number' ? res.scBalance : 0;
+    renderProfilePpBadge();
+    if ($('#rankGrid').dataset.loaded === '1') renderRankGrid();
+  }
 }
 
 // ── Oldalsó "side rail" - minden alfülön (PrémiumPont/Rangok/Kódbeváltás/Skin/
@@ -322,6 +348,11 @@ function switchView(view) {
   $$('.app-nav-item[data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
   $$('.view').forEach((v) => v.classList.toggle('active', v.dataset.view === view));
   if (view === 'skin') loadSkinPreview3d();
+  // A PP-egyenleg (rangvásárlás fedezet-ellenőrzéséhez) minden alkalommal
+  // frissül, amikor a felhasználó megnyitja a Rangok fület - nem élő/valós
+  // idejű szinkron, de elég friss ahhoz, hogy a gombok állapota (elég PP
+  // van-e) ne legyen régi adaton alapuló.
+  if (view === 'ranks') refreshPpBalance();
 }
 $$('.app-nav-item[data-view]').forEach((btn) => {
   btn.addEventListener('click', () => switchView(btn.dataset.view));
@@ -633,14 +664,19 @@ loadShopCatalog();
 // ── Rangok - NEM Stripe-fizetés, a játékos MÁR meglévő PrémiumPont-
 // egyenlegéből vonja le a beváltó plugin (ld. POST /api/shop/purchase-rank) -
 // ezért itt nincs redirect, csak egy visszajelzés, hogy a kérés elindult
-// (a tényleges fedezet-ellenőrzés a pluginban, aszinkron történik). ──
+// (a tényleges fedezet-ellenőrzés a pluginban, aszinkron történik). A gombok
+// állapotát (elég PP van-e) itt, kliens-oldalon is ellenőrizzük - ez csak UX-
+// segéd, a valódi, biztonságos ellenőrzést mindig a plugin végzi élő adaton. ──
 function formatPp(n) {
   return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ' PP';
 }
 
+let shopRanks = [];
+
 function renderRankCard(rank) {
+  const affordable = currentPpBalance >= rank.priceCoins;
   return `
-    <div class="rank-card${rank.id === 'solaryn' ? ' featured' : ''}">
+    <div class="rank-card${rank.id === 'solaryn' ? ' featured' : ''}${affordable ? '' : ' insufficient'}">
       <div class="rank-card-head">
         <div class="pkg-icon">${ICONS.crown}</div>
         <div class="rank-card-name">${rank.label}</div>
@@ -648,33 +684,73 @@ function renderRankCard(rank) {
       <div class="rank-card-duration">${rank.duration}</div>
       <div class="pkg-price">${formatPp(rank.priceCoins)}</div>
       <ul class="info-list rank-perm-list">${rank.perms.map((p) => `<li>${p}</li>`).join('')}</ul>
-      <button type="button" class="btn-buy" data-rank-id="${rank.id}">Vásárlás</button>
+      <button type="button" class="btn-buy" data-rank-id="${rank.id}"${affordable ? '' : ' disabled'}>${affordable ? 'Vásárlás' : 'Nincs elég PP'}</button>
     </div>
   `;
+}
+
+function renderRankGrid() {
+  $('#rankGrid').innerHTML = shopRanks.map(renderRankCard).join('');
 }
 
 async function loadRanks() {
   try {
     const res = await fetch(BACKEND_URL + '/api/shop/ranks');
     const data = await res.json();
-    const ranks = data.ok && Array.isArray(data.ranks) ? data.ranks : [];
-    $('#rankGrid').innerHTML = ranks.map(renderRankCard).join('');
+    shopRanks = data.ok && Array.isArray(data.ranks) ? data.ranks : [];
   } catch {
-    $('#rankGrid').innerHTML = '';
+    shopRanks = [];
   }
+  renderRankGrid();
+  $('#rankGrid').dataset.loaded = '1';
 }
 loadRanks();
 
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('.btn-buy[data-rank-id]');
-  if (btn) buyRank(btn.dataset.rankId, btn);
+  if (btn && !btn.disabled) buyRank(btn.dataset.rankId, btn);
 });
+
+// Egyszerű, a site stílusát követő Igen/Mégse megerősítő modál (a natív
+// confirm() helyett) - Promise<boolean>-t ad vissza.
+function confirmModal(title, message) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal-card">
+        <h3>${title}</h3>
+        <p>${message}</p>
+        <div class="modal-actions">
+          <button type="button" class="btn-outline" id="confirmModalCancel">Mégse</button>
+          <button type="button" class="btn-glow" id="confirmModalOk" style="margin-top:0;">Igen, vásárlás</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const finish = (result) => { overlay.remove(); resolve(result); };
+    overlay.querySelector('#confirmModalCancel').addEventListener('click', () => finish(false));
+    overlay.querySelector('#confirmModalOk').addEventListener('click', () => finish(true));
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) finish(false); });
+  });
+}
 
 async function buyRank(rankId, buttonEl) {
   if (!session || !session.token) {
     showToast('A vásárláshoz jelentkezz be.', true);
     return;
   }
+  const rank = shopRanks.find((r) => r.id === rankId);
+  if (rank && currentPpBalance < rank.priceCoins) {
+    showToast('Nincs elég PrémiumPontod ehhez a ranghoz.', true);
+    return;
+  }
+  const confirmed = await confirmModal(
+    'Biztosan megveszed?',
+    rank ? `A(z) <b>${rank.label}</b> rangot vásárolod meg <b>${formatPp(rank.priceCoins)}</b>-ért. Ez levonásra kerül az egyenlegedből.` : 'Biztosan megveszed ezt a rangot?'
+  );
+  if (!confirmed) return;
+
   const originalText = buttonEl.textContent;
   buttonEl.disabled = true;
   buttonEl.textContent = 'Vásárlás...';

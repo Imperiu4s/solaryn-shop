@@ -233,9 +233,17 @@ a { color: inherit; }
 #homeSkinCanvas { border-radius: 16px; background: var(--panel-2); border: 1px solid var(--line); }
 .profile-info { flex: 1; min-width: 200px; }
 .profile-name { font-size: 24px; font-weight: 800; margin-bottom: 8px; }
+.profile-pp-badge {
+  display: inline-flex; align-items: center; gap: 7px; margin-bottom: 10px;
+  padding: 7px 15px; border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255,122,61,.18), rgba(255,77,31,.08));
+  border: 1px solid rgba(255,122,61,.45); box-shadow: 0 0 18px var(--orange-glow);
+  color: var(--orange); font-weight: 800; font-size: 13px;
+}
+.profile-pp-badge svg { width: 15px; height: 15px; }
 .profile-empty-skin { color: var(--text-faint); font-size: 13px; }
 
-/* Statisztika-jelvények (Rangok/SolarynCoin/Online töltött idő). */
+/* Statisztika-jelvények (Rangok/PrémiumPont/Online töltött idő). */
 .stat-badge-grid {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 18px; margin-bottom: 28px;
@@ -313,6 +321,8 @@ a { color: inherit; }
 }
 .rank-card:hover { transform: translateY(-4px); border-color: var(--gold-2); background: rgba(255,176,32,.05); }
 .rank-card.featured { border-color: var(--gold); box-shadow: 0 0 20px rgba(255,176,32,.12); }
+.rank-card.insufficient { opacity: .6; }
+.rank-card.insufficient:hover { transform: none; border-color: var(--line); background: rgba(255,255,255,.02); }
 .rank-card-head { display: flex; flex-direction: column; align-items: center; }
 .rank-card-name { font-weight: 800; font-size: 16px; margin-top: 4px; }
 .rank-card-duration { font-size: 12px; color: var(--text-dim); margin: 4px 0 10px; }
