@@ -264,7 +264,7 @@ function formatStats(data) {
 let currentPpBalance = 0;
 
 function renderProfilePpBadge() {
-  $('#profilePpValue').textContent = formatPp(currentPpBalance);
+  $('#topbarPpValue').textContent = formatPp(currentPpBalance);
 }
 
 // meData: opcionálisan előre lekért /api/me válasz (pl. tryAutoLogin()-ból,
@@ -353,6 +353,10 @@ function switchView(view) {
   // idejű szinkron, de elég friss ahhoz, hogy a gombok állapota (elég PP
   // van-e) ne legyen régi adaton alapuló.
   if (view === 'ranks') refreshPpBalance();
+  // A Napló fület minden megnyitáskor frissítjük - friss bejegyzéseket kér le
+  // (a dátum-szűrők szerint), a keresés viszont kliens-oldalon szűr a már
+  // letöltött listán, nem küld újabb kérést minden billentyűleütésre.
+  if (view === 'ledger') loadLedger();
 }
 $$('.app-nav-item[data-view]').forEach((btn) => {
   btn.addEventListener('click', () => switchView(btn.dataset.view));
@@ -773,6 +777,157 @@ async function buyRank(rankId, buttonEl) {
     buttonEl.textContent = originalText;
   }
 }
+
+// ── Átutalás - a tényleges levonást/jóváírást is a beváltó plugin végzi
+// (aszinkron, ld. SolarShop fulfillTransfer), itt csak elindítjuk a kérést. A
+// 10%-os díj kliens-oldali kiszámítása csak megjelenítési célú előzetes
+// becslés - a backend/plugin újraszámolja, ez a tényleges forrás. ──
+const TRANSFER_FEE_PERCENT = 10;
+
+function updateTransferFeeNote() {
+  const amount = parseInt($('#transferAmountInput').value, 10);
+  const note = $('#transferFeeNote');
+  if (!Number.isInteger(amount) || amount <= 0) {
+    note.innerHTML = 'Add meg az összeget a díj kiszámításához.';
+    return;
+  }
+  const total = Math.ceil(amount * (1 + TRANSFER_FEE_PERCENT / 100));
+  note.innerHTML = `10% díjjal együtt <b>${formatPp(total)}</b> kerül levonásra az egyenlegedből.`;
+}
+$('#transferAmountInput').addEventListener('input', updateTransferFeeNote);
+
+$('#transferSubmitBtn').addEventListener('click', async () => {
+  const resultEl = $('#transferResult');
+  resultEl.textContent = '';
+  resultEl.className = 'redeem-result';
+
+  if (!session || !session.token) {
+    showToast('Az átutaláshoz jelentkezz be.', true);
+    return;
+  }
+  const recipient = $('#transferRecipientInput').value.trim();
+  const amount = parseInt($('#transferAmountInput').value, 10);
+  if (!recipient) {
+    resultEl.textContent = 'Add meg a címzett felhasználónevét.';
+    resultEl.className = 'redeem-result error';
+    return;
+  }
+  if (!Number.isInteger(amount) || amount <= 0) {
+    resultEl.textContent = 'Adj meg egy érvényes összeget.';
+    resultEl.className = 'redeem-result error';
+    return;
+  }
+  const total = Math.ceil(amount * (1 + TRANSFER_FEE_PERCENT / 100));
+  if (currentPpBalance < total) {
+    resultEl.textContent = `Nincs elég PrémiumPontod (${formatPp(currentPpBalance)} van, ${formatPp(total)} kellene).`;
+    resultEl.className = 'redeem-result error';
+    return;
+  }
+  const confirmed = await confirmModal(
+    'Biztosan átutalod?',
+    `<b>${formatPp(amount)}</b>-t küldesz <b>${recipient}</b>-nak. A 10% díjjal együtt <b>${formatPp(total)}</b> kerül levonásra az egyenlegedből.`
+  );
+  if (!confirmed) return;
+
+  const btn = $('#transferSubmitBtn');
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Átutalás...';
+  try {
+    const res = await fetch(BACKEND_URL + '/api/shop/transfer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ recipient, amount })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      resultEl.textContent = data.message || 'Nem sikerült elindítani az átutalást.';
+      resultEl.className = 'redeem-result error';
+    } else {
+      showToast('Átutalás elindítva - kb. 1 percen belül megtörténik.');
+      $('#transferRecipientInput').value = '';
+      $('#transferAmountInput').value = '';
+      updateTransferFeeNote();
+    }
+  } catch {
+    resultEl.textContent = 'Nem sikerült elérni a szervert.';
+    resultEl.className = 'redeem-result error';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+});
+
+// ── Napló - a dátum-tartományt a backend szűri (ld. GET /api/shop/ledger),
+// a szöveges keresést (érintett/művelet/részletek) kliens-oldalon, a már
+// letöltött listán, hogy ne kelljen minden billentyűleütésre új kérést
+// küldeni. ──
+const LEDGER_TYPE_LABELS = {
+  transfer_in: 'Átutalás',
+  transfer_out: 'Átutalás',
+  purchase: 'Vásárlás',
+  game_purchase: 'Játékbeli vásárlás'
+};
+
+let ledgerEntries = [];
+
+function formatLedgerDate(sqliteDatetime) {
+  // A backend "YYYY-MM-DD HH:MM:SS" (UTC, datetime('now')) alakot ad vissza -
+  // ISO-formára alakítva adjuk át a Date-nek, hogy megbízhatóan parse-olja.
+  const d = new Date(sqliteDatetime.replace(' ', 'T') + 'Z');
+  if (Number.isNaN(d.getTime())) return sqliteDatetime;
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}. ${pad(d.getMonth() + 1)}. ${pad(d.getDate())}. ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function renderLedgerRow(entry) {
+  const typeLabel = LEDGER_TYPE_LABELS[entry.type] || entry.type;
+  const amountClass = entry.amount > 0 ? 'ledger-amount-positive' : entry.amount < 0 ? 'ledger-amount-negative' : 'ledger-amount-zero';
+  const amountText = (entry.amount > 0 ? '+' : '') + formatPp(entry.amount);
+  return `
+    <tr>
+      <td>${formatLedgerDate(entry.created_at)}</td>
+      <td>${entry.counterparty || '-'}</td>
+      <td>${typeLabel}</td>
+      <td>${entry.detail || '-'}</td>
+      <td class="${amountClass}">${amountText}</td>
+      <td class="ledger-balance">${formatPp(entry.balance_after)}</td>
+    </tr>
+  `;
+}
+
+function renderLedgerTable() {
+  const search = $('#ledgerSearchInput').value.trim().toLowerCase();
+  const filtered = !search ? ledgerEntries : ledgerEntries.filter((e) => {
+    const haystack = [(e.counterparty || ''), (LEDGER_TYPE_LABELS[e.type] || e.type), (e.detail || '')].join(' ').toLowerCase();
+    return haystack.includes(search);
+  });
+  $('#ledgerTableBody').innerHTML = filtered.map(renderLedgerRow).join('');
+  $('#ledgerEmptyNote').classList.toggle('hidden', filtered.length > 0);
+}
+
+async function loadLedger() {
+  if (!session || !session.token) return;
+  const from = $('#ledgerFromInput').value;
+  const to = $('#ledgerToInput').value;
+  const params = new URLSearchParams();
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+  try {
+    const res = await fetch(BACKEND_URL + '/api/shop/ledger?' + params.toString(), {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    ledgerEntries = data.ok && Array.isArray(data.entries) ? data.entries : [];
+  } catch {
+    ledgerEntries = [];
+  }
+  renderLedgerTable();
+}
+
+$('#ledgerSearchInput').addEventListener('input', renderLedgerTable);
+$('#ledgerFromInput').addEventListener('change', loadLedger);
+$('#ledgerToInput').addEventListener('change', loadLedger);
 
 function showToast(message, isError) {
   const el = document.createElement('div');

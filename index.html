@@ -157,6 +157,14 @@
           <svg viewBox="0 0 24 24"><path d="M3 8l4 3 5-6 5 6 4-3-2 11H5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
           <span>Rangok</span>
         </button>
+        <button class="app-nav-item" data-view="transfer">
+          <svg viewBox="0 0 24 24"><path d="M7 8h13M17 4l3 4-3 4M17 16H4M7 12l-3 4 3 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Átutalás</span>
+        </button>
+        <button class="app-nav-item" data-view="ledger">
+          <svg viewBox="0 0 24 24"><path d="M6 3h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 12h6M9 16h6M9 8h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <span>Napló</span>
+        </button>
         <button class="app-nav-item" data-view="redeem">
           <svg viewBox="0 0 24 24"><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6m9-9v9m0-9L8 7m4-4l4 4M4 12h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <span>Kódbeváltás</span>
@@ -189,7 +197,13 @@
       <div class="app-topbar">
         <div class="topbar-user" id="topbarUserBtn">
           <canvas class="topbar-avatar" id="topbarAvatar" width="32" height="32"></canvas>
-          <span id="topbarUsername"></span>
+          <div class="topbar-user-text">
+            <span id="topbarUsername"></span>
+            <span class="topbar-pp-badge">
+              <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 15.9v1.1h-2v-1.1a3.6 3.6 0 0 1-2.8-2.4l1.8-.7a1.8 1.8 0 0 0 1.8 1.3c.8 0 1.4-.4 1.4-1s-.5-.9-1.7-1.2c-1.8-.5-3-1.2-3-2.9a2.8 2.8 0 0 1 2.5-2.6V7.3h2v1.1a3.2 3.2 0 0 1 2.3 2l-1.8.7a1.5 1.5 0 0 0-1.5-1.1c-.7 0-1.2.3-1.2.9s.6.8 1.8 1.2c1.9.5 2.9 1.3 2.9 2.9a2.9 2.9 0 0 1-2.5 2.9z"/></svg>
+              <span id="topbarPpValue">0 PP</span>
+            </span>
+          </div>
           <svg class="topbar-caret" viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M7 10l5 5 5-5z"/></svg>
 
           <div class="topbar-dropdown hidden" id="topbarDropdown">
@@ -220,10 +234,6 @@
                   </div>
                   <div class="profile-info">
                     <div class="profile-name" id="profileName"></div>
-                    <div class="profile-pp-badge" id="profilePpBadge">
-                      <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 15.9v1.1h-2v-1.1a3.6 3.6 0 0 1-2.8-2.4l1.8-.7a1.8 1.8 0 0 0 1.8 1.3c.8 0 1.4-.4 1.4-1s-.5-.9-1.7-1.2c-1.8-.5-3-1.2-3-2.9a2.8 2.8 0 0 1 2.5-2.6V7.3h2v1.1a3.2 3.2 0 0 1 2.3 2l-1.8.7a1.5 1.5 0 0 0-1.5-1.1c-.7 0-1.2.3-1.2.9s.6.8 1.8 1.2c1.9.5 2.9 1.3 2.9 2.9a2.9 2.9 0 0 1-2.5 2.9z"/></svg>
-                      <span id="profilePpValue">0 PP</span>
-                    </div>
                     <p class="profile-empty-skin" id="profileSkinNote"></p>
                   </div>
                 </div>
@@ -311,6 +321,71 @@
             </div>
 
             <div class="side-rail" data-side-rail="ranks"></div>
+          </div>
+        </section>
+
+        <!-- ÁTUTALÁS -->
+        <section class="view" data-view="transfer">
+          <h1 class="page-title">Átutalás</h1>
+          <p class="page-note">Küldj PrémiumPontot más játékosoknak - minden átutalásra 10% díj kerül felszámításra.</p>
+
+          <div class="content-grid">
+            <div>
+              <div class="card transfer-card">
+                <div class="redeem-icon">
+                  <svg viewBox="0 0 24 24" width="24" height="24"><path d="M7 8h13M17 4l3 4-3 4M17 16H4M7 12l-3 4 3 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </div>
+                <label>Címzett felhasználóneve</label>
+                <input type="text" id="transferRecipientInput" placeholder="Játékosnév" />
+                <label>Mennyiség (PP)</label>
+                <input type="number" id="transferAmountInput" placeholder="0" min="1" step="1" />
+                <div class="transfer-fee-note" id="transferFeeNote">Add meg az összeget a díj kiszámításához.</div>
+                <button type="button" class="btn-glow btn-glow-orange" id="transferSubmitBtn">Átutalás</button>
+                <p class="redeem-result" id="transferResult"></p>
+              </div>
+            </div>
+
+            <div class="side-rail" data-side-rail="transfer"></div>
+          </div>
+        </section>
+
+        <!-- NAPLÓ -->
+        <section class="view" data-view="ledger">
+          <h1 class="page-title">Napló</h1>
+          <p class="page-note">Minden esemény, ami a PrémiumPont-egyenlegedet érinti: átutalások, vásárlások és játékbeli vásárlások.</p>
+
+          <div class="card ledger-filters">
+            <div class="ledger-filter-row">
+              <div class="ledger-filter-field">
+                <label>Keresés</label>
+                <input type="text" id="ledgerSearchInput" placeholder="Érintett vagy művelet..." />
+              </div>
+              <div class="ledger-filter-field">
+                <label>Dátumtól</label>
+                <input type="date" id="ledgerFromInput" />
+              </div>
+              <div class="ledger-filter-field">
+                <label>Dátumig</label>
+                <input type="date" id="ledgerToInput" />
+              </div>
+            </div>
+          </div>
+
+          <div class="ledger-table-wrap">
+            <table class="ledger-table">
+              <thead>
+                <tr>
+                  <th>Dátum</th>
+                  <th>Érintett</th>
+                  <th>Művelet</th>
+                  <th>Részletek</th>
+                  <th>Összeg</th>
+                  <th>Neked maradt</th>
+                </tr>
+              </thead>
+              <tbody id="ledgerTableBody"></tbody>
+            </table>
+            <p class="ledger-empty hidden" id="ledgerEmptyNote">Nincs egyetlen bejegyzés sem.</p>
           </div>
         </section>
 
