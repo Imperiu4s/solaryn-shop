@@ -237,9 +237,11 @@ async function tryAutoLogin() {
 // SolarBungee (playtime) és SolarLobby (SC/rang) szerver-oldali pluginok
 // töltik fel ezeket a /api/game/report végponton keresztül - innentől valódi
 // adatok, nem helykitöltő 0/"-" érték.
+// JAVÍTVA: a PrémiumPont-jelvény mostantól a felhasználó saját PP-érme
+// képét használja (assets/pp-coin.png) a korábbi generikus érme-SVG helyett.
 const STAT_ICONS = {
   rank: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l2.4 6.6L21 9l-5 4.6L17.4 21 12 17.3 6.6 21 8 13.6 3 9l6.6-.4z"/></svg>',
-  coin: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 15.9v1.1h-2v-1.1a3.6 3.6 0 0 1-2.8-2.4l1.8-.7a1.8 1.8 0 0 0 1.8 1.3c.8 0 1.4-.4 1.4-1s-.5-.9-1.7-1.2c-1.8-.5-3-1.2-3-2.9a2.8 2.8 0 0 1 2.5-2.6V7.3h2v1.1a3.2 3.2 0 0 1 2.3 2l-1.8.7a1.5 1.5 0 0 0-1.5-1.1c-.7 0-1.2.3-1.2.9s.6.8 1.8 1.2c1.9.5 2.9 1.3 2.9 2.9a2.9 2.9 0 0 1-2.5 2.9z"/></svg>',
+  coin: '<img src="assets/pp-coin.png" alt="PP" />',
   time: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 5v5.4l4 2.3-.8 1.3L11 13V7z"/></svg>'
 };
 
@@ -646,14 +648,30 @@ function renderAdminLockStatus(locked) {
   }
 }
 
+// A "Változtatás" gomb kattintásakor felfedett szerkesztő mezőnek kell
+// tudnia, mi a JELENLEG mentett email, hogy "Mégse"-nél pontosan erre
+// tudjon visszaállni (ne a régi, esetleg félbehagyott beírt szöveget mutassa).
+let currentAdminEmail = '';
+
+function setAdminEmailEditing(editing) {
+  $('#adminEmailView').classList.toggle('hidden', editing);
+  $('#adminEmailEditRow').classList.toggle('hidden', !editing);
+  if (editing) {
+    $('#adminPlayerEmailInput').value = currentAdminEmail;
+    $('#adminPlayerEmailInput').focus();
+  }
+}
+
 async function loadAdminPlayerPanel(username) {
-  $('#adminPlayerEmailInput').value = '';
+  currentAdminEmail = '';
+  $('#adminPlayerEmailText').textContent = '…';
   $('#adminPlayerCreatedAt').textContent = '…';
   $('#adminEmailResult').textContent = '';
   $('#adminLockStatus').textContent = '';
   $('#adminLockReasonInput').value = '';
   $('#adminPlayerLoginsBody').innerHTML = '';
   $('#adminPlayerDevicesBody').innerHTML = '';
+  setAdminEmailEditing(false);
   try {
     const res = await fetch(BACKEND_URL + '/api/admin/player/' + encodeURIComponent(username), {
       headers: { Authorization: 'Bearer ' + session.token }
@@ -663,7 +681,8 @@ async function loadAdminPlayerPanel(username) {
       $('#adminPlayerCreatedAt').textContent = '-';
       return;
     }
-    $('#adminPlayerEmailInput').value = data.email || '';
+    currentAdminEmail = data.email || '';
+    $('#adminPlayerEmailText').textContent = currentAdminEmail || '-';
     $('#adminPlayerCreatedAt').textContent = formatLedgerDate(data.createdAt);
     renderAdminLockStatus(data.locked);
     $('#adminPlayerLoginsBody').innerHTML = data.logins.map((l) => `
@@ -684,12 +703,29 @@ async function loadAdminPlayerPanel(username) {
   }
 }
 
+$('#adminEmailChangeBtn').addEventListener('click', () => setAdminEmailEditing(true));
+$('#adminEmailCancelBtn').addEventListener('click', () => setAdminEmailEditing(false));
+
 $('#adminPlayerEmailSave').addEventListener('click', async () => {
   const resultEl = $('#adminEmailResult');
   resultEl.textContent = '';
   resultEl.className = 'redeem-result';
   if (!lastAdminPlayerUsername) return;
   const email = $('#adminPlayerEmailInput').value.trim();
+  if (!email) {
+    resultEl.textContent = 'Adj meg egy email címet.';
+    resultEl.className = 'redeem-result error';
+    return;
+  }
+  if (email === currentAdminEmail) { setAdminEmailEditing(false); return; }
+
+  const confirmed = await confirmModal(
+    'Email cím módosítása',
+    `Biztosan megváltoztatod <b>${lastAdminPlayerUsername}</b> email címét erre: <b>${email}</b>?`,
+    'Igen, mentés'
+  );
+  if (!confirmed) return;
+
   try {
     const res = await fetch(BACKEND_URL + '/api/admin/player/' + encodeURIComponent(lastAdminPlayerUsername) + '/email', {
       method: 'POST',
@@ -702,6 +738,9 @@ $('#adminPlayerEmailSave').addEventListener('click', async () => {
       resultEl.className = 'redeem-result error';
       return;
     }
+    currentAdminEmail = email;
+    $('#adminPlayerEmailText').textContent = email;
+    setAdminEmailEditing(false);
     showToast('Email cím frissítve.');
   } catch {
     resultEl.textContent = 'Nem sikerült elérni a szervert.';
@@ -895,7 +934,7 @@ $('#btnBackToPlayers').addEventListener('click', () => switchView('players'));
 // útvonalak voltak, amik torzan/elcsúszva jelentek meg - most egyszerű,
 // garantáltan szimmetrikus SVG alapformákból (kör, vonal, téglalap) épülnek fel.
 const ICONS = {
-  coin: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 15.9v1.1h-2v-1.1a3.6 3.6 0 0 1-2.8-2.4l1.8-.7a1.8 1.8 0 0 0 1.8 1.3c.8 0 1.4-.4 1.4-1s-.5-.9-1.7-1.2c-1.8-.5-3-1.2-3-2.9a2.8 2.8 0 0 1 2.5-2.6V7.3h2v1.1a3.2 3.2 0 0 1 2.3 2l-1.8.7a1.5 1.5 0 0 0-1.5-1.1c-.7 0-1.2.3-1.2.9s.6.8 1.8 1.2c1.9.5 2.9 1.3 2.9 2.9a2.9 2.9 0 0 1-2.5 2.9z"/></svg>',
+  coin: '<img src="assets/pp-coin.png" alt="PP" />',
   gem: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M6 3h12l4 6-10 12L2 9z"/></svg>',
   crown: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 8l4 3 5-6 5 6 4-3-2 11H5z"/></svg>',
   micMute: `<svg viewBox="0 0 24 24">
@@ -982,7 +1021,7 @@ function renderRankCard(rank) {
         <div class="rank-card-name">${rank.label}</div>
       </div>
       <div class="rank-card-duration">${rank.duration}</div>
-      <div class="pkg-price">${formatPp(rank.priceCoins)}</div>
+      <div class="pkg-price rank-price"><img src="assets/pp-coin.png" alt="PP" class="rank-price-icon" />${formatPp(rank.priceCoins)}</div>
       <ul class="info-list rank-perm-list">${rank.perms.map((p) => `<li>${p}</li>`).join('')}</ul>
       <button type="button" class="btn-buy" data-rank-id="${rank.id}"${affordable ? '' : ' disabled'}>${affordable ? 'Vásárlás' : 'Nincs elég PP'}</button>
     </div>

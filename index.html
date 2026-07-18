@@ -221,7 +221,7 @@
           <div class="topbar-user-text">
             <span id="topbarUsername"></span>
             <span class="topbar-pp-badge">
-              <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 15.9v1.1h-2v-1.1a3.6 3.6 0 0 1-2.8-2.4l1.8-.7a1.8 1.8 0 0 0 1.8 1.3c.8 0 1.4-.4 1.4-1s-.5-.9-1.7-1.2c-1.8-.5-3-1.2-3-2.9a2.8 2.8 0 0 1 2.5-2.6V7.3h2v1.1a3.2 3.2 0 0 1 2.3 2l-1.8.7a1.5 1.5 0 0 0-1.5-1.1c-.7 0-1.2.3-1.2.9s.6.8 1.8 1.2c1.9.5 2.9 1.3 2.9 2.9a2.9 2.9 0 0 1-2.5 2.9z"/></svg>
+              <img src="assets/pp-coin.png" alt="PP" />
               <span id="topbarPpValue">0 PP</span>
             </span>
           </div>
@@ -539,9 +539,14 @@
             <div class="admin-info-grid">
               <div class="admin-info-item">
                 <span class="admin-info-label">Email</span>
-                <div class="admin-email-edit">
+                <div class="admin-email-view" id="adminEmailView">
+                  <span id="adminPlayerEmailText">-</span>
+                  <button type="button" class="link-btn" id="adminEmailChangeBtn">Változtatás</button>
+                </div>
+                <div class="admin-email-edit-row hidden" id="adminEmailEditRow">
                   <input type="text" id="adminPlayerEmailInput" placeholder="email@pelda.hu" />
                   <button type="button" class="device-link" id="adminPlayerEmailSave">Mentés</button>
+                  <button type="button" class="link-btn" id="adminEmailCancelBtn">Mégse</button>
                 </div>
               </div>
               <div class="admin-info-item">
@@ -552,11 +557,12 @@
             <p class="redeem-result" id="adminEmailResult"></p>
 
             <div class="admin-subsection-title">Fiók zárolása</div>
-            <p class="redeem-result" id="adminLockStatus"></p>
-            <div class="admin-lock-row">
-              <input type="text" id="adminLockReasonInput" placeholder="Indoklás a zároláshoz..." />
-              <button type="button" class="btn-glow admin-lock-btn" id="adminLockBtn">Zárolás</button>
-              <button type="button" class="btn-outline" id="adminUnlockBtn">Feloldás</button>
+            <div class="ban-panel admin-lock-panel">
+              <p class="redeem-result" id="adminLockStatus"></p>
+              <label>Indoklás</label>
+              <input type="text" id="adminLockReasonInput" placeholder="Pl. csalás, szabályszegés..." />
+              <button type="button" class="btn-glow admin-lock-btn" id="adminLockBtn">Fiók zárolása</button>
+              <button type="button" class="btn-outline" id="adminUnlockBtn">Zárolás feloldása</button>
             </div>
 
             <div class="admin-subsection-title">Kliens</div>
@@ -632,7 +638,7 @@
                 <label>Indoklás</label>
                 <input type="text" id="banReasonInput" placeholder="Pl. multi-account, csalás..." />
                 <button type="button" class="btn-glow" id="banSubmitBtn">Kliens tiltása</button>
-                <button type="button" class="btn-outline" id="unbanSubmitBtn" style="margin-top:10px; width:100%;">Tiltás feloldása</button>
+                <button type="button" class="btn-outline" id="unbanSubmitBtn">Tiltás feloldása</button>
                 <p class="redeem-result" id="banResult"></p>
               </div>
             </div>
