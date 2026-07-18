@@ -1,11 +1,14 @@
 // ── Backend kapcsolat ──
 // Ugyanaz a SolarBackend (Node/Express), amit a SolarLauncher is használ - a
 // login/register/me/skin végpontok innen valók, nem itt kerültek kitalálásra.
-// FIGYELEM: ha a SolarCenter végül HTTPS alól fut, ez a sima http:// cím
-// "kevert tartalomként" (mixed content) BLOKKOLVA lesz a böngészőben - ilyenkor
-// vagy egy HTTPS-re állított backend URL-t kell ide beírni, vagy egy proxyt kell
-// elé tenni. Helyi teszteléshez/HTTP-s hosztoláshoz így is működik.
-const BACKEND_URL = 'http://node2.hexaverse.hu:8341';
+// JAVÍTVA: a SolarCenter mostantól HTTPS alól fut (center.solaryn.hu, GitHub
+// Pages), ezért a korábbi sima http:// cím "kevert tartalomként" (mixed
+// content) BLOKKOLVA volt a böngészőben - a backendnek időközben lett egy
+// HTTPS-listenere is (ld. SolarBackend src/tls.js + data/tls-config.json),
+// ezt kell itt is használni. A domain neve ("api.overclockgame.hu") egy másik
+// projekthez lett eredetileg bejegyezve, de mivel ugyanaz a HTTPS-szerver
+// szolgálja ki most már a TELJES Solaryn-backendet is, működik erre is.
+const BACKEND_URL = 'https://api.overclockgame.hu:8908';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
