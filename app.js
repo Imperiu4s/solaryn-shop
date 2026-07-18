@@ -723,7 +723,7 @@ $('#banSubmitBtn').addEventListener('click', async () => {
   const confirmMsg = permanent
     ? `Biztosan <b>véglegesen</b> tiltod ezt az eszközt (#${currentDeviceId})?`
     : `Biztosan tiltod ezt az eszközt (#${currentDeviceId}) <b>${durationValue} ${unitLabel}</b>-ra?`;
-  const confirmed = await confirmModal('Kliens-tiltás megerősítése', confirmMsg);
+  const confirmed = await confirmModal('Kliens-tiltás megerősítése', confirmMsg, 'Igen, tiltás');
   if (!confirmed) return;
 
   try {
@@ -748,7 +748,7 @@ $('#banSubmitBtn').addEventListener('click', async () => {
 
 $('#unbanSubmitBtn').addEventListener('click', async () => {
   if (!currentDeviceId) return;
-  const confirmed = await confirmModal('Tiltás feloldása', `Biztosan feloldod ennek az eszköznek (#${currentDeviceId}) a kliens-tiltását?`);
+  const confirmed = await confirmModal('Tiltás feloldása', `Biztosan feloldod ennek az eszköznek (#${currentDeviceId}) a kliens-tiltását?`, 'Igen, feloldás');
   if (!confirmed) return;
   try {
     const res = await fetch(BACKEND_URL + '/api/admin/device/' + currentDeviceId + '/unban', {
@@ -893,7 +893,7 @@ document.addEventListener('click', (e) => {
 
 // Egyszerű, a site stílusát követő Igen/Mégse megerősítő modál (a natív
 // confirm() helyett) - Promise<boolean>-t ad vissza.
-function confirmModal(title, message) {
+function confirmModal(title, message, okLabel) {
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -903,7 +903,7 @@ function confirmModal(title, message) {
         <p>${message}</p>
         <div class="modal-actions">
           <button type="button" class="btn-outline" id="confirmModalCancel">Mégse</button>
-          <button type="button" class="btn-glow" id="confirmModalOk" style="margin-top:0;">Igen, vásárlás</button>
+          <button type="button" class="btn-glow" id="confirmModalOk" style="margin-top:0;">${okLabel || 'Igen'}</button>
         </div>
       </div>
     `;
@@ -927,7 +927,8 @@ async function buyRank(rankId, buttonEl) {
   }
   const confirmed = await confirmModal(
     'Biztosan megveszed?',
-    rank ? `A(z) <b>${rank.label}</b> rangot vásárolod meg <b>${formatPp(rank.priceCoins)}</b>-ért. Ez levonásra kerül az egyenlegedből.` : 'Biztosan megveszed ezt a rangot?'
+    rank ? `A(z) <b>${rank.label}</b> rangot vásárolod meg <b>${formatPp(rank.priceCoins)}</b>-ért. Ez levonásra kerül az egyenlegedből.` : 'Biztosan megveszed ezt a rangot?',
+    'Igen, vásárlás'
   );
   if (!confirmed) return;
 
@@ -1001,7 +1002,8 @@ $('#transferSubmitBtn').addEventListener('click', async () => {
   }
   const confirmed = await confirmModal(
     'Biztosan átutalod?',
-    `<b>${formatPp(amount)}</b>-t küldesz <b>${recipient}</b>-nak. A 10% díjjal együtt <b>${formatPp(total)}</b> kerül levonásra az egyenlegedből.`
+    `<b>${formatPp(amount)}</b>-t küldesz <b>${recipient}</b>-nak. A 10% díjjal együtt <b>${formatPp(total)}</b> kerül levonásra az egyenlegedből.`,
+    'Igen, utalás'
   );
   if (!confirmed) return;
 
