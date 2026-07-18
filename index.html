@@ -136,6 +136,27 @@
     </div>
   </section>
 
+  <!-- ── ZÁROLT FIÓK KÉPERNYŐ (owner-i zárolás esetén, ld. app.js) ── -->
+  <section id="lockedScreen" class="auth-screen hidden">
+    <div class="auth-split locked-split">
+      <div class="auth-form-side locked-form-side">
+        <div class="auth-brand">
+          <img class="brand-logo-img" src="assets/solaryn-icon.png" alt="Solaryn" />
+          <div class="auth-brand-name">SOLARCENTER<small>Solaryn Network</small></div>
+        </div>
+        <div class="ban-modal-icon">
+          <svg viewBox="0 0 24 24" width="40" height="40"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.2"/><line x1="6" y1="18" x2="18" y2="6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        </div>
+        <h1 class="ban-modal-title">A karaktered zárolás alá került</h1>
+        <p class="ban-modal-desc">Ameddig a zárolás fennáll, nem tudod használni a SolarCentert és a SolarLaunchert sem.</p>
+        <div class="ban-modal-details">
+          <div class="ban-modal-row"><span>Indok</span><b id="lockedReasonText">-</b></div>
+        </div>
+        <button type="button" class="btn-glow btn-glow-orange" id="btnLogoutLocked">Kijelentkezés</button>
+      </div>
+    </div>
+  </section>
+
   <!-- ── APP HÉJ (bejelentkezés után) ── -->
   <main id="appScreen" class="app-shell hidden">
     <nav class="app-sidebar">
@@ -518,12 +539,24 @@
             <div class="admin-info-grid">
               <div class="admin-info-item">
                 <span class="admin-info-label">Email</span>
-                <span id="adminPlayerEmail">-</span>
+                <div class="admin-email-edit">
+                  <input type="text" id="adminPlayerEmailInput" placeholder="email@pelda.hu" />
+                  <button type="button" class="device-link" id="adminPlayerEmailSave">Mentés</button>
+                </div>
               </div>
               <div class="admin-info-item">
                 <span class="admin-info-label">Regisztrált</span>
                 <span id="adminPlayerCreatedAt">-</span>
               </div>
+            </div>
+            <p class="redeem-result" id="adminEmailResult"></p>
+
+            <div class="admin-subsection-title">Fiók zárolása</div>
+            <p class="redeem-result" id="adminLockStatus"></p>
+            <div class="admin-lock-row">
+              <input type="text" id="adminLockReasonInput" placeholder="Indoklás a zároláshoz..." />
+              <button type="button" class="btn-glow admin-lock-btn" id="adminLockBtn">Zárolás</button>
+              <button type="button" class="btn-outline" id="adminUnlockBtn">Feloldás</button>
             </div>
 
             <div class="admin-subsection-title">Kliens</div>

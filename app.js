@@ -87,7 +87,11 @@ async function apiPost(path, body) {
 async function apiGetMe(token) {
   try {
     const res = await fetch(BACKEND_URL + '/api/me', { headers: { Authorization: 'Bearer ' + token } });
-    if (!res.ok) return { ok: false };
+    // JAVÍTVA: korábban egy nem-2xx válasz esetén (pl. 403 zárolt fióknál)
+    // eldobtuk a válasz törzsét, és csak egy csupasz {ok:false}-t adtunk
+    // vissza - emiatt a "locked"/"reason" mezők sosem jutottak el a
+    // hívóhoz. Most a törzset MINDIG megpróbáljuk beolvasni, státusztól
+    // függetlenül (ugyanaz a minta, mint az apiPost()-nál).
     return await res.json();
   } catch {
     return { ok: false };
@@ -114,11 +118,31 @@ async function doLogin() {
   const pass = $('#authPass').value;
   $('#authError').textContent = '';
   const res = await apiPost('/api/login', { username: user, password: pass });
-  if (!res.ok) { $('#authError').textContent = res.message || 'Sikertelen bejelentkezés.'; return; }
+  if (!res.ok) {
+    if (res.locked) { showLockedScreen(res.reason); return; }
+    $('#authError').textContent = res.message || 'Sikertelen bejelentkezés.';
+    return;
+  }
   session = { username: res.username, token: res.token };
   saveSession();
   enterApp();
 }
+
+// A zárolt-fiók képernyő bármely belépési ponton (friss login, automatikus
+// munkamenet-visszaállítás) megjeleníthető - mindig ugyanazt az élményt adja,
+// nem csak egy apró hibaüzenetet.
+function showLockedScreen(reason) {
+  $('#authScreen').classList.add('hidden');
+  $('#appScreen').classList.add('hidden');
+  $('#lockedReasonText').textContent = reason || 'nincs megadva';
+  $('#lockedScreen').classList.remove('hidden');
+}
+$('#btnLogoutLocked').addEventListener('click', () => {
+  session = null;
+  saveSession();
+  $('#lockedScreen').classList.add('hidden');
+  $('#authScreen').classList.remove('hidden');
+});
 
 // ── Regisztráció: születési dátum legördülők feltöltése ──
 const HU_MONTHS = ['Január', 'Február', 'Március', 'Április', 'Május', 'Június', 'Július', 'Augusztus', 'Szeptember', 'Október', 'November', 'December'];
@@ -196,6 +220,8 @@ async function tryAutoLogin() {
     session = { username: res.username, token: session.token };
     saveSession();
     enterApp(res);
+  } else if (res.locked) {
+    showLockedScreen(res.reason);
   } else {
     session = null;
     saveSession();
@@ -609,9 +635,23 @@ async function openPlayerProfile(username) {
 
 // ── Admin panel (csak "tulajdonos" rangnak) - email/regisztráció + kliens-
 // eszközök (ld. SolarBackend src/client.js /api/admin/*). ──
+function renderAdminLockStatus(locked) {
+  const statusEl = $('#adminLockStatus');
+  if (locked) {
+    statusEl.textContent = `Ez a fiók ZÁROLVA van. Indok: ${locked.reason}. Zárolta: ${locked.by}, ekkor: ${formatLedgerDate(locked.at)}.`;
+    statusEl.className = 'redeem-result error';
+  } else {
+    statusEl.textContent = 'Ez a fiók jelenleg nincs zárolva.';
+    statusEl.className = 'redeem-result';
+  }
+}
+
 async function loadAdminPlayerPanel(username) {
-  $('#adminPlayerEmail').textContent = '…';
+  $('#adminPlayerEmailInput').value = '';
   $('#adminPlayerCreatedAt').textContent = '…';
+  $('#adminEmailResult').textContent = '';
+  $('#adminLockStatus').textContent = '';
+  $('#adminLockReasonInput').value = '';
   $('#adminPlayerLoginsBody').innerHTML = '';
   $('#adminPlayerDevicesBody').innerHTML = '';
   try {
@@ -620,12 +660,12 @@ async function loadAdminPlayerPanel(username) {
     });
     const data = await res.json();
     if (!data.ok) {
-      $('#adminPlayerEmail').textContent = '-';
       $('#adminPlayerCreatedAt').textContent = '-';
       return;
     }
-    $('#adminPlayerEmail').textContent = data.email || '-';
+    $('#adminPlayerEmailInput').value = data.email || '';
     $('#adminPlayerCreatedAt').textContent = formatLedgerDate(data.createdAt);
+    renderAdminLockStatus(data.locked);
     $('#adminPlayerLoginsBody').innerHTML = data.logins.map((l) => `
       <tr>
         <td>${formatLedgerDate(l.created_at)}</td>
@@ -640,10 +680,90 @@ async function loadAdminPlayerPanel(username) {
       </tr>
     `).join('') || '<tr><td colspan="3">Nincs rögzített eszköz.</td></tr>';
   } catch {
-    $('#adminPlayerEmail').textContent = '-';
     $('#adminPlayerCreatedAt').textContent = '-';
   }
 }
+
+$('#adminPlayerEmailSave').addEventListener('click', async () => {
+  const resultEl = $('#adminEmailResult');
+  resultEl.textContent = '';
+  resultEl.className = 'redeem-result';
+  if (!lastAdminPlayerUsername) return;
+  const email = $('#adminPlayerEmailInput').value.trim();
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/player/' + encodeURIComponent(lastAdminPlayerUsername) + '/email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ email })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      resultEl.textContent = data.message || 'Nem sikerült menteni az email címet.';
+      resultEl.className = 'redeem-result error';
+      return;
+    }
+    showToast('Email cím frissítve.');
+  } catch {
+    resultEl.textContent = 'Nem sikerült elérni a szervert.';
+    resultEl.className = 'redeem-result error';
+  }
+});
+
+$('#adminLockBtn').addEventListener('click', async () => {
+  if (!lastAdminPlayerUsername) return;
+  const reason = $('#adminLockReasonInput').value.trim();
+  const statusEl = $('#adminLockStatus');
+  if (!reason) {
+    statusEl.textContent = 'Adj meg indoklást a zároláshoz.';
+    statusEl.className = 'redeem-result error';
+    return;
+  }
+  const confirmed = await confirmModal(
+    'Fiók zárolása',
+    `Biztosan zárolod <b>${lastAdminPlayerUsername}</b> fiókját? A zárolás alatt sem a SolarCentert, sem a SolarLaunchert nem tudja használni.`,
+    'Igen, zárolás'
+  );
+  if (!confirmed) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/player/' + encodeURIComponent(lastAdminPlayerUsername) + '/lock', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ reason })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      statusEl.textContent = data.message || 'Nem sikerült zárolni a fiókot.';
+      statusEl.className = 'redeem-result error';
+      return;
+    }
+    showToast('Fiók zárolva.');
+    loadAdminPlayerPanel(lastAdminPlayerUsername);
+  } catch {
+    statusEl.textContent = 'Nem sikerült elérni a szervert.';
+    statusEl.className = 'redeem-result error';
+  }
+});
+
+$('#adminUnlockBtn').addEventListener('click', async () => {
+  if (!lastAdminPlayerUsername) return;
+  const confirmed = await confirmModal('Zárolás feloldása', `Biztosan feloldod <b>${lastAdminPlayerUsername}</b> fiókjának zárolását?`, 'Igen, feloldás');
+  if (!confirmed) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/player/' + encodeURIComponent(lastAdminPlayerUsername) + '/unlock', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showToast('Zárolás feloldva.');
+      loadAdminPlayerPanel(lastAdminPlayerUsername);
+    } else {
+      showToast(data.message || 'Nem sikerült feloldani a zárolást.', true);
+    }
+  } catch {
+    showToast('Nem sikerült elérni a szervert.', true);
+  }
+});
 
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('.device-link[data-device-id]');
