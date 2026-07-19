@@ -682,6 +682,14 @@ async function openPlayerProfile(username) {
   const noteEl = $('#playerProfileSkinNote');
   const img = await loadSkinImage(username);
   if (!img) {
+    // JAVÍTVA: korábban itt csak a szöveg állt be, a canvas-t/előnézetet NEM
+    // állítottuk le/töröltük - ha korábban (akár a saját profilodon, akár egy
+    // másik keresésnél) már megjelent VALAMILYEN skin ezen a canvason, az
+    // tovább forgott/látszott, még egy skin NÉLKÜLI játékos profiljánál is
+    // (ld. loadHomeSkinPreview ugyanezen mintáját a Főoldalon).
+    if (stopPlayerPreview) { stopPlayerPreview(); stopPlayerPreview = null; }
+    const canvas = $('#playerProfileSkinCanvas');
+    canvas.width = canvas.width;
     noteEl.textContent = 'Ez a játékos még nem töltött fel skint.';
     return;
   }
