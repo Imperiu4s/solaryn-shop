@@ -364,6 +364,10 @@ async function enterApp(meData) {
   // vagy már eleve bejelentkezve volt egy ilyen linken keresztül érkezve, itt
   // fejezzük be az összekötést (ld. tryConsumeDiscordLink lejjebb).
   tryConsumeDiscordLink();
+
+  // Minden bejelentkezéskor megnézzük, kapott-e a felhasználó időközben
+  // (MÁR teljesített) ajándékot valakitől - ld. checkPendingGifts lejjebb.
+  checkPendingGifts();
 }
 
 // A Rangok fül megnyitásakor (ld. switchView) hívjuk - friss egyenleget kér
@@ -1113,6 +1117,7 @@ function renderPkgCard(item) {
       <div class="pkg-name">${item.short}</div>
       <div class="pkg-price">${formatHuf(item.priceHuf)}</div>
       <button type="button" class="btn-buy" data-item-id="${item.id}">Vásárlás</button>
+      <button type="button" class="btn-outline btn-gift" data-gift-item-id="${item.id}">🎁 Ajándékozás</button>
     </div>
   `;
 }
@@ -1164,6 +1169,7 @@ function renderRankCard(rank) {
       <div class="pkg-price rank-price"><img src="assets/pp-coin.png" alt="PP" class="rank-price-icon" />${formatPp(rank.priceCoins)}</div>
       <ul class="info-list rank-perm-list">${rank.perms.map((p) => `<li>${p}</li>`).join('')}</ul>
       <button type="button" class="btn-buy" data-rank-id="${rank.id}"${affordable ? '' : ' disabled'}>${affordable ? 'Vásárlás' : 'Nincs elég PP'}</button>
+      <button type="button" class="btn-outline btn-gift" data-gift-rank-id="${rank.id}"${affordable ? '' : ' disabled'}>🎁 Ajándékozás</button>
     </div>
   `;
 }
@@ -1214,7 +1220,7 @@ function confirmModal(title, message, okLabel) {
   });
 }
 
-async function buyRank(rankId, buttonEl) {
+async function buyRank(rankId, buttonEl, giftTo, giftMessage) {
   if (!session || !session.token) {
     showToast('A vásárláshoz jelentkezz be.', true);
     return;
@@ -1226,25 +1232,27 @@ async function buyRank(rankId, buttonEl) {
   }
   const confirmed = await confirmModal(
     'Biztosan megveszed?',
-    rank ? `A(z) <b>${rank.label}</b> rangot vásárolod meg <b>${formatPp(rank.priceCoins)}</b>-ért. Ez levonásra kerül az egyenlegedből.` : 'Biztosan megveszed ezt a rangot?',
-    'Igen, vásárlás'
+    giftTo
+      ? (rank ? `A(z) <b>${rank.label}</b> rangot ajándékozod <b>${giftTo}</b>-nak <b>${formatPp(rank.priceCoins)}</b>-ért - ez a TE egyenlegedből kerül levonásra.` : `Biztosan ajándékozod ezt a rangot ${giftTo}-nak?`)
+      : (rank ? `A(z) <b>${rank.label}</b> rangot vásárolod meg <b>${formatPp(rank.priceCoins)}</b>-ért. Ez levonásra kerül az egyenlegedből.` : 'Biztosan megveszed ezt a rangot?'),
+    giftTo ? 'Igen, ajándékozás' : 'Igen, vásárlás'
   );
   if (!confirmed) return;
 
   const originalText = buttonEl.textContent;
   buttonEl.disabled = true;
-  buttonEl.textContent = 'Vásárlás...';
+  buttonEl.textContent = giftTo ? 'Ajándékozás...' : 'Vásárlás...';
   try {
     const res = await fetch(BACKEND_URL + '/api/shop/purchase-rank', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
-      body: JSON.stringify({ rankId })
+      body: JSON.stringify(giftTo ? { rankId, giftTo, giftMessage } : { rankId })
     });
     const data = await res.json();
     if (!data.ok) {
       showToast(data.message || 'Nem sikerült elindítani a vásárlást.', true);
     } else {
-      showToast('Vásárlás elindítva - ha elég PrémiumPontod van, kb. 1 percen belül megkapod a rangot.');
+      showToast(giftTo ? `Ajándékozás elindítva - ${giftTo} kb. 1 percen belül megkapja a rangot.` : 'Vásárlás elindítva - ha elég PrémiumPontod van, kb. 1 percen belül megkapod a rangot.');
     }
   } catch {
     showToast('Nem sikerült elérni a szervert.', true);
@@ -1253,6 +1261,80 @@ async function buyRank(rankId, buttonEl) {
     buttonEl.textContent = originalText;
   }
 }
+
+// Az ajándékozás címzettjét/opcionális üzenetét kérdező modál - a
+// confirmModal()-hoz hasonló Promise-alapú minta, de saját input mezőkkel. A
+// visszaadott {giftTo, giftMessage} objektumot a buyItem()/buyRank() a
+// checkout/purchase-rank kérés testébe fűzi bele (ld. SolarBackend src/shop.js
+// validateGiftTarget() végzi a tényleges, biztonságos ellenőrzést).
+function giftModal(itemLabel) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal-card">
+        <h3>Ajándékozás</h3>
+        <p>Kinek ajándékozod ezt: <b>${itemLabel}</b>?</p>
+        <label class="gift-modal-label" for="giftModalRecipient">Címzett felhasználóneve</label>
+        <input type="text" id="giftModalRecipient" class="gift-modal-input" placeholder="Játékosnév" />
+        <label class="gift-modal-label" for="giftModalMessage">Üzenet a címzettnek (nem kötelező)</label>
+        <textarea id="giftModalMessage" class="gift-modal-input" placeholder="Pl. Boldog szülinapot!" maxlength="256" rows="2"></textarea>
+        <div class="modal-actions" style="margin-top:18px;">
+          <button type="button" class="btn-outline" id="giftModalCancel">Mégse</button>
+          <button type="button" class="btn-glow" id="giftModalOk" style="margin-top:0;">Ajándékozás</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const finish = (result) => { overlay.remove(); resolve(result); };
+    overlay.querySelector('#giftModalCancel').addEventListener('click', () => finish(null));
+    overlay.querySelector('#giftModalOk').addEventListener('click', () => {
+      const recipient = overlay.querySelector('#giftModalRecipient').value.trim();
+      const message = overlay.querySelector('#giftModalMessage').value.trim();
+      if (!recipient) {
+        showToast('Add meg a címzett felhasználónevét.', true);
+        return;
+      }
+      finish({ giftTo: recipient, giftMessage: message || undefined });
+    });
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) finish(null); });
+  });
+}
+
+async function giftItem(itemId, buttonEl) {
+  if (!session || !session.token) {
+    showToast('A vásárláshoz jelentkezz be.', true);
+    return;
+  }
+  const item = shopCatalog.find((i) => i.id === itemId);
+  const result = await giftModal(item ? item.short : 'a csomagot');
+  if (!result) return;
+  buyItem(itemId, buttonEl, result.giftTo, result.giftMessage);
+}
+
+async function giftRank(rankId, buttonEl) {
+  if (!session || !session.token) {
+    showToast('A vásárláshoz jelentkezz be.', true);
+    return;
+  }
+  const rank = shopRanks.find((r) => r.id === rankId);
+  if (rank && currentPpBalance < rank.priceCoins) {
+    showToast('Nincs elég PrémiumPontod ehhez a ranghoz.', true);
+    return;
+  }
+  const result = await giftModal(rank ? rank.label : 'a rangot');
+  if (!result) return;
+  buyRank(rankId, buttonEl, result.giftTo, result.giftMessage);
+}
+
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.btn-gift[data-gift-item-id]');
+  if (btn) giftItem(btn.dataset.giftItemId, btn);
+});
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.btn-gift[data-gift-rank-id]');
+  if (btn && !btn.disabled) giftRank(btn.dataset.giftRankId, btn);
+});
 
 // ── Átutalás - a tényleges levonást/jóváírást is a beváltó plugin végzi
 // (aszinkron, ld. SolarShop fulfillTransfer), itt csak elindítjuk a kérést. A
@@ -1343,7 +1425,9 @@ const LEDGER_TYPE_LABELS = {
   transfer_in: 'Átutalás',
   transfer_out: 'Átutalás',
   purchase: 'Vásárlás',
-  game_purchase: 'Játékbeli vásárlás'
+  game_purchase: 'Játékbeli vásárlás',
+  gift_sent: 'Ajándékozás (küldött)',
+  gift_received: 'Ajándékozás (kapott)'
 };
 
 let ledgerEntries = [];
@@ -1495,7 +1579,7 @@ document.addEventListener('click', (e) => {
   if (btn) buyItem(btn.dataset.itemId, btn);
 });
 
-async function buyItem(itemId, buttonEl) {
+async function buyItem(itemId, buttonEl, giftTo, giftMessage) {
   if (!session || !session.token) {
     showToast('A vásárláshoz jelentkezz be.', true);
     return;
@@ -1511,8 +1595,13 @@ async function buyItem(itemId, buttonEl) {
       // hova irányítson vissza a Stripe checkout után - a puszta origin nem
       // volt elég, mert ha a SolarCenter nem a domain gyökerén fut, a
       // gyökérre visszadobás egy másik oldalt (pl. a "hamarosan" landing
-      // page-et) mutatta a fizetés után a checkmark helyett.
-      body: JSON.stringify({ itemId, returnUrl: window.location.origin + window.location.pathname })
+      // page-et) mutatta a fizetés után a checkmark helyett. A giftTo/
+      // giftMessage csak akkor kerül bele, ha ajándékozásról van szó (ld.
+      // giftItem() lejjebb) - a backend a Stripe session "metadata" mezőjén
+      // keresztül viszi át a webhookig.
+      body: JSON.stringify(giftTo
+        ? { itemId, returnUrl: window.location.origin + window.location.pathname, giftTo, giftMessage }
+        : { itemId, returnUrl: window.location.origin + window.location.pathname })
     });
     const data = await res.json();
     if (!data.ok || !data.url) {
@@ -1621,6 +1710,65 @@ async function tryConsumeDiscordLink() {
     }
   } catch {
     showToast('Nem sikerült elérni a szervert a Discord-összekötéshez.', true);
+  }
+}
+
+// ── Ajándék-értesítés (ld. SolarBackend src/shop.js GET /api/shop/gifts/pending) ──
+// Csak a MÁR TELJESÍTETT (a SolarShop plugin által ténylegesen jóváírt)
+// ajándékokat kérdezzük le - enterApp() végén, minden bejelentkezéskor, hogy
+// a következő belépéskor is megjelenjen, ha valaki épp akkor kapott
+// ajándékot, amikor nem volt bejelentkezve.
+function giftItemLabel(gift) {
+  if (gift.item_type === 'rank') return gift.label ? `a(z) ${gift.label} rangot` : 'egy rangot';
+  if (typeof gift.amount === 'number' && gift.amount > 0) return formatPp(gift.amount);
+  return gift.label || 'egy terméket';
+}
+
+function showNextGiftModal(queue) {
+  if (!queue.length) return;
+  const gift = queue.shift();
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal-card purchase-success-card">
+      <div class="purchase-success-icon" style="font-size:28px;border-color:var(--gold);color:var(--gold);box-shadow:0 0 24px var(--gold-glow);">🎁</div>
+      <h3>Ajándékot kaptál!</h3>
+      <p><b>${gift.from}</b> ajándékozott neked ${giftItemLabel(gift)}.</p>
+      ${gift.gift_message ? `<p class="gift-message">„${gift.gift_message}”</p>` : ''}
+      <div class="modal-actions">
+        <button type="button" class="btn-outline" id="giftAckBtn" style="flex:0 1 160px;margin:0 auto;">Rendben</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const finish = async () => {
+    overlay.remove();
+    try {
+      await fetch(BACKEND_URL + '/api/shop/gifts/' + gift.id + '/ack', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + session.token }
+      });
+    } catch {
+      // Csendben kihagyjuk - ha nem sikerült nyugtázni, a következő
+      // bejelentkezéskor egyszerűen újra megjelenik ugyanez az ajándék.
+    }
+    showNextGiftModal(queue);
+  };
+  overlay.querySelector('#giftAckBtn').addEventListener('click', finish);
+}
+
+async function checkPendingGifts() {
+  if (!session || !session.token) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/shop/gifts/pending', {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    if (data.ok && Array.isArray(data.gifts) && data.gifts.length) {
+      showNextGiftModal(data.gifts.slice());
+    }
+  } catch {
+    // Csendben kihagyjuk - a következő bejelentkezéskor úgyis újra lekérdezzük.
   }
 }
 

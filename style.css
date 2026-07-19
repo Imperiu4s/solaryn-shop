@@ -353,6 +353,11 @@ a { color: inherit; }
 }
 .btn-buy:hover { filter: brightness(1.06); }
 .btn-buy:disabled { cursor: default; opacity: .7; filter: none; }
+.btn-gift {
+  width: 100%; padding: 8px 0; margin-top: 8px; border-radius: 9px;
+  font-size: 11px; text-transform: uppercase; font-weight: 700;
+}
+.btn-gift:disabled { cursor: default; opacity: .5; }
 
 /* Rangkártyák (PrémiumPontból vásárolhatók, nem Stripe-fizetéssel) - a
    .pkg-card-hoz hasonló alapstílus, de magasabb, hogy elférjen benne a
@@ -708,6 +713,24 @@ a { color: inherit; }
 @keyframes purchaseCheckPop {
   from { transform: scale(.4); opacity: 0; }
   to { transform: scale(1); opacity: 1; }
+}
+
+/* Ajándékozás modál (címzett/üzenet bekérése) és az ajándék-értesítés
+   idézett üzenete - a .transfer-card input-hoz hasonló mezőstílus, de a
+   modal-card-on belül is használható (nem csak a .transfer-card-on belül). */
+.gift-modal-label {
+  display: block; font-size: 11px; color: var(--text-dim); margin: 14px 2px 6px;
+  letter-spacing: .5px; text-transform: uppercase; text-align: left;
+}
+.gift-modal-input {
+  width: 100%; padding: 12px 14px; border-radius: 11px; font-family: inherit;
+  background: var(--bg); border: 1px solid var(--line); color: var(--text); font-size: 14px; outline: none;
+  transition: border-color .18s; resize: vertical;
+}
+.gift-modal-input:focus { border-color: var(--gold); }
+.gift-message {
+  font-style: italic; color: var(--text); background: rgba(255,176,32,.06);
+  border: 1px solid rgba(255,176,32,.2); border-radius: 10px; padding: 12px 14px; margin: -8px 0 18px;
 }
 
 @media (max-width: 760px) {
