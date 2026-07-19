@@ -202,6 +202,11 @@
           <svg viewBox="0 0 24 24"><path d="M11 2a5 5 0 1 0 5 5 5 5 0 0 0-5-5zm-8.5 20a8.5 8.5 0 0 1 17 0zM19 8a3.5 3.5 0 1 0 0 7 .5.5 0 0 0 0-1 2.5 2.5 0 1 1 0-5 .5.5 0 0 0 0-1z"/></svg>
           <span>Játékosok</span>
         </button>
+        <!-- Csak "tulajdonos" rangú felhasználóknak jelenik meg, ld. app.js isOwner -->
+        <button class="app-nav-item hidden" id="navAdminLogs" data-view="adminLogs">
+          <svg viewBox="0 0 24 24"><path d="M6 3h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 12h6M9 16h6M9 8h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="18" cy="18" r="4.2" fill="var(--bg,#0d0d12)" stroke="currentColor" stroke-width="1.6"/><path d="M18 16.3v1.9l1.3 1.1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Napló (admin)</span>
+        </button>
       </div>
 
       <div class="app-nav-spacer"></div>
@@ -509,6 +514,45 @@
 
           <h2 id="playerResultHeading" class="player-result-heading hidden">Talált <span class="text-accent">játékosok</span></h2>
           <div id="playerResult" class="player-result-grid"></div>
+        </section>
+
+        <!-- NAPLÓ (ADMIN) - csak "tulajdonos" rangnak, ld. app.js isOwner -->
+        <section class="view" data-view="adminLogs">
+          <h1 class="page-title">Napló (admin)</h1>
+          <p class="page-note" id="adminLogsScopeNote">Legutóbbi 100 bejegyzés (globális, minden játékos).</p>
+
+          <div class="card player-search-panel">
+            <label class="player-search-label">Játékosnév szerinti szűrés</label>
+            <div class="player-search-row">
+              <div class="player-search-field">
+                <input type="text" id="adminLogsUserSearchInput" placeholder="Játékosnév" />
+                <svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M21 21l-4.3-4.3M18 11a7 7 0 1 1-14 0 7 7 0 0 1 14 0z"/></svg>
+              </div>
+              <button class="btn-search" id="adminLogsUserSearchBtn">
+                <svg viewBox="0 0 24 24" width="15" height="15"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M21 21l-4.3-4.3M18 11a7 7 0 1 1-14 0 7 7 0 0 1 14 0z"/></svg>
+                Keresés
+              </button>
+              <button class="btn-search" id="adminLogsClearBtn" type="button">Globális nézet</button>
+            </div>
+          </div>
+
+          <div class="ledger-table-wrap">
+            <table class="ledger-table">
+              <thead>
+                <tr>
+                  <th>Dátum</th>
+                  <th>Játékos</th>
+                  <th>Érintett</th>
+                  <th>Művelet</th>
+                  <th>Részletek</th>
+                  <th>Összeg</th>
+                  <th>Egyenleg utána</th>
+                </tr>
+              </thead>
+              <tbody id="adminLogsTableBody"></tbody>
+            </table>
+            <p class="ledger-empty hidden" id="adminLogsEmptyNote">Nincs egyetlen bejegyzés sem.</p>
+          </div>
         </section>
 
         <!-- JÁTÉKOS PROFIL (egy találatra kattintva) -->

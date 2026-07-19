@@ -282,8 +282,13 @@ function formatPlaytime(seconds) {
 
 function formatStats(data) {
   if (!data) return emptyStats();
+  // A jelvényen a LuckPerms chat-PREFIX jelenik meg (pl. "[VIP]"), nem a nyers
+  // csoportnév ("vip") - ha a SolarLobby plugin még nem jelentett prefixet
+  // (pl. régebbi verzió, vagy a csoportnak nincs beállítva), visszaesünk a
+  // csoportnévre, hogy a jelvény sose maradjon üres. Az isOwner-döntés
+  // (enterApp) EZZEL SZEMBEN mindig a nyers "data.rank"-ot nézi, sosem ezt.
   return {
-    rank: data.rank ? data.rank : '—',
+    rank: data.rankPrefix ? data.rankPrefix : (data.rank ? data.rank : '—'),
     coin: typeof data.scBalance === 'number' ? data.scBalance.toLocaleString('hu-HU') : '0',
     time: formatPlaytime(data.playtimeSeconds)
   };
@@ -321,6 +326,7 @@ async function enterApp(meData) {
   currentPpBalance = typeof meData?.scBalance === 'number' ? meData.scBalance : 0;
   renderProfilePpBadge();
   isOwner = typeof meData?.rank === 'string' && meData.rank.toLowerCase() === 'tulajdonos';
+  $('#navAdminLogs').classList.toggle('hidden', !isOwner);
 
   loadTopbarAvatar();
   loadHomeSkinPreview();
@@ -398,6 +404,11 @@ function switchView(view) {
   // (a dátum-szűrők szerint), a keresés viszont kliens-oldalon szűr a már
   // letöltött listán, nem küld újabb kérést minden billentyűleütésre.
   if (view === 'ledger') loadLedger();
+  // A tulajdonosi Napló (admin) fület minden megnyitáskor a globális
+  // (mindenkire kiterjedő) nézetre állítjuk vissza - a korábban beírt
+  // játékosnév-szűrés nem marad meg fülváltás után, hogy ne legyen
+  // meglepő/régi szűrt nézet a legközelebbi megnyitáskor.
+  if (view === 'adminLogs') loadAdminLogsGlobal();
 }
 $$('.app-nav-item[data-view]').forEach((btn) => {
   btn.addEventListener('click', () => switchView(btn.dataset.view));
@@ -1350,6 +1361,75 @@ async function loadLedger() {
 }
 
 $('#ledgerSearchInput').addEventListener('input', renderLedgerTable);
+
+// ── Napló (admin) - tulajdonosi rálátás MINDEN játékos pp_ledger
+// bejegyzésére (ld. SolarBackend GET /api/admin/logs[/:username]), szemben a
+// fenti (saját) Napló füllel - ugyanazt a "ledger-table" HTML/CSS mintát és
+// segédfüggvényeket (formatLedgerDate/LEDGER_TYPE_LABELS/formatPp) használja,
+// csak egy plusz "Játékos" oszloppal, mert itt több felhasználó keveredik. ──
+let adminLogsEntries = [];
+
+function renderAdminLogRow(entry) {
+  const typeLabel = LEDGER_TYPE_LABELS[entry.type] || entry.type;
+  const amountClass = entry.amount > 0 ? 'ledger-amount-positive' : entry.amount < 0 ? 'ledger-amount-negative' : 'ledger-amount-zero';
+  const amountText = (entry.amount > 0 ? '+' : '') + formatPp(entry.amount);
+  return `
+    <tr>
+      <td>${formatLedgerDate(entry.created_at)}</td>
+      <td>${entry.username}</td>
+      <td>${entry.counterparty || '-'}</td>
+      <td>${typeLabel}</td>
+      <td>${entry.detail || '-'}</td>
+      <td class="${amountClass}">${amountText}</td>
+      <td class="ledger-balance">${formatPp(entry.balance_after)}</td>
+    </tr>
+  `;
+}
+
+function renderAdminLogsTable() {
+  $('#adminLogsTableBody').innerHTML = adminLogsEntries.map(renderAdminLogRow).join('');
+  $('#adminLogsEmptyNote').classList.toggle('hidden', adminLogsEntries.length > 0);
+}
+
+async function loadAdminLogsGlobal() {
+  if (!session || !session.token || !isOwner) return;
+  $('#adminLogsUserSearchInput').value = '';
+  $('#adminLogsScopeNote').textContent = 'Legutóbbi 100 bejegyzés (globális, minden játékos).';
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/logs', {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    adminLogsEntries = data.ok && Array.isArray(data.entries) ? data.entries : [];
+  } catch {
+    adminLogsEntries = [];
+  }
+  renderAdminLogsTable();
+}
+
+async function loadAdminLogsForUser(username) {
+  if (!session || !session.token || !isOwner || !username) return;
+  $('#adminLogsScopeNote').textContent = `"${username}" legutóbbi 100 bejegyzése.`;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/logs/' + encodeURIComponent(username), {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    adminLogsEntries = data.ok && Array.isArray(data.entries) ? data.entries : [];
+  } catch {
+    adminLogsEntries = [];
+  }
+  renderAdminLogsTable();
+}
+
+$('#adminLogsUserSearchBtn').addEventListener('click', () => {
+  const username = $('#adminLogsUserSearchInput').value.trim();
+  if (username) loadAdminLogsForUser(username); else loadAdminLogsGlobal();
+});
+$('#adminLogsUserSearchInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') $('#adminLogsUserSearchBtn').click();
+});
+$('#adminLogsClearBtn').addEventListener('click', loadAdminLogsGlobal);
 $('#ledgerFromInput').addEventListener('change', loadLedger);
 $('#ledgerToInput').addEventListener('change', loadLedger);
 

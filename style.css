@@ -485,7 +485,10 @@ a { color: inherit; }
    itt is, hogy a két hely (kliens-tiltás / fiók-zárolás) egységes, modern
    megjelenést kapjon, nem külön-külön kialakított, eltérő stílust. */
 .admin-lock-panel { margin-bottom: 24px; }
-.admin-danger-title { color: var(--danger); }
+/* JAVÍTVA: a "Fiók végleges törlése" cím korábban közvetlenül a fenti
+   .content-grid táblák alá lógott (egyik oldalon sem volt margó közöttük),
+   emiatt vizuálisan egybefolyt velük - ez a felső margó választja el őket. */
+.admin-danger-title { color: var(--danger); margin-top: 32px; }
 .admin-delete-panel .btn-glow:disabled { cursor: not-allowed; opacity: .45; filter: none; }
 #adminDeleteUsernameHint { color: var(--text); font-weight: 700; }
 .ban-panel .btn-outline { width: 100%; margin-top: 10px; }
