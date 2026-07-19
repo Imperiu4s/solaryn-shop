@@ -252,7 +252,7 @@ const STAT_ICONS = {
 
 function renderStatBadges(container, values) {
   const items = [
-    { icon: 'rank', label: 'Rang', value: values.rank },
+    { icon: 'rank', label: 'Rang', value: values.rank, color: values.rankColor },
     { icon: 'coin', label: 'PrémiumPont', value: values.coin },
     { icon: 'time', label: 'Online töltött idő', value: values.time }
   ];
@@ -261,7 +261,7 @@ function renderStatBadges(container, values) {
       <div class="stat-badge-icon">${STAT_ICONS[it.icon]}</div>
       <div>
         <div class="stat-badge-label">${it.label}</div>
-        <div class="stat-badge-value">${it.value}</div>
+        <div class="stat-badge-value"${it.color ? ` style="color:${it.color}"` : ''}>${it.value}</div>
       </div>
     </div>
   `).join('');
@@ -271,8 +271,15 @@ function renderStatBadges(container, values) {
 // sosem lépett még a szerverre), a megfelelő mező null/hiányzik a backendtől -
 // ilyenkor esik vissza helykitöltőre ("—"/"0"/"0 óra").
 function emptyStats() {
-  return { rank: '—', coin: '0', time: '0 óra' };
+  return { rank: '—', rankColor: null, coin: '0', time: '0 óra' };
 }
+
+// A backend a "rankPrefixColor" mezőt már szigorúan "#RRGGBB" formára
+// ellenőrizve tárolja (ld. SolarBackend server.js RANK_PREFIX_COLOR_RE-jét),
+// de mivel ez közvetlenül egy inline "style" attribútumba kerül, itt,
+// kliens-oldalon is újra ellenőrizzük - védelmi rétegként, nem mert a
+// backendben ne bíznánk.
+const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/;
 
 function formatPlaytime(seconds) {
   const s = typeof seconds === 'number' && Number.isFinite(seconds) ? seconds : 0;
@@ -289,6 +296,7 @@ function formatStats(data) {
   // (enterApp) EZZEL SZEMBEN mindig a nyers "data.rank"-ot nézi, sosem ezt.
   return {
     rank: data.rankPrefix ? data.rankPrefix : (data.rank ? data.rank : '—'),
+    rankColor: typeof data.rankPrefixColor === 'string' && HEX_COLOR_RE.test(data.rankPrefixColor) ? data.rankPrefixColor : null,
     coin: typeof data.scBalance === 'number' ? data.scBalance.toLocaleString('hu-HU') : '0',
     time: formatPlaytime(data.playtimeSeconds)
   };
