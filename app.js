@@ -294,6 +294,31 @@ function formatStats(data) {
   };
 }
 
+// ÚJ: "Összekötve ezzel: ..." jelvény a profil-kártyán (Főoldal SAJÁT profil,
+// illetve a tulajdonosi Játékos-profil admin panelje) - ugyanazt a
+// data.discordUsername/discordAvatar mezőpárt használja mindkét helyen (ld.
+// SolarBackend /api/me, /api/profile/:username, /api/admin/player/:username).
+function renderDiscordLinkBadge(container, data) {
+  if (!container) return;
+  if (data && data.discordUsername) {
+    const avatarHtml = data.discordAvatar
+      ? `<img class="discord-link-avatar" src="${data.discordAvatar}" alt="" />`
+      : '';
+    container.innerHTML = `
+      <div class="discord-link-badge discord-link-badge-connected">
+        ${avatarHtml}
+        <span>Összekötve ezzel: <b>${data.discordUsername}</b></span>
+      </div>
+    `;
+  } else {
+    container.innerHTML = `
+      <div class="discord-link-badge discord-link-badge-empty">
+        <span>Nincs összekötve Discord fiók - írd be a szerveren: <code>/link</code></span>
+      </div>
+    `;
+  }
+}
+
 // A rangvásárlás gombjai (ld. renderRankCard/refreshPpBalance) ebből olvassák
 // ki, hogy a játékosnak van-e elég fedezete - ez csak kliens-oldali UX-segéd
 // (a tényleges, biztonságos ellenőrzést a beváltó plugin végzi élő adaton),
@@ -323,6 +348,7 @@ async function enterApp(meData) {
 
   if (!meData) meData = await apiGetMe(session.token);
   renderStatBadges($('#statBadgeGrid'), formatStats(meData));
+  renderDiscordLinkBadge($('#profileDiscordLink'), meData);
   currentPpBalance = typeof meData?.scBalance === 'number' ? meData.scBalance : 0;
   renderProfilePpBadge();
   isOwner = typeof meData?.rank === 'string' && meData.rank.toLowerCase() === 'tulajdonos';
@@ -332,6 +358,12 @@ async function enterApp(meData) {
   loadHomeSkinPreview();
   loadDiscordWidget();
   renderSideRails();
+
+  // A Wolfy Discord bot /link (vagy /update) parancsa ide (?discordLink=<token>)
+  // irányítja a felhasználót - ha épp most jelentkezett be/regisztrált emiatt,
+  // vagy már eleve bejelentkezve volt egy ilyen linken keresztül érkezve, itt
+  // fejezzük be az összekötést (ld. tryConsumeDiscordLink lejjebb).
+  tryConsumeDiscordLink();
 }
 
 // A Rangok fül megnyitásakor (ld. switchView) hívjuk - friss egyenleget kér
@@ -729,6 +761,7 @@ async function loadAdminPlayerPanel(username) {
   currentAdminEmail = '';
   $('#adminPlayerEmailText').textContent = '…';
   $('#adminPlayerCreatedAt').textContent = '…';
+  $('#adminPlayerDiscordLink').textContent = '…';
   $('#adminEmailResult').textContent = '';
   $('#adminLockStatus').textContent = '';
   $('#adminLockReasonInput').value = '';
@@ -751,6 +784,7 @@ async function loadAdminPlayerPanel(username) {
     currentAdminEmail = data.email || '';
     $('#adminPlayerEmailText').textContent = currentAdminEmail || '-';
     $('#adminPlayerCreatedAt').textContent = formatLedgerDate(data.createdAt);
+    renderDiscordLinkBadge($('#adminPlayerDiscordLink'), data);
     renderAdminLockStatus(data.locked);
     $('#adminPlayerLoginsBody').innerHTML = data.logins.map((l) => `
       <tr>
@@ -1540,6 +1574,55 @@ function showPurchaseSuccessModal() {
   const newUrl = window.location.pathname + (newSearch ? '?' + newSearch : '') + window.location.hash;
   window.history.replaceState({}, '', newUrl);
 })();
+
+// ── Discord fiók összekötés (ld. SolarBackend src/discord.js) ──
+// A Wolfy Discord bot /link (vagy /update) parancsa egy "?discordLink=<token>"
+// linket ad a felhasználónak - a tokent itt, oldalbetöltéskor olvassuk ki
+// (de MÉG NEM töröljük az URL-ből, mert a felhasználó lehet, hogy még nincs
+// bejelentkezve). A tényleges "elfogyasztás" (a token beváltása a MÁR
+// bejelentkezett munkamenettel) az enterApp() VÉGÉN történik (ld. ott a
+// tryConsumeDiscordLink() hívást) - ez az egyetlen hely, amit MINDEN
+// bejelentkezési út (automata/kézi/regisztráció) lefut, tehát a token attól
+// függetlenül beváltódik, hogy a felhasználó a linkre kattintáskor már be
+// volt-e jelentkezve, vagy csak utána jelentkezett be.
+let pendingDiscordLinkToken = (function readPendingDiscordLinkToken() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('discordLink') || null;
+})();
+
+function clearDiscordLinkParam() {
+  const params = new URLSearchParams(window.location.search);
+  params.delete('discordLink');
+  const newSearch = params.toString();
+  const newUrl = window.location.pathname + (newSearch ? '?' + newSearch : '') + window.location.hash;
+  window.history.replaceState({}, '', newUrl);
+}
+
+async function tryConsumeDiscordLink() {
+  if (!pendingDiscordLinkToken || !session || !session.token) return;
+  const token = pendingDiscordLinkToken;
+  pendingDiscordLinkToken = null; // azonnal töröljük, hogy egy hibás válasz se próbálkozzon újra a helyén
+  clearDiscordLinkParam();
+
+  // apiPost() nem küld Authorization fejlécet, ez a végpont viszont
+  // requireAuth-os - ezért itt közvetlenül fetch-elünk, a session tokenjével.
+  try {
+    const res = await fetch(BACKEND_URL + '/api/discord/consume', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ token })
+    });
+    const result = await res.json();
+    if (result.ok) {
+      showToast(`Discord fiók összekötve: ${result.discordUsername}`);
+      renderDiscordLinkBadge($('#profileDiscordLink'), { discordUsername: result.discordUsername, discordAvatar: result.discordAvatar });
+    } else {
+      showToast(result.message || 'A Discord-összekötés sikertelen.', true);
+    }
+  } catch {
+    showToast('Nem sikerült elérni a szervert a Discord-összekötéshez.', true);
+  }
+}
 
 // ── Discord widget ──
 // JAVÍTVA: a korábbi saját widget.json-fetch megoldás helyett most a Discord
