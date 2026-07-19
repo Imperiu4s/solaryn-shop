@@ -302,7 +302,15 @@ a { color: inherit; }
 .stat-badge-icon svg { width: 24px; height: 24px; fill: currentColor; }
 .stat-badge-icon img { width: 30px; height: 30px; object-fit: contain; }
 .stat-badge-label { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-faint); margin-bottom: 4px; }
-.stat-badge-value { font-size: 22px; font-weight: 800; color: var(--text); }
+/* JAVÍTVA: a LuckPerms rang-prefixek gyakran fonetikus KIS KAPITÁLIS Unicode
+   karaktereket használnak (pl. "ᴛᴜʟᴀᴊᴅᴏɴᴏꜱ") a stilizált kinézethez - az
+   alap "Segoe UI" ezeknek csak egy részét (Phonetic Extensions) fedi le, a
+   ritkább Latin Extended-D karakterekre (pl. a "ꜱ" kis kapitális S-re)
+   Windows-on egy MÁSIK, vizuálisan eltérő betűtípusra esik vissza - emiatt
+   tűnt "más betűtípusúnak"/hibásnak pont az utolsó betű. A "Segoe UI
+   Historic" a Windows saját, kifejezetten ezekhez a blokkokhoz csomagolt
+   betűtípusa - előre véve a láncban egységesen fedi az egész prefixet. */
+.stat-badge-value { font-size: 22px; font-weight: 800; color: var(--text); font-family: "Segoe UI Historic", "Segoe UI", Inter, system-ui, sans-serif; }
 .stat-note {
   color: var(--text-faint); font-size: 12px; margin: -10px 0 22px;
 }

@@ -250,18 +250,48 @@ const STAT_ICONS = {
   time: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 5v5.4l4 2.3-.8 1.3L11 13V7z"/></svg>'
 };
 
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// A backend a "rankPrefixColor"/a szakaszok "color" mezőit már szigorúan
+// "#RRGGBB" formára ellenőrizve tárolja (ld. SolarBackend server.js
+// RANK_PREFIX_COLOR_RE-jét), de mivel ezek közvetlenül egy inline "style"
+// attribútumba kerülnek, itt, kliens-oldalon is újra ellenőrizzük - védelmi
+// rétegként, nem mert a backendben ne bíznánk.
+const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/;
+
+// A rang-jelvény TARTALMÁT adja vissza HTML-ként. Ha van szakaszonkénti
+// szín-bontás (ld. SolarBackend "rankPrefixSegments", SolarLobby
+// parseColoredSegments()), minden szakaszt saját <span style="color:...">-
+// ban jelenít meg - ez kell ahhoz, hogy egy PER-BETŰS színátmenetes
+// (gradient) in-game prefix (pl. "[TULAJDONOS]", betűnként más árnyalatú
+// piros) a Centeren is pontosan ugyanúgy nézzen ki, ne csak egyetlen
+// (a "rankColor" fallback szerinti) egyszínű blokként. Szakaszok hiányában
+// visszaesünk a sima, egyszínű szövegre.
+function renderRankValueHtml(values) {
+  if (Array.isArray(values.rankSegments) && values.rankSegments.length) {
+    return values.rankSegments.map((seg) => {
+      const text = escapeHtml(seg && typeof seg.text === 'string' ? seg.text : '');
+      const color = seg && typeof seg.color === 'string' && HEX_COLOR_RE.test(seg.color) ? seg.color : null;
+      return color ? `<span style="color:${color}">${text}</span>` : `<span>${text}</span>`;
+    }).join('');
+  }
+  return escapeHtml(values.rank);
+}
+
 function renderStatBadges(container, values) {
   const items = [
-    { icon: 'rank', label: 'Rang', value: values.rank, color: values.rankColor },
-    { icon: 'coin', label: 'PrémiumPont', value: values.coin },
-    { icon: 'time', label: 'Online töltött idő', value: values.time }
+    { icon: 'rank', label: 'Rang', html: renderRankValueHtml(values), color: values.rankColor },
+    { icon: 'coin', label: 'PrémiumPont', html: escapeHtml(values.coin) },
+    { icon: 'time', label: 'Online töltött idő', html: escapeHtml(values.time) }
   ];
   container.innerHTML = items.map((it) => `
     <div class="stat-badge">
       <div class="stat-badge-icon">${STAT_ICONS[it.icon]}</div>
       <div>
         <div class="stat-badge-label">${it.label}</div>
-        <div class="stat-badge-value"${it.color ? ` style="color:${it.color}"` : ''}>${it.value}</div>
+        <div class="stat-badge-value"${it.color ? ` style="color:${it.color}"` : ''}>${it.html}</div>
       </div>
     </div>
   `).join('');
@@ -271,15 +301,8 @@ function renderStatBadges(container, values) {
 // sosem lépett még a szerverre), a megfelelő mező null/hiányzik a backendtől -
 // ilyenkor esik vissza helykitöltőre ("—"/"0"/"0 óra").
 function emptyStats() {
-  return { rank: '—', rankColor: null, coin: '0', time: '0 óra' };
+  return { rank: '—', rankColor: null, rankSegments: null, coin: '0', time: '0 óra' };
 }
-
-// A backend a "rankPrefixColor" mezőt már szigorúan "#RRGGBB" formára
-// ellenőrizve tárolja (ld. SolarBackend server.js RANK_PREFIX_COLOR_RE-jét),
-// de mivel ez közvetlenül egy inline "style" attribútumba kerül, itt,
-// kliens-oldalon is újra ellenőrizzük - védelmi rétegként, nem mert a
-// backendben ne bíznánk.
-const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/;
 
 function formatPlaytime(seconds) {
   const s = typeof seconds === 'number' && Number.isFinite(seconds) ? seconds : 0;
@@ -297,6 +320,7 @@ function formatStats(data) {
   return {
     rank: data.rankPrefix ? data.rankPrefix : (data.rank ? data.rank : '—'),
     rankColor: typeof data.rankPrefixColor === 'string' && HEX_COLOR_RE.test(data.rankPrefixColor) ? data.rankPrefixColor : null,
+    rankSegments: Array.isArray(data.rankPrefixSegments) ? data.rankPrefixSegments : null,
     coin: typeof data.scBalance === 'number' ? data.scBalance.toLocaleString('hu-HU') : '0',
     time: formatPlaytime(data.playtimeSeconds)
   };
