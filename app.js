@@ -384,7 +384,7 @@ async function enterApp(meData) {
   currentPpBalance = typeof meData?.scBalance === 'number' ? meData.scBalance : 0;
   renderProfilePpBadge();
   isOwner = typeof meData?.rank === 'string' && meData.rank.toLowerCase() === 'tulajdonos';
-  $('#navAdminLogs').classList.toggle('hidden', !isOwner);
+  $$('.admin-nav-item').forEach((el) => el.classList.toggle('hidden', !isOwner));
 
   loadTopbarAvatar();
   loadHomeSkinPreview();
@@ -400,6 +400,9 @@ async function enterApp(meData) {
   // Minden bejelentkezéskor megnézzük, kapott-e a felhasználó időközben
   // (MÁR teljesített) ajándékot valakitől - ld. checkPendingGifts lejjebb.
   checkPendingGifts();
+
+  // A legfrissebb hír/felhívás a főoldalon, a "Profilod" kártya alatt.
+  loadHomeNews();
 }
 
 // A Rangok fül megnyitásakor (ld. switchView) hívjuk - friss egyenleget kér
@@ -477,6 +480,9 @@ function switchView(view) {
   // játékosnév-szűrés nem marad meg fülváltás után, hogy ne legyen
   // meglepő/régi szűrt nézet a legközelebbi megnyitáskor.
   if (view === 'adminLogs') loadAdminLogsGlobal();
+  if (view === 'staffStats') loadStaffStats();
+  if (view === 'revenue') loadRevenue();
+  if (view === 'newsAdmin') { resetNewsForm(); loadNewsAdmin(); }
 }
 $$('.app-nav-item[data-view]').forEach((btn) => {
   btn.addEventListener('click', () => switchView(btn.dataset.view));
@@ -938,6 +944,49 @@ $('#adminUnlockBtn').addEventListener('click', async () => {
     }
   } catch {
     showToast('Nem sikerült elérni a szervert.', true);
+  }
+});
+
+// A PP-módosítás SZÁNDÉKOSAN NEM közvetlenül a users.sc_balance oszlopot
+// írja (ld. SolarBackend src/client.js /api/admin/player/:username/pp-adjust
+// megjegyzését) - ezért a válasz itt csak azt jelzi, hogy a kérés
+// ELINDULT, a tényleges jóváírás/levonás a SolarShop pluginon keresztül,
+// aszinkron (kb. 1 percen belül) történik meg.
+$('#adminPpAdjustBtn').addEventListener('click', async () => {
+  if (!lastAdminPlayerUsername) return;
+  const statusEl = $('#adminPpAdjustStatus');
+  const amount = parseInt($('#adminPpAdjustAmountInput').value, 10);
+  const reason = $('#adminPpAdjustReasonInput').value.trim();
+  if (!Number.isInteger(amount) || amount === 0) {
+    statusEl.textContent = 'Adj meg egy nullától eltérő, egész összeget.';
+    statusEl.className = 'redeem-result error';
+    return;
+  }
+  const confirmed = await confirmModal(
+    'PrémiumPont módosítása',
+    `Biztosan ${amount > 0 ? 'jóváírsz' : 'levonsz'} <b>${formatPp(Math.abs(amount))}</b>-t <b>${lastAdminPlayerUsername}</b> egyenlegén?`,
+    'Igen, végrehajtás'
+  );
+  if (!confirmed) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/player/' + encodeURIComponent(lastAdminPlayerUsername) + '/pp-adjust', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ amount, reason: reason || undefined })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      statusEl.textContent = data.message || 'Nem sikerült elindítani a módosítást.';
+      statusEl.className = 'redeem-result error';
+      return;
+    }
+    statusEl.textContent = 'Módosítás elindítva - kb. 1 percen belül megtörténik.';
+    statusEl.className = 'redeem-result';
+    $('#adminPpAdjustAmountInput').value = '';
+    $('#adminPpAdjustReasonInput').value = '';
+  } catch {
+    statusEl.textContent = 'Nem sikerült elérni a szervert.';
+    statusEl.className = 'redeem-result error';
   }
 });
 
@@ -1459,7 +1508,8 @@ const LEDGER_TYPE_LABELS = {
   purchase: 'Vásárlás',
   game_purchase: 'Játékbeli vásárlás',
   gift_sent: 'Ajándékozás (küldött)',
-  gift_received: 'Ajándékozás (kapott)'
+  gift_received: 'Ajándékozás (kapott)',
+  admin_adjust: 'Admin módosítás'
 };
 
 let ledgerEntries = [];
@@ -1590,6 +1640,189 @@ $('#adminLogsUserSearchInput').addEventListener('keydown', (e) => {
 $('#adminLogsClearBtn').addEventListener('click', loadAdminLogsGlobal);
 $('#ledgerFromInput').addEventListener('change', loadLedger);
 $('#ledgerToInput').addEventListener('change', loadLedger);
+
+// ── Csapat statisztika (admin, ld. SolarBackend GET /api/admin/staff-stats) ──
+async function loadStaffStats() {
+  if (!session || !session.token || !isOwner) return;
+  let staff = [];
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/staff-stats', {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    staff = data.ok && Array.isArray(data.staff) ? data.staff : [];
+  } catch {
+    staff = [];
+  }
+  $('#staffStatsTableBody').innerHTML = staff.map((s) => `
+    <tr>
+      <td>${escapeHtml(s.username)}</td>
+      <td>${escapeHtml(s.rank)}</td>
+      <td>${formatPlaytime(s.onlineSeconds)}</td>
+      <td>${s.mutesIssued}</td>
+      <td>${s.bansIssued}</td>
+    </tr>
+  `).join('');
+  $('#staffStatsEmptyNote').classList.toggle('hidden', staff.length > 0);
+}
+
+// ── Havi bevétel (admin, ld. SolarBackend GET /api/admin/revenue) ──
+async function loadRevenue() {
+  if (!session || !session.token || !isOwner) return;
+  let months = [];
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/revenue', {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    months = data.ok && Array.isArray(data.months) ? data.months : [];
+  } catch {
+    months = [];
+  }
+  $('#revenueTableBody').innerHTML = months.map((m) => `
+    <tr>
+      <td>${m.month}</td>
+      <td>${m.purchaseCount}</td>
+      <td>${formatHuf(m.totalHuf)}</td>
+    </tr>
+  `).join('');
+  $('#revenueEmptyNote').classList.toggle('hidden', months.length > 0);
+}
+
+// ── Felhívások/hírek (admin, ld. SolarBackend src/news.js) ──
+let newsEditingId = null;
+let newsAdminItems = [];
+
+function resetNewsForm() {
+  newsEditingId = null;
+  $('#newsFormTitle').textContent = 'Új felhívás';
+  $('#newsTitleInput').value = '';
+  $('#newsContentInput').value = '';
+  $('#newsFormResult').textContent = '';
+  $('#newsFormResult').className = 'redeem-result';
+  $('#newsSaveBtn').textContent = 'Mentés';
+}
+
+function renderNewsAdminList() {
+  $('#newsAdminList').innerHTML = newsAdminItems.map((n) => `
+    <div class="news-admin-item">
+      <div class="news-admin-item-head">
+        <div>
+          <div class="news-admin-item-title">${escapeHtml(n.title)}</div>
+          <div class="news-admin-item-meta">${escapeHtml(n.created_by)} - ${formatLedgerDate(n.created_at)}${n.updated_at ? ' (szerkesztve: ' + formatLedgerDate(n.updated_at) + ')' : ''}</div>
+        </div>
+        <div class="news-admin-item-actions">
+          <button type="button" class="news-edit-btn" data-news-id="${n.id}">Szerkesztés</button>
+          <button type="button" class="news-delete-btn" data-news-id="${n.id}">Törlés</button>
+        </div>
+      </div>
+      <p class="news-admin-item-content">${escapeHtml(n.content)}</p>
+    </div>
+  `).join('') || '<p class="redeem-result">Még nincs egyetlen felhívás sem.</p>';
+}
+
+async function loadNewsAdmin() {
+  if (!session || !session.token || !isOwner) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/news', {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    newsAdminItems = data.ok && Array.isArray(data.news) ? data.news : [];
+  } catch {
+    newsAdminItems = [];
+  }
+  renderNewsAdminList();
+}
+
+$('#newsDiscardBtn').addEventListener('click', resetNewsForm);
+
+$('#newsSaveBtn').addEventListener('click', async () => {
+  const resultEl = $('#newsFormResult');
+  const title = $('#newsTitleInput').value.trim();
+  const content = $('#newsContentInput').value.trim();
+  if (!title || !content) {
+    resultEl.textContent = 'Adj meg címet és tartalmat.';
+    resultEl.className = 'redeem-result error';
+    return;
+  }
+  try {
+    const url = newsEditingId ? BACKEND_URL + '/api/admin/news/' + newsEditingId : BACKEND_URL + '/api/admin/news';
+    const res = await fetch(url, {
+      method: newsEditingId ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ title, content })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      resultEl.textContent = data.message || 'Nem sikerült menteni.';
+      resultEl.className = 'redeem-result error';
+      return;
+    }
+    showToast(newsEditingId ? 'Felhívás frissítve.' : 'Felhívás mentve - mostantól ez a legfrissebb hír.');
+    resetNewsForm();
+    loadNewsAdmin();
+  } catch {
+    resultEl.textContent = 'Nem sikerült elérni a szervert.';
+    resultEl.className = 'redeem-result error';
+  }
+});
+
+document.addEventListener('click', (e) => {
+  const editBtn = e.target.closest('.news-edit-btn');
+  if (editBtn) {
+    const item = newsAdminItems.find((n) => String(n.id) === editBtn.dataset.newsId);
+    if (!item) return;
+    newsEditingId = item.id;
+    $('#newsFormTitle').textContent = 'Felhívás szerkesztése';
+    $('#newsTitleInput').value = item.title;
+    $('#newsContentInput').value = item.content;
+    $('#newsSaveBtn').textContent = 'Frissítés';
+    $('#newsFormResult').textContent = '';
+    return;
+  }
+  const deleteBtn = e.target.closest('.news-delete-btn');
+  if (deleteBtn) {
+    const id = deleteBtn.dataset.newsId;
+    confirmModal('Felhívás törlése', 'Biztosan törlöd ezt a felhívást? Ez nem vonható vissza.', 'Igen, törlés').then((confirmed) => {
+      if (!confirmed) return;
+      fetch(BACKEND_URL + '/api/admin/news/' + id, {
+        method: 'DELETE',
+        headers: { Authorization: 'Bearer ' + session.token }
+      }).then((res) => res.json()).then((data) => {
+        if (data.ok) {
+          showToast('Felhívás törölve.');
+          if (String(newsEditingId) === String(id)) resetNewsForm();
+          loadNewsAdmin();
+        } else {
+          showToast('Nem sikerült törölni.', true);
+        }
+      }).catch(() => showToast('Nem sikerült elérni a szervert.', true));
+    });
+  }
+});
+
+// A főoldal "Profilod" szekció alatti kártya - MINDENKI látja (nem csak
+// tulajdonos), csak a legfrissebb (egyetlen) hírt jeleníti meg. Ha még
+// sosem mentettek hírt, a kártya rejtve marad.
+async function loadHomeNews() {
+  if (!session || !session.token) return;
+  const card = $('#homeNewsCard');
+  try {
+    const res = await fetch(BACKEND_URL + '/api/news/latest', {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    const news = data.ok ? data.news : null;
+    if (!news) { card.classList.add('hidden'); return; }
+    $('#homeNewsTitle').textContent = news.title;
+    $('#homeNewsMeta').textContent = formatLedgerDate(news.created_at);
+    $('#homeNewsContent').textContent = news.content;
+    card.classList.remove('hidden');
+  } catch {
+    // Csendben kihagyjuk - a kártya rejtve marad, a következő belépéskor újra próbálkozunk.
+  }
+}
 
 function showToast(message, isError) {
   const el = document.createElement('div');

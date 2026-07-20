@@ -203,9 +203,22 @@
           <span>Játékosok</span>
         </button>
         <!-- Csak "tulajdonos" rangú felhasználóknak jelenik meg, ld. app.js isOwner -->
-        <button class="app-nav-item hidden" id="navAdminLogs" data-view="adminLogs">
+        <div class="app-nav-divider admin-nav-item hidden">Admin</div>
+        <button class="app-nav-item admin-nav-item hidden" data-view="adminLogs">
           <svg viewBox="0 0 24 24"><path d="M6 3h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 12h6M9 16h6M9 8h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="18" cy="18" r="4.2" fill="var(--bg,#0d0d12)" stroke="currentColor" stroke-width="1.6"/><path d="M18 16.3v1.9l1.3 1.1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <span>Napló (admin)</span>
+        </button>
+        <button class="app-nav-item admin-nav-item hidden" data-view="staffStats">
+          <svg viewBox="0 0 24 24"><path d="M11 2a5 5 0 1 0 5 5 5 5 0 0 0-5-5zm-8.5 20a8.5 8.5 0 0 1 17 0zM19 8a3.5 3.5 0 1 0 0 7 .5.5 0 0 0 0-1 2.5 2.5 0 1 1 0-5 .5.5 0 0 0 0-1z"/></svg>
+          <span>Csapat statisztika</span>
+        </button>
+        <button class="app-nav-item admin-nav-item hidden" data-view="revenue">
+          <svg viewBox="0 0 24 24"><path d="M3 3v18h18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 15l4-5 3 3 5-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Havi bevétel</span>
+        </button>
+        <button class="app-nav-item admin-nav-item hidden" data-view="newsAdmin">
+          <svg viewBox="0 0 24 24"><path d="M4 5h13a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M7 9h8M7 12h8M7 15h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M19 8l2 1.2v9.8a1 1 0 0 1-1 1h-1" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Felhívások</span>
         </button>
       </div>
 
@@ -264,6 +277,15 @@
                     <div id="profileDiscordLink"></div>
                   </div>
                 </div>
+              </div>
+
+              <!-- ÚJ: legfrissebb hír/felhívás (ld. src/news.js GET /api/news/latest) -
+                   csak akkor jelenik meg, ha már mentettek legalább egy hírt. -->
+              <div class="card news-card hidden" id="homeNewsCard">
+                <div class="card-title">📰 Legfrissebb hír</div>
+                <div class="news-card-title" id="homeNewsTitle"></div>
+                <div class="news-card-meta" id="homeNewsMeta"></div>
+                <p class="news-card-content" id="homeNewsContent"></p>
               </div>
             </div>
 
@@ -556,6 +578,70 @@
           </div>
         </section>
 
+        <!-- CSAPAT STATISZTIKA (admin) -->
+        <section class="view" data-view="staffStats">
+          <h1 class="page-title">Csapat statisztika</h1>
+          <p class="page-note">A jelen naptári hónap adatai (Jr. Moderátortól Admin+-ig) - minden hónap 1-jén automatikusan újraindul.</p>
+
+          <div class="ledger-table-wrap">
+            <table class="ledger-table">
+              <thead>
+                <tr>
+                  <th>Felhasználónév</th>
+                  <th>Rang</th>
+                  <th>Online idő (hónap)</th>
+                  <th>Kiadott mute</th>
+                  <th>Kiadott ban</th>
+                </tr>
+              </thead>
+              <tbody id="staffStatsTableBody"></tbody>
+            </table>
+            <p class="ledger-empty hidden" id="staffStatsEmptyNote">Nincs jelenleg staff-rangú felhasználó.</p>
+          </div>
+        </section>
+
+        <!-- HAVI BEVÉTEL (admin) -->
+        <section class="view" data-view="revenue">
+          <h1 class="page-title">Havi bevétel</h1>
+          <p class="page-note">Minden sikeres (pénzes) vásárlás összege hónaponként - visszamenőleg is megtekinthető, mint egy naptár.</p>
+
+          <div class="ledger-table-wrap">
+            <table class="ledger-table">
+              <thead>
+                <tr>
+                  <th>Hónap</th>
+                  <th>Sikeres vásárlások</th>
+                  <th>Bevétel</th>
+                </tr>
+              </thead>
+              <tbody id="revenueTableBody"></tbody>
+            </table>
+            <p class="ledger-empty hidden" id="revenueEmptyNote">Még nem történt egyetlen pénzes vásárlás sem.</p>
+          </div>
+        </section>
+
+        <!-- FELHÍVÁSOK / HÍREK (admin) -->
+        <section class="view" data-view="newsAdmin">
+          <h1 class="page-title">Felhívások</h1>
+          <p class="page-note">A mentett felhívás a legfrissebbként jelenik meg mindenki főoldalán, a "Profilod" szekció alatt.</p>
+
+          <div class="card">
+            <div class="card-title" id="newsFormTitle">Új felhívás</div>
+            <label>Cím</label>
+            <input type="text" id="newsTitleInput" placeholder="Pl. Karbantartás értesítő" maxlength="120" />
+            <label style="margin-top:14px;">Tartalom</label>
+            <textarea id="newsContentInput" class="gift-modal-input" placeholder="A felhívás szövege..." rows="6" maxlength="4000" style="margin-top:6px;"></textarea>
+            <p class="redeem-result" id="newsFormResult"></p>
+            <div class="modal-actions" style="margin-top:14px;">
+              <button type="button" class="btn-outline" id="newsDiscardBtn">Elvetés</button>
+              <button type="button" class="btn-glow" id="newsSaveBtn" style="margin-top:0;">Mentés</button>
+            </div>
+          </div>
+
+          <div class="admin-subsection-title">Korábbi felhívások</div>
+          <div id="newsAdminList"></div>
+        </section>
+
         <!-- JÁTÉKOS PROFIL (egy találatra kattintva) -->
         <section class="view" data-view="playerProfile">
           <button class="btn-back" id="btnBackToPlayers">
@@ -613,6 +699,16 @@
               <input type="text" id="adminLockReasonInput" placeholder="Pl. csalás, szabályszegés..." />
               <button type="button" class="btn-glow admin-lock-btn" id="adminLockBtn">Fiók zárolása</button>
               <button type="button" class="btn-outline" id="adminUnlockBtn">Zárolás feloldása</button>
+            </div>
+
+            <div class="admin-subsection-title">PrémiumPont módosítása</div>
+            <div class="ban-panel admin-pp-panel">
+              <p class="redeem-result" id="adminPpAdjustStatus"></p>
+              <label>Összeg (negatív = levonás)</label>
+              <input type="number" id="adminPpAdjustAmountInput" placeholder="Pl. 1000 vagy -500" step="1" />
+              <label>Indoklás (nem kötelező)</label>
+              <input type="text" id="adminPpAdjustReasonInput" placeholder="Pl. kártalanítás, esemény-nyeremény..." />
+              <button type="button" class="btn-glow admin-lock-btn" id="adminPpAdjustBtn">Módosítás végrehajtása</button>
             </div>
 
             <div class="admin-subsection-title">Kliens</div>
