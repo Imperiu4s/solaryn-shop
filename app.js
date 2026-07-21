@@ -454,6 +454,7 @@ async function loadCasinoPrizes() {
       <div class="casino-prize-card">
         <div class="casino-prize-icon">${casinoIconHtml(p.icon)}</div>
         <div class="casino-prize-name">${escapeHtml(p.name)}</div>
+        ${p.server ? `<div class="casino-prize-server">${escapeHtml(p.server)}</div>` : ''}
       </div>
     `).join('');
   } catch {
@@ -472,7 +473,10 @@ function renderCasinoButtons() {
   spinBtn.disabled = casinoSpinning || !canSpin;
   spinBtn.textContent = canSpin ? 'Pörgetés' : 'Nincs elérhető pörgetésed';
 
-  const canBuy = casinoState.purchasesUnlocked && casinoState.purchasesRemaining > 0;
+  // ÚJ: csak akkor vehető próbálkozás, ha az ingyenes keret TÉNYLEGESEN
+  // elfogyott (0) - ld. SolarBackend src/casino.js POST /buy-spin
+  // "free_spin_available" elutasítás-okát ugyanerről.
+  const canBuy = casinoState.purchasesUnlocked && casinoState.purchasesRemaining > 0 && casinoState.freeSpinsAvailable === 0;
   buyBtn.hidden = !canBuy;
   buyBtn.disabled = casinoSpinning;
 }
@@ -1522,9 +1526,22 @@ function formatHuf(n) {
 // A "locked" (true, ha nincs mit csökkenteni) csak a némítás-/kitiltás-/
 // kliens-tiltás-csökkentés kártyáknál kap értéket (ld. loadShopCatalog) - a
 // PrémiumPont-csomagoknál mindig undefined marad, ott nincs ilyen feltétel.
+//
+// JAVÍTVA: a felhasználó kérésére a szankció-csökkentés egyik fajtája sem
+// ajándékozható többé - ajándékozni csak PrémiumPontot vagy rangot lehet.
+// (Ez egyben egy korábban felfedezett, de sosem javított hibát is
+// megszüntet: a beváltó plugin fulfillSanctionReduction()-je sosem vette
+// figyelembe a gift_to mezőt, tehát egy "ajándék" csökkentés valójában a
+// VÁSÁRLÓ saját szankcióját csökkentette volna - mivel ez az útvonal most
+// egyáltalán elérhetetlenné válik, a hiba is okafogyottá válik.)
+const GIFTABLE_TYPES = new Set(['sc', 'rank']);
+
 function renderPkgCard(item, locked) {
   const lockedNote = locked
     ? `<div class="pkg-locked-note">Nincs aktív szankciód - nincs mit csökkenteni</div>`
+    : '';
+  const giftBtn = GIFTABLE_TYPES.has(item.type)
+    ? `<button type="button" class="btn-outline btn-gift" data-gift-item-id="${item.id}">🎁 Ajándékozás</button>`
     : '';
   return `
     <div class="pkg-card${item.featured ? ' featured' : ''}${locked ? ' pkg-card-locked' : ''}">
@@ -1532,7 +1549,7 @@ function renderPkgCard(item, locked) {
       <div class="pkg-name">${item.short}</div>
       <div class="pkg-price">${formatHuf(item.priceHuf)}</div>
       <button type="button" class="btn-buy" data-item-id="${item.id}"${locked ? ' disabled' : ''}>Vásárlás</button>
-      <button type="button" class="btn-outline btn-gift" data-gift-item-id="${item.id}">🎁 Ajándékozás</button>
+      ${giftBtn}
       ${lockedNote}
     </div>
   `;
@@ -1990,8 +2007,14 @@ $('#ledgerFromInput').addEventListener('change', loadLedger);
 $('#ledgerToInput').addEventListener('change', loadLedger);
 
 // ── Csapat statisztika (admin, ld. SolarBackend GET /api/admin/staff-stats) ──
+// JAVÍTVA: a felhasználó kérésére a korábbi sima táblázat helyett kártya-
+// rácsos megjelenítés - a kártyák a havi online idő szerint csökkenő
+// sorrendben jelennek meg, hogy a legaktívabb staff-tagok legyenek elöl.
+const STAFF_STAT_ICON_TICKET = '<svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M3 9a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v1a1.5 1.5 0 0 0 0 3v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1a1.5 1.5 0 0 0 0-3z"/><path d="M9 7v10" stroke="currentColor" stroke-width="1.6" stroke-dasharray="2.5 2.5"/></svg>';
+
 async function loadStaffStats() {
   if (!session || !session.token || !isOwner) return;
+  const grid = $('#staffStatsGrid');
   let staff = [];
   try {
     const res = await fetch(BACKEND_URL + '/api/admin/staff-stats', {
@@ -2002,14 +2025,33 @@ async function loadStaffStats() {
   } catch {
     staff = [];
   }
-  $('#staffStatsTableBody').innerHTML = staff.map((s) => `
-    <tr>
-      <td>${escapeHtml(s.username)}</td>
-      <td>${escapeHtml(s.rank)}</td>
-      <td>${formatPlaytime(s.onlineSeconds)}</td>
-      <td>${s.mutesIssued}</td>
-      <td>${s.bansIssued}</td>
-    </tr>
+  staff.sort((a, b) => b.onlineSeconds - a.onlineSeconds);
+
+  grid.innerHTML = staff.map((s) => `
+    <div class="staff-stat-card">
+      <div class="staff-stat-card-head">
+        <div class="staff-stat-card-name">${escapeHtml(s.username)}</div>
+        <div class="staff-stat-card-rank">${escapeHtml(s.rank)}</div>
+      </div>
+      <div class="staff-stat-rows">
+        <div class="staff-stat-row">
+          <div class="staff-stat-row-icon">${STAT_ICONS.time}</div>
+          <div><div class="staff-stat-row-label">Online idő</div><div class="staff-stat-row-value">${formatPlaytime(s.onlineSeconds)}</div></div>
+        </div>
+        <div class="staff-stat-row">
+          <div class="staff-stat-row-icon">${ICONS.micMute}</div>
+          <div><div class="staff-stat-row-label">Kiadott mute</div><div class="staff-stat-row-value">${s.mutesIssued}</div></div>
+        </div>
+        <div class="staff-stat-row">
+          <div class="staff-stat-row-icon">${ICONS.ban}</div>
+          <div><div class="staff-stat-row-label">Kiadott ban</div><div class="staff-stat-row-value">${s.bansIssued}</div></div>
+        </div>
+        <div class="staff-stat-row">
+          <div class="staff-stat-row-icon">${STAFF_STAT_ICON_TICKET}</div>
+          <div><div class="staff-stat-row-label">Lezárt ticket</div><div class="staff-stat-row-value">${s.ticketsClosed}</div></div>
+        </div>
+      </div>
+    </div>
   `).join('');
   $('#staffStatsEmptyNote').classList.toggle('hidden', staff.length > 0);
 }
@@ -2114,12 +2156,26 @@ $('#btnBackToRevenue').addEventListener('click', () => switchView('revenue'));
 // ── Felhívások/hírek (admin, ld. SolarBackend src/news.js) ──
 let newsEditingId = null;
 let newsAdminItems = [];
+// ÚJ: a kiválasztott (de még fel nem töltött) kép fájl, illetve a "meglévő
+// kép eltávolítása" jelző szerkesztéskor - ld. newsSaveBtn handlerét, ahol
+// ezekből épül fel a multipart FormData.
+let newsSelectedImageFile = null;
+let newsRemoveExistingImage = false;
+
+function newsImageUrl(id) {
+  return BACKEND_URL + '/api/news/' + id + '/image';
+}
 
 function resetNewsForm() {
   newsEditingId = null;
+  newsSelectedImageFile = null;
+  newsRemoveExistingImage = false;
   $('#newsFormTitle').textContent = 'Új felhívás';
   $('#newsTitleInput').value = '';
   $('#newsContentInput').value = '';
+  $('#newsImageInput').value = '';
+  $('#newsImagePreviewWrap').hidden = true;
+  $('#newsImagePreview').src = '';
   $('#newsFormResult').textContent = '';
   $('#newsFormResult').className = 'redeem-result';
   $('#newsSaveBtn').textContent = 'Mentés';
@@ -2128,6 +2184,7 @@ function resetNewsForm() {
 function renderNewsAdminList() {
   $('#newsAdminList').innerHTML = newsAdminItems.map((n) => `
     <div class="news-admin-item">
+      ${n.image_ext ? `<img class="news-admin-item-image" src="${newsImageUrl(n.id)}" alt="" />` : ''}
       <div class="news-admin-item-head">
         <div>
           <div class="news-admin-item-title">${escapeHtml(n.title)}</div>
@@ -2142,6 +2199,27 @@ function renderNewsAdminList() {
     </div>
   `).join('') || '<p class="redeem-result">Még nincs egyetlen felhívás sem.</p>';
 }
+
+$('#newsImageInput').addEventListener('change', (e) => {
+  const file = e.target.files && e.target.files[0];
+  newsSelectedImageFile = file || null;
+  newsRemoveExistingImage = false;
+  if (!file) { $('#newsImagePreviewWrap').hidden = true; return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    $('#newsImagePreview').src = reader.result;
+    $('#newsImagePreviewWrap').hidden = false;
+  };
+  reader.readAsDataURL(file);
+});
+
+$('#newsImageRemoveBtn').addEventListener('click', () => {
+  newsSelectedImageFile = null;
+  newsRemoveExistingImage = true;
+  $('#newsImageInput').value = '';
+  $('#newsImagePreviewWrap').hidden = true;
+  $('#newsImagePreview').src = '';
+});
 
 async function loadNewsAdmin() {
   if (!session || !session.token || !isOwner) return;
@@ -2170,10 +2248,20 @@ $('#newsSaveBtn').addEventListener('click', async () => {
   }
   try {
     const url = newsEditingId ? BACKEND_URL + '/api/admin/news/' + newsEditingId : BACKEND_URL + '/api/admin/news';
+    // FormData (multipart), NEM JSON - a kép-csatolmány miatt (ld. SolarBackend
+    // src/news.js upload.single('image')). A "Content-Type" fejlécet
+    // SZÁNDÉKOSAN nem adjuk meg kézzel - a böngésző maga állítja be, a
+    // helyes multipart boundary-vel, ha kézzel írnánk felül, a szerver nem
+    // tudná feldolgozni a törzset.
+    const formData = new FormData();
+    formData.append('title', title);
+    formData.append('content', content);
+    if (newsSelectedImageFile) formData.append('image', newsSelectedImageFile);
+    else if (newsEditingId && newsRemoveExistingImage) formData.append('removeImage', 'true');
     const res = await fetch(url, {
       method: newsEditingId ? 'PUT' : 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
-      body: JSON.stringify({ title, content })
+      headers: { Authorization: 'Bearer ' + session.token },
+      body: formData
     });
     const data = await res.json();
     if (!data.ok) {
@@ -2196,11 +2284,21 @@ document.addEventListener('click', (e) => {
     const item = newsAdminItems.find((n) => String(n.id) === editBtn.dataset.newsId);
     if (!item) return;
     newsEditingId = item.id;
+    newsSelectedImageFile = null;
+    newsRemoveExistingImage = false;
+    $('#newsImageInput').value = '';
     $('#newsFormTitle').textContent = 'Felhívás szerkesztése';
     $('#newsTitleInput').value = item.title;
     $('#newsContentInput').value = item.content;
     $('#newsSaveBtn').textContent = 'Frissítés';
     $('#newsFormResult').textContent = '';
+    if (item.image_ext) {
+      $('#newsImagePreview').src = newsImageUrl(item.id);
+      $('#newsImagePreviewWrap').hidden = false;
+    } else {
+      $('#newsImagePreview').src = '';
+      $('#newsImagePreviewWrap').hidden = true;
+    }
     return;
   }
   const deleteBtn = e.target.closest('.news-delete-btn');
@@ -2237,6 +2335,14 @@ async function loadHomeNews() {
     const data = await res.json();
     const news = data.ok ? data.news : null;
     if (!news) { card.classList.add('hidden'); return; }
+    const imageEl = $('#homeNewsImage');
+    if (news.image_ext) {
+      imageEl.src = newsImageUrl(news.id);
+      imageEl.classList.remove('hidden');
+    } else {
+      imageEl.classList.add('hidden');
+      imageEl.src = '';
+    }
     $('#homeNewsTitle').textContent = news.title;
     $('#homeNewsMeta').textContent = formatLedgerDate(news.created_at);
     $('#homeNewsContent').textContent = news.content;

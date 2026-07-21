@@ -263,12 +263,16 @@ a { color: inherit; }
 .news-card-title { font-size: 17px; font-weight: 800; margin-top: 4px; }
 .news-card-meta { font-size: 12px; color: var(--text-faint); margin-top: 4px; }
 .news-card-content { font-size: 13.5px; color: var(--text-dim); line-height: 1.7; margin-top: 12px; white-space: pre-wrap; }
+/* ÚJ: a felhívás mellé csatolható kép (ld. app.js loadHomeNews) - a
+   card-title UTÁN, a cím ELŐTT jelenik meg. */
+.news-card-image { display: block; width: 100%; max-height: 260px; object-fit: cover; border-radius: 12px; margin-top: 10px; }
 
 /* Admin "Felhívások" lista (ld. index.html data-view="newsAdmin") */
 .news-admin-item {
   background: rgba(255,255,255,.02); border: 1px solid var(--line); border-radius: 14px;
   padding: 18px 20px; margin-top: 14px;
 }
+.news-admin-item-image { display: block; width: 100%; max-height: 220px; object-fit: cover; border-radius: 10px; margin-bottom: 14px; }
 .news-admin-item-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .news-admin-item-title { font-size: 15px; font-weight: 800; }
 .news-admin-item-meta { font-size: 12px; color: var(--text-faint); margin-top: 3px; }
@@ -280,6 +284,10 @@ a { color: inherit; }
 }
 .news-admin-item-actions button:hover { color: var(--text); border-color: var(--gold-2); }
 .news-admin-item-actions .news-delete-btn:hover { color: var(--danger); border-color: var(--danger); }
+
+/* ÚJ: kép-feltöltés az "Új felhívás" űrlapon (ld. index.html #newsImageInput) */
+.news-image-preview-wrap { display: flex; align-items: center; gap: 14px; margin-top: 10px; }
+.news-image-preview { width: 90px; height: 90px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); }
 
 /* Havi bevétel - naptár nézet (ld. index.html data-view="revenue"/"revenueDetail") */
 .revenue-calendar-year { margin-top: 30px; }
@@ -425,6 +433,10 @@ a { color: inherit; }
 }
 .casino-prize-icon svg { width: 22px; height: 22px; }
 .casino-prize-name { font-size: 12px; font-weight: 700; line-height: 1.35; }
+.casino-prize-server {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px;
+  color: var(--gold); background: rgba(255,176,32,.1); border-radius: 999px; padding: 3px 9px;
+}
 
 .casino-stat-grid { grid-template-columns: 1fr; }
 
@@ -620,6 +632,29 @@ a { color: inherit; }
   transition: border-color .18s;
 }
 .ledger-filter-field input:focus { border-color: var(--gold); }
+
+/* ÚJ: Csapat statisztika - kártya-rács a korábbi sima táblázat helyett (ld.
+   app.js loadStaffStats()), a stat-badge/rank-card vizuális nyelvét követve. */
+.staff-stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px; }
+.staff-stat-card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+  padding: 20px 22px; box-shadow: 0 10px 30px rgba(0,0,0,.2);
+  transition: transform .16s, border-color .16s;
+}
+.staff-stat-card:hover { transform: translateY(-3px); border-color: var(--gold-2); }
+.staff-stat-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.staff-stat-card-name { font-size: 16px; font-weight: 800; }
+.staff-stat-card-rank { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--gold); }
+.staff-stat-rows { display: flex; flex-direction: column; gap: 12px; }
+.staff-stat-row { display: flex; align-items: center; gap: 12px; }
+.staff-stat-row-icon {
+  width: 34px; height: 34px; flex-shrink: 0; border-radius: 10px;
+  background: rgba(255,176,32,.1); border: 1px solid rgba(255,176,32,.22);
+  display: flex; align-items: center; justify-content: center; color: var(--gold);
+}
+.staff-stat-row-icon svg { width: 17px; height: 17px; }
+.staff-stat-row-label { font-size: 11px; color: var(--text-faint); }
+.staff-stat-row-value { font-size: 14px; font-weight: 700; }
 
 .ledger-table-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; overflow-x: auto; }
 .ledger-table { width: 100%; border-collapse: collapse; font-size: 13px; }

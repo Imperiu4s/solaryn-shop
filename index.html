@@ -288,6 +288,7 @@
                    csak akkor jelenik meg, ha már mentettek legalább egy hírt. -->
               <div class="card news-card hidden" id="homeNewsCard">
                 <div class="card-title">📰 Legfrissebb hír</div>
+                <img class="news-card-image hidden" id="homeNewsImage" alt="" />
                 <div class="news-card-title" id="homeNewsTitle"></div>
                 <div class="news-card-meta" id="homeNewsMeta"></div>
                 <p class="news-card-content" id="homeNewsContent"></p>
@@ -635,21 +636,8 @@
           <h1 class="page-title">Csapat statisztika</h1>
           <p class="page-note">A jelen naptári hónap adatai (Jr. Moderátortól Admin+-ig) - minden hónap 1-jén automatikusan újraindul.</p>
 
-          <div class="ledger-table-wrap">
-            <table class="ledger-table">
-              <thead>
-                <tr>
-                  <th>Felhasználónév</th>
-                  <th>Rang</th>
-                  <th>Online idő (hónap)</th>
-                  <th>Kiadott mute</th>
-                  <th>Kiadott ban</th>
-                </tr>
-              </thead>
-              <tbody id="staffStatsTableBody"></tbody>
-            </table>
-            <p class="ledger-empty hidden" id="staffStatsEmptyNote">Nincs jelenleg staff-rangú felhasználó.</p>
-          </div>
+          <div class="staff-stats-grid" id="staffStatsGrid"></div>
+          <p class="ledger-empty hidden" id="staffStatsEmptyNote">Nincs jelenleg staff-rangú felhasználó.</p>
         </section>
 
         <!-- HAVI BEVÉTEL (admin) - naptár nézet, ld. app.js loadRevenue() -->
@@ -703,6 +691,12 @@
             <input type="text" id="newsTitleInput" class="gift-modal-input" placeholder="Pl. Karbantartás értesítő" maxlength="120" />
             <label class="gift-modal-label">Tartalom</label>
             <textarea id="newsContentInput" class="gift-modal-input" placeholder="A felhívás szövege..." rows="6" maxlength="4000"></textarea>
+            <label class="gift-modal-label">Kép (nem kötelező, PNG vagy JPEG)</label>
+            <input type="file" id="newsImageInput" accept="image/png,image/jpeg" />
+            <div class="news-image-preview-wrap" id="newsImagePreviewWrap" hidden>
+              <img id="newsImagePreview" class="news-image-preview" alt="" />
+              <button type="button" class="link-btn" id="newsImageRemoveBtn">Kép eltávolítása</button>
+            </div>
             <p class="redeem-result" id="newsFormResult"></p>
             <div class="modal-actions" style="margin-top:14px;">
               <button type="button" class="btn-outline" id="newsDiscardBtn">Elvetés</button>
