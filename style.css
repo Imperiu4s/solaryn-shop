@@ -338,6 +338,59 @@ a { color: inherit; }
   width: 20px; height: 20px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
 }
 
+/* ÚJ: aktív némítás-/kitiltás-/kliens-tiltás jelvény(ek) a Főoldal saját
+   profiljában (ld. app.js renderSanctionStatus()) - üres marad, ha nincs
+   aktív szankció, csak a figyelmeztető állapotokat mutatja. */
+.profile-sanction-status { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.sanction-status-pill {
+  display: inline-flex; align-items: center; font-size: 12px; font-weight: 700;
+  padding: 6px 12px; border-radius: 999px; cursor: default;
+  background: rgba(255,90,90,.14); border: 1px solid rgba(255,90,90,.4); color: var(--danger);
+}
+
+/* ── Casino (SolarLucky nyerőgép) - státusz-oldal, a tényleges pörgetés
+   in-game történik, ez csak a "van hány pörgetésed" kijelzés + egy dísz-
+   nyerőgép (ld. app.js loadCasino()). A jobb oldali oszlopban a stat-kártya
+   és a támogató side-rail egymás alatt jelenik meg (a .content-grid csak
+   2 oszlopos, ez a wrapper foglalja el a második oszlopot). ── */
+.side-rail-col { display: flex; flex-direction: column; gap: 20px; }
+
+.casino-machine-card { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 32px 24px; }
+.slot-machine {
+  display: flex; flex-direction: column; align-items: center; gap: 0;
+  padding: 22px 26px 30px; border-radius: 22px;
+  background: linear-gradient(180deg, #3a3a44, #1c1c22);
+  border: 3px solid #55555f; box-shadow: 0 0 0 1px rgba(255,255,255,.04) inset, 0 18px 40px rgba(0,0,0,.45);
+  position: relative;
+}
+.slot-machine-top {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; padding: 8px 18px; margin-bottom: 18px; border-radius: 10px;
+  background: linear-gradient(180deg, var(--gold), var(--gold-2));
+  color: #1a1206; font-weight: 900; font-size: 15px; letter-spacing: 2px;
+  box-shadow: 0 6px 18px var(--gold-glow);
+}
+.slot-machine-star { color: #1a1206; opacity: .8; }
+.slot-machine-jackpot { text-transform: uppercase; }
+.slot-machine-reels { display: flex; gap: 10px; }
+.slot-reel {
+  width: 62px; height: 62px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 35% 30%, #26262e, #0c0c10 75%);
+  border: 2px solid #55555f; box-shadow: inset 0 0 14px rgba(0,0,0,.7);
+  font-size: 30px; font-weight: 900; color: var(--gold); text-shadow: 0 0 10px var(--gold-glow);
+}
+.slot-machine-lever-col { position: absolute; right: -20px; top: 24px; bottom: 30px; display: flex; align-items: flex-start; }
+.slot-machine-lever-track { width: 8px; height: 100%; border-radius: 4px; background: linear-gradient(180deg, #6a6a76, #34343c); position: relative; }
+.slot-machine-lever-knob {
+  position: absolute; top: -4px; left: 50%; transform: translateX(-50%);
+  width: 20px; height: 20px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ff7a6a, var(--danger) 70%);
+  box-shadow: 0 4px 10px rgba(255,90,90,.5);
+}
+.casino-ingame-note { margin-top: 20px; color: var(--text-dim); font-size: 13px; }
+.casino-ingame-note code { background: rgba(255,255,255,.08); border-radius: 4px; padding: 2px 6px; color: var(--gold); }
+.casino-stat-grid { grid-template-columns: 1fr; }
+
 /* Statisztika-jelvények (Rangok/PrémiumPont/Online töltött idő). */
 .stat-badge-grid {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -420,6 +473,18 @@ a { color: inherit; }
   font-size: 11px; text-transform: uppercase; font-weight: 700;
 }
 .btn-gift:disabled { cursor: default; opacity: .5; }
+
+/* ÚJ: némítás-/kitiltás-/kliens-tiltás-csökkentés kártya, ha a
+   bejelentkezett játékosnak épp NINCS aktív szankciója az adott típusból
+   (ld. app.js renderPkgCard "locked" paramétere) - a "Vásárlás" gomb
+   letiltva, egy kis magyarázó felirat jelenik meg helyette. Az
+   "Ajándékozás" gomb SZÁNDÉKOSAN nem tiltott itt - egy másik játékosnak,
+   akinek van aktív szankciója, továbbra is vehető csökkentés (ld. shop.js
+   /checkout gate, ami a giftTo célpont állapotát nézi ilyenkor). */
+.pkg-card-locked { opacity: .8; }
+.pkg-locked-note {
+  font-size: 11px; color: var(--text-faint); margin-top: 8px; line-height: 1.4;
+}
 
 /* Rangkártyák (PrémiumPontból vásárolhatók, nem Stripe-fizetéssel) - a
    .pkg-card-hoz hasonló alapstílus, de magasabb, hogy elférjen benne a

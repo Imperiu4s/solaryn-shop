@@ -257,6 +257,15 @@ const SkinPreview = (() => {
       canvas.removeEventListener('mousedown', onDown);
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
+      // JAVÍTVA: a frame() leállítása (stopped=true) MEGÁLLÍTJA az újrarajzolást,
+      // de az UTOLJÁRA kirajzolt kép a WebGL vászon pufferében marad, amíg valami
+      // ténylegesen ki nem törli - a hívó oldali "canvas.width = canvas.width"
+      // trükk erre a célra NEM megbízható (Chromium bizonyos esetekben nem
+      // veszi észre/hajtja végre a puffer-resetet, ha az érték változatlan
+      // marad), ezért itt, KÖZVETLENÜL a WebGL kontextuson töröljük a tartalmat,
+      // mielőtt visszaadnánk az irányítást - így a visszaállítás/fiókváltás után
+      // sosem ragadhat ott a régi skin képe.
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     };
   }
 

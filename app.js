@@ -247,7 +247,8 @@ async function tryAutoLogin() {
 const STAT_ICONS = {
   rank: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l2.4 6.6L21 9l-5 4.6L17.4 21 12 17.3 6.6 21 8 13.6 3 9l6.6-.4z"/></svg>',
   coin: '<img src="assets/pp-coin.png" alt="PP" />',
-  time: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 5v5.4l4 2.3-.8 1.3L11 13V7z"/></svg>'
+  time: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 5v5.4l4 2.3-.8 1.3L11 13V7z"/></svg>',
+  spin: '<svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M4 12a8 8 0 0 1 14.6-4.5M20 12a8 8 0 0 1-14.6 4.5M18.6 7.5V4m0 3.5H15M5.4 16.5V20m0-3.5H9"/></svg>'
 };
 
 function escapeHtml(s) {
@@ -351,6 +352,71 @@ function renderDiscordLinkBadge(container, data) {
   }
 }
 
+// ÚJ: "van-e aktív némításod/kitiltásod/kliens-tiltásod" jelvény(ek) a
+// profil-kártyán - a data.activeMute/activeBan/activeCban mezőket a
+// SolarBackend GET /api/me adja (ld. ott activeMuteInfo/activeBanInfoFromUser/
+// getActiveCbanForUsername) null-t, ha épp nincs aktív szankció az adott
+// típusból. Ha egyik sincs aktív, a konténer üresen marad (nincs "minden
+// rendben" jelvény - csak a figyelmeztetés jellegű állapotok jelennek meg).
+function renderSanctionStatus(container, data) {
+  if (!container) return;
+  const pills = [];
+  if (data?.activeMute) pills.push({ label: 'Aktív némítás', info: data.activeMute });
+  if (data?.activeBan) pills.push({ label: 'Aktív kitiltás', info: data.activeBan });
+  if (data?.activeCban) pills.push({ label: 'Aktív kliens-tiltás', info: data.activeCban });
+
+  if (!pills.length) {
+    container.innerHTML = '';
+    return;
+  }
+  container.innerHTML = pills.map((p) => {
+    const detail = p.info.permanent ? 'végleges' : `eddig: ${formatSanctionUntil(p.info.until)}`;
+    return `<span class="sanction-status-pill" title="${escapeHtml(detail)}${p.info.reason ? ' - ' + escapeHtml(p.info.reason) : ''}">${p.label}</span>`;
+  }).join('');
+}
+
+function formatSanctionUntil(until) {
+  if (!until) return '—';
+  const d = new Date(until);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString('hu-HU');
+}
+
+// ── Casino (SolarLucky) - státusz-nézet, ld. SolarBackend src/casino.js
+// GET /api/casino/state. A tényleges pörgetés csak in-game (a lobby
+// szerveren, /casino paranccsal) történik - ez a nézet kizárólag
+// megjeleníti, hány pörgetés áll rendelkezésre, nem lehet innen pörgetni. ──
+async function loadCasino() {
+  const grid = $('#casinoStatGrid');
+  if (!grid || !session || !session.token) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/casino/state', {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    if (!data.ok) { grid.innerHTML = ''; return; }
+
+    const items = [
+      { icon: 'time', label: 'Bejelentkezési sorozat', html: `${data.loginStreakDays} nap` },
+      { icon: 'spin', label: 'Ingyenes pörgetés', html: String(data.freeSpinsAvailable) }
+    ];
+    if (data.purchasesUnlocked) {
+      items.push({ icon: 'spin', label: 'Vásárolható próbálkozás', html: `${data.purchasesRemaining}/2 (200 PP/db)` });
+    }
+    grid.innerHTML = items.map((it) => `
+      <div class="stat-badge">
+        <div class="stat-badge-icon">${STAT_ICONS[it.icon]}</div>
+        <div>
+          <div class="stat-badge-label">${it.label}</div>
+          <div class="stat-badge-value">${it.html}</div>
+        </div>
+      </div>
+    `).join('');
+  } catch {
+    grid.innerHTML = '';
+  }
+}
+
 // A rangvásárlás gombjai (ld. renderRankCard/refreshPpBalance) ebből olvassák
 // ki, hogy a játékosnak van-e elég fedezete - ez csak kliens-oldali UX-segéd
 // (a tényleges, biztonságos ellenőrzést a beváltó plugin végzi élő adaton),
@@ -364,6 +430,13 @@ let currentPpBalance = 0;
 // végponton (ld. SolarBackend src/client.js requireOwner), ez a kliens-
 // oldali flag csak azt dönti el, MEGJELENÍTSÜK-e egyáltalán a panelt.
 let isOwner = false;
+
+// ÚJ: a legutóbb lekért /api/me aktív szankció-állapota (ld.
+// renderSanctionStatus fentebb) - a "sanction" (kitiltáscsökkentés) nézet
+// ebből dönti el, mely csomagok gombja legyen kattintható (ld.
+// loadShopCatalog) - csak akkor lehet megvenni egy csökkentést, ha tényleg
+// van mit csökkenteni.
+let currentSanctionStatus = { activeMute: null, activeBan: null, activeCban: null };
 
 function renderProfilePpBadge() {
   $('#topbarPpValue').textContent = formatPp(currentPpBalance);
@@ -381,6 +454,17 @@ async function enterApp(meData) {
   if (!meData) meData = await apiGetMe(session.token);
   renderStatBadges($('#statBadgeGrid'), formatStats(meData));
   renderDiscordLinkBadge($('#profileDiscordLink'), meData);
+  renderSanctionStatus($('#profileSanctionStatus'), meData);
+  currentSanctionStatus = {
+    activeMute: meData?.activeMute || null,
+    activeBan: meData?.activeBan || null,
+    activeCban: meData?.activeCban || null
+  };
+  // A bejelentkezés ELŐTT (szkript-betöltéskor) lefutott loadShopCatalog()
+  // még a fenti alapértelmezett (mind-null, azaz mind-zárolt) állapottal
+  // rendereli a kitiltáscsökkentés kártyákat - most, hogy tudjuk a valódi
+  // szankció-állapotot, újra kell generálni a gomb-állapotokat.
+  loadShopCatalog();
   currentPpBalance = typeof meData?.scBalance === 'number' ? meData.scBalance : 0;
   renderProfilePpBadge();
   isOwner = typeof meData?.rank === 'string' && meData.rank.toLowerCase() === 'tulajdonos';
@@ -483,6 +567,7 @@ function switchView(view) {
   if (view === 'staffStats') loadStaffStats();
   if (view === 'revenue') loadRevenue();
   if (view === 'newsAdmin') { resetNewsForm(); loadNewsAdmin(); }
+  if (view === 'casino') loadCasino();
 }
 $$('.app-nav-item[data-view]').forEach((btn) => {
   btn.addEventListener('click', () => switchView(btn.dataset.view));
@@ -990,6 +1075,47 @@ $('#adminPpAdjustBtn').addEventListener('click', async () => {
   }
 });
 
+// A SolarLucky pörgetés adása/elvétele - ELLENTÉTBEN a fenti PP-módosítással,
+// ez KÖZVETLENÜL, szinkron módon történik (ld. SolarBackend src/client.js
+// /api/admin/player/:username/casino-adjust megjegyzését) - nincs szükség
+// a beváltó plugin aszinkron körére, mert a SolarLucky plugin a backendtől
+// magától kérdezi le élőben a pörgetés-számot.
+$('#adminCasinoAdjustBtn').addEventListener('click', async () => {
+  if (!lastAdminPlayerUsername) return;
+  const statusEl = $('#adminCasinoAdjustStatus');
+  const amount = parseInt($('#adminCasinoAdjustAmountInput').value, 10);
+  if (!Number.isInteger(amount) || amount === 0) {
+    statusEl.textContent = 'Adj meg egy nullától eltérő, egész mennyiséget.';
+    statusEl.className = 'redeem-result error';
+    return;
+  }
+  const confirmed = await confirmModal(
+    'Casino pörgetés módosítása',
+    `Biztosan ${amount > 0 ? 'adsz' : 'elveszel'} <b>${Math.abs(amount)}</b> pörgetést <b>${lastAdminPlayerUsername}</b> SolarLucky-egyenlegéből?`,
+    'Igen, végrehajtás'
+  );
+  if (!confirmed) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/player/' + encodeURIComponent(lastAdminPlayerUsername) + '/casino-adjust', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ amount })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      statusEl.textContent = data.message || 'Nem sikerült végrehajtani a módosítást.';
+      statusEl.className = 'redeem-result error';
+      return;
+    }
+    statusEl.textContent = `Módosítva - jelenlegi ingyenes pörgetések: ${data.freeSpinsAvailable}.`;
+    statusEl.className = 'redeem-result';
+    $('#adminCasinoAdjustAmountInput').value = '';
+  } catch {
+    statusEl.textContent = 'Nem sikerült elérni a szervert.';
+    statusEl.className = 'redeem-result error';
+  }
+});
+
 // A törlés gomb CSAK akkor engedélyezett, ha a beírt szöveg PONTOSAN egyezik
 // a felhasználónévvel - ez a szándékos "beírásos" plusz megerősítés (a
 // szokásos Igen/Mégse ablakon felül) egy VISSZAVONHATATLAN művelethez.
@@ -1191,14 +1317,21 @@ function formatHuf(n) {
   return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ' Ft';
 }
 
-function renderPkgCard(item) {
+// A "locked" (true, ha nincs mit csökkenteni) csak a némítás-/kitiltás-/
+// kliens-tiltás-csökkentés kártyáknál kap értéket (ld. loadShopCatalog) - a
+// PrémiumPont-csomagoknál mindig undefined marad, ott nincs ilyen feltétel.
+function renderPkgCard(item, locked) {
+  const lockedNote = locked
+    ? `<div class="pkg-locked-note">Nincs aktív szankciód - nincs mit csökkenteni</div>`
+    : '';
   return `
-    <div class="pkg-card${item.featured ? ' featured' : ''}">
+    <div class="pkg-card${item.featured ? ' featured' : ''}${locked ? ' pkg-card-locked' : ''}">
       <div class="pkg-icon">${ICONS[item.icon] || ICONS.coin}</div>
       <div class="pkg-name">${item.short}</div>
       <div class="pkg-price">${formatHuf(item.priceHuf)}</div>
-      <button type="button" class="btn-buy" data-item-id="${item.id}">Vásárlás</button>
+      <button type="button" class="btn-buy" data-item-id="${item.id}"${locked ? ' disabled' : ''}>Vásárlás</button>
       <button type="button" class="btn-outline btn-gift" data-gift-item-id="${item.id}">🎁 Ajándékozás</button>
+      ${lockedNote}
     </div>
   `;
 }
@@ -1215,13 +1348,26 @@ async function loadShopCatalog() {
   const coinItems = shopCatalog.filter((i) => i.type === 'sc');
   const muteItems = shopCatalog.filter((i) => i.type === 'mute_reduction');
   const banItems = shopCatalog.filter((i) => i.type === 'ban_reduction');
+  const cbanItems = shopCatalog.filter((i) => i.type === 'cban_reduction');
 
-  $('#coinPkgGrid').innerHTML = coinItems.map(renderPkgCard).join('');
+  // ÚJ: a "Vásárlás" gomb (nem az ajándékozás - azt más játékos szankciójára
+  // vesszük, ld. buyItem/giftModal) csak akkor kattintható, ha a
+  // bejelentkezett játékosnak TÉNYLEG van aktív szankciója az adott
+  // típusból (ld. currentSanctionStatus, enterApp() tölti a legutóbbi
+  // /api/me válaszból) - a szerver a /checkout végponton ÚGYIS elutasítaná,
+  // ez csak megelőzi, hogy valaki feleslegesen próbálkozzon.
+  const muteLocked = !currentSanctionStatus.activeMute;
+  const banLocked = !currentSanctionStatus.activeBan;
+  const cbanLocked = !currentSanctionStatus.activeCban;
+
+  $('#coinPkgGrid').innerHTML = coinItems.map((i) => renderPkgCard(i)).join('');
   $('#sanctionPkgWrap').innerHTML = `
     <div class="pkg-category">Némítás feloldás</div>
-    <div class="pkg-grid">${muteItems.map(renderPkgCard).join('')}</div>
+    <div class="pkg-grid">${muteItems.map((i) => renderPkgCard(i, muteLocked)).join('')}</div>
     <div class="pkg-category">Kitiltás feloldás</div>
-    <div class="pkg-grid">${banItems.map(renderPkgCard).join('')}</div>
+    <div class="pkg-grid">${banItems.map((i) => renderPkgCard(i, banLocked)).join('')}</div>
+    <div class="pkg-category">Kliens-tiltás csökkentése</div>
+    <div class="pkg-grid">${cbanItems.map((i) => renderPkgCard(i, cbanLocked)).join('')}</div>
   `;
 }
 loadShopCatalog();
