@@ -526,7 +526,7 @@
         <!-- CASINO -->
         <section class="view" data-view="casino">
           <h1 class="page-title">Casino</h1>
-          <p class="page-note">A SolarLucky nyerőgép állapotod - maga a pörgetés a lobby szerveren, a <code>/casino</code> paranccsal történik. Minden 7. egymást követő napi belépésedért +1 ingyenes pörgetést kapsz, az elhasznált ingyenes pörgetésed után pedig még 2 próbálkozást vásárolhatsz 200 PrémiumPontért.</p>
+          <p class="page-note">Minden 7. egymást követő napi belépésedért +1 ingyenes pörgetést kapsz. Az ingyenes pörgetésed elhasználása után még 2 próbálkozást vásárolhatsz 200 PrémiumPontért - a nyereményt a rendszer automatikusan jóváírja a fiókodhoz.</p>
 
           <div class="content-grid">
             <div>
@@ -538,20 +538,25 @@
                     <span class="slot-machine-star">★</span>
                   </div>
                   <div class="slot-machine-reels">
-                    <div class="slot-reel">7</div>
-                    <div class="slot-reel">7</div>
-                    <div class="slot-reel">7</div>
+                    <div class="slot-reel" id="casinoReel0"></div>
+                    <div class="slot-reel" id="casinoReel1"></div>
+                    <div class="slot-reel" id="casinoReel2"></div>
                   </div>
                   <div class="slot-machine-lever-col">
                     <div class="slot-machine-lever-track"><div class="slot-machine-lever-knob"></div></div>
                   </div>
                 </div>
-                <div class="casino-ingame-note">Pörgess a lobby szerveren a <code>/casino</code> paranccsal!</div>
+                <p class="redeem-result" id="casinoSpinResult"></p>
+                <div class="casino-actions">
+                  <button type="button" class="btn-glow" id="casinoSpinBtn" disabled>Pörgetés</button>
+                  <button type="button" class="btn-outline" id="casinoBuySpinBtn" hidden>Próbálkozás vásárlása (200 PP)</button>
+                </div>
               </div>
 
               <div class="card">
                 <div class="card-title">Nyeremények</div>
-                <p class="page-note" style="margin-bottom:0;">Ha mind a 3 tekercs ugyanazt mutatja, egy véletlenszerű jutalmat nyersz - ideiglenes rangot, vagy szerver-specifikus jogot (pl. Glow, AntiQueue, Enderchest, AutoPickup, BattlePass prémium, AFK-mentesség). Az esély viszonylag alacsony, hogy a nyerés tényleg különlegesnek számítson.</p>
+                <p class="page-note">Ha mind a 3 tekercs ugyanazt mutatja, egyet nyersz az alábbiak közül - véletlenszerűen, viszonylag alacsony eséllyel pörgetésenként.</p>
+                <div class="casino-prize-grid" id="casinoPrizeGrid"></div>
               </div>
             </div>
 
@@ -728,6 +733,7 @@
               <div class="profile-info">
                 <div class="profile-name" id="playerProfileName"></div>
                 <p class="profile-empty-skin" id="playerProfileSkinNote"></p>
+                <div id="playerProfileSanctionStatus" class="profile-sanction-status"></div>
               </div>
             </div>
           </div>

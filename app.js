@@ -358,35 +358,126 @@ function renderDiscordLinkBadge(container, data) {
 // getActiveCbanForUsername) null-t, ha épp nincs aktív szankció az adott
 // típusból. Ha egyik sincs aktív, a konténer üresen marad (nincs "minden
 // rendben" jelvény - csak a figyelmeztetés jellegű állapotok jelennek meg).
+// JAVÍTVA: korábban csak egy hover-title-ban (csak egérrel rávitelre látszó
+// tooltip) volt benne, hogy ki és mikor adta a szankciót - a felhasználó
+// kérésére ez mostantól MINDIG látható, kártyaszerűen kiírva (ki adta,
+// mikor, mennyi van hátra, indoklás).
 function renderSanctionStatus(container, data) {
   if (!container) return;
-  const pills = [];
-  if (data?.activeMute) pills.push({ label: 'Aktív némítás', info: data.activeMute });
-  if (data?.activeBan) pills.push({ label: 'Aktív kitiltás', info: data.activeBan });
-  if (data?.activeCban) pills.push({ label: 'Aktív kliens-tiltás', info: data.activeCban });
+  const cards = [];
+  if (data?.activeMute) cards.push({ label: '🔇 Aktív némítás', info: data.activeMute });
+  if (data?.activeBan) cards.push({ label: '⛔ Aktív kitiltás', info: data.activeBan });
+  if (data?.activeCban) cards.push({ label: '🖥 Aktív kliens-tiltás', info: data.activeCban });
 
-  if (!pills.length) {
+  if (!cards.length) {
     container.innerHTML = '';
     return;
   }
-  container.innerHTML = pills.map((p) => {
-    const detail = p.info.permanent ? 'végleges' : `eddig: ${formatSanctionUntil(p.info.until)}`;
-    return `<span class="sanction-status-pill" title="${escapeHtml(detail)}${p.info.reason ? ' - ' + escapeHtml(p.info.reason) : ''}">${p.label}</span>`;
-  }).join('');
+  container.innerHTML = cards.map((c) => `
+    <div class="sanction-status-card">
+      <div class="sanction-status-card-title">${c.label}</div>
+      ${c.info.by ? `<div class="sanction-status-card-row"><span>Kiadta:</span> ${escapeHtml(c.info.by)}</div>` : ''}
+      ${c.info.since ? `<div class="sanction-status-card-row"><span>Kiadva:</span> ${formatSanctionUntil(c.info.since)}</div>` : ''}
+      <div class="sanction-status-card-row"><span>${c.info.permanent ? 'Időtartam:' : 'Hátralévő idő:'}</span> ${c.info.permanent ? 'végleges' : formatRemaining(c.info.until)}</div>
+      ${c.info.reason ? `<div class="sanction-status-card-reason">Indok: ${escapeHtml(c.info.reason)}</div>` : ''}
+    </div>
+  `).join('');
 }
 
-function formatSanctionUntil(until) {
-  if (!until) return '—';
-  const d = new Date(until);
+function formatSanctionUntil(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '—';
   return d.toLocaleString('hu-HU');
 }
 
-// ── Casino (SolarLucky) - státusz-nézet, ld. SolarBackend src/casino.js
-// GET /api/casino/state. A tényleges pörgetés csak in-game (a lobby
-// szerveren, /casino paranccsal) történik - ez a nézet kizárólag
-// megjeleníti, hány pörgetés áll rendelkezésre, nem lehet innen pörgetni. ──
-async function loadCasino() {
+// A hátralévő időt "X nap Y óra" / "X óra Y perc" alakban adja vissza,
+// zárójelben a pontos dátummal - egy puszta dátum-időbélyeg kevésbé
+// szemléletes annál, mint amennyi idő ténylegesen hátravan.
+function formatRemaining(untilIso) {
+  if (!untilIso) return '—';
+  const untilMs = new Date(untilIso).getTime();
+  if (Number.isNaN(untilMs)) return '—';
+  const diffMs = untilMs - Date.now();
+  const exact = formatSanctionUntil(untilIso);
+  if (diffMs <= 0) return `lejárt (${exact})`;
+  const days = Math.floor(diffMs / 86400000);
+  const hours = Math.floor((diffMs % 86400000) / 3600000);
+  const minutes = Math.floor((diffMs % 3600000) / 60000);
+  let human;
+  if (days > 0) human = `${days} nap ${hours} óra`;
+  else if (hours > 0) human = `${hours} óra ${minutes} perc`;
+  else human = `${minutes} perc`;
+  return `${human} (${exact}-ig)`;
+}
+
+// ── Casino (SolarLucky) - a pörgetés MAGÁN a weboldalon zajlik (a
+// felhasználó kifejezett kérésére, NEM egy in-game /casino parancs GUI-
+// jában) - ld. SolarBackend src/casino.js POST /api/casino/spin. A
+// SolarLucky Minecraft-plugin csak a napi bejelentkezést jelenti (streak-
+// számításhoz) és a MÁR itt eldöntött nyeremény LuckPerms-parancsát hajtja
+// végre a szerveren. ──
+const CASINO_PRIZE_ICONS = {
+  glow: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l1.8 5.6L19 9l-5.2 1.4L12 16l-1.8-5.6L5 9l5.2-1.4z"/><path fill="currentColor" opacity=".6" d="M19 15l.9 2.6L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.4z"/></svg>',
+  antiqueue: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M2 5l8 7-8 7zM12 5l8 7-8 7z"/></svg>',
+  enderchest: '<svg viewBox="0 0 24 24"><rect x="3" y="9" width="18" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 13h18" stroke="currentColor" stroke-width="2"/><rect x="10.5" y="12" width="3" height="3" rx=".5" fill="currentColor"/><path d="M7 9V7a5 5 0 0 1 10 0v2" fill="none" stroke="currentColor" stroke-width="2"/></svg>',
+  autopickup: '<svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 3v13m0 0l-5-5m5 5l5-5M5 19h14"/></svg>',
+  battlepass: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M7 3h10v6a5 5 0 0 1-10 0z"/><path fill="none" stroke="currentColor" stroke-width="1.8" d="M7 4H4a3 3 0 0 0 3 4M17 4h3a3 3 0 0 1-3 4"/><path fill="currentColor" d="M11 13h2v3h-2z"/><path fill="currentColor" d="M8 19a4 4 0 0 1 8 0z"/></svg>',
+  afk: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9 9h2.4L9 13h2.6M14 9h1.8c1 0 1 1.4 0 1.6c1 .2 1 1.6 0 1.6h-1.8z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>',
+  rank: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 8l4 3 5-6 5 6 4-3-2 11H5z"/></svg>'
+};
+const CASINO_ICON_KEYS = Object.keys(CASINO_PRIZE_ICONS);
+const CASINO_JACKPOT_ICON = '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l2.4 6.6L21 9l-5 4.6L17.4 21 12 17.3 6.6 21 8 13.6 3 9l6.6-.4z"/></svg>';
+
+function casinoIconHtml(key) {
+  return CASINO_PRIZE_ICONS[key] || CASINO_JACKPOT_ICON;
+}
+
+let casinoPrizes = [];
+let casinoSpinning = false;
+
+function setCasinoReel(index, iconHtml) {
+  const el = $('#casinoReel' + index);
+  if (el) el.innerHTML = iconHtml;
+}
+
+async function loadCasinoPrizes() {
+  const grid = $('#casinoPrizeGrid');
+  if (!grid) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/casino/prizes', {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    casinoPrizes = data.ok && Array.isArray(data.prizes) ? data.prizes : [];
+    grid.innerHTML = casinoPrizes.map((p) => `
+      <div class="casino-prize-card">
+        <div class="casino-prize-icon">${casinoIconHtml(p.icon)}</div>
+        <div class="casino-prize-name">${escapeHtml(p.name)}</div>
+      </div>
+    `).join('');
+  } catch {
+    grid.innerHTML = '';
+  }
+}
+
+let casinoState = null;
+
+function renderCasinoButtons() {
+  const spinBtn = $('#casinoSpinBtn');
+  const buyBtn = $('#casinoBuySpinBtn');
+  if (!spinBtn || !buyBtn || !casinoState) return;
+
+  const canSpin = casinoState.freeSpinsAvailable > 0 || casinoState.purchasedSpinsAvailable > 0;
+  spinBtn.disabled = casinoSpinning || !canSpin;
+  spinBtn.textContent = canSpin ? 'Pörgetés' : 'Nincs elérhető pörgetésed';
+
+  const canBuy = casinoState.purchasesUnlocked && casinoState.purchasesRemaining > 0;
+  buyBtn.hidden = !canBuy;
+  buyBtn.disabled = casinoSpinning;
+}
+
+async function loadCasinoState() {
   const grid = $('#casinoStatGrid');
   if (!grid || !session || !session.token) return;
   try {
@@ -395,11 +486,15 @@ async function loadCasino() {
     });
     const data = await res.json();
     if (!data.ok) { grid.innerHTML = ''; return; }
+    casinoState = data;
 
     const items = [
       { icon: 'time', label: 'Bejelentkezési sorozat', html: `${data.loginStreakDays} nap` },
       { icon: 'spin', label: 'Ingyenes pörgetés', html: String(data.freeSpinsAvailable) }
     ];
+    if (data.purchasedSpinsAvailable > 0) {
+      items.push({ icon: 'spin', label: 'Megvásárolt pörgetés', html: String(data.purchasedSpinsAvailable) });
+    }
     if (data.purchasesUnlocked) {
       items.push({ icon: 'spin', label: 'Vásárolható próbálkozás', html: `${data.purchasesRemaining}/2 (200 PP/db)` });
     }
@@ -412,10 +507,112 @@ async function loadCasino() {
         </div>
       </div>
     `).join('');
+    renderCasinoButtons();
   } catch {
     grid.innerHTML = '';
   }
 }
+
+function loadCasino() {
+  for (let i = 0; i < 3; i++) setCasinoReel(i, casinoIconHtml(CASINO_ICON_KEYS[i % CASINO_ICON_KEYS.length]));
+  $('#casinoSpinResult').textContent = '';
+  loadCasinoPrizes();
+  loadCasinoState();
+}
+
+// A pörgetés eredményét (nyert-e, melyik jutalmat) a backend MÁR eldöntötte
+// a POST /api/casino/spin válaszában, mire ez a függvény lefut - az
+// animáció csak megjelenítés, nem befolyásolja/nem is ismeri előre a
+// kimenetelt, amíg a hívás vissza nem tér.
+async function spinCasino() {
+  if (casinoSpinning || !casinoState) return;
+  if (casinoState.freeSpinsAvailable <= 0 && casinoState.purchasedSpinsAvailable <= 0) return;
+
+  casinoSpinning = true;
+  renderCasinoButtons();
+  const resultEl = $('#casinoSpinResult');
+  resultEl.textContent = '';
+  resultEl.className = 'redeem-result';
+  $$('.slot-reel').forEach((el) => el.classList.add('spinning'));
+  $('.slot-machine-lever-track')?.classList.add('pulled');
+
+  const spinPromise = fetch(BACKEND_URL + '/api/casino/spin', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + session.token }
+  }).then((r) => r.json()).catch(() => ({ ok: false }));
+
+  const cycleTimer = setInterval(() => {
+    for (let i = 0; i < 3; i++) setCasinoReel(i, casinoIconHtml(CASINO_ICON_KEYS[Math.floor(Math.random() * CASINO_ICON_KEYS.length)]));
+  }, 90);
+
+  // A "menő animáció" kedvéért mesterségesen legalább ~1.4 másodpercig pörög
+  // a tekercs, még ha a backend-hívás gyorsabban vissza is tér.
+  const [data] = await Promise.all([spinPromise, new Promise((r) => setTimeout(r, 1400))]);
+  clearInterval(cycleTimer);
+  $('.slot-machine-lever-track')?.classList.remove('pulled');
+
+  if (!data || !data.ok) {
+    $$('.slot-reel').forEach((el) => el.classList.remove('spinning'));
+    resultEl.textContent = (data && data.reason === 'no_spin_available') ? 'Nincs elérhető pörgetésed.' : 'A pörgetés sikertelen volt, próbáld újra.';
+    resultEl.className = 'redeem-result error';
+    casinoSpinning = false;
+    await loadCasinoState();
+    return;
+  }
+
+  if (data.win) {
+    for (let i = 0; i < 3; i++) setCasinoReel(i, casinoIconHtml(data.prizeIcon));
+    $$('.slot-reel').forEach((el) => { el.classList.remove('spinning'); el.classList.add('won'); });
+    resultEl.textContent = `🎉 JACKPOT! Nyereményed: ${data.prizeName}`;
+    resultEl.className = 'redeem-result';
+    setTimeout(() => $$('.slot-reel').forEach((el) => el.classList.remove('won')), 3000);
+  } else {
+    const a = CASINO_ICON_KEYS[Math.floor(Math.random() * CASINO_ICON_KEYS.length)];
+    let b = CASINO_ICON_KEYS[Math.floor(Math.random() * CASINO_ICON_KEYS.length)];
+    if (b === a) b = CASINO_ICON_KEYS[(CASINO_ICON_KEYS.indexOf(a) + 1) % CASINO_ICON_KEYS.length];
+    const c = CASINO_ICON_KEYS[(CASINO_ICON_KEYS.indexOf(b) + 2) % CASINO_ICON_KEYS.length];
+    setCasinoReel(0, casinoIconHtml(a));
+    setCasinoReel(1, casinoIconHtml(b));
+    setCasinoReel(2, casinoIconHtml(c));
+    $$('.slot-reel').forEach((el) => el.classList.remove('spinning'));
+    resultEl.textContent = 'Sajnos ezúttal nem nyertél - próbáld meg legközelebb!';
+    resultEl.className = 'redeem-result';
+  }
+
+  casinoState = data;
+  casinoSpinning = false;
+  renderCasinoButtons();
+}
+
+async function buyCasinoSpin() {
+  const btn = $('#casinoBuySpinBtn');
+  const resultEl = $('#casinoSpinResult');
+  btn.disabled = true;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/casino/buy-spin', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      resultEl.textContent = 'Nem sikerült elindítani a vásárlást.';
+      resultEl.className = 'redeem-result error';
+      btn.disabled = false;
+      return;
+    }
+    resultEl.textContent = data.message || 'A vásárlás elindult.';
+    resultEl.className = 'redeem-result';
+    casinoState = data;
+    renderCasinoButtons();
+  } catch {
+    resultEl.textContent = 'Nem sikerült elérni a szervert.';
+    resultEl.className = 'redeem-result error';
+    btn.disabled = false;
+  }
+}
+
+$('#casinoSpinBtn')?.addEventListener('click', spinCasino);
+$('#casinoBuySpinBtn')?.addEventListener('click', buyCasinoSpin);
 
 // A rangvásárlás gombjai (ld. renderRankCard/refreshPpBalance) ebből olvassák
 // ki, hogy a játékosnak van-e elég fedezete - ez csak kliens-oldali UX-segéd
@@ -830,8 +1027,13 @@ async function openPlayerProfile(username) {
   $('#playerProfileTitle').textContent = username;
   $('#playerProfileName').textContent = username;
   renderStatBadges($('#playerProfileStats'), emptyStats());
+  renderSanctionStatus($('#playerProfileSanctionStatus'), null);
   apiGetProfile(username).then((profile) => {
     renderStatBadges($('#playerProfileStats'), profile.ok ? formatStats(profile) : emptyStats());
+    // ÚJ: a felhasználó kérésére a némítás-/kitiltás-állapot a játékos-
+    // keresőben (bárki profilját megnézve) is megjelenik, nem csak a saját
+    // fooldalon - ld. SolarBackend GET /api/profile/:username kiterjesztését.
+    renderSanctionStatus($('#playerProfileSanctionStatus'), profile.ok ? profile : null);
   });
 
   lastAdminPlayerUsername = username;

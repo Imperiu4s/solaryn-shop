@@ -338,15 +338,20 @@ a { color: inherit; }
   width: 20px; height: 20px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
 }
 
-/* ÚJ: aktív némítás-/kitiltás-/kliens-tiltás jelvény(ek) a Főoldal saját
-   profiljában (ld. app.js renderSanctionStatus()) - üres marad, ha nincs
-   aktív szankció, csak a figyelmeztető állapotokat mutatja. */
-.profile-sanction-status { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-.sanction-status-pill {
-  display: inline-flex; align-items: center; font-size: 12px; font-weight: 700;
-  padding: 6px 12px; border-radius: 999px; cursor: default;
-  background: rgba(255,90,90,.14); border: 1px solid rgba(255,90,90,.4); color: var(--danger);
+/* ÚJ: aktív némítás-/kitiltás-/kliens-tiltás kártya(ák) - a Főoldal saját
+   profiljában ÉS a játékos-kereső profil-nézetében is (ld. app.js
+   renderSanctionStatus()) - üres marad, ha nincs aktív szankció. JAVÍTVA:
+   korábban csak egy hover-tooltipben volt a ki/mikor/meddig, most mindig
+   látható, kártyaszerűen. */
+.profile-sanction-status { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; width: 100%; }
+.sanction-status-card {
+  padding: 12px 14px; border-radius: 12px;
+  background: rgba(255,90,90,.1); border: 1px solid rgba(255,90,90,.35);
 }
+.sanction-status-card-title { font-weight: 800; font-size: 13.5px; color: var(--danger); margin-bottom: 6px; }
+.sanction-status-card-row { font-size: 12.5px; color: var(--text-dim); margin-top: 2px; }
+.sanction-status-card-row span { color: var(--text-faint); }
+.sanction-status-card-reason { font-size: 12.5px; color: var(--text-dim); margin-top: 6px; font-style: italic; }
 
 /* ── Casino (SolarLucky nyerőgép) - státusz-oldal, a tényleges pörgetés
    in-game történik, ez csak a "van hány pörgetésed" kijelzés + egy dísz-
@@ -378,6 +383,18 @@ a { color: inherit; }
   background: radial-gradient(circle at 35% 30%, #26262e, #0c0c10 75%);
   border: 2px solid #55555f; box-shadow: inset 0 0 14px rgba(0,0,0,.7);
   font-size: 30px; font-weight: 900; color: var(--gold); text-shadow: 0 0 10px var(--gold-glow);
+  overflow: hidden; transition: box-shadow .2s;
+}
+.slot-reel svg { width: 32px; height: 32px; }
+.slot-reel.spinning {
+  box-shadow: inset 0 0 14px rgba(0,0,0,.7), 0 0 16px var(--gold-glow);
+  animation: casino-reel-blur .18s linear infinite;
+}
+.slot-reel.won { box-shadow: inset 0 0 14px rgba(0,0,0,.7), 0 0 22px var(--gold-glow); border-color: var(--gold); }
+@keyframes casino-reel-blur {
+  0% { transform: translateY(-3px); opacity: .75; }
+  50% { transform: translateY(3px); opacity: 1; }
+  100% { transform: translateY(-3px); opacity: .75; }
 }
 .slot-machine-lever-col { position: absolute; right: -20px; top: 24px; bottom: 30px; display: flex; align-items: flex-start; }
 .slot-machine-lever-track { width: 8px; height: 100%; border-radius: 4px; background: linear-gradient(180deg, #6a6a76, #34343c); position: relative; }
@@ -386,9 +403,29 @@ a { color: inherit; }
   width: 20px; height: 20px; border-radius: 50%;
   background: radial-gradient(circle at 35% 30%, #ff7a6a, var(--danger) 70%);
   box-shadow: 0 4px 10px rgba(255,90,90,.5);
+  transition: top .5s cubic-bezier(.34,1.56,.64,1);
 }
-.casino-ingame-note { margin-top: 20px; color: var(--text-dim); font-size: 13px; }
-.casino-ingame-note code { background: rgba(255,255,255,.08); border-radius: 4px; padding: 2px 6px; color: var(--gold); }
+.slot-machine-lever-track.pulled .slot-machine-lever-knob { top: calc(100% - 20px); }
+
+.casino-actions { display: flex; gap: 12px; margin-top: 6px; flex-wrap: wrap; justify-content: center; }
+.casino-actions .btn-glow, .casino-actions .btn-outline { width: auto; padding: 11px 22px; }
+
+.casino-prize-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-top: 16px;
+}
+.casino-prize-card {
+  display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px;
+  background: rgba(255,255,255,.02); border: 1px solid var(--line); border-radius: 13px; padding: 16px 10px;
+  transition: transform .16s, border-color .16s;
+}
+.casino-prize-card:hover { transform: translateY(-3px); border-color: var(--gold-2); }
+.casino-prize-icon {
+  width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;
+  color: var(--gold); background: rgba(255,176,32,.1); border: 1px solid rgba(255,176,32,.22); border-radius: 12px;
+}
+.casino-prize-icon svg { width: 22px; height: 22px; }
+.casino-prize-name { font-size: 12px; font-weight: 700; line-height: 1.35; }
+
 .casino-stat-grid { grid-template-columns: 1fr; }
 
 /* Statisztika-jelvények (Rangok/PrémiumPont/Online töltött idő). */
