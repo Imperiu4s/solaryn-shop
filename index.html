@@ -600,23 +600,43 @@
           </div>
         </section>
 
-        <!-- HAVI BEVÉTEL (admin) -->
+        <!-- HAVI BEVÉTEL (admin) - naptár nézet, ld. app.js loadRevenue() -->
         <section class="view" data-view="revenue">
           <h1 class="page-title">Havi bevétel</h1>
-          <p class="page-note">Minden sikeres (pénzes) vásárlás összege hónaponként - visszamenőleg is megtekinthető, mint egy naptár.</p>
+          <p class="page-note">Kattints egy hónapra a részletekért - minden sikeres (pénzes) vásárlást számol, visszamenőleg is.</p>
+
+          <div id="revenueCalendar"></div>
+        </section>
+
+        <!-- HAVI BEVÉTEL RÉSZLETEI (egy hónapra kattintva) -->
+        <section class="view" data-view="revenueDetail">
+          <button class="btn-back" id="btnBackToRevenue">
+            <svg viewBox="0 0 24 24" width="14" height="14"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M15 18l-6-6 6-6"/></svg>
+            Vissza a naptárhoz
+          </button>
+          <h1 class="page-title" id="revenueDetailTitle"></h1>
+
+          <div class="card revenue-summary-card">
+            <div class="revenue-summary-label">Összes bevétel</div>
+            <div class="revenue-summary-amount" id="revenueDetailTotal">0 Ft</div>
+            <div class="revenue-summary-count" id="revenueDetailCount"></div>
+          </div>
+
+          <div class="revenue-detail-divider"></div>
 
           <div class="ledger-table-wrap">
             <table class="ledger-table">
               <thead>
                 <tr>
-                  <th>Hónap</th>
-                  <th>Sikeres vásárlások</th>
-                  <th>Bevétel</th>
+                  <th>Dátum</th>
+                  <th>Játékos</th>
+                  <th>Termék</th>
+                  <th>Összeg</th>
                 </tr>
               </thead>
-              <tbody id="revenueTableBody"></tbody>
+              <tbody id="revenueDetailTableBody"></tbody>
             </table>
-            <p class="ledger-empty hidden" id="revenueEmptyNote">Még nem történt egyetlen pénzes vásárlás sem.</p>
+            <p class="ledger-empty hidden" id="revenueDetailEmptyNote">Ebben a hónapban nem történt vásárlás.</p>
           </div>
         </section>
 
@@ -627,10 +647,10 @@
 
           <div class="card">
             <div class="card-title" id="newsFormTitle">Új felhívás</div>
-            <label>Cím</label>
-            <input type="text" id="newsTitleInput" placeholder="Pl. Karbantartás értesítő" maxlength="120" />
-            <label style="margin-top:14px;">Tartalom</label>
-            <textarea id="newsContentInput" class="gift-modal-input" placeholder="A felhívás szövege..." rows="6" maxlength="4000" style="margin-top:6px;"></textarea>
+            <label class="gift-modal-label" style="margin-top:0;">Cím</label>
+            <input type="text" id="newsTitleInput" class="gift-modal-input" placeholder="Pl. Karbantartás értesítő" maxlength="120" />
+            <label class="gift-modal-label">Tartalom</label>
+            <textarea id="newsContentInput" class="gift-modal-input" placeholder="A felhívás szövege..." rows="6" maxlength="4000"></textarea>
             <p class="redeem-result" id="newsFormResult"></p>
             <div class="modal-actions" style="margin-top:14px;">
               <button type="button" class="btn-outline" id="newsDiscardBtn">Elvetés</button>

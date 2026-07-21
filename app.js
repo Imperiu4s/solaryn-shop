@@ -1666,7 +1666,53 @@ async function loadStaffStats() {
   $('#staffStatsEmptyNote').classList.toggle('hidden', staff.length > 0);
 }
 
-// ── Havi bevétel (admin, ld. SolarBackend GET /api/admin/revenue) ──
+// ── Havi bevétel (admin) - naptár nézet: minden évhez mind a 12 hónap
+// kártyaként megjelenik (akkor is, ha egy hónapban nem volt vásárlás), a
+// LEGFRISSEBB év felül. Az évek listáját a ténylegesen létező adatokból ÉS a
+// jelen évből építjük - így egy vadonatúj, még adat nélküli évben is
+// azonnal látszik a folyó hónap kártyája, nem csak ott, ahol már van adat.
+const REVENUE_MONTH_NAMES = ['Jan', 'Feb', 'Márc', 'Ápr', 'Máj', 'Jún', 'Júl', 'Aug', 'Szept', 'Okt', 'Nov', 'Dec'];
+
+function buildRevenueCalendarHtml(months) {
+  const dataByMonth = Object.fromEntries(months.map((m) => [m.month, m]));
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonthNum = now.getMonth() + 1;
+
+  const years = new Set([currentYear]);
+  months.forEach((m) => years.add(Number(m.month.slice(0, 4))));
+  const sortedYears = [...years].sort((a, b) => b - a);
+
+  return sortedYears.map((year) => {
+    const yearTotal = months
+      .filter((m) => m.month.startsWith(year + '-'))
+      .reduce((sum, m) => sum + m.totalHuf, 0);
+
+    const cards = REVENUE_MONTH_NAMES.map((name, i) => {
+      const monthNum = i + 1;
+      const monthKey = `${year}-${String(monthNum).padStart(2, '0')}`;
+      const isFuture = year > currentYear || (year === currentYear && monthNum > currentMonthNum);
+      const entry = dataByMonth[monthKey];
+      const hasData = entry && entry.purchaseCount > 0;
+      const stateClass = isFuture ? 'future' : hasData ? 'has-data' : 'no-data';
+      return `
+        <div class="revenue-month-card ${stateClass}" data-revenue-month="${monthKey}">
+          <div class="revenue-month-name">${name}</div>
+          <div class="revenue-month-amount">${hasData ? formatHuf(entry.totalHuf) : (isFuture ? '—' : '0 Ft')}</div>
+          <div class="revenue-month-count">${hasData ? entry.purchaseCount + ' vásárlás' : (isFuture ? '' : 'Nincs adat')}</div>
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="revenue-calendar-year">
+        <div class="revenue-calendar-year-title">${year}<span class="revenue-calendar-year-total">Éves összesen: ${formatHuf(yearTotal)}</span></div>
+        <div class="revenue-month-grid">${cards}</div>
+      </div>
+    `;
+  }).join('');
+}
+
 async function loadRevenue() {
   if (!session || !session.token || !isOwner) return;
   let months = [];
@@ -1679,15 +1725,43 @@ async function loadRevenue() {
   } catch {
     months = [];
   }
-  $('#revenueTableBody').innerHTML = months.map((m) => `
-    <tr>
-      <td>${m.month}</td>
-      <td>${m.purchaseCount}</td>
-      <td>${formatHuf(m.totalHuf)}</td>
-    </tr>
-  `).join('');
-  $('#revenueEmptyNote').classList.toggle('hidden', months.length > 0);
+  $('#revenueCalendar').innerHTML = buildRevenueCalendarHtml(months);
 }
+
+document.addEventListener('click', (e) => {
+  const card = e.target.closest('.revenue-month-card[data-revenue-month]');
+  if (card) loadRevenueDetail(card.dataset.revenueMonth);
+});
+
+async function loadRevenueDetail(month) {
+  $('#revenueDetailTitle').textContent = 'Havi bevétel - ' + month;
+  $('#revenueDetailTotal').textContent = '…';
+  $('#revenueDetailCount').textContent = '';
+  $('#revenueDetailTableBody').innerHTML = '';
+  switchView('revenueDetail');
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/revenue/' + month, {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    if (!data.ok) return;
+    $('#revenueDetailTotal').textContent = formatHuf(data.totalHuf);
+    $('#revenueDetailCount').textContent = `${data.purchaseCount} sikeres vásárlás`;
+    $('#revenueDetailTableBody').innerHTML = data.purchases.map((p) => `
+      <tr>
+        <td>${formatLedgerDate(p.createdAt)}</td>
+        <td>${escapeHtml(p.username)}</td>
+        <td>${escapeHtml(p.label)}</td>
+        <td>${formatHuf(p.priceHuf)}</td>
+      </tr>
+    `).join('');
+    $('#revenueDetailEmptyNote').classList.toggle('hidden', data.purchases.length > 0);
+  } catch {
+    $('#revenueDetailTotal').textContent = '-';
+  }
+}
+
+$('#btnBackToRevenue').addEventListener('click', () => switchView('revenue'));
 
 // ── Felhívások/hírek (admin, ld. SolarBackend src/news.js) ──
 let newsEditingId = null;

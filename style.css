@@ -280,6 +280,34 @@ a { color: inherit; }
 }
 .news-admin-item-actions button:hover { color: var(--text); border-color: var(--gold-2); }
 .news-admin-item-actions .news-delete-btn:hover { color: var(--danger); border-color: var(--danger); }
+
+/* Havi bevétel - naptár nézet (ld. index.html data-view="revenue"/"revenueDetail") */
+.revenue-calendar-year { margin-top: 30px; }
+.revenue-calendar-year:first-child { margin-top: 0; }
+.revenue-calendar-year-title {
+  font-size: 20px; font-weight: 800; color: var(--gold); margin-bottom: 14px;
+  display: flex; align-items: center; gap: 10px;
+}
+.revenue-calendar-year-total { font-size: 13px; font-weight: 600; color: var(--text-faint); }
+.revenue-month-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
+.revenue-month-card {
+  background: rgba(255,255,255,.02); border: 1px solid var(--line); border-radius: 14px;
+  padding: 18px; text-align: center; cursor: pointer;
+  transition: transform .16s, border-color .16s, background .16s;
+}
+.revenue-month-card:hover { transform: translateY(-3px); border-color: var(--gold-2); background: rgba(255,176,32,.05); }
+.revenue-month-card.has-data { border-color: rgba(255,176,32,.25); }
+.revenue-month-card.no-data { opacity: .55; }
+.revenue-month-card.future { opacity: .3; cursor: default; pointer-events: none; }
+.revenue-month-name { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--text-dim); }
+.revenue-month-amount { font-size: 17px; font-weight: 800; margin-top: 8px; }
+.revenue-month-count { font-size: 11.5px; color: var(--text-faint); margin-top: 4px; }
+
+.revenue-summary-card { text-align: center; padding: 32px; }
+.revenue-summary-label { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-faint); }
+.revenue-summary-amount { font-size: 38px; font-weight: 800; color: var(--gold); margin-top: 8px; }
+.revenue-summary-count { font-size: 13px; color: var(--text-dim); margin-top: 6px; }
+.revenue-detail-divider { height: 1px; background: var(--line); margin: 24px 0; }
 .card-title { font-size: 17px; font-weight: 700; margin-bottom: 18px; display: flex; align-items: center; gap: 8px; }
 
 /* Profil kártya (Főoldal) */
@@ -551,7 +579,7 @@ a { color: inherit; }
 .admin-delete-panel .btn-glow:disabled { cursor: not-allowed; opacity: .45; filter: none; }
 #adminDeleteUsernameHint { color: var(--text); font-weight: 700; }
 .ban-panel .btn-outline { width: 100%; margin-top: 10px; }
-.admin-subsection-title { font-size: 13px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--orange); font-weight: 700; margin-bottom: 14px; }
+.admin-subsection-title { font-size: 13px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--orange); font-weight: 700; margin: 28px 0 14px; }
 .admin-tables-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .admin-table-title { font-size: 13px; font-weight: 700; margin-bottom: 10px; color: var(--text); }
 .device-link {
