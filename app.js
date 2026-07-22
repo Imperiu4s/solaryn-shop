@@ -255,35 +255,9 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-// A backend a "rankPrefixColor"/a szakaszok "color" mezőit már szigorúan
-// "#RRGGBB" formára ellenőrizve tárolja (ld. SolarBackend server.js
-// RANK_PREFIX_COLOR_RE-jét), de mivel ezek közvetlenül egy inline "style"
-// attribútumba kerülnek, itt, kliens-oldalon is újra ellenőrizzük - védelmi
-// rétegként, nem mert a backendben ne bíznánk.
-const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/;
-
-// A rang-jelvény TARTALMÁT adja vissza HTML-ként. Ha van szakaszonkénti
-// szín-bontás (ld. SolarBackend "rankPrefixSegments", SolarLobby
-// parseColoredSegments()), minden szakaszt saját <span style="color:...">-
-// ban jelenít meg - ez kell ahhoz, hogy egy PER-BETŰS színátmenetes
-// (gradient) in-game prefix (pl. "[TULAJDONOS]", betűnként más árnyalatú
-// piros) a Centeren is pontosan ugyanúgy nézzen ki, ne csak egyetlen
-// (a "rankColor" fallback szerinti) egyszínű blokként. Szakaszok hiányában
-// visszaesünk a sima, egyszínű szövegre.
-function renderRankValueHtml(values) {
-  if (Array.isArray(values.rankSegments) && values.rankSegments.length) {
-    return values.rankSegments.map((seg) => {
-      const text = escapeHtml(seg && typeof seg.text === 'string' ? seg.text : '');
-      const color = seg && typeof seg.color === 'string' && HEX_COLOR_RE.test(seg.color) ? seg.color : null;
-      return color ? `<span style="color:${color}">${text}</span>` : `<span>${text}</span>`;
-    }).join('');
-  }
-  return escapeHtml(values.rank);
-}
-
 function renderStatBadges(container, values) {
   const items = [
-    { icon: 'rank', label: 'Rang', html: renderRankValueHtml(values), color: values.rankColor },
+    { icon: 'rank', label: 'Rang', html: escapeHtml(values.rank) },
     { icon: 'coin', label: 'PrémiumPont', html: escapeHtml(values.coin) },
     { icon: 'time', label: 'Online töltött idő', html: escapeHtml(values.time) }
   ];
@@ -292,7 +266,7 @@ function renderStatBadges(container, values) {
       <div class="stat-badge-icon">${STAT_ICONS[it.icon]}</div>
       <div>
         <div class="stat-badge-label">${it.label}</div>
-        <div class="stat-badge-value${it.icon === 'rank' ? ' stat-badge-value-rank' : ''}"${it.color ? ` style="color:${it.color}"` : ''}>${it.html}</div>
+        <div class="stat-badge-value${it.icon === 'rank' ? ' stat-badge-value-rank' : ''}">${it.html}</div>
       </div>
     </div>
   `).join('');
@@ -302,7 +276,7 @@ function renderStatBadges(container, values) {
 // sosem lépett még a szerverre), a megfelelő mező null/hiányzik a backendtől -
 // ilyenkor esik vissza helykitöltőre ("—"/"0"/"0 óra").
 function emptyStats() {
-  return { rank: '—', rankColor: null, rankSegments: null, coin: '0', time: '0 óra' };
+  return { rank: '—', coin: '0', time: '0 óra' };
 }
 
 function formatPlaytime(seconds) {
@@ -311,17 +285,22 @@ function formatPlaytime(seconds) {
   return `${hours.toLocaleString('hu-HU')} óra`;
 }
 
+// Nagy kezdőbetűs csoportnév ("tulajdonos" -> "Tulajdonos") - csak az ELSŐ
+// betűt nagybetűsítjük, a többit érintetlenül hagyjuk (a LuckPerms
+// csoportnevek eleve kisbetűsek, nem szónként címkeszerűek).
+function capitalizeFirst(s) {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
+
 function formatStats(data) {
   if (!data) return emptyStats();
-  // A jelvényen a LuckPerms chat-PREFIX jelenik meg (pl. "[VIP]"), nem a nyers
-  // csoportnév ("vip") - ha a SolarLobby plugin még nem jelentett prefixet
-  // (pl. régebbi verzió, vagy a csoportnak nincs beállítva), visszaesünk a
-  // csoportnévre, hogy a jelvény sose maradjon üres. Az isOwner-döntés
-  // (enterApp) EZZEL SZEMBEN mindig a nyers "data.rank"-ot nézi, sosem ezt.
+  // JAVÍTVA (a felhasználó kérésére): a jelvényen mostantól a NYERS LuckPerms
+  // csoportnév jelenik meg nagy kezdőbetűvel, egyszínű (fehér) szövegként -
+  // NEM a színes/szakaszos in-game chat-prefix ("[TULAJDONOS]" stb.). Az
+  // isOwner-döntés (enterApp) EZZEL SZEMBEN továbbra is mindig a nyers
+  // "data.rank"-ot nézi, sosem ezt a formázott változatot.
   return {
-    rank: data.rankPrefix ? data.rankPrefix : (data.rank ? data.rank : '—'),
-    rankColor: typeof data.rankPrefixColor === 'string' && HEX_COLOR_RE.test(data.rankPrefixColor) ? data.rankPrefixColor : null,
-    rankSegments: Array.isArray(data.rankPrefixSegments) ? data.rankPrefixSegments : null,
+    rank: data.rank ? capitalizeFirst(data.rank) : '—',
     coin: typeof data.scBalance === 'number' ? data.scBalance.toLocaleString('hu-HU') : '0',
     time: formatPlaytime(data.playtimeSeconds)
   };
@@ -2012,6 +1991,40 @@ $('#ledgerToInput').addEventListener('change', loadLedger);
 // sorrendben jelennek meg, hogy a legaktívabb staff-tagok legyenek elöl.
 const STAFF_STAT_ICON_TICKET = '<svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M3 9a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v1a1.5 1.5 0 0 0 0 3v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1a1.5 1.5 0 0 0 0-3z"/><path d="M9 7v10" stroke="currentColor" stroke-width="1.6" stroke-dasharray="2.5 2.5"/></svg>';
 
+// A csapat-szintű összesítő sáv (ld. staff-stats-summary) - a per-staff
+// kártyák FÖLÖTT, az összes staff-tag adatait összeadva mutatja, hogy ne
+// kelljen fejben összeadni 10+ kártyát a "mennyi ban/mute/ticket volt
+// összesen ebben a hónapban" kérdés megválaszolásához. Tisztán a már
+// letöltött staff-tömbből számol, nincs hozzá külön backend-végpont.
+function renderStaffStatsSummary(staff) {
+  const container = $('#staffStatsSummary');
+  if (!staff.length) {
+    container.innerHTML = '';
+    return;
+  }
+  const totals = staff.reduce((acc, s) => {
+    acc.onlineSeconds += Number(s.onlineSeconds) || 0;
+    acc.mutesIssued += Number(s.mutesIssued) || 0;
+    acc.bansIssued += Number(s.bansIssued) || 0;
+    acc.ticketsClosed += Number(s.ticketsClosed) || 0;
+    return acc;
+  }, { onlineSeconds: 0, mutesIssued: 0, bansIssued: 0, ticketsClosed: 0 });
+
+  const tiles = [
+    { icon: STAT_ICONS.time, label: 'Összes online idő', value: formatPlaytime(totals.onlineSeconds) },
+    { icon: ICONS.micMute, label: 'Összes kiadott mute', value: totals.mutesIssued.toLocaleString('hu-HU') },
+    { icon: ICONS.ban, label: 'Összes kiadott ban', value: totals.bansIssued.toLocaleString('hu-HU') },
+    { icon: STAFF_STAT_ICON_TICKET, label: 'Összes lezárt ticket', value: totals.ticketsClosed.toLocaleString('hu-HU') }
+  ];
+
+  container.innerHTML = tiles.map((t) => `
+    <div class="staff-stat-summary-tile">
+      <div class="staff-stat-row-icon">${t.icon}</div>
+      <div><div class="staff-stat-row-label">${t.label}</div><div class="staff-stat-summary-value">${t.value}</div></div>
+    </div>
+  `).join('');
+}
+
 async function loadStaffStats() {
   if (!session || !session.token || !isOwner) return;
   const grid = $('#staffStatsGrid');
@@ -2026,6 +2039,8 @@ async function loadStaffStats() {
     staff = [];
   }
   staff.sort((a, b) => b.onlineSeconds - a.onlineSeconds);
+
+  renderStaffStatsSummary(staff);
 
   grid.innerHTML = staff.map((s) => `
     <div class="staff-stat-card">

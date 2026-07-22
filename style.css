@@ -662,6 +662,14 @@ a { color: inherit; }
 
 /* ÚJ: Csapat statisztika - kártya-rács a korábbi sima táblázat helyett (ld.
    app.js loadStaffStats()), a stat-badge/rank-card vizuális nyelvét követve. */
+.staff-stats-summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; margin-bottom: 22px; }
+.staff-stat-summary-tile {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+  padding: 14px 16px;
+}
+.staff-stat-summary-value { font-size: 18px; font-weight: 800; color: var(--text); }
+
 .staff-stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px; }
 .staff-stat-card {
   background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
