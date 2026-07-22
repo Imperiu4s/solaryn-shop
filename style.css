@@ -1,6 +1,13 @@
 /* A klasszikus Minecraft pixel-betűtípus (Minecraftia) a rang-jelvényhez -
    a jordanbyron/minecrafter repo (jsDelivr-en, egy fix commitra rögzítve)
-   szolgáltatja a woff/ttf fájlokat. */
+   szolgáltatja a woff/ttf fájlokat.
+   JAVÍTVA: ez a régi web-font konverzió az ékezetes betűk (á/é/í/ó/ö/ő/ú/ü/ű
+   stb.) glyph-jeit HIBÁSAN, a betű fölé "elszállva" pozicionálja (élesben
+   ellenőrizve pl. a "Moderátor" rangnál) - a "unicode-range" ezért
+   szándékosan csak az alap ASCII tartományra (szóköz-tilde) korlátozza a
+   Minecraftia használatát, minden MÁS karakterre (ékezetes betűk, a rang-
+   prefixek fonetikus kis kapitális Unicode karakterei) a böngésző a lánc
+   következő (helyesen megjelenő) betűtípusára esik vissza. */
 @font-face {
   font-family: "Minecraftia";
   src: url("https://cdn.jsdelivr.net/gh/jordanbyron/minecrafter@2b14d46edfb745ead18183bfe1984346b2424781/public/fonts/minecraftia-webfont.woff") format("woff"),
@@ -8,6 +15,7 @@
   font-weight: normal;
   font-style: normal;
   font-display: swap;
+  unicode-range: U+0020-007E;
 }
 
 :root {
