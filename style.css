@@ -1,3 +1,15 @@
+/* A klasszikus Minecraft pixel-betűtípus (Minecraftia) a rang-jelvényhez -
+   a jordanbyron/minecrafter repo (jsDelivr-en, egy fix commitra rögzítve)
+   szolgáltatja a woff/ttf fájlokat. */
+@font-face {
+  font-family: "Minecraftia";
+  src: url("https://cdn.jsdelivr.net/gh/jordanbyron/minecrafter@2b14d46edfb745ead18183bfe1984346b2424781/public/fonts/minecraftia-webfont.woff") format("woff"),
+       url("https://cdn.jsdelivr.net/gh/jordanbyron/minecrafter@2b14d46edfb745ead18183bfe1984346b2424781/public/fonts/minecraftia-webfont.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --bg: #0a0a0d;
   --bg-2: #101015;
@@ -467,6 +479,13 @@ a { color: inherit; }
    Historic" a Windows saját, kifejezetten ezekhez a blokkokhoz csomagolt
    betűtípusa - előre véve a láncban egységesen fedi az egész prefixet. */
 .stat-badge-value { font-size: 22px; font-weight: 800; color: var(--text); font-family: "Segoe UI Historic", "Segoe UI", Inter, system-ui, sans-serif; }
+/* A rang-jelvény szövege (a Minecraft in-game prefix) a Minecraftia
+   pixel-fontot használja - a szín és a szakaszonkénti (per-betűs gradient)
+   felbontás változatlan marad (ld. renderRankValueHtml). A Minecraftia nem
+   tartalmazza a fonetikus kis kapitális Unicode karaktereket (ᴛᴜʟᴀᴊᴅᴏɴᴏꜱ
+   stb.), ezekre a böngésző automatikusan, karakterenként esik vissza a
+   lánc következő betűtípusára. */
+.stat-badge-value-rank { font-family: "Minecraftia", "Segoe UI Historic", "Segoe UI", Inter, system-ui, sans-serif; }
 .stat-note {
   color: var(--text-faint); font-size: 12px; margin: -10px 0 22px;
 }

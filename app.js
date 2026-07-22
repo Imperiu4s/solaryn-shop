@@ -292,7 +292,7 @@ function renderStatBadges(container, values) {
       <div class="stat-badge-icon">${STAT_ICONS[it.icon]}</div>
       <div>
         <div class="stat-badge-label">${it.label}</div>
-        <div class="stat-badge-value"${it.color ? ` style="color:${it.color}"` : ''}>${it.html}</div>
+        <div class="stat-badge-value${it.icon === 'rank' ? ' stat-badge-value-rank' : ''}"${it.color ? ` style="color:${it.color}"` : ''}>${it.html}</div>
       </div>
     </div>
   `).join('');
