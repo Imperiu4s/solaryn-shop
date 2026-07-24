@@ -59,7 +59,16 @@ const SkinPreview = (() => {
   // meg egy kicsit, DE a textúra-UV mintavételezés az EREDETI (nem-paddelt)
   // w/h/d alapján történik - enélkül a nagyobb doboz a textúrán is nagyobb,
   // szomszédos régiót mintázna, ami rossz/csúszó textúrázást adna.
-  function addBox(positions, uvs, indices, cx, cy, cz, w, h, d, uvOrigin, texW, texH, pad = 0) {
+  // ÚJ: "uvScale" - HD (64-nél szélesebb) skineknél a textúra-régiók (UV-
+  // origó ÉS a lap-méretek is) ennyiszer nagyobbak PIXELBEN, mint a
+  // "sztenderd" 64-alapú elrendezésben (2 egy 128 széles HD skinnél, stb.) -
+  // a 3D geometria (w/h/d világ-egységben) ETTŐL FÜGGETLENÜL változatlan
+  // marad, hiszen a modell alakja nem nő attól, hogy a skin-kép felbontása
+  // nagyobb. Enélkül egy HD skinnél a UV-régió mérete (w/h/d) nem lett
+  // felskálázva a nagyobb texW/texH-hoz képest, ezért a fej/test/kar/láb
+  // mindegyike csak a textúra bal-felső NEGYEDÉT mintázta volna (rossz,
+  // "összecsúszott" előnézetet adva).
+  function addBox(positions, uvs, indices, cx, cy, cz, w, h, d, uvOrigin, texW, texH, pad = 0, uvScale = 1) {
     const hw = w / 2 + pad, hh = h / 2 + pad, hd = d / 2 + pad;
     const p = {
       '000': [cx - hw, cy - hh, cz - hd], '100': [cx + hw, cy - hh, cz - hd],
@@ -67,7 +76,7 @@ const SkinPreview = (() => {
       '001': [cx - hw, cy - hh, cz + hd], '101': [cx + hw, cy - hh, cz + hd],
       '011': [cx - hw, cy + hh, cz + hd], '111': [cx + hw, cy + hh, cz + hd]
     };
-    const faces = boxUvFaces(uvOrigin[0], uvOrigin[1], w, h, d);
+    const faces = boxUvFaces(uvOrigin[0] * uvScale, uvOrigin[1] * uvScale, w * uvScale, h * uvScale, d * uvScale);
     const faceCorners = {
       front: [p['001'], p['101'], p['111'], p['011']],
       back: [p['100'], p['000'], p['010'], p['110']],
@@ -109,32 +118,40 @@ const SkinPreview = (() => {
     // A "modern" (64 magas) formátumban a bal kar/láb KÜLÖN UV-régiót kap a
     // jobbtól, és van teljes overlay (zakó/ujjak/nadrág) réteg is; a régi 64x32
     // formátumban a bal oldal a jobb oldal TÜKRE, és csak a fej kap kalap-overlayt.
-    const modern = texH >= 64;
+    // ÚJ: HD skin (64-nél szélesebb kép) esetén a valódi UV-régiók ennyi-
+    // szeresei a sztenderd 64-alapú elrendezésnek - ld. addBox uvScale
+    // paraméterének megjegyzését.
+    const uvScale = texW / 64;
+    // "modern" (64x64-szerű, teljes overlay-réteggel) vs "legacy" (64x32-szerű,
+    // csak fej-overlayjel) - a HD-arányos ellenőrzés (texH > texW/2, nem a
+    // korábbi, csak a sztenderd méretre helyes "texH >= 64") ugyanígy
+    // megkülönbözteti a kettőt bármilyen felbontásban.
+    const modern = texH > texW / 2;
     const PAD = 0.4;
 
     // Alap réteg
-    addBox(positions, uvs, indices, 0, 10, 0, 8, 8, 8, [0, 0], texW, texH); // fej
-    addBox(positions, uvs, indices, 0, 0, 0, 8, 12, 4, [16, 16], texW, texH); // törzs
-    addBox(positions, uvs, indices, -(4 + armW / 2), 0, 0, armW, 12, 4, [40, 16], texW, texH); // jobb kar
+    addBox(positions, uvs, indices, 0, 10, 0, 8, 8, 8, [0, 0], texW, texH, 0, uvScale); // fej
+    addBox(positions, uvs, indices, 0, 0, 0, 8, 12, 4, [16, 16], texW, texH, 0, uvScale); // törzs
+    addBox(positions, uvs, indices, -(4 + armW / 2), 0, 0, armW, 12, 4, [40, 16], texW, texH, 0, uvScale); // jobb kar
     // JAVÍTVA: korábban itt is [40,16]-ot (a jobb kar UV-ját) használtuk, azaz a
     // bal kart a jobb kar textúrájával tükrözve rajzoltuk ki - modern formátumban
     // a bal karnak saját, külön UV-régiója van ([32,48]).
-    addBox(positions, uvs, indices, (4 + armW / 2), 0, 0, armW, 12, 4, modern ? [32, 48] : [40, 16], texW, texH); // bal kar
-    addBox(positions, uvs, indices, -2, -12, 0, 4, 12, 4, [0, 16], texW, texH); // jobb láb
+    addBox(positions, uvs, indices, (4 + armW / 2), 0, 0, armW, 12, 4, modern ? [32, 48] : [40, 16], texW, texH, 0, uvScale); // bal kar
+    addBox(positions, uvs, indices, -2, -12, 0, 4, 12, 4, [0, 16], texW, texH, 0, uvScale); // jobb láb
     // JAVÍTVA: ugyanaz a hiba, mint a karnál - a bal lábnak modern formátumban
     // saját UV-régiója van ([16,48]), nem a jobb láb tükrözése.
-    addBox(positions, uvs, indices, 2, -12, 0, 4, 12, 4, modern ? [16, 48] : [0, 16], texW, texH); // bal láb
+    addBox(positions, uvs, indices, 2, -12, 0, 4, 12, 4, modern ? [16, 48] : [0, 16], texW, texH, 0, uvScale); // bal láb
 
     // Overlay réteg (kalap/zakó/ujjak/nadrág) - a base-nél kicsit nagyobb (PAD)
     // dobozok, hogy ne z-fighteljenek, és csak ott látszódjanak, ahol a textúra
     // nem átlátszó (lásd a fragment shader alpha-discard-ját).
-    addBox(positions, uvs, indices, 0, 10, 0, 8, 8, 8, [32, 0], texW, texH, PAD); // fej overlay (kalap) - mindkét formátumban létezik
+    addBox(positions, uvs, indices, 0, 10, 0, 8, 8, 8, [32, 0], texW, texH, PAD, uvScale); // fej overlay (kalap) - mindkét formátumban létezik
     if (modern) {
-      addBox(positions, uvs, indices, 0, 0, 0, 8, 12, 4, [16, 32], texW, texH, PAD); // törzs overlay (zakó)
-      addBox(positions, uvs, indices, -(4 + armW / 2), 0, 0, armW, 12, 4, [40, 32], texW, texH, PAD); // jobb kar overlay
-      addBox(positions, uvs, indices, (4 + armW / 2), 0, 0, armW, 12, 4, [48, 48], texW, texH, PAD); // bal kar overlay
-      addBox(positions, uvs, indices, -2, -12, 0, 4, 12, 4, [0, 32], texW, texH, PAD); // jobb láb overlay
-      addBox(positions, uvs, indices, 2, -12, 0, 4, 12, 4, [0, 48], texW, texH, PAD); // bal láb overlay
+      addBox(positions, uvs, indices, 0, 0, 0, 8, 12, 4, [16, 32], texW, texH, PAD, uvScale); // törzs overlay (zakó)
+      addBox(positions, uvs, indices, -(4 + armW / 2), 0, 0, armW, 12, 4, [40, 32], texW, texH, PAD, uvScale); // jobb kar overlay
+      addBox(positions, uvs, indices, (4 + armW / 2), 0, 0, armW, 12, 4, [48, 48], texW, texH, PAD, uvScale); // bal kar overlay
+      addBox(positions, uvs, indices, -2, -12, 0, 4, 12, 4, [0, 32], texW, texH, PAD, uvScale); // jobb láb overlay
+      addBox(positions, uvs, indices, 2, -12, 0, 4, 12, 4, [0, 48], texW, texH, PAD, uvScale); // bal láb overlay
     }
     return { positions, uvs, indices };
   }

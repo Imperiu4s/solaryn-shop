@@ -266,7 +266,7 @@ function renderStatBadges(container, values) {
       <div class="stat-badge-icon">${STAT_ICONS[it.icon]}</div>
       <div>
         <div class="stat-badge-label">${it.label}</div>
-        <div class="stat-badge-value${it.icon === 'rank' ? ' stat-badge-value-rank' : ''}">${it.html}</div>
+        <div class="stat-badge-value">${it.html}</div>
       </div>
     </div>
   `).join('');
@@ -777,8 +777,16 @@ async function drawFaceFromSkin(canvas, username, size) {
   const img = await loadSkinImage(username);
   if (img) {
     ctx.clearRect(0, 0, size, size);
-    ctx.drawImage(img, 8, 8, 8, 8, 0, 0, size, size);
-    if (img.naturalHeight >= 64) ctx.drawImage(img, 40, 8, 8, 8, 0, 0, size, size);
+    // JAVÍTVA: a fej UV-régiója (8,8)-(16,16) csak sztenderd, 64 széles
+    // skinnél helyes pixelben - HD (pl. 128/256 széles) skinnél ugyanez a
+    // régió arányosan nagyobb helyen van, a kép TÉNYLEGES szélessége/64
+    // arányában (ld. skin3d.js azonos hibájának javítását ugyanezzel a
+    // logikával).
+    const scale = (img.naturalWidth || img.width) / 64;
+    ctx.drawImage(img, 8 * scale, 8 * scale, 8 * scale, 8 * scale, 0, 0, size, size);
+    if ((img.naturalHeight || img.height) > (img.naturalWidth || img.width) / 2) {
+      ctx.drawImage(img, 40 * scale, 8 * scale, 8 * scale, 8 * scale, 0, 0, size, size);
+    }
   } else {
     drawDefaultFace(ctx, size);
   }
@@ -994,8 +1002,12 @@ async function drawFaceForPlayer(canvas, player) {
   const img = player.hasSkin ? await loadSkinImage(player.username) : null;
   if (img) {
     ctx.clearRect(0, 0, 40, 40);
-    ctx.drawImage(img, 8, 8, 8, 8, 0, 0, 40, 40);
-    if (img.naturalHeight >= 64) ctx.drawImage(img, 40, 8, 8, 8, 0, 0, 40, 40);
+    // JAVÍTVA: ld. drawFaceFromSkin ugyanezen HD-skálázási javítását.
+    const scale = (img.naturalWidth || img.width) / 64;
+    ctx.drawImage(img, 8 * scale, 8 * scale, 8 * scale, 8 * scale, 0, 0, 40, 40);
+    if ((img.naturalHeight || img.height) > (img.naturalWidth || img.width) / 2) {
+      ctx.drawImage(img, 40 * scale, 8 * scale, 8 * scale, 8 * scale, 0, 0, 40, 40);
+    }
   } else {
     drawDefaultFace(ctx, 40);
   }
