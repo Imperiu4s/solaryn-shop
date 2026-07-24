@@ -487,43 +487,24 @@
         <!-- SKIN -->
         <section class="view" data-view="skin">
           <h1 class="page-title">Skin</h1>
-          <p class="page-note">Egyedi skin feltöltés (.png, 64x64 vagy 64x32, klasszikus vagy slim modell) - ugyanaz a skin jelenik meg a szerveren és a SolarLauncherben is.</p>
+          <p class="page-note">Egyedi skin feltöltés (.png, 64x64/64x32 vagy ennek HD többszöröse - pl. 128x128, 256x256, egészen 1024x1024-ig -, klasszikus vagy slim modell) - ugyanaz a skin jelenik meg a szerveren és a SolarLauncherben is. HD skin feltöltésekor az lesz a skined (nem lehet egyszerre sima ÉS HD skined is).</p>
 
           <div class="content-grid">
-            <div>
-              <div class="card">
-                <div class="skin-layout">
-                  <div class="skin-upload-col">
-                    <input type="file" id="skinFileInput" accept=".png,image/png" hidden />
-                    <div class="skin-drop" id="skinDrop">Húzd ide a .png skinedet, vagy kattints a tallózáshoz</div>
-                    <div class="skin-model-toggle">
-                      <button class="pill active" data-model="classic">Klasszikus</button>
-                      <button class="pill" data-model="slim">Vékony (slim)</button>
-                    </div>
-                    <button type="button" class="btn-outline" id="skinResetBtn">Alapértelmezett skin visszaállítása</button>
-                    <p class="skin-status" id="skinStatus"></p>
+            <div class="card">
+              <div class="skin-layout">
+                <div class="skin-upload-col">
+                  <input type="file" id="skinFileInput" accept=".png,image/png" hidden />
+                  <div class="skin-drop" id="skinDrop">Húzd ide a .png skinedet, vagy kattints a tallózáshoz</div>
+                  <div class="skin-model-toggle">
+                    <button class="pill active" data-model="classic">Klasszikus</button>
+                    <button class="pill" data-model="slim">Vékony (slim)</button>
                   </div>
-                  <div class="skin-preview-col">
-                    <canvas id="skinPreview3d" width="220" height="280"></canvas>
-                    <p class="skin-preview-hint">Húzással forgatható</p>
-                  </div>
+                  <button type="button" class="btn-outline" id="skinResetBtn">Alapértelmezett skin visszaállítása</button>
+                  <p class="skin-status" id="skinStatus"></p>
                 </div>
-              </div>
-
-              <div class="card" style="margin-top: 18px;">
-                <div class="skin-layout">
-                  <div class="skin-upload-col">
-                    <div class="info-box-title" style="margin-bottom: 10px;">HD skin (opcionális)</div>
-                    <input type="file" id="skinHdFileInput" accept=".png,image/png" hidden />
-                    <div class="skin-drop" id="skinHdDrop">Húzd ide a HD .png skinedet, vagy kattints a tallózáshoz</div>
-                    <p class="stat-note" style="margin-top: 10px;">Nagyobb felbontású változat (128x128, 256x256, ..., max. 1024x1024, ugyanolyan 1:1/2:1 arányban, mint a rendes skin) - csak a SolarClient-et futtató játékosoknak jelenik meg élesebben, mindenki másnak a fenti, rendes skin marad látható.</p>
-                    <button type="button" class="btn-outline" id="skinHdResetBtn">HD skin eltávolítása</button>
-                    <p class="skin-status" id="skinHdStatus"></p>
-                  </div>
-                  <div class="skin-preview-col">
-                    <canvas id="skinHdPreview3d" width="220" height="280"></canvas>
-                    <p class="skin-preview-hint">Húzással forgatható</p>
-                  </div>
+                <div class="skin-preview-col">
+                  <canvas id="skinPreview3d" width="220" height="280"></canvas>
+                  <p class="skin-preview-hint">Húzással forgatható</p>
                 </div>
               </div>
             </div>
