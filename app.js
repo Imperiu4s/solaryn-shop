@@ -729,7 +729,7 @@ $('#btnLogout').addEventListener('click', (e) => {
 function switchView(view) {
   $$('.app-nav-item[data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
   $$('.view').forEach((v) => v.classList.toggle('active', v.dataset.view === view));
-  if (view === 'skin') loadSkinPreview3d();
+  if (view === 'skin') { loadSkinPreview3d(); loadSkinHdPreview3d(); }
   // A PP-egyenleg (rangvásárlás fedezet-ellenőrzéséhez) minden alkalommal
   // frissül, amikor a felhasználó megnyitja a Rangok fület - nem élő/valós
   // idejű szinkron, de elég friss ahhoz, hogy a gombok állapota (elég PP
@@ -803,6 +803,19 @@ function loadSkinImage(username) {
   });
 }
 
+// Ugyanaz, mint loadSkinImage(), csak az opcionális HD-változatot kérdezi le
+// (ld. SolarBackend GET /api/skin/:username/hd) - 404, ha a felhasználó nem
+// töltött fel HD skint.
+function loadSkinImageHd(username) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = BACKEND_URL + '/api/skin/' + encodeURIComponent(username) + '/hd?t=' + Date.now();
+  });
+}
+
 // ── Főoldal: saját skin 3D előnézet ──
 let stopHomeSkinPreview = null;
 async function loadHomeSkinPreview() {
@@ -846,6 +859,7 @@ $$('.skin-model-toggle .pill').forEach((p) => {
     p.classList.add('active');
     skinModel = p.dataset.model === 'slim' ? 'slim' : 'classic';
     loadSkinPreview3d();
+    loadSkinHdPreview3d();
   });
 });
 
@@ -919,6 +933,89 @@ async function uploadSkinFile(file) {
     statusEl.textContent = 'Nem sikerült elérni a szervert.';
   }
 }
+
+// ── HD skin (opcionális, ld. SolarBackend POST/GET /api/skin/:username/hd) ──
+// Külön feltöltés/előnézet/törlés a rendes skintől - ugyanazt a klasszikus/
+// slim választást (skinModel) használja a 3D előnézethez, mint a rendes skin.
+let stopSkinHdPreview = null;
+
+async function loadSkinHdPreview3d() {
+  if (!session) return;
+  const img = await loadSkinImageHd(session.username);
+  if (!img) {
+    if (stopSkinHdPreview) { stopSkinHdPreview(); stopSkinHdPreview = null; }
+    const canvas = $('#skinHdPreview3d');
+    canvas.width = canvas.width;
+    return;
+  }
+  if (stopSkinHdPreview) stopSkinHdPreview();
+  stopSkinHdPreview = SkinPreview.start($('#skinHdPreview3d'), img, skinModel === 'slim');
+}
+
+const skinHdFileInput = $('#skinHdFileInput');
+$('#skinHdDrop').addEventListener('click', () => skinHdFileInput.click());
+$('#skinHdDrop').addEventListener('dragover', (e) => e.preventDefault());
+$('#skinHdDrop').addEventListener('drop', (e) => {
+  e.preventDefault();
+  const file = e.dataTransfer.files && e.dataTransfer.files[0];
+  if (file) uploadSkinHdFile(file);
+});
+skinHdFileInput.addEventListener('change', () => {
+  const file = skinHdFileInput.files && skinHdFileInput.files[0];
+  if (file) uploadSkinHdFile(file);
+  skinHdFileInput.value = '';
+});
+
+async function uploadSkinHdFile(file) {
+  const statusEl = $('#skinHdStatus');
+  statusEl.classList.remove('error');
+  statusEl.textContent = 'Feltöltés...';
+  try {
+    const form = new FormData();
+    form.append('skin', file, 'skin_hd.png');
+    const res = await fetch(BACKEND_URL + '/api/skin/hd', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + session.token },
+      body: form
+    });
+    const data = await res.json();
+    if (data.ok) {
+      statusEl.textContent = 'HD skin sikeresen feltöltve!';
+      loadSkinHdPreview3d();
+    } else {
+      statusEl.classList.add('error');
+      statusEl.textContent = data.message || 'A feltöltés sikertelen.';
+    }
+  } catch {
+    statusEl.classList.add('error');
+    statusEl.textContent = 'Nem sikerült elérni a szervert.';
+  }
+}
+
+$('#skinHdResetBtn').addEventListener('click', async () => {
+  const statusEl = $('#skinHdStatus');
+  const confirmed = await confirmModal('HD skin eltávolítása', 'Biztosan törlöd a feltöltött HD skinedet? A rendes skined változatlan marad.', 'Igen, eltávolítás');
+  if (!confirmed) return;
+  statusEl.classList.remove('error');
+  statusEl.textContent = 'Eltávolítás...';
+  try {
+    const res = await fetch(BACKEND_URL + '/api/skin/hd/reset', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    if (data.ok) {
+      statusEl.textContent = 'HD skin eltávolítva.';
+      loadSkinHdPreview3d();
+    } else {
+      statusEl.classList.add('error');
+      statusEl.textContent = data.message || 'Az eltávolítás sikertelen.';
+    }
+  } catch {
+    statusEl.classList.add('error');
+    statusEl.textContent = 'Nem sikerült elérni a szervert.';
+  }
+});
 
 // ── Kódbeváltás (stub - nincs valódi kód-adatbázis egyenlőre) ──
 $('#redeemSubmit').addEventListener('click', () => {
