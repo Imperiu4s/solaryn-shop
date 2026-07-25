@@ -991,7 +991,16 @@ async function doPlayerSearch() {
     </div>
   `).join('');
 
-  $$('.player-card').forEach((card, i) => {
+  // JAVÍTVA: korábban ez a lekérdezés ("$$('.player-card')") NEM volt az
+  // eredmény-listára szűkítve - mivel a "Barátok" kártya (ld. loadHomeFriends)
+  // a főoldalon UGYANEZT a ".player-card" osztályt használja (és a főoldal
+  // DOM-eleme akkor is a lapon marad, ha épp nem az aktív nézet), a globális
+  // lekérdezés a barát-kártyákat IS visszaadta, elcsúsztatva az index szerinti
+  // "data.players[i]" párosítást - ha volt legalább egy barátod, egy adott
+  // ponton "player" undefined lett, ami megszakította a forEach-et, mielőtt a
+  // tényleges keresési találatokra rákerülhetett volna a canvas-rajzolás/
+  // kattintás-figyelő.
+  $$('#playerResult .player-card').forEach((card, i) => {
     const player = data.players[i];
     const canvas = card.querySelector('canvas');
     drawFaceForPlayer(canvas, player);
