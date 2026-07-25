@@ -293,6 +293,18 @@
                 <div class="news-card-meta" id="homeNewsMeta"></div>
                 <p class="news-card-content" id="homeNewsContent"></p>
               </div>
+
+              <!-- ÚJ: baráti lista (ld. SolarBackend src/friends.js GET
+                   /api/friends/:username) - zölden a jelenleg elérhető,
+                   fehéren a nem elérhető barátok neve, a /fr in-game
+                   parancsokkal (add/accept/remove) kezelhető lista. Egy
+                   barátra kattintva ugyanaz a profil-nézet nyílik meg, mint a
+                   Játékosok fülön (ld. openPlayerProfile). -->
+              <div class="card" id="homeFriendsCard">
+                <div class="card-title">Barátok</div>
+                <div id="homeFriendsGrid" class="player-result-grid"></div>
+                <p class="player-result-note hidden" id="homeFriendsEmpty">Még nincs egyetlen barátod sem - a szerveren a /fr add &lt;név&gt; paranccsal küldhetsz barátkérelmet.</p>
+              </div>
             </div>
 
             <div class="card discord-card">

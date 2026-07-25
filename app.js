@@ -667,6 +667,9 @@ async function enterApp(meData) {
 
   // A legfrissebb hír/felhívás a főoldalon, a "Profilod" kártya alatt.
   loadHomeNews();
+
+  // A "Barátok" kártya (ld. loadHomeFriends lentebb).
+  loadHomeFriends();
 }
 
 // A Rangok fül megnyitásakor (ld. switchView) hívjuk - friss egyenleget kér
@@ -2376,6 +2379,49 @@ async function loadHomeNews() {
     card.classList.remove('hidden');
   } catch {
     // Csendben kihagyjuk - a kártya rejtve marad, a következő belépéskor újra próbálkozunk.
+  }
+}
+
+// A főoldal "Barátok" kártyája - a bejelentkezett felhasználó ELFOGADOTT
+// barátait listázza (ld. SolarBackend GET /api/friends/:username), zölden az
+// éppen elérhetőket (proxy-oldali élő állapot, ld. SolarBungee
+// FriendCommand.handleList megjegyzését, itt viszont a backend heartbeat-
+// alapú "online" mezőjéből jön, mert a weboldalnak nincs élő kapcsolata a
+// proxyval). A barátkérelmek kezelése (küldés/elfogadás/eltávolítás)
+// SZÁNDÉKOSAN csak in-game (/fr add|accept|remove) lehetséges, itt csak a
+// már meglévő barátság jelenik meg. Egy kártyára kattintva ugyanaz a
+// profil-nézet nyílik meg, mint a Játékosok fülön (ld. openPlayerProfile).
+async function loadHomeFriends() {
+  if (!session || !session.username) return;
+  const grid = $('#homeFriendsGrid');
+  const emptyNote = $('#homeFriendsEmpty');
+  try {
+    const res = await fetch(BACKEND_URL + '/api/friends/' + encodeURIComponent(session.username));
+    const data = await res.json();
+    const friendsList = data.ok ? data.friends : [];
+    if (!friendsList.length) {
+      grid.innerHTML = '';
+      emptyNote.classList.remove('hidden');
+      return;
+    }
+    emptyNote.classList.add('hidden');
+    grid.innerHTML = friendsList.map((f, i) => `
+      <div class="player-card" data-username="${f.username}">
+        <canvas class="player-card-canvas" data-idx="${i}" width="40" height="40"></canvas>
+        <div class="player-card-info">
+          <div class="player-card-label">Név</div>
+          <div class="player-card-name friend-card-name ${f.online ? 'online' : ''}">${f.username}</div>
+        </div>
+      </div>
+    `).join('');
+    $$('#homeFriendsGrid .player-card').forEach((card, i) => {
+      const friend = friendsList[i];
+      const canvas = card.querySelector('canvas');
+      drawFaceForPlayer(canvas, { username: friend.username, hasSkin: true });
+      card.addEventListener('click', () => openPlayerProfile(friend.username));
+    });
+  } catch {
+    // Csendben kihagyjuk - a kártya üresen marad, a következő belépéskor újra próbálkozunk.
   }
 }
 

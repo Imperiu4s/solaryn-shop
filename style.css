@@ -830,6 +830,12 @@ a { color: inherit; }
 .player-card-name { font-weight: 700; font-size: 15px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .player-result-note { color: var(--text-dim); font-size: 13px; text-align: center; margin-top: 10px; }
 
+/* ÚJ: főoldali "Barátok" kártya (ld. app.js loadHomeFriends) - a .player-card
+   mintáját újrahasznosítja, csak a névszín jelzi zölden az elérhető
+   barátokat (ugyanaz a zöld, mint a .ledger-amount-positive-nél). */
+.friend-card-name.online { color: #2ecc71; }
+#homeFriendsCard .player-result-grid { margin-top: 4px; }
+
 .btn-back {
   display: inline-flex; align-items: center; gap: 8px; margin-bottom: 16px;
   background: transparent; border: none; color: var(--text-dim); cursor: pointer;
