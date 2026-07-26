@@ -224,6 +224,10 @@
           <svg viewBox="0 0 24 24"><path d="M4 5h13a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M7 9h8M7 12h8M7 15h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M19 8l2 1.2v9.8a1 1 0 0 1-1 1h-1" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <span>Felhívások</span>
         </button>
+        <button class="app-nav-item admin-nav-item hidden" data-view="badges">
+          <svg viewBox="0 0 24 24"><path d="M12 2l2.6 5.8 6.2.6-4.7 4.2 1.4 6.2L12 15.8 6.5 18.8l1.4-6.2-4.7-4.2 6.2-.6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+          <span>Jelvények</span>
+        </button>
       </div>
 
       <div class="app-nav-spacer"></div>
@@ -276,7 +280,12 @@
                     <canvas id="homeSkinCanvas" width="170" height="220"></canvas>
                   </div>
                   <div class="profile-info">
-                    <div class="profile-name" id="profileName"></div>
+                    <div class="profile-name-row">
+                      <div class="profile-name" id="profileName"></div>
+                      <!-- ÚJ: jelvények (ld. SolarBackend src/badges.js) - mindenki
+                           számára láthatók a saját neve mellett a főoldalon. -->
+                      <span class="name-badges" id="profileNameBadges"></span>
+                    </div>
                     <p class="profile-empty-skin" id="profileSkinNote"></p>
                     <div id="profileDiscordLink"></div>
                     <div id="profileSanctionStatus" class="profile-sanction-status"></div>
@@ -722,6 +731,34 @@
           <div id="newsAdminList"></div>
         </section>
 
+        <!-- JELVÉNYEK (admin, ld. SolarBackend src/badges.js) -->
+        <section class="view" data-view="badges">
+          <h1 class="page-title">Jelvények</h1>
+          <p class="page-note">A létrehozott jelvényeket a játékos-profil admin paneljén oszthatod ki/veheted el - a megkapott jelvények mindenki neve mellett megjelennek a főoldalon.</p>
+
+          <div class="card">
+            <div class="card-title" id="badgeFormTitle">Új jelvény</div>
+            <label class="gift-modal-label" style="margin-top:0;">Név</label>
+            <input type="text" id="badgeNameInput" class="gift-modal-input" placeholder="Pl. Veterán" maxlength="32" />
+            <label class="gift-modal-label">Névszín</label>
+            <input type="color" id="badgeColorInput" class="badge-color-input" value="#ffc42e" />
+            <label class="gift-modal-label">Ikon (PNG vagy JPEG)</label>
+            <input type="file" id="badgeIconInput" accept="image/png,image/jpeg" />
+            <div class="news-image-preview-wrap" id="badgeIconPreviewWrap" hidden>
+              <img id="badgeIconPreview" class="news-image-preview badge-icon-preview" alt="" />
+              <button type="button" class="link-btn" id="badgeIconRemoveBtn">Ikon eltávolítása</button>
+            </div>
+            <p class="redeem-result" id="badgeFormResult"></p>
+            <div class="modal-actions" style="margin-top:14px;">
+              <button type="button" class="btn-outline" id="badgeDiscardBtn">Elvetés</button>
+              <button type="button" class="btn-glow" id="badgeSaveBtn" style="margin-top:0;">Mentés</button>
+            </div>
+          </div>
+
+          <div class="admin-subsection-title">Meglévő jelvények</div>
+          <div id="badgesAdminList"></div>
+        </section>
+
         <!-- JÁTÉKOS PROFIL (egy találatra kattintva) -->
         <section class="view" data-view="playerProfile">
           <button class="btn-back" id="btnBackToPlayers">
@@ -739,7 +776,10 @@
                 <canvas id="playerProfileSkinCanvas" width="170" height="220"></canvas>
               </div>
               <div class="profile-info">
-                <div class="profile-name" id="playerProfileName"></div>
+                <div class="profile-name-row">
+                  <div class="profile-name" id="playerProfileName"></div>
+                  <span class="name-badges" id="playerProfileNameBadges"></span>
+                </div>
                 <p class="profile-empty-skin" id="playerProfileSkinNote"></p>
                 <div id="playerProfileSanctionStatus" class="profile-sanction-status"></div>
               </div>
@@ -798,6 +838,17 @@
               <label>Pörgetés mennyisége (negatív = elvétel)</label>
               <input type="number" id="adminCasinoAdjustAmountInput" placeholder="Pl. 1 vagy -1" step="1" />
               <button type="button" class="btn-glow admin-lock-btn" id="adminCasinoAdjustBtn">Módosítás végrehajtása</button>
+            </div>
+
+            <div class="admin-subsection-title">Jelvények</div>
+            <div class="ban-panel admin-badges-panel">
+              <p class="redeem-result" id="adminBadgeGrantStatus"></p>
+              <label>Jelvény kiosztása</label>
+              <div class="admin-badge-grant-row">
+                <select id="adminBadgeSelect"></select>
+                <button type="button" class="device-link" id="adminBadgeGrantBtn">Adás</button>
+              </div>
+              <div id="adminPlayerBadgesList" class="admin-player-badges-list"></div>
             </div>
 
             <div class="admin-subsection-title">Kliens</div>

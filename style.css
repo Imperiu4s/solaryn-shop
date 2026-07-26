@@ -289,6 +289,57 @@ a { color: inherit; }
 .news-image-preview-wrap { display: flex; align-items: center; gap: 14px; margin-top: 10px; }
 .news-image-preview { width: 90px; height: 90px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); }
 
+/* ÚJ: Jelvények (ld. SolarBackend src/badges.js, index.html data-view="badges") */
+.badge-color-input {
+  display: block; width: 64px; height: 34px; padding: 3px; margin-top: 6px;
+  border-radius: 8px; border: 1px solid var(--line); background: var(--bg); cursor: pointer;
+}
+.badge-icon-preview { width: 48px; height: 48px; border-radius: 10px; }
+.badges-admin-item {
+  display: flex; align-items: center; gap: 14px;
+  background: rgba(255,255,255,.02); border: 1px solid var(--line); border-radius: 14px;
+  padding: 12px 16px; margin-top: 12px;
+}
+.badges-admin-item-icon { width: 40px; height: 40px; border-radius: 10px; object-fit: cover; flex-shrink: 0; background: var(--panel-2); }
+.badges-admin-item-info { flex: 1; min-width: 0; }
+.badges-admin-item-name { font-size: 14px; font-weight: 800; }
+.badges-admin-item-meta { font-size: 12px; color: var(--text-faint); margin-top: 2px; }
+.badges-admin-item-actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+/* ÚJ: jelvények a névtábla mellett (Profilod kártya / Játékos-profil) */
+.profile-name-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.profile-name-row .profile-name { margin-bottom: 0; }
+.name-badges { display: inline-flex; gap: 6px; }
+.name-badge { position: relative; display: inline-flex; }
+.name-badge-icon {
+  width: 20px; height: 20px; border-radius: 6px; object-fit: cover;
+  border: 1px solid rgba(255,255,255,.25); background: var(--panel-2); cursor: default;
+}
+.name-badge-tooltip {
+  position: absolute; bottom: 130%; left: 50%; transform: translateX(-50%);
+  background: #0a0a0d; border: 1px solid var(--line); border-radius: 6px;
+  padding: 4px 9px; font-size: 11.5px; font-weight: 800; white-space: nowrap;
+  opacity: 0; pointer-events: none; transition: opacity .14s; z-index: 20;
+}
+.name-badge:hover .name-badge-tooltip { opacity: 1; }
+
+/* ÚJ: jelvény adása/elvétele a játékos-profil admin paneljén */
+.admin-badge-grant-row { display: flex; gap: 8px; margin-top: 6px; }
+.admin-badge-grant-row select { flex: 1; }
+.admin-badge-grant-row .device-link { flex-shrink: 0; }
+.admin-player-badges-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.admin-player-badge-chip {
+  display: flex; align-items: center; gap: 6px;
+  background: rgba(255,255,255,.04); border: 1px solid var(--line); border-radius: 999px;
+  padding: 4px 6px 4px 4px; font-size: 12px; font-weight: 700;
+}
+.admin-player-badge-chip img { width: 18px; height: 18px; border-radius: 5px; object-fit: cover; }
+.admin-player-badge-chip button {
+  background: none; border: none; color: var(--text-faint); cursor: pointer; font-size: 13px;
+  line-height: 1; padding: 2px;
+}
+.admin-player-badge-chip button:hover { color: var(--danger); }
+
 /* Havi bevétel - naptár nézet (ld. index.html data-view="revenue"/"revenueDetail") */
 .revenue-calendar-year { margin-top: 30px; }
 .revenue-calendar-year:first-child { margin-top: 0; }

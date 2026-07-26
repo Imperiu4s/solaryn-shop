@@ -635,6 +635,7 @@ async function enterApp(meData) {
   renderStatBadges($('#statBadgeGrid'), formatStats(meData));
   renderDiscordLinkBadge($('#profileDiscordLink'), meData);
   renderSanctionStatus($('#profileSanctionStatus'), meData);
+  renderNameBadges($('#profileNameBadges'), meData?.badges);
   currentSanctionStatus = {
     activeMute: meData?.activeMute || null,
     activeBan: meData?.activeBan || null,
@@ -750,6 +751,7 @@ function switchView(view) {
   if (view === 'staffStats') loadStaffStats();
   if (view === 'revenue') loadRevenue();
   if (view === 'newsAdmin') { resetNewsForm(); loadNewsAdmin(); }
+  if (view === 'badges') { resetBadgeForm(); loadBadgesAdmin(); }
   if (view === 'casino') loadCasino();
 }
 $$('.app-nav-item[data-view]').forEach((btn) => {
@@ -1035,12 +1037,16 @@ async function openPlayerProfile(username) {
   $('#playerProfileName').textContent = username;
   renderStatBadges($('#playerProfileStats'), emptyStats());
   renderSanctionStatus($('#playerProfileSanctionStatus'), null);
+  renderNameBadges($('#playerProfileNameBadges'), null);
   apiGetProfile(username).then((profile) => {
     renderStatBadges($('#playerProfileStats'), profile.ok ? formatStats(profile) : emptyStats());
     // ÚJ: a felhasználó kérésére a némítás-/kitiltás-állapot a játékos-
     // keresőben (bárki profilját megnézve) is megjelenik, nem csak a saját
     // fooldalon - ld. SolarBackend GET /api/profile/:username kiterjesztését.
     renderSanctionStatus($('#playerProfileSanctionStatus'), profile.ok ? profile : null);
+    // ÚJ: jelvények (ld. SolarBackend src/badges.js) - mindenki látja bárki
+    // más neve mellett is, nem csak a sajátjánál.
+    renderNameBadges($('#playerProfileNameBadges'), profile.ok ? profile.badges : null);
   });
 
   lastAdminPlayerUsername = username;
@@ -1093,6 +1099,47 @@ function setAdminEmailEditing(editing) {
   }
 }
 
+// ÚJ: a játékos-profil admin paneljének "Jelvények" szekciója - a
+// jelenleg birtokolt jelvényeket tárolja, hogy a grant/revoke gombok
+// mindig friss listára hivatkozzanak (ld. loadAdminPlayerPanel/
+// renderAdminPlayerBadgesList).
+let currentAdminPlayerBadges = [];
+
+async function ensureAllBadgesLoaded() {
+  if (allBadgesCache.length) return allBadgesCache;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/badges', {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    allBadgesCache = data.ok && Array.isArray(data.badges) ? data.badges : [];
+  } catch {
+    allBadgesCache = [];
+  }
+  return allBadgesCache;
+}
+
+function renderAdminPlayerBadgesList(badgeList) {
+  currentAdminPlayerBadges = Array.isArray(badgeList) ? badgeList : [];
+  $('#adminPlayerBadgesList').innerHTML = currentAdminPlayerBadges.map((b) => `
+    <span class="admin-player-badge-chip" style="color:${escapeHtml(b.color)}">
+      <img src="${badgeIconUrl(b.id)}" alt="" />
+      ${escapeHtml(b.name)}
+      <button type="button" data-revoke-badge-id="${b.id}" title="Elvétel">×</button>
+    </span>
+  `).join('') || '<p class="redeem-result">Ennek a játékosnak még nincs egyetlen jelvénye sem.</p>';
+}
+
+async function renderAdminBadgeSelectOptions() {
+  const all = await ensureAllBadgesLoaded();
+  const select = $('#adminBadgeSelect');
+  if (!all.length) {
+    select.innerHTML = '<option value="">Nincs létrehozott jelvény</option>';
+    return;
+  }
+  select.innerHTML = all.map((b) => `<option value="${b.id}">${escapeHtml(b.name)}</option>`).join('');
+}
+
 async function loadAdminPlayerPanel(username) {
   currentAdminEmail = '';
   $('#adminPlayerEmailText').textContent = '…';
@@ -1107,7 +1154,10 @@ async function loadAdminPlayerPanel(username) {
   $('#adminDeleteConfirmInput').value = '';
   $('#adminDeleteResult').textContent = '';
   $('#adminDeleteBtn').disabled = true;
+  $('#adminBadgeGrantStatus').textContent = '';
+  $('#adminPlayerBadgesList').innerHTML = '';
   setAdminEmailEditing(false);
+  renderAdminBadgeSelectOptions();
   try {
     const res = await fetch(BACKEND_URL + '/api/admin/player/' + encodeURIComponent(username), {
       headers: { Authorization: 'Bearer ' + session.token }
@@ -1122,6 +1172,7 @@ async function loadAdminPlayerPanel(username) {
     $('#adminPlayerCreatedAt').textContent = formatLedgerDate(data.createdAt);
     renderDiscordLinkBadge($('#adminPlayerDiscordLink'), data);
     renderAdminLockStatus(data.locked);
+    renderAdminPlayerBadgesList(data.badges);
     $('#adminPlayerLoginsBody').innerHTML = data.logins.map((l) => `
       <tr>
         <td>${formatLedgerDate(l.created_at)}</td>
@@ -1323,6 +1374,56 @@ $('#adminCasinoAdjustBtn').addEventListener('click', async () => {
     statusEl.textContent = 'Nem sikerült elérni a szervert.';
     statusEl.className = 'redeem-result error';
   }
+});
+
+$('#adminBadgeGrantBtn').addEventListener('click', async () => {
+  if (!lastAdminPlayerUsername) return;
+  const statusEl = $('#adminBadgeGrantStatus');
+  const badgeId = $('#adminBadgeSelect').value;
+  if (!badgeId) {
+    statusEl.textContent = 'Nincs kiválasztott jelvény.';
+    statusEl.className = 'redeem-result error';
+    return;
+  }
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/player/' + encodeURIComponent(lastAdminPlayerUsername) + '/badges', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ badgeId: Number(badgeId) })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      statusEl.textContent = data.message || 'Nem sikerült kiosztani a jelvényt.';
+      statusEl.className = 'redeem-result error';
+      return;
+    }
+    statusEl.textContent = '';
+    renderAdminPlayerBadgesList(data.badges);
+    showToast('Jelvény kiosztva.');
+  } catch {
+    statusEl.textContent = 'Nem sikerült elérni a szervert.';
+    statusEl.className = 'redeem-result error';
+  }
+});
+
+// Delegált kattintás-figyelő (a jelvény-chipek dinamikusan újragenerálódnak,
+// ld. renderAdminPlayerBadgesList) - ugyanaz a minta, mint a news-edit-btn/
+// news-delete-btn-nél fentebb.
+document.addEventListener('click', (e) => {
+  const revokeBtn = e.target.closest('[data-revoke-badge-id]');
+  if (!revokeBtn || !lastAdminPlayerUsername) return;
+  const badgeId = revokeBtn.dataset.revokeBadgeId;
+  fetch(BACKEND_URL + '/api/admin/player/' + encodeURIComponent(lastAdminPlayerUsername) + '/badges/' + badgeId, {
+    method: 'DELETE',
+    headers: { Authorization: 'Bearer ' + session.token }
+  }).then((res) => res.json()).then((data) => {
+    if (data.ok) {
+      renderAdminPlayerBadgesList(data.badges);
+      showToast('Jelvény elvéve.');
+    } else {
+      showToast('Nem sikerült elvenni a jelvényt.', true);
+    }
+  }).catch(() => showToast('Nem sikerült elérni a szervert.', true));
 });
 
 // A törlés gomb CSAK akkor engedélyezett, ha a beírt szöveg PONTOSAN egyezik
@@ -2360,6 +2461,193 @@ document.addEventListener('click', (e) => {
     });
   }
 });
+
+// ── Jelvények (admin, ld. SolarBackend src/badges.js) - ugyanaz a minta,
+// mint a fenti "Felhívások" (news) CRUD, csak név+szín+ikon mezőkkel a
+// szöveges cím+tartalom helyett. ──
+let badgeEditingId = null;
+let badgesAdminItems = [];
+let badgeSelectedIconFile = null;
+let badgeRemoveExistingIcon = false;
+// ÚJ: az ÖSSZES jelvény gyorsítótárazott listája - a fenti admin CRUD
+// (badgesAdminItems) TÖLTI FEL (ld. loadBadgesAdmin), a játékos-profil
+// admin paneljének jelvény-választója (ld. loadAdminPlayerPanel) pedig
+// EBBŐL olvas, hogy ne kelljen külön lekérdezést indítania minden egyes
+// játékos-profil megnyitásakor.
+let allBadgesCache = [];
+
+function badgeIconUrl(id) {
+  return BACKEND_URL + '/api/badges/' + id + '/icon';
+}
+
+function resetBadgeForm() {
+  badgeEditingId = null;
+  badgeSelectedIconFile = null;
+  badgeRemoveExistingIcon = false;
+  $('#badgeFormTitle').textContent = 'Új jelvény';
+  $('#badgeNameInput').value = '';
+  $('#badgeColorInput').value = '#ffc42e';
+  $('#badgeIconInput').value = '';
+  $('#badgeIconPreviewWrap').hidden = true;
+  $('#badgeIconPreview').src = '';
+  $('#badgeFormResult').textContent = '';
+  $('#badgeFormResult').className = 'redeem-result';
+  $('#badgeSaveBtn').textContent = 'Mentés';
+}
+
+function renderBadgesAdminList() {
+  $('#badgesAdminList').innerHTML = badgesAdminItems.map((b) => `
+    <div class="badges-admin-item">
+      ${b.icon_ext ? `<img class="badges-admin-item-icon" src="${badgeIconUrl(b.id)}" alt="" />` : '<div class="badges-admin-item-icon"></div>'}
+      <div class="badges-admin-item-info">
+        <div class="badges-admin-item-name" style="color:${escapeHtml(b.color)}">${escapeHtml(b.name)}</div>
+        <div class="badges-admin-item-meta">${formatLedgerDate(b.created_at)}</div>
+      </div>
+      <div class="badges-admin-item-actions">
+        <button type="button" class="news-edit-btn" data-badge-id="${b.id}">Szerkesztés</button>
+        <button type="button" class="news-delete-btn" data-badge-id="${b.id}">Törlés</button>
+      </div>
+    </div>
+  `).join('') || '<p class="redeem-result">Még nincs egyetlen jelvény sem.</p>';
+}
+
+$('#badgeIconInput').addEventListener('change', (e) => {
+  const file = e.target.files && e.target.files[0];
+  badgeSelectedIconFile = file || null;
+  badgeRemoveExistingIcon = false;
+  if (!file) { $('#badgeIconPreviewWrap').hidden = true; return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    $('#badgeIconPreview').src = reader.result;
+    $('#badgeIconPreviewWrap').hidden = false;
+  };
+  reader.readAsDataURL(file);
+});
+
+$('#badgeIconRemoveBtn').addEventListener('click', () => {
+  badgeSelectedIconFile = null;
+  badgeRemoveExistingIcon = true;
+  $('#badgeIconInput').value = '';
+  $('#badgeIconPreviewWrap').hidden = true;
+  $('#badgeIconPreview').src = '';
+});
+
+async function loadBadgesAdmin() {
+  if (!session || !session.token || !isOwner) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/badges', {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    badgesAdminItems = data.ok && Array.isArray(data.badges) ? data.badges : [];
+  } catch {
+    badgesAdminItems = [];
+  }
+  renderBadgesAdminList();
+  // ÚJ: a játékos-profil admin paneljén lévő jelvény-választó (ld.
+  // loadAdminPlayerPanel) ugyanezt a listát használja - itt is frissítjük,
+  // hogy egy most létrehozott/törölt jelvény azonnal megjelenjen ott is,
+  // anélkül hogy külön kellene újratölteni.
+  allBadgesCache = badgesAdminItems;
+}
+
+$('#badgeDiscardBtn').addEventListener('click', resetBadgeForm);
+
+$('#badgeSaveBtn').addEventListener('click', async () => {
+  const resultEl = $('#badgeFormResult');
+  const name = $('#badgeNameInput').value.trim();
+  const color = $('#badgeColorInput').value;
+  if (!name) {
+    resultEl.textContent = 'Adj meg egy nevet.';
+    resultEl.className = 'redeem-result error';
+    return;
+  }
+  try {
+    const url = badgeEditingId ? BACKEND_URL + '/api/admin/badges/' + badgeEditingId : BACKEND_URL + '/api/admin/badges';
+    // FormData (multipart), NEM JSON - az ikon-csatolmány miatt, ld. news.js
+    // hasonló megjegyzését ugyanerről.
+    const formData = new FormData();
+    formData.append('name', name);
+    formData.append('color', color);
+    if (badgeSelectedIconFile) formData.append('icon', badgeSelectedIconFile);
+    const res = await fetch(url, {
+      method: badgeEditingId ? 'PUT' : 'POST',
+      headers: { Authorization: 'Bearer ' + session.token },
+      body: formData
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      resultEl.textContent = data.message || 'Nem sikerült menteni.';
+      resultEl.className = 'redeem-result error';
+      return;
+    }
+    showToast(badgeEditingId ? 'Jelvény frissítve.' : 'Jelvény létrehozva.');
+    resetBadgeForm();
+    loadBadgesAdmin();
+  } catch {
+    resultEl.textContent = 'Nem sikerült elérni a szervert.';
+    resultEl.className = 'redeem-result error';
+  }
+});
+
+document.addEventListener('click', (e) => {
+  const editBtn = e.target.closest('.news-edit-btn[data-badge-id]');
+  if (editBtn) {
+    const item = badgesAdminItems.find((b) => String(b.id) === editBtn.dataset.badgeId);
+    if (!item) return;
+    badgeEditingId = item.id;
+    badgeSelectedIconFile = null;
+    badgeRemoveExistingIcon = false;
+    $('#badgeIconInput').value = '';
+    $('#badgeFormTitle').textContent = 'Jelvény szerkesztése';
+    $('#badgeNameInput').value = item.name;
+    $('#badgeColorInput').value = item.color;
+    $('#badgeSaveBtn').textContent = 'Frissítés';
+    $('#badgeFormResult').textContent = '';
+    if (item.icon_ext) {
+      $('#badgeIconPreview').src = badgeIconUrl(item.id);
+      $('#badgeIconPreviewWrap').hidden = false;
+    } else {
+      $('#badgeIconPreview').src = '';
+      $('#badgeIconPreviewWrap').hidden = true;
+    }
+    return;
+  }
+  const deleteBtn = e.target.closest('.news-delete-btn[data-badge-id]');
+  if (deleteBtn) {
+    const id = deleteBtn.dataset.badgeId;
+    confirmModal('Jelvény törlése', 'Biztosan törlöd ezt a jelvényt? Minden játékostól levonja, akinek meg lett adva. Ez nem vonható vissza.', 'Igen, törlés').then((confirmed) => {
+      if (!confirmed) return;
+      fetch(BACKEND_URL + '/api/admin/badges/' + id, {
+        method: 'DELETE',
+        headers: { Authorization: 'Bearer ' + session.token }
+      }).then((res) => res.json()).then((data) => {
+        if (data.ok) {
+          showToast('Jelvény törölve.');
+          if (String(badgeEditingId) === String(id)) resetBadgeForm();
+          loadBadgesAdmin();
+        } else {
+          showToast('Nem sikerült törölni.', true);
+        }
+      }).catch(() => showToast('Nem sikerült elérni a szervert.', true));
+    });
+  }
+});
+
+// ÚJ: mindenhol, ahol egy felhasználó neve megjelenik, a megkapott
+// jelvényei is odakerülnek melléje (ld. index.html #profileNameBadges/
+// #playerProfileNameBadges) - egy kis ikon soronként, rávitelkor (hover)
+// felirattal, a jelvény saját névszínével.
+function renderNameBadges(container, badgeList) {
+  if (!container) return;
+  if (!Array.isArray(badgeList) || !badgeList.length) { container.innerHTML = ''; return; }
+  container.innerHTML = badgeList.map((b) => `
+    <span class="name-badge">
+      <img class="name-badge-icon" src="${badgeIconUrl(b.id)}" alt="${escapeHtml(b.name)}" />
+      <span class="name-badge-tooltip" style="color:${escapeHtml(b.color)}">${escapeHtml(b.name)}</span>
+    </span>
+  `).join('');
+}
 
 // A főoldal "Profilod" szekció alatti kártya - MINDENKI látja (nem csak
 // tulajdonos), csak a legfrissebb (egyetlen) hírt jeleníti meg. Ha még
