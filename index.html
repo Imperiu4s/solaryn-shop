@@ -532,6 +532,25 @@
 
             <div class="side-rail" data-side-rail="skin"></div>
           </div>
+
+          <div class="content-grid" style="margin-top:24px;">
+            <div class="card">
+              <div class="card-title">Köpeny</div>
+              <p class="page-note" style="margin-bottom:20px;">Egyedi köpeny feltöltés (.png, pontosan 64x32) - ugyanúgy megjelenik a szerveren, mint a skin.</p>
+              <div class="skin-layout">
+                <div class="skin-upload-col">
+                  <input type="file" id="capeFileInput" accept=".png,image/png" hidden />
+                  <div class="skin-drop" id="capeDrop">Húzd ide a .png köpenyedet, vagy kattints a tallózáshoz</div>
+                  <button type="button" class="btn-outline" id="capeResetBtn">Köpeny eltávolítása</button>
+                  <p class="skin-status" id="capeStatus"></p>
+                </div>
+                <div class="skin-preview-col">
+                  <img id="capePreviewImg" class="cape-preview-img" alt="Köpeny" hidden />
+                  <p class="skin-preview-hint" id="capePreviewHint">Még nincs feltöltött köpenyed</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </section>
 
         <!-- KITILTÁSCSÖKKENTÉS -->
@@ -849,6 +868,26 @@
                 <button type="button" class="device-link" id="adminBadgeGrantBtn">Adás</button>
               </div>
               <div id="adminPlayerBadgesList" class="admin-player-badges-list"></div>
+            </div>
+
+            <div class="admin-subsection-title">Skin / Köpeny</div>
+            <div class="ban-panel admin-media-panel">
+              <p class="redeem-result" id="adminMediaStatus"></p>
+              <div class="admin-media-row">
+                <span class="admin-media-label">Skin: <b id="adminSkinState">-</b></span>
+                <div class="admin-media-actions">
+                  <button type="button" class="btn-outline" id="adminSkinDeleteBtn" disabled>Törlés</button>
+                  <button type="button" class="btn-glow admin-lock-btn" id="adminSkinBanBtn" disabled style="margin-top:0;">Tiltás</button>
+                </div>
+              </div>
+              <div class="admin-media-row">
+                <span class="admin-media-label">Köpeny: <b id="adminCapeState">-</b></span>
+                <div class="admin-media-actions">
+                  <button type="button" class="btn-outline" id="adminCapeDeleteBtn" disabled>Törlés</button>
+                  <button type="button" class="btn-glow admin-lock-btn" id="adminCapeBanBtn" disabled style="margin-top:0;">Tiltás</button>
+                </div>
+              </div>
+              <p class="pkg-locked-note">A "Törlés" csak elveszi a jelenlegi fájlt - a "Tiltás" ezen felül véglegesen letiltja EZT A KONKRÉT KÉPET, azt utána senki sem tudja feltölteni sem skinként, sem köpenyként.</p>
             </div>
 
             <div class="admin-subsection-title">Kliens</div>

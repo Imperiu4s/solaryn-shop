@@ -733,7 +733,7 @@ $('#btnLogout').addEventListener('click', (e) => {
 function switchView(view) {
   $$('.app-nav-item[data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
   $$('.view').forEach((v) => v.classList.toggle('active', v.dataset.view === view));
-  if (view === 'skin') loadSkinPreview3d();
+  if (view === 'skin') { loadSkinPreview3d(); loadCapePreview(); }
   // A PP-egyenleg (rangvásárlás fedezet-ellenőrzéséhez) minden alkalommal
   // frissül, amikor a felhasználó megnyitja a Rangok fület - nem élő/valós
   // idejű szinkron, de elég friss ahhoz, hogy a gombok állapota (elég PP
@@ -915,6 +915,99 @@ async function uploadSkinFile(file) {
       loadSkinPreview3d();
       loadHomeSkinPreview();
       loadTopbarAvatar();
+    } else {
+      statusEl.classList.add('error');
+      statusEl.textContent = data.message || 'A feltöltés sikertelen.';
+    }
+  } catch {
+    statusEl.classList.add('error');
+    statusEl.textContent = 'Nem sikerült elérni a szervert.';
+  }
+}
+
+// ── Köpeny nézet: sima 2D előnézet + feltöltés - a skin fenti logikájával
+// PÁRHUZAMOS szerkezet, csak nincs 3D forgó előnézet/model-váltó (ld.
+// style.css .cape-preview-img megjegyzését arról, miért marad ez sima <img>).
+function loadCapeImage(username) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = BACKEND_URL + '/api/cape/' + encodeURIComponent(username) + '?t=' + Date.now();
+  });
+}
+
+async function loadCapePreview() {
+  if (!session) return;
+  const img = await loadCapeImage(session.username);
+  const imgEl = $('#capePreviewImg');
+  const hintEl = $('#capePreviewHint');
+  if (!img) {
+    imgEl.hidden = true;
+    hintEl.textContent = 'Még nincs feltöltött köpenyed';
+    return;
+  }
+  imgEl.src = img.src;
+  imgEl.hidden = false;
+  hintEl.textContent = '';
+}
+
+const capeFileInput = $('#capeFileInput');
+$('#capeDrop').addEventListener('click', () => capeFileInput.click());
+$('#capeDrop').addEventListener('dragover', (e) => e.preventDefault());
+$('#capeDrop').addEventListener('drop', (e) => {
+  e.preventDefault();
+  const file = e.dataTransfer.files && e.dataTransfer.files[0];
+  if (file) uploadCapeFile(file);
+});
+capeFileInput.addEventListener('change', () => {
+  const file = capeFileInput.files && capeFileInput.files[0];
+  if (file) uploadCapeFile(file);
+  capeFileInput.value = '';
+});
+
+$('#capeResetBtn').addEventListener('click', async () => {
+  const statusEl = $('#capeStatus');
+  const confirmed = await confirmModal('Köpeny eltávolítása', 'Biztosan törlöd a jelenlegi köpenyedet?', 'Igen, eltávolítás');
+  if (!confirmed) return;
+  statusEl.classList.remove('error');
+  statusEl.textContent = 'Eltávolítás...';
+  try {
+    const res = await fetch(BACKEND_URL + '/api/cape/reset', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    if (data.ok) {
+      statusEl.textContent = 'Köpeny eltávolítva.';
+      loadCapePreview();
+    } else {
+      statusEl.classList.add('error');
+      statusEl.textContent = data.message || 'A törlés sikertelen.';
+    }
+  } catch {
+    statusEl.classList.add('error');
+    statusEl.textContent = 'Nem sikerült elérni a szervert.';
+  }
+});
+
+async function uploadCapeFile(file) {
+  const statusEl = $('#capeStatus');
+  statusEl.classList.remove('error');
+  statusEl.textContent = 'Feltöltés...';
+  try {
+    const form = new FormData();
+    form.append('cape', file, 'cape.png');
+    const res = await fetch(BACKEND_URL + '/api/cape', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + session.token },
+      body: form
+    });
+    const data = await res.json();
+    if (data.ok) {
+      statusEl.textContent = 'Köpeny sikeresen feltöltve!';
+      loadCapePreview();
     } else {
       statusEl.classList.add('error');
       statusEl.textContent = data.message || 'A feltöltés sikertelen.';
@@ -1156,6 +1249,8 @@ async function loadAdminPlayerPanel(username) {
   $('#adminDeleteBtn').disabled = true;
   $('#adminBadgeGrantStatus').textContent = '';
   $('#adminPlayerBadgesList').innerHTML = '';
+  $('#adminMediaStatus').textContent = '';
+  renderAdminMediaState(false, false);
   setAdminEmailEditing(false);
   renderAdminBadgeSelectOptions();
   try {
@@ -1173,6 +1268,7 @@ async function loadAdminPlayerPanel(username) {
     renderDiscordLinkBadge($('#adminPlayerDiscordLink'), data);
     renderAdminLockStatus(data.locked);
     renderAdminPlayerBadgesList(data.badges);
+    renderAdminMediaState(data.hasSkin, data.hasCape);
     $('#adminPlayerLoginsBody').innerHTML = data.logins.map((l) => `
       <tr>
         <td>${formatLedgerDate(l.created_at)}</td>
@@ -1190,6 +1286,68 @@ async function loadAdminPlayerPanel(username) {
     $('#adminPlayerCreatedAt').textContent = '-';
   }
 }
+
+// ÚJ: a "Skin / Köpeny" admin-alszekció állapot-kijelzése + gombok
+// engedélyezése/tiltása - ld. index.html #adminSkinState/#adminCapeState.
+// A gombok csak akkor aktívak, ha ténylegesen VAN mit törölni/tiltani.
+function renderAdminMediaState(hasSkin, hasCape) {
+  $('#adminSkinState').textContent = hasSkin ? 'van feltöltve' : 'nincs feltöltve';
+  $('#adminCapeState').textContent = hasCape ? 'van feltöltve' : 'nincs feltöltve';
+  $('#adminSkinDeleteBtn').disabled = !hasSkin;
+  $('#adminSkinBanBtn').disabled = !hasSkin;
+  $('#adminCapeDeleteBtn').disabled = !hasCape;
+  $('#adminCapeBanBtn').disabled = !hasCape;
+}
+
+// A négy gomb (skin/köpeny × törlés/tiltás) ugyanazt a mintát követi -
+// egyetlen segédfüggvény hívja mindegyiket, csak a végpont/szöveg különbözik.
+async function adminMediaAction(kind, action, confirmTitle, confirmBody, confirmLabel) {
+  if (!lastAdminPlayerUsername) return;
+  const statusEl = $('#adminMediaStatus');
+  statusEl.className = 'redeem-result';
+  const confirmed = await confirmModal(confirmTitle, confirmBody, confirmLabel);
+  if (!confirmed) return;
+  statusEl.textContent = 'Végrehajtás...';
+  try {
+    const path = '/api/admin/player/' + encodeURIComponent(lastAdminPlayerUsername) + '/' + kind + (action === 'ban' ? '/ban' : '');
+    const res = await fetch(BACKEND_URL + path, {
+      method: action === 'ban' ? 'POST' : 'DELETE',
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      statusEl.classList.add('error');
+      statusEl.textContent = data.message || 'A művelet sikertelen.';
+      return;
+    }
+    statusEl.textContent = 'Kész.';
+    loadAdminPlayerPanel(lastAdminPlayerUsername);
+  } catch {
+    statusEl.classList.add('error');
+    statusEl.textContent = 'Nem sikerült elérni a szervert.';
+  }
+}
+
+$('#adminSkinDeleteBtn').addEventListener('click', () => adminMediaAction(
+  'skin', 'delete', 'Skin törlése',
+  `Biztosan törlöd <b>${lastAdminPlayerUsername}</b> jelenlegi skinjét? Ezt utána bármikor feltöltheti újra (akár ugyanazt is).`,
+  'Igen, törlöm'
+));
+$('#adminSkinBanBtn').addEventListener('click', () => adminMediaAction(
+  'skin', 'ban', 'Skin végleges tiltása',
+  `Biztosan <b>véglegesen letiltod</b> <b>${lastAdminPlayerUsername}</b> jelenlegi skinjét? Ezt a KONKRÉT képet ezután SENKI sem tudja többé feltölteni, se skinként, se köpenyként.`,
+  'Igen, letiltom'
+));
+$('#adminCapeDeleteBtn').addEventListener('click', () => adminMediaAction(
+  'cape', 'delete', 'Köpeny törlése',
+  `Biztosan törlöd <b>${lastAdminPlayerUsername}</b> jelenlegi köpenyét? Ezt utána bármikor feltöltheti újra (akár ugyanazt is).`,
+  'Igen, törlöm'
+));
+$('#adminCapeBanBtn').addEventListener('click', () => adminMediaAction(
+  'cape', 'ban', 'Köpeny végleges tiltása',
+  `Biztosan <b>véglegesen letiltod</b> <b>${lastAdminPlayerUsername}</b> jelenlegi köpenyét? Ezt a KONKRÉT képet ezután SENKI sem tudja többé feltölteni, se skinként, se köpenyként.`,
+  'Igen, letiltom'
+));
 
 $('#adminEmailChangeBtn').addEventListener('click', () => setAdminEmailEditing(true));
 $('#adminEmailCancelBtn').addEventListener('click', () => setAdminEmailEditing(false));
