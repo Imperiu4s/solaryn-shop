@@ -2636,15 +2636,16 @@ document.addEventListener('click', (e) => {
 
 // ÚJ: mindenhol, ahol egy felhasználó neve megjelenik, a megkapott
 // jelvényei is odakerülnek melléje (ld. index.html #profileNameBadges/
-// #playerProfileNameBadges) - egy kis ikon soronként, rávitelkor (hover)
-// felirattal, a jelvény saját névszínével.
+// #playerProfileNameBadges) - a jelvény neve MINDIG látszik az ikon mellett
+// (nem csak rávitelkor/hoverre, ahogy korábban egy tooltip csinálta), a
+// jelvény saját névszínével.
 function renderNameBadges(container, badgeList) {
   if (!container) return;
   if (!Array.isArray(badgeList) || !badgeList.length) { container.innerHTML = ''; return; }
   container.innerHTML = badgeList.map((b) => `
     <span class="name-badge">
-      <img class="name-badge-icon" src="${badgeIconUrl(b.id)}" alt="${escapeHtml(b.name)}" />
-      <span class="name-badge-tooltip" style="color:${escapeHtml(b.color)}">${escapeHtml(b.name)}</span>
+      <img class="name-badge-icon" src="${badgeIconUrl(b.id)}" alt="" />
+      <span class="name-badge-label" style="color:${escapeHtml(b.color)}">${escapeHtml(b.name)}</span>
     </span>
   `).join('');
 }

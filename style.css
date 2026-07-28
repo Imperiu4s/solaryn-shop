@@ -306,22 +306,17 @@ a { color: inherit; }
 .badges-admin-item-meta { font-size: 12px; color: var(--text-faint); margin-top: 2px; }
 .badges-admin-item-actions { display: flex; gap: 8px; flex-shrink: 0; }
 
-/* ÚJ: jelvények a névtábla mellett (Profilod kártya / Játékos-profil) */
+/* ÚJ: jelvények a névtábla mellett (Profilod kártya / Játékos-profil).
+   JAVÍTVA: korábban az ikon kicsi volt (20px), keretezett, és a jelvény
+   NEVE csak hoverkor, egy tooltipben jelent meg - most az ikon nagyobb,
+   keret nélküli (hogy animált/átlátszó GIF-ikonok se törjenek meg egy
+   dobozkerettől), és a név MINDIG, közvetlenül az ikon mellett látszik. */
 .profile-name-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .profile-name-row .profile-name { margin-bottom: 0; }
-.name-badges { display: inline-flex; gap: 6px; }
-.name-badge { position: relative; display: inline-flex; }
-.name-badge-icon {
-  width: 20px; height: 20px; border-radius: 6px; object-fit: cover;
-  border: 1px solid rgba(255,255,255,.25); background: var(--panel-2); cursor: default;
-}
-.name-badge-tooltip {
-  position: absolute; bottom: 130%; left: 50%; transform: translateX(-50%);
-  background: #0a0a0d; border: 1px solid var(--line); border-radius: 6px;
-  padding: 4px 9px; font-size: 11.5px; font-weight: 800; white-space: nowrap;
-  opacity: 0; pointer-events: none; transition: opacity .14s; z-index: 20;
-}
-.name-badge:hover .name-badge-tooltip { opacity: 1; }
+.name-badges { display: inline-flex; flex-wrap: wrap; gap: 10px; }
+.name-badge { display: inline-flex; align-items: center; gap: 7px; }
+.name-badge-icon { width: 32px; height: 32px; border-radius: 8px; object-fit: cover; cursor: default; }
+.name-badge-label { font-size: 13.5px; font-weight: 800; white-space: nowrap; }
 
 /* ÚJ: jelvény adása/elvétele a játékos-profil admin paneljén */
 .admin-badge-grant-row { display: flex; gap: 8px; margin-top: 6px; }
