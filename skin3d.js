@@ -3,6 +3,17 @@
 // Az alap réteget ÉS a második (overlay) réteget is rajzolja - kalap, zakó,
 // ujjak, nadrág -, az overlay dobozok kicsit nagyobbra méretezve (lásd PAD),
 // hogy ne z-fighteljenek az alap réteggel ott, ahol a textúra átlátszatlan.
+//
+// ÚJ (a felhasználó kérésére): ha van feltöltött köpenye a játékosnak, azt a
+// SAJÁT, KÜLÖN textúrájával (a köpeny sose ugyanaz a kép, mint a skin) egy
+// MÁSODIK geometriaként/draw call-ként rajzoljuk ki, UGYANAZZAL a forgó
+// MVP-mátrixszal, hogy a testtel együtt forogjon - nincs többé külön, lapos
+// 2D köpeny-előnézet, a köpeny MINDIG a skin 3D-modelljén jelenik meg (vagy
+// sehol, ha nincs feltöltve). A fragment shader alpha-discard-ja (lásd
+// FRAG_SRC) a köpenyre is vonatkozik, tehát egy átlátszó pixel a köpeny-
+// textúrában itt is átlátszó marad - UGYANAZ az elv, mint amit a SolarClient
+// (ld. MixinCapeFeatureRenderer.java, RenderLayer.getEntityCutout()) az
+// éles, in-game renderben is használ.
 
 const SkinPreview = (() => {
   const VERT_SRC = `
@@ -156,6 +167,22 @@ const SkinPreview = (() => {
     return { positions, uvs, indices };
   }
 
+  // A köpeny geometriája - EGYETLEN, vékony (1 mély) doboz, a törzs MÖGÖTT,
+  // a vállaktól kicsit lejjebb-combközépig lógva, a vanilla Minecraft
+  // PlayerEntityModel "cloak" ModelPart-jának méretarányait követve (10 széles,
+  // 16 magas, 1 mély - decompilálással igazolt, ld. MixinCapeFeatureRenderer.java
+  // megjegyzését). A w/h/d ÉRTÉKEKNEK pontosan ezeknek kell maradniuk (nem csak
+  // a vizuális méretnek), mert az addBox ugyanezekből a méretekből vezeti le a
+  // köpeny-textúra UV-régióinak MÉRETÉT is - a sztenderd köpeny-sablon (0,0
+  // UV-origóból) pontosan egy 10x16x1-es doboz szabványos "kicsomagolását"
+  // követi, ugyanúgy, mint bármelyik testrész.
+  function buildCapeGeometry(texW, texH) {
+    const positions = [], uvs = [], indices = [];
+    const uvScale = texW / 64;
+    addBox(positions, uvs, indices, 0, -2, -2.5, 10, 16, 1, [0, 0], texW, texH, 0, uvScale);
+    return { positions, uvs, indices };
+  }
+
   // ── Minimális 4x4 mátrix segédek (perspektíva + forgatás) ──
   function perspective(fovy, aspect, near, far) {
     const f = 1 / Math.tan(fovy / 2);
@@ -188,9 +215,38 @@ const SkinPreview = (() => {
     return new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, x, y, z, 1]);
   }
 
+  // Egy geometria (positions/uvs/indices) feltöltése GL-pufferekbe + egy
+  // textúra létrehozása egy Image-ből - a testhez ÉS a köpenyhez is
+  // ugyanezzel a segédfüggvénnyel (csak más geometria/kép a bemenete).
+  function createDrawable(gl, geometry, img) {
+    const posBuf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(geometry.positions), gl.STATIC_DRAW);
+
+    const uvBuf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, uvBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(geometry.uvs), gl.STATIC_DRAW);
+
+    const idxBuf = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(geometry.indices), gl.STATIC_DRAW);
+
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+    return { posBuf, uvBuf, idxBuf, tex, indexCount: geometry.indices.length };
+  }
+
   // Egy adott canvason indít (vagy újraindít) egy forgó 3D előnézetet a
-  // megadott kép (skin texture) alapján. Visszaad egy leállító függvényt.
-  function start(canvas, img, slim) {
+  // megadott kép (skin texture) alapján - ÚJ: opcionálisan egy KÜLÖN köpeny-
+  // képpel is (capeImg), ami a testtel EGYÜTT, ugyanazzal a forgó mátrixszal
+  // rajzolódik ki egy második draw call-lal. Visszaad egy leállító függvényt.
+  function start(canvas, img, slim, capeImg) {
     const gl = canvas.getContext('webgl', { alpha: true, antialias: false });
     if (!gl) return () => {};
 
@@ -203,33 +259,29 @@ const SkinPreview = (() => {
     }
     gl.useProgram(program);
 
-    const { positions, uvs, indices } = buildGeometry(!!slim, img.naturalWidth || img.width, img.naturalHeight || img.height);
-
-    const posBuf = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
     const aPos = gl.getAttribLocation(program, 'aPos');
-    gl.enableVertexAttribArray(aPos);
-    gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
-
-    const uvBuf = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, uvBuf);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(uvs), gl.STATIC_DRAW);
     const aUV = gl.getAttribLocation(program, 'aUV');
+    gl.enableVertexAttribArray(aPos);
     gl.enableVertexAttribArray(aUV);
-    gl.vertexAttribPointer(aUV, 2, gl.FLOAT, false, 0, 0);
 
-    const idxBuf = gl.createBuffer();
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf);
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
+    const bodyGeometry = buildGeometry(!!slim, img.naturalWidth || img.width, img.naturalHeight || img.height);
+    const body = createDrawable(gl, bodyGeometry, img);
 
-    const tex = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    let cape = null;
+    if (capeImg) {
+      const capeGeometry = buildCapeGeometry(capeImg.naturalWidth || capeImg.width, capeImg.naturalHeight || capeImg.height);
+      cape = createDrawable(gl, capeGeometry, capeImg);
+    }
+
+    function drawDrawable(d) {
+      gl.bindBuffer(gl.ARRAY_BUFFER, d.posBuf);
+      gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
+      gl.bindBuffer(gl.ARRAY_BUFFER, d.uvBuf);
+      gl.vertexAttribPointer(aUV, 2, gl.FLOAT, false, 0, 0);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, d.idxBuf);
+      gl.bindTexture(gl.TEXTURE_2D, d.tex);
+      gl.drawElements(gl.TRIANGLES, d.indexCount, gl.UNSIGNED_SHORT, 0);
+    }
 
     const uMVP = gl.getUniformLocation(program, 'uMVP');
     gl.enable(gl.DEPTH_TEST);
@@ -264,7 +316,8 @@ const SkinPreview = (() => {
       const model = rotateY(angle);
       const mvp = multiply(proj, multiply(view, model));
       gl.uniformMatrix4fv(uMVP, false, mvp);
-      gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
+      drawDrawable(body);
+      if (cape) drawDrawable(cape);
       requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);

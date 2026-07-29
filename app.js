@@ -733,7 +733,7 @@ $('#btnLogout').addEventListener('click', (e) => {
 function switchView(view) {
   $$('.app-nav-item[data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
   $$('.view').forEach((v) => v.classList.toggle('active', v.dataset.view === view));
-  if (view === 'skin') { loadSkinPreview3d(); loadCapePreview(); }
+  if (view === 'skin') loadSkinPreview3d();
   // A PP-egyenleg (rangvásárlás fedezet-ellenőrzéséhez) minden alkalommal
   // frissül, amikor a felhasználó megnyitja a Rangok fület - nem élő/valós
   // idejű szinkron, de elég friss ahhoz, hogy a gombok állapota (elég PP
@@ -809,9 +809,12 @@ function loadSkinImage(username) {
 }
 
 // ── Főoldal: saját skin 3D előnézet ──
+// ÚJ: a köpenyet (ld. loadCapeImage lentebb) MINDIG együtt kérdezzük le a
+// skinnel - ha a felhasználónak van feltöltött köpenye, az a skin 3D-
+// modelljén jelenik meg, nincs többé külön köpeny-előnézet.
 let stopHomeSkinPreview = null;
 async function loadHomeSkinPreview() {
-  const img = await loadSkinImage(session.username);
+  const [img, capeImg] = await Promise.all([loadSkinImage(session.username), loadCapeImage(session.username)]);
   const noteEl = $('#profileSkinNote');
   if (!img) {
     // Nincs (már) feltöltött skin - pl. épp most lett visszaállítva
@@ -825,7 +828,7 @@ async function loadHomeSkinPreview() {
   }
   noteEl.textContent = '';
   if (stopHomeSkinPreview) stopHomeSkinPreview();
-  stopHomeSkinPreview = SkinPreview.start($('#homeSkinCanvas'), img, false);
+  stopHomeSkinPreview = SkinPreview.start($('#homeSkinCanvas'), img, false, capeImg);
 }
 
 // ── Skin nézet: 3D előnézet + feltöltés ──
@@ -834,7 +837,7 @@ let skinModel = 'classic';
 
 async function loadSkinPreview3d() {
   if (!session) return;
-  const img = await loadSkinImage(session.username);
+  const [img, capeImg] = await Promise.all([loadSkinImage(session.username), loadCapeImage(session.username)]);
   if (!img) {
     if (stopSkinPreview) { stopSkinPreview(); stopSkinPreview = null; }
     const canvas = $('#skinPreview3d');
@@ -842,7 +845,7 @@ async function loadSkinPreview3d() {
     return;
   }
   if (stopSkinPreview) stopSkinPreview();
-  stopSkinPreview = SkinPreview.start($('#skinPreview3d'), img, skinModel === 'slim');
+  stopSkinPreview = SkinPreview.start($('#skinPreview3d'), img, skinModel === 'slim', capeImg);
 }
 
 $$('.skin-model-toggle .pill').forEach((p) => {
@@ -925,9 +928,10 @@ async function uploadSkinFile(file) {
   }
 }
 
-// ── Köpeny nézet: sima 2D előnézet + feltöltés - a skin fenti logikájával
-// PÁRHUZAMOS szerkezet, csak nincs 3D forgó előnézet/model-váltó (ld.
-// style.css .cape-preview-img megjegyzését arról, miért marad ez sima <img>).
+// ── Köpeny: NINCS külön előnézete - a feltöltött köpeny a skin 3D-
+// modelljén jelenik meg (ld. loadHomeSkinPreview/loadSkinPreview3d/
+// openPlayerProfile, amik MINDIG lekérdezik ezt is a skinnel együtt), ezért
+// itt csak a lekérdező függvény + a feltöltés/törlés logika maradt.
 function loadCapeImage(username) {
   return new Promise((resolve) => {
     const img = new Image();
@@ -936,21 +940,6 @@ function loadCapeImage(username) {
     img.onerror = () => resolve(null);
     img.src = BACKEND_URL + '/api/cape/' + encodeURIComponent(username) + '?t=' + Date.now();
   });
-}
-
-async function loadCapePreview() {
-  if (!session) return;
-  const img = await loadCapeImage(session.username);
-  const imgEl = $('#capePreviewImg');
-  const hintEl = $('#capePreviewHint');
-  if (!img) {
-    imgEl.hidden = true;
-    hintEl.textContent = 'Még nincs feltöltött köpenyed';
-    return;
-  }
-  imgEl.src = img.src;
-  imgEl.hidden = false;
-  hintEl.textContent = '';
 }
 
 const capeFileInput = $('#capeFileInput');
@@ -981,7 +970,8 @@ $('#capeResetBtn').addEventListener('click', async () => {
     const data = await res.json();
     if (data.ok) {
       statusEl.textContent = 'Köpeny eltávolítva.';
-      loadCapePreview();
+      loadSkinPreview3d();
+      loadHomeSkinPreview();
     } else {
       statusEl.classList.add('error');
       statusEl.textContent = data.message || 'A törlés sikertelen.';
@@ -1007,7 +997,8 @@ async function uploadCapeFile(file) {
     const data = await res.json();
     if (data.ok) {
       statusEl.textContent = 'Köpeny sikeresen feltöltve!';
-      loadCapePreview();
+      loadSkinPreview3d();
+      loadHomeSkinPreview();
     } else {
       statusEl.classList.add('error');
       statusEl.textContent = data.message || 'A feltöltés sikertelen.';
@@ -1147,7 +1138,9 @@ async function openPlayerProfile(username) {
   if (isOwner) loadAdminPlayerPanel(username);
 
   const noteEl = $('#playerProfileSkinNote');
-  const img = await loadSkinImage(username);
+  // ÚJ: a köpenyt is lekérdezzük ehhez a MÁSIK játékoshoz - ha van neki
+  // feltöltve, ugyanúgy megjelenik a 3D előnézetén, mint a sajátodén.
+  const [img, capeImg] = await Promise.all([loadSkinImage(username), loadCapeImage(username)]);
   if (!img) {
     // JAVÍTVA: korábban itt csak a szöveg állt be, a canvas-t/előnézetet NEM
     // állítottuk le/töröltük - ha korábban (akár a saját profilodon, akár egy
@@ -1162,7 +1155,7 @@ async function openPlayerProfile(username) {
   }
   noteEl.textContent = '';
   if (stopPlayerPreview) stopPlayerPreview();
-  stopPlayerPreview = SkinPreview.start($('#playerProfileSkinCanvas'), img, false);
+  stopPlayerPreview = SkinPreview.start($('#playerProfileSkinCanvas'), img, false, capeImg);
 }
 
 // ── Admin panel (csak "tulajdonos" rangnak) - email/regisztráció + kliens-

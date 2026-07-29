@@ -508,7 +508,7 @@
         <!-- SKIN -->
         <section class="view" data-view="skin">
           <h1 class="page-title">Skin</h1>
-          <p class="page-note">Egyedi skin feltöltés (.png, 64x64/64x32 vagy ennek HD többszöröse - pl. 128x128, 256x256, egészen 1024x1024-ig -, klasszikus vagy slim modell) - ugyanaz a skin jelenik meg a szerveren és a SolarLauncherben is. HD skin feltöltésekor az lesz a skined (nem lehet egyszerre sima ÉS HD skined is).</p>
+          <p class="page-note">Egyedi skin feltöltés (.png, 64x64/64x32 vagy ennek HD többszöröse - pl. 128x128, 256x256, egészen 2048x2048/2048x1024-ig -, klasszikus vagy slim modell) - ugyanaz a skin jelenik meg a szerveren és a SolarLauncherben is. HD skin feltöltésekor az lesz a skined (nem lehet egyszerre sima ÉS HD skined is).</p>
 
           <div class="content-grid">
             <div class="card">
@@ -536,18 +536,12 @@
           <div class="content-grid" style="margin-top:24px;">
             <div class="card">
               <div class="card-title">Köpeny</div>
-              <p class="page-note" style="margin-bottom:20px;">Egyedi köpeny feltöltés (.png, 64x32 vagy ennek HD többszöröse - pl. 128x64, 256x128, egészen 1024x512-ig -, mindig pontosan 2:1 arányban) - ugyanúgy megjelenik a szerveren, mint a skin.</p>
-              <div class="skin-layout">
-                <div class="skin-upload-col">
-                  <input type="file" id="capeFileInput" accept=".png,image/png" hidden />
-                  <div class="skin-drop" id="capeDrop">Húzd ide a .png köpenyedet, vagy kattints a tallózáshoz</div>
-                  <button type="button" class="btn-outline" id="capeResetBtn">Köpeny eltávolítása</button>
-                  <p class="skin-status" id="capeStatus"></p>
-                </div>
-                <div class="skin-preview-col">
-                  <img id="capePreviewImg" class="cape-preview-img" alt="Köpeny" hidden />
-                  <p class="skin-preview-hint" id="capePreviewHint">Még nincs feltöltött köpenyed</p>
-                </div>
+              <p class="page-note" style="margin-bottom:20px;">Egyedi köpeny feltöltés (.png, 64x32 vagy ennek HD többszöröse - pl. 128x64, 256x128, egészen 2048x1024-ig -, mindig pontosan 2:1 arányban) - nincs külön előnézete, a fenti skin 3D-modelljén jelenik meg, ugyanúgy, mint a szerveren.</p>
+              <div class="skin-upload-col">
+                <input type="file" id="capeFileInput" accept=".png,image/png" hidden />
+                <div class="skin-drop" id="capeDrop">Húzd ide a .png köpenyedet, vagy kattints a tallózáshoz</div>
+                <button type="button" class="btn-outline" id="capeResetBtn">Köpeny eltávolítása</button>
+                <p class="skin-status" id="capeStatus"></p>
               </div>
             </div>
           </div>

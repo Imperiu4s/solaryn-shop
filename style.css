@@ -834,16 +834,6 @@ a { color: inherit; }
 #skinPreview3d:active { cursor: grabbing; }
 .skin-preview-hint { color: var(--text-faint); font-size: 12px; }
 
-/* ÚJ: köpeny-előnézet - szándékosan sima 2D <img> (nem a skin3d.js-féle
-   WebGL 3D-modell), mert a köpeny geometriája nincs benne a meglévő
-   skin-előnézet mesh-jében - ennek felépítése külön munka lenne, a
-   kérés lényege (feltölthető legyen, ÉS ingame ugyanúgy megjelenjen)
-   ettől függetlenül teljesül. image-rendering: pixelated, hogy a 64x32-es
-   textúra ne homályosodjon el felnagyítva. */
-.cape-preview-img {
-  width: 220px; height: 110px; object-fit: contain; image-rendering: pixelated;
-  border-radius: 16px; background: var(--panel-2); border: 1px solid var(--line);
-}
 .skin-status { font-size: 13px; margin-top: 14px; color: var(--text-dim); }
 .skin-status.error { color: var(--danger); }
 
