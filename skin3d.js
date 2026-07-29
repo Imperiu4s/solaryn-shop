@@ -79,7 +79,7 @@ const SkinPreview = (() => {
   // felskálázva a nagyobb texW/texH-hoz képest, ezért a fej/test/kar/láb
   // mindegyike csak a textúra bal-felső NEGYEDÉT mintázta volna (rossz,
   // "összecsúszott" előnézetet adva).
-  function addBox(positions, uvs, indices, cx, cy, cz, w, h, d, uvOrigin, texW, texH, pad = 0, uvScale = 1) {
+  function addBox(positions, uvs, indices, cx, cy, cz, w, h, d, uvOrigin, texW, texH, pad = 0, uvScale = 1, uvFaceMap = null) {
     const hw = w / 2 + pad, hh = h / 2 + pad, hd = d / 2 + pad;
     const p = {
       '000': [cx - hw, cy - hh, cz - hd], '100': [cx + hw, cy - hh, cz - hd],
@@ -97,7 +97,8 @@ const SkinPreview = (() => {
       bottom: [p['000'], p['100'], p['101'], p['001']]
     };
     for (const name of Object.keys(faceCorners)) {
-      const [u, v, fw, fh] = faces[name];
+      const uvName = (uvFaceMap && uvFaceMap[name]) || name;
+      const [u, v, fw, fh] = faces[uvName];
       // JAVÍTVA (2. kör): a puszta vízszintes tükrözés csak részben javította az
       // állnál (front-bottom él) látszó hibát - a "bottom" lap valójában 180
       // fokkal van elforgatva a textúrán a többi laphoz képest (mindkét
@@ -179,7 +180,18 @@ const SkinPreview = (() => {
   function buildCapeGeometry(texW, texH) {
     const positions = [], uvs = [], indices = [];
     const uvScale = texW / 64;
-    addBox(positions, uvs, indices, 0, -2, -2.5, 10, 16, 1, [0, 0], texW, texH, 0, uvScale);
+    // JAVÍTVA: a doboz-kicsomagolás "front" UV-régiója (1,1-11,17) a doboz
+    // BELSŐ, a törzshöz simuló lapjára esne (a köpeny hátrébb, -Z felé lóg,
+    // tehát a törzs felőli lap van elöl a nevezéktan szerint), miközben a
+    // NÉZŐ felé (a karakter háta felől) néző, ténylegesen látható lap a
+    // "back" nevű - ez pont fordítva van, mint amit a köpeny-készítők
+    // (és a valódi Minecraft-köpenyek) várnak: a tényleges mintázat a
+    // sablon (1,1-11,17) régiójában van, ami emiatt sose látszott (helyette
+    // az általában üres/sima (12,1-22,17) régió jelent meg minden köpenyen).
+    // Élesben (szinkron rAF-fel, kézi kamera-forgatással) igazolt teszttel:
+    // 180°-os forgatás után (a köpeny látható oldalát nézve) a "back" UV
+    // jelent meg, nem a "front" - ezért itt a kettőt felcseréljük.
+    addBox(positions, uvs, indices, 0, -2, -2.5, 10, 16, 1, [0, 0], texW, texH, 0, uvScale, { front: 'back', back: 'front' });
     return { positions, uvs, indices };
   }
 
