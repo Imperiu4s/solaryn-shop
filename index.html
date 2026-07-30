@@ -33,6 +33,7 @@
           <input id="authPass" type="password" autocomplete="off" placeholder="••••••••" />
           <div id="authError" class="auth-error"></div>
           <button id="authSubmit" class="btn-glow">Bejelentkezés</button>
+          <a href="#" id="btnForgotPassword" class="auth-forgot-link">Elfelejtett jelszó?</a>
         </div>
 
         <!-- Regisztráció -->
@@ -733,6 +734,10 @@
               <img id="newsImagePreview" class="news-image-preview" alt="" />
               <button type="button" class="link-btn" id="newsImageRemoveBtn">Kép eltávolítása</button>
             </div>
+            <label class="check-row" style="margin-top:10px;">
+              <input type="checkbox" id="newsSendEmailCheckbox" />
+              Kiküldés emailben is azoknak, akik hozzájárultak a hírlevelekhez (csak új felhívás létrehozásakor, szerkesztéskor nem)
+            </label>
             <p class="redeem-result" id="newsFormResult"></p>
             <div class="modal-actions" style="margin-top:14px;">
               <button type="button" class="btn-outline" id="newsDiscardBtn">Elvetés</button>
@@ -1119,6 +1124,39 @@
       </footer>
     </div>
   </main>
+
+  <!-- Elfelejtett jelszó - email/felhasználónév bekérése (ld. app.js,
+       SolarBackend src/passwordReset.js POST /api/password-reset/request) -->
+  <div class="modal-overlay hidden" id="forgotPasswordModal">
+    <div class="modal-card">
+      <h3>Elfelejtett jelszó</h3>
+      <p>Add meg a felhasználóneved vagy az email címed - ha létezik ilyen fiók, küldünk rá egy linket, amivel új jelszót adhatsz meg.</p>
+      <label class="gift-modal-label" style="margin-top:0;">Felhasználónév vagy email</label>
+      <input type="text" id="forgotPasswordInput" class="gift-modal-input" placeholder="Játékosneved vagy email címed" />
+      <div id="forgotPasswordResult" class="redeem-result"></div>
+      <div class="modal-actions">
+        <button class="btn-outline" id="forgotPasswordCancelBtn">Mégse</button>
+        <button class="btn-glow" id="forgotPasswordSubmitBtn">Küldés</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Új jelszó megadása - a fenti emailben kapott "?resetToken=" linkről
+       nyílik meg automatikusan (ld. app.js handlePasswordResetLink()) -->
+  <div class="modal-overlay hidden" id="setNewPasswordModal">
+    <div class="modal-card">
+      <h3>Új jelszó megadása</h3>
+      <label class="gift-modal-label" style="margin-top:0;">Új jelszó</label>
+      <input type="password" id="setNewPasswordInput" class="gift-modal-input" placeholder="Új jelszó (min. 6 karakter)" />
+      <label class="gift-modal-label">Új jelszó újra</label>
+      <input type="password" id="setNewPasswordInput2" class="gift-modal-input" placeholder="Új jelszó újra" />
+      <div id="setNewPasswordResult" class="redeem-result"></div>
+      <div class="modal-actions">
+        <button class="btn-outline" id="setNewPasswordCancelBtn">Mégse</button>
+        <button class="btn-glow" id="setNewPasswordSubmitBtn">Jelszó megváltoztatása</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Süti beállítások modál -->
   <div class="modal-overlay hidden" id="cookieModal">

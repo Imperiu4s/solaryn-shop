@@ -128,6 +128,100 @@ async function doLogin() {
   enterApp();
 }
 
+// ── Elfelejtett jelszó (ld. SolarBackend src/passwordReset.js) ──
+const forgotPasswordModal = $('#forgotPasswordModal');
+function openForgotPasswordModal() {
+  $('#forgotPasswordInput').value = $('#authUser').value.trim();
+  $('#forgotPasswordResult').textContent = '';
+  $('#forgotPasswordResult').className = 'redeem-result';
+  forgotPasswordModal.classList.remove('hidden');
+}
+function closeForgotPasswordModal() { forgotPasswordModal.classList.add('hidden'); }
+$('#btnForgotPassword').addEventListener('click', (e) => { e.preventDefault(); openForgotPasswordModal(); });
+$('#forgotPasswordCancelBtn').addEventListener('click', closeForgotPasswordModal);
+forgotPasswordModal.addEventListener('click', (e) => { if (e.target === forgotPasswordModal) closeForgotPasswordModal(); });
+
+$('#forgotPasswordSubmitBtn').addEventListener('click', async () => {
+  const resultEl = $('#forgotPasswordResult');
+  const identifier = $('#forgotPasswordInput').value.trim();
+  if (!identifier) {
+    resultEl.textContent = 'Add meg a felhasználóneved vagy az email címed.';
+    resultEl.className = 'redeem-result error';
+    return;
+  }
+  const res = await apiPost('/api/password-reset/request', { usernameOrEmail: identifier });
+  // A backend SZÁNDÉKOSAN mindig {ok:true}-val válaszol (ld. ott a
+  // user-enumeration elleni megjegyzést) - itt is egyszerűen ezt az
+  // üzenetet mutatjuk, nem árulunk el többet.
+  resultEl.textContent = res.message || 'Ha létezik ilyen fiók, hamarosan kapsz egy emailt.';
+  resultEl.className = 'redeem-result success';
+});
+
+// A jelszó-emailben kapott "?resetToken=<token>" linkről nyílik meg -
+// ugyanaz a minta, mint a "?discordLink=" olvasása lentebb: oldalbetöltéskor
+// azonnal kiolvassuk (bejelentkezés NÉLKÜL is használható, hiszen pont az a
+// lényege, hogy egy kijelentkezett állapotú felhasználó is vissza tudjon
+// jutni a fiókjába), és a modál bezárásakor/sikeres váltás után töröljük az
+// URL-ből, hogy egy frissítés ne nyissa meg újra.
+const setNewPasswordModal = $('#setNewPasswordModal');
+let pendingPasswordResetToken = (function readPendingPasswordResetToken() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('resetToken') || null;
+})();
+
+function clearResetTokenParam() {
+  const params = new URLSearchParams(window.location.search);
+  params.delete('resetToken');
+  const newSearch = params.toString();
+  const newUrl = window.location.pathname + (newSearch ? '?' + newSearch : '') + window.location.hash;
+  window.history.replaceState({}, '', newUrl);
+}
+
+function closeSetNewPasswordModal() {
+  setNewPasswordModal.classList.add('hidden');
+  pendingPasswordResetToken = null;
+  clearResetTokenParam();
+}
+$('#setNewPasswordCancelBtn').addEventListener('click', closeSetNewPasswordModal);
+
+if (pendingPasswordResetToken) {
+  $('#setNewPasswordInput').value = '';
+  $('#setNewPasswordInput2').value = '';
+  $('#setNewPasswordResult').textContent = '';
+  $('#setNewPasswordResult').className = 'redeem-result';
+  setNewPasswordModal.classList.remove('hidden');
+}
+
+$('#setNewPasswordSubmitBtn').addEventListener('click', async () => {
+  const resultEl = $('#setNewPasswordResult');
+  const pass = $('#setNewPasswordInput').value;
+  const pass2 = $('#setNewPasswordInput2').value;
+  if (!pendingPasswordResetToken) {
+    resultEl.textContent = 'Hiányzó vagy lejárt link - kérj egy újat.';
+    resultEl.className = 'redeem-result error';
+    return;
+  }
+  if (pass.length < 6) {
+    resultEl.textContent = 'A jelszó min. 6 karakter.';
+    resultEl.className = 'redeem-result error';
+    return;
+  }
+  if (pass !== pass2) {
+    resultEl.textContent = 'A két jelszó nem egyezik.';
+    resultEl.className = 'redeem-result error';
+    return;
+  }
+  const res = await apiPost('/api/password-reset/confirm', { token: pendingPasswordResetToken, newPassword: pass });
+  if (!res.ok) {
+    resultEl.textContent = res.message || 'Nem sikerült megváltoztatni a jelszót.';
+    resultEl.className = 'redeem-result error';
+    return;
+  }
+  closeSetNewPasswordModal();
+  showToast('Jelszavad megváltozott - jelentkezz be az új jelszóval.');
+  setAuthMode('login');
+});
+
 // A zárolt-fiók képernyő bármely belépési ponton (friss login, automatikus
 // munkamenet-visszaállítás) megjeleníthető - mindig ugyanazt az élményt adja,
 // nem csak egy apró hibaüzenetet.
@@ -2467,6 +2561,12 @@ function resetNewsForm() {
   $('#newsImageInput').value = '';
   $('#newsImagePreviewWrap').hidden = true;
   $('#newsImagePreview').src = '';
+  $('#newsSendEmailCheckbox').checked = false;
+  // Szerkesztéskor a backend úgyis figyelmen kívül hagyja ezt a mezőt (ld.
+  // SolarBackend src/news.js megjegyzését - csak létrehozáskor küldhető ki),
+  // ezért új felhívásnál látszik, szerkesztésnél elrejtjük, hogy ne
+  // keltsen hamis benyomást.
+  $('#newsSendEmailCheckbox').closest('label').hidden = false;
   $('#newsFormResult').textContent = '';
   $('#newsFormResult').className = 'redeem-result';
   $('#newsSaveBtn').textContent = 'Mentés';
@@ -2549,6 +2649,10 @@ $('#newsSaveBtn').addEventListener('click', async () => {
     formData.append('content', content);
     if (newsSelectedImageFile) formData.append('image', newsSelectedImageFile);
     else if (newsEditingId && newsRemoveExistingImage) formData.append('removeImage', 'true');
+    // Csak ÚJ felhívásnál küldjük el ezt a mezőt - szerkesztésnél a backend
+    // úgyis figyelmen kívül hagyja (ld. news.js megjegyzését), a checkbox is
+    // el van rejtve ilyenkor.
+    if (!newsEditingId && $('#newsSendEmailCheckbox').checked) formData.append('sendEmail', 'true');
     const res = await fetch(url, {
       method: newsEditingId ? 'PUT' : 'POST',
       headers: { Authorization: 'Bearer ' + session.token },
@@ -2560,7 +2664,13 @@ $('#newsSaveBtn').addEventListener('click', async () => {
       resultEl.className = 'redeem-result error';
       return;
     }
-    showToast(newsEditingId ? 'Felhívás frissítve.' : 'Felhívás mentve - mostantól ez a legfrissebb hír.');
+    if (newsEditingId) {
+      showToast('Felhívás frissítve.');
+    } else if (data.emailQueued > 0) {
+      showToast(`Felhívás mentve - ${data.emailQueued} feliratkozónak email is kiküldve.`);
+    } else {
+      showToast('Felhívás mentve - mostantól ez a legfrissebb hír.');
+    }
     resetNewsForm();
     loadNewsAdmin();
   } catch {
@@ -2582,6 +2692,11 @@ document.addEventListener('click', (e) => {
     $('#newsTitleInput').value = item.title;
     $('#newsContentInput').value = item.content;
     $('#newsSaveBtn').textContent = 'Frissítés';
+    // Szerkesztésnél a backend úgyis figyelmen kívül hagyja a "sendEmail"
+    // mezőt (ld. resetNewsForm megjegyzését) - elrejtjük, ne tűnjön úgy,
+    // mintha egy elgépelés-javítás újra kiküldené a hírlevelet.
+    $('#newsSendEmailCheckbox').checked = false;
+    $('#newsSendEmailCheckbox').closest('label').hidden = true;
     $('#newsFormResult').textContent = '';
     if (item.image_ext) {
       $('#newsImagePreview').src = newsImageUrl(item.id);
