@@ -712,8 +712,29 @@ let isOwner = false;
 // van mit csökkenteni.
 let currentSanctionStatus = { activeMute: null, activeBan: null, activeCban: null };
 
+// ÚJ: a felhasználó kérésére ("sokkal több animáció... modernebb") - a
+// PrémiumPont-egyenleg most a régi (vagy első betöltéskor 0) értékről az
+// újra SZÁMOLVA fut fel, nem csak egyszerűen kicserélődik a szöveg - a mai
+// dashboard-alkalmazásoknál megszokott "count-up" hatás. Csak EZT a
+// konkrét számot animáljuk (nem minden statisztikát site-szerte), mert ez a
+// leggyakrabban, legszembetűnőbben frissülő érték (minden vásárlás/
+// átutalás/rangvásárlás után), a többi statisztika-doboz ritkábban változik.
+let lastRenderedPpBalance = null;
+function animateNumberTo(el, from, to, formatFn, duration = 650) {
+  if (from === to) { el.textContent = formatFn(to); return; }
+  const start = performance.now();
+  function tick(now) {
+    const t = Math.min(1, (now - start) / duration);
+    const eased = 1 - Math.pow(1 - t, 3); // ease-out kockás görbe - gyors indulás, lágy megállás
+    el.textContent = formatFn(Math.round(from + (to - from) * eased));
+    if (t < 1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
 function renderProfilePpBadge() {
-  $('#topbarPpValue').textContent = formatPp(currentPpBalance);
+  const from = lastRenderedPpBalance === null ? 0 : lastRenderedPpBalance;
+  animateNumberTo($('#topbarPpValue'), from, currentPpBalance, formatPp);
+  lastRenderedPpBalance = currentPpBalance;
 }
 
 // meData: opcionálisan előre lekért /api/me válasz (pl. tryAutoLogin()-ból,

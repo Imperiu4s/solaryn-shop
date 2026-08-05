@@ -175,6 +175,18 @@ a { color: inherit; }
   display: flex; flex-direction: column;
   padding: 28px 18px;
   position: sticky; top: 0; height: 100vh;
+  /* JAVÍTVA: a felhasználó kérésére - az "Admin" szekció (Napló/Csapat
+     statisztika/Havi bevétel/Felhívások/Jelvények/Akciók) a teljes navigációs
+     listát magasabbra nőtte, mint a viewport 100%-os nagyításnál rendelkezésre
+     álló hely - "overflow-y: auto" nélkül ez korábban egyszerűen levágódott
+     (a "Discord" alsó link is emiatt tűnt el), görgetési lehetőség nélkül. */
+  overflow-y: auto; overflow-x: hidden;
+}
+.app-sidebar::-webkit-scrollbar { width: 6px; }
+.app-sidebar::-webkit-scrollbar-track { background: transparent; }
+.app-sidebar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--gold), var(--gold-2));
+  border-radius: 999px;
 }
 .app-brand { display: flex; align-items: center; gap: 12px; padding: 0 8px 30px; }
 .app-nav { display: flex; flex-direction: column; gap: 4px; }
@@ -1080,4 +1092,51 @@ a { color: inherit; }
 @keyframes dropdownOpen {
   from { opacity: 0; transform: scale(.92) translateY(-6px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* ÚJ: a felhasználó kérésére ("sokkal több animáció... cleanebb, modernebb")
+   - a dinamikusan (innerHTML/.map(...).join('')) renderelt kártya-/lista-
+   elemek korábban egyáltalán nem animáltak be, csak egyszerűen "megjelentek"
+   a DOM-ban (nincs @keyframes rájuk kötve) - ellentétben pl. a ".stat-badge"
+   fentebbi, kézzel felsorolt nth-child-stagger mintájával, ami CSAK a
+   Kezdőlap fix számú (max 6) statisztika-dobozára volt megírva. Ez a szabály
+   egységesen minden dinamikus kártya-/lista-elem osztályra vonatkozik, hogy
+   egy lista/rács betöltésekor mindegyik elem egymás után, kis késleltetéssel
+   "úszzon be" - nem csak egyetlen tömbként felvillan. A nth-child-számlálás
+   MINDEN esetben egy DEDIKÁLT konténerbe (pl. #badgesAdminList, #rankGrid)
+   renderelt, egyfajta gyerek-elemekre vonatkozik, ezért helyesen sorszámozza
+   az elemeket akkor is, ha a szelektor önmagában nem "tudja", melyik
+   konténerben van éppen. */
+.pkg-card, .rank-card, .badges-admin-item, .news-admin-item, .player-card, .staff-stat-card {
+  animation: fadeSlideUp .4s cubic-bezier(.2,.7,.3,1) both;
+}
+.pkg-card:nth-child(2), .rank-card:nth-child(2), .badges-admin-item:nth-child(2), .news-admin-item:nth-child(2), .player-card:nth-child(2), .staff-stat-card:nth-child(2) { animation-delay: .04s; }
+.pkg-card:nth-child(3), .rank-card:nth-child(3), .badges-admin-item:nth-child(3), .news-admin-item:nth-child(3), .player-card:nth-child(3), .staff-stat-card:nth-child(3) { animation-delay: .08s; }
+.pkg-card:nth-child(4), .rank-card:nth-child(4), .badges-admin-item:nth-child(4), .news-admin-item:nth-child(4), .player-card:nth-child(4), .staff-stat-card:nth-child(4) { animation-delay: .12s; }
+.pkg-card:nth-child(5), .rank-card:nth-child(5), .badges-admin-item:nth-child(5), .news-admin-item:nth-child(5), .player-card:nth-child(5), .staff-stat-card:nth-child(5) { animation-delay: .16s; }
+.pkg-card:nth-child(6), .rank-card:nth-child(6), .badges-admin-item:nth-child(6), .news-admin-item:nth-child(6), .player-card:nth-child(6), .staff-stat-card:nth-child(6) { animation-delay: .2s; }
+.pkg-card:nth-child(n+7), .rank-card:nth-child(n+7), .badges-admin-item:nth-child(n+7), .news-admin-item:nth-child(n+7), .player-card:nth-child(n+7), .staff-stat-card:nth-child(n+7) { animation-delay: .24s; }
+
+/* ÚJ: kártya-hover finomítás - a korábbi puszta translateY+border-szín-
+   váltás mellé egy lágy arany fényudvar (box-shadow) is társul, hogy a
+   hover állapot "emelkedettebbnek", prémiumabbnak hasson. */
+.pkg-card:hover, .rank-card:hover { box-shadow: 0 14px 34px rgba(255,176,32,.14); }
+.player-card:hover { box-shadow: 0 10px 26px rgba(255,176,32,.12); }
+
+/* ÚJ: ".btn-buy" prémium csillanás-effekt nyugalmi állapotban - ugyanaz a
+   minta, mint a SolarLauncher "JÁTÉK INDÍTÁSA" gombjáé, hogy a Solaryn-
+   termékcsalád vizuális nyelve konzisztens legyen. */
+.btn-buy { position: relative; overflow: hidden; transition: filter .16s, box-shadow .16s, transform .12s; }
+.btn-buy:hover { box-shadow: 0 8px 22px var(--gold-glow); }
+.btn-buy:active:not(:disabled) { transform: scale(.97); }
+.btn-buy::after {
+  content: ""; position: absolute; top: 0; left: -60%; width: 40%; height: 100%;
+  background: linear-gradient(115deg, transparent, rgba(255,255,255,.55), transparent);
+  transform: skewX(-20deg);
+  animation: btnBuyShine 4s ease-in-out infinite;
+}
+.btn-buy:disabled::after { display: none; }
+@keyframes btnBuyShine {
+  0% { left: -60%; }
+  22%, 100% { left: 140%; }
 }
