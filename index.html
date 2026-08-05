@@ -229,6 +229,10 @@
           <svg viewBox="0 0 24 24"><path d="M12 2l2.6 5.8 6.2.6-4.7 4.2 1.4 6.2L12 15.8 6.5 18.8l1.4-6.2-4.7-4.2 6.2-.6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
           <span>Jelvények</span>
         </button>
+        <button class="app-nav-item admin-nav-item hidden" data-view="discounts">
+          <svg viewBox="0 0 24 24"><path d="M20 12l-8 8-9-9V4h7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>
+          <span>Akciók</span>
+        </button>
       </div>
 
       <div class="app-nav-spacer"></div>
@@ -729,7 +733,8 @@
             <label class="gift-modal-label">Tartalom</label>
             <textarea id="newsContentInput" class="gift-modal-input" placeholder="A felhívás szövege..." rows="6" maxlength="4000"></textarea>
             <label class="gift-modal-label">Kép (nem kötelező, PNG vagy JPEG)</label>
-            <input type="file" id="newsImageInput" accept="image/png,image/jpeg" />
+            <input type="file" id="newsImageInput" accept="image/png,image/jpeg" hidden />
+            <button type="button" class="btn-outline file-picker-btn" id="newsImagePickBtn">Kép kiválasztása</button>
             <div class="news-image-preview-wrap" id="newsImagePreviewWrap" hidden>
               <img id="newsImagePreview" class="news-image-preview" alt="" />
               <button type="button" class="link-btn" id="newsImageRemoveBtn">Kép eltávolítása</button>
@@ -761,7 +766,8 @@
             <label class="gift-modal-label">Névszín</label>
             <input type="color" id="badgeColorInput" class="badge-color-input" value="#ffc42e" />
             <label class="gift-modal-label">Ikon (PNG, JPEG, vagy GIF animált ikonhoz)</label>
-            <input type="file" id="badgeIconInput" accept="image/png,image/jpeg,image/gif" />
+            <input type="file" id="badgeIconInput" accept="image/png,image/jpeg,image/gif" hidden />
+            <button type="button" class="btn-outline file-picker-btn" id="badgeIconPickBtn">Ikon kiválasztása</button>
             <div class="news-image-preview-wrap" id="badgeIconPreviewWrap" hidden>
               <img id="badgeIconPreview" class="news-image-preview badge-icon-preview" alt="" />
               <button type="button" class="link-btn" id="badgeIconRemoveBtn">Ikon eltávolítása</button>
@@ -775,6 +781,48 @@
 
           <div class="admin-subsection-title">Meglévő jelvények</div>
           <div id="badgesAdminList"></div>
+        </section>
+
+        <!-- AKCIÓK (admin, ld. SolarBackend src/discounts.js) - ugyanaz a
+             CRUD-minta, mint a Jelvények, csak a "Kedvezmény" mezőkkel
+             (érvényességi kör + opcionális egy-csomagos szűkítés + aktív/
+             lejárat) a szín+ikon helyett. -->
+        <section class="view" data-view="discounts">
+          <h1 class="page-title">Akciók</h1>
+          <p class="page-note">A létrehozott akciók automatikusan érvényesülnek vásárláskor a beállított érvényességi körben - több egyidejűleg illeszkedő akció (és az egyéni, játékosonkénti kedvezmény, ld. Játékosok admin panel) ÖSSZEADÓDIK.</p>
+
+          <div class="card">
+            <div class="card-title" id="discountFormTitle">Új akció</div>
+            <label class="gift-modal-label" style="margin-top:0;">Név</label>
+            <input type="text" id="discountNameInput" class="gift-modal-input" placeholder="Pl. Nyári akció" maxlength="48" />
+            <label class="gift-modal-label">Kedvezmény (%)</label>
+            <input type="number" id="discountPercentInput" class="gift-modal-input" placeholder="Pl. 20" min="1" max="100" step="1" />
+            <label class="gift-modal-label">Érvényességi kör</label>
+            <select id="discountScopeSelect" class="gift-modal-input">
+              <option value="all">Minden csomag</option>
+              <option value="pp">PrémiumPont csomagok</option>
+              <option value="rank">Rangok</option>
+              <option value="item">Egy konkrét csomag</option>
+            </select>
+            <div id="discountScopeItemWrap" hidden>
+              <label class="gift-modal-label">Csomag</label>
+              <select id="discountScopeItemSelect" class="gift-modal-input"></select>
+            </div>
+            <label class="gift-modal-label">Lejárat (nem kötelező)</label>
+            <input type="date" id="discountExpiresInput" class="gift-modal-input" />
+            <label class="check-row" style="margin-top:10px;">
+              <input type="checkbox" id="discountActiveCheckbox" checked />
+              Aktív (a kikapcsolt akció mentve marad, de vásárláskor nem érvényesül)
+            </label>
+            <p class="redeem-result" id="discountFormResult"></p>
+            <div class="modal-actions" style="margin-top:14px;">
+              <button type="button" class="btn-outline" id="discountDiscardBtn">Elvetés</button>
+              <button type="button" class="btn-glow" id="discountSaveBtn" style="margin-top:0;">Mentés</button>
+            </div>
+          </div>
+
+          <div class="admin-subsection-title">Meglévő akciók</div>
+          <div id="discountsAdminList"></div>
         </section>
 
         <!-- JÁTÉKOS PROFIL (egy találatra kattintva) -->
@@ -848,6 +896,20 @@
               <label>Indoklás (nem kötelező)</label>
               <input type="text" id="adminPpAdjustReasonInput" placeholder="Pl. kártalanítás, esemény-nyeremény..." />
               <button type="button" class="btn-glow admin-lock-btn" id="adminPpAdjustBtn">Módosítás végrehajtása</button>
+            </div>
+
+            <div class="admin-subsection-title">Kedvezmény beállítása</div>
+            <div class="ban-panel admin-discount-panel">
+              <p class="redeem-result" id="adminDiscountStatus"></p>
+              <p class="admin-discount-current" id="adminDiscountCurrent"></p>
+              <label>Kedvezmény (%)</label>
+              <input type="number" id="adminDiscountPercentInput" placeholder="Pl. 20" min="1" max="100" step="1" />
+              <label>Indoklás (nem kötelező)</label>
+              <input type="text" id="adminDiscountReasonInput" placeholder="Pl. hűségjutalom, kártalanítás..." />
+              <label>Lejárat (nem kötelező)</label>
+              <input type="date" id="adminDiscountExpiresInput" />
+              <button type="button" class="btn-glow admin-lock-btn" id="adminDiscountSetBtn">Kedvezmény beállítása</button>
+              <button type="button" class="btn-outline" id="adminDiscountRevokeBtn">Kedvezmény törlése</button>
             </div>
 
             <div class="admin-subsection-title">Casino pörgetések (SolarLucky)</div>

@@ -846,6 +846,7 @@ function switchView(view) {
   if (view === 'revenue') loadRevenue();
   if (view === 'newsAdmin') { resetNewsForm(); loadNewsAdmin(); }
   if (view === 'badges') { resetBadgeForm(); loadBadgesAdmin(); }
+  if (view === 'discounts') { resetDiscountForm(); loadDiscountsAdmin(); }
   if (view === 'casino') loadCasino();
 }
 $$('.app-nav-item[data-view]').forEach((btn) => {
@@ -1340,6 +1341,11 @@ async function loadAdminPlayerPanel(username) {
   renderAdminMediaState(false, false);
   setAdminEmailEditing(false);
   renderAdminBadgeSelectOptions();
+  $('#adminDiscountStatus').textContent = '';
+  $('#adminDiscountPercentInput').value = '';
+  $('#adminDiscountReasonInput').value = '';
+  $('#adminDiscountExpiresInput').value = '';
+  renderAdminDiscountState(null);
   try {
     const res = await fetch(BACKEND_URL + '/api/admin/player/' + encodeURIComponent(username), {
       headers: { Authorization: 'Bearer ' + session.token }
@@ -1356,6 +1362,7 @@ async function loadAdminPlayerPanel(username) {
     renderAdminLockStatus(data.locked);
     renderAdminPlayerBadgesList(data.badges);
     renderAdminMediaState(data.hasSkin, data.hasCape);
+    renderAdminDiscountState(data.discount);
     $('#adminPlayerLoginsBody').innerHTML = data.logins.map((l) => `
       <tr>
         <td>${formatLedgerDate(l.created_at)}</td>
@@ -1372,6 +1379,18 @@ async function loadAdminPlayerPanel(username) {
   } catch {
     $('#adminPlayerCreatedAt').textContent = '-';
   }
+}
+
+// ÚJ: a "Kedvezmény beállítása" admin-alszekció összefoglaló szövege (ld.
+// SolarBackend src/discounts.js GET /api/admin/player/:username "discount"
+// mezője - "null", ha nincs, vagy már lejárt egyedi kedvezmény).
+function renderAdminDiscountState(discount) {
+  const el = $('#adminDiscountCurrent');
+  if (!discount) { el.textContent = 'Jelenleg nincs egyedi kedvezménye.'; return; }
+  const parts = [`Jelenlegi egyedi kedvezmény: ${discount.percent}%`];
+  if (discount.expires_at) parts.push(`lejár: ${formatLedgerDate(discount.expires_at)}`);
+  if (discount.reason) parts.push(`indoklás: ${discount.reason}`);
+  el.textContent = parts.join(' - ');
 }
 
 // ÚJ: a "Skin / Köpeny" admin-alszekció állapot-kijelzése + gombok
@@ -1574,6 +1593,81 @@ $('#adminPpAdjustBtn').addEventListener('click', async () => {
     statusEl.className = 'redeem-result';
     $('#adminPpAdjustAmountInput').value = '';
     $('#adminPpAdjustReasonInput').value = '';
+  } catch {
+    statusEl.textContent = 'Nem sikerült elérni a szervert.';
+    statusEl.className = 'redeem-result error';
+  }
+});
+
+// ÚJ: egyedi, játékosonkénti kedvezmény beállítása/törlése (ld.
+// SolarBackend src/discounts.js POST/DELETE /api/admin/player/:username/discount) -
+// ELLENTÉTBEN a fenti PP-/casino-módosítással, ez KÖZVETLENÜL, szinkron
+// módon történik (nincs beváltó-plugin-kör, a "discounts"/"player_discounts"
+// tábla a backend SAJÁT, azonnal-friss adata - ld. computeDiscountPercent()).
+$('#adminDiscountSetBtn').addEventListener('click', async () => {
+  if (!lastAdminPlayerUsername) return;
+  const statusEl = $('#adminDiscountStatus');
+  const percent = parseInt($('#adminDiscountPercentInput').value, 10);
+  const reason = $('#adminDiscountReasonInput').value.trim();
+  const expiresAt = $('#adminDiscountExpiresInput').value || undefined;
+  if (!Number.isInteger(percent) || percent < 1 || percent > 100) {
+    statusEl.textContent = 'A kedvezmény 1 és 100% között lehet.';
+    statusEl.className = 'redeem-result error';
+    return;
+  }
+  const confirmed = await confirmModal(
+    'Kedvezmény beállítása',
+    `Biztosan beállítasz <b>${percent}%</b> egyedi kedvezményt <b>${lastAdminPlayerUsername}</b> részére? Ez felülírja a korábbi egyedi kedvezményét, ha volt.`,
+    'Igen, beállítás'
+  );
+  if (!confirmed) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/player/' + encodeURIComponent(lastAdminPlayerUsername) + '/discount', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ percent, reason: reason || undefined, expiresAt })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      statusEl.textContent = data.message || 'Nem sikerült beállítani a kedvezményt.';
+      statusEl.className = 'redeem-result error';
+      return;
+    }
+    statusEl.textContent = 'Kedvezmény beállítva.';
+    statusEl.className = 'redeem-result';
+    renderAdminDiscountState(data.discount);
+    $('#adminDiscountPercentInput').value = '';
+    $('#adminDiscountReasonInput').value = '';
+    $('#adminDiscountExpiresInput').value = '';
+  } catch {
+    statusEl.textContent = 'Nem sikerült elérni a szervert.';
+    statusEl.className = 'redeem-result error';
+  }
+});
+
+$('#adminDiscountRevokeBtn').addEventListener('click', async () => {
+  if (!lastAdminPlayerUsername) return;
+  const statusEl = $('#adminDiscountStatus');
+  const confirmed = await confirmModal(
+    'Kedvezmény törlése',
+    `Biztosan törlöd <b>${lastAdminPlayerUsername}</b> egyedi kedvezményét?`,
+    'Igen, törlés'
+  );
+  if (!confirmed) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/player/' + encodeURIComponent(lastAdminPlayerUsername) + '/discount', {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      statusEl.textContent = 'Nem sikerült törölni (talán már nem is volt egyedi kedvezménye).';
+      statusEl.className = 'redeem-result error';
+      return;
+    }
+    statusEl.textContent = 'Kedvezmény törölve.';
+    statusEl.className = 'redeem-result';
+    renderAdminDiscountState(null);
   } catch {
     statusEl.textContent = 'Nem sikerült elérni a szervert.';
     statusEl.className = 'redeem-result error';
@@ -2591,6 +2685,14 @@ function renderNewsAdminList() {
   `).join('') || '<p class="redeem-result">Még nincs egyetlen felhívás sem.</p>';
 }
 
+// JAVÍTVA: a felhasználó kérésére a natív "Fájl kiválasztása" gomb (a
+// böngésző saját, stílusozatlan megjelenítése) helyett most egy a site
+// designjához illő gomb váltja ki a rejtett file-inputot - ugyanaz a minta,
+// mint a skin/köpeny feltöltésénél (ld. #skinDrop/#capeDrop kattintás-
+// továbbítása app.js-ben), csak itt egy kompakt gombbal, nem egy nagy
+// drag&drop dobozzal, mert ez a form szűkebb, egysoros mezőkből áll.
+$('#newsImagePickBtn').addEventListener('click', () => $('#newsImageInput').click());
+
 $('#newsImageInput').addEventListener('change', (e) => {
   const file = e.target.files && e.target.files[0];
   newsSelectedImageFile = file || null;
@@ -2777,6 +2879,10 @@ function renderBadgesAdminList() {
   `).join('') || '<p class="redeem-result">Még nincs egyetlen jelvény sem.</p>';
 }
 
+// JAVÍTVA: ugyanaz a stílusozott-gombos kiváltás, mint a felhívások
+// kép-feltöltésénél (ld. #newsImagePickBtn fenti megjegyzését).
+$('#badgeIconPickBtn').addEventListener('click', () => $('#badgeIconInput').click());
+
 $('#badgeIconInput').addEventListener('change', (e) => {
   const file = e.target.files && e.target.files[0];
   badgeSelectedIconFile = file || null;
@@ -2892,6 +2998,179 @@ document.addEventListener('click', (e) => {
           showToast('Jelvény törölve.');
           if (String(badgeEditingId) === String(id)) resetBadgeForm();
           loadBadgesAdmin();
+        } else {
+          showToast('Nem sikerült törölni.', true);
+        }
+      }).catch(() => showToast('Nem sikerült elérni a szervert.', true));
+    });
+  }
+});
+
+// ── Akciók (admin, ld. SolarBackend src/discounts.js) - ugyanaz a CRUD-
+// minta, mint a fenti Jelvények, csak a "Kedvezmény" mezőkkel (érvényességi
+// kör + opcionális egy-csomagos szűkítés + aktív/lejárat) a szín+ikon
+// helyett - nincs fájlfeltöltés, ezért egyszerű JSON POST/PUT, nem FormData. ──
+let discountEditingId = null;
+let discountsAdminItems = [];
+
+function resetDiscountForm() {
+  discountEditingId = null;
+  $('#discountFormTitle').textContent = 'Új akció';
+  $('#discountNameInput').value = '';
+  $('#discountPercentInput').value = '';
+  $('#discountScopeSelect').value = 'all';
+  $('#discountScopeItemWrap').hidden = true;
+  $('#discountExpiresInput').value = '';
+  $('#discountActiveCheckbox').checked = true;
+  $('#discountFormResult').textContent = '';
+  $('#discountFormResult').className = 'redeem-result';
+  $('#discountSaveBtn').textContent = 'Mentés';
+  populateDiscountScopeItemSelect();
+}
+
+// A "shopCatalog"/"shopRanks" globális tömböket használja (ld. loadShopCatalog/
+// loadRanks fentebb - mindkettő MÁR betöltődik oldalbetöltéskor, nincs szükség
+// külön lekérdezésre) - a legördülő értéke MINDIG a CATALOG-/RANKS-kulcs (pl.
+// "sc_1300"/"helios"), ugyanaz, amit a backend "scope_item_id"-ként vár.
+function populateDiscountScopeItemSelect(selectedId) {
+  const sel = $('#discountScopeItemSelect');
+  const catalogOptions = shopCatalog.map((i) => `<option value="${i.id}">${escapeHtml(i.short || i.label)} (${formatHuf(i.priceHuf)})</option>`).join('');
+  const rankOptions = shopRanks.map((r) => `<option value="${r.id}">${escapeHtml(r.label)} (${formatPp(r.priceCoins)})</option>`).join('');
+  sel.innerHTML = `<optgroup label="Csomagok">${catalogOptions}</optgroup><optgroup label="Rangok">${rankOptions}</optgroup>`;
+  if (selectedId) sel.value = selectedId;
+}
+
+$('#discountScopeSelect').addEventListener('change', () => {
+  $('#discountScopeItemWrap').hidden = $('#discountScopeSelect').value !== 'item';
+});
+
+function discountScopeLabel(d) {
+  if (d.scope === 'all') return 'Minden csomag';
+  if (d.scope === 'pp') return 'PrémiumPont csomagok';
+  if (d.scope === 'rank') return 'Rangok';
+  // "item" - a katalógusban/rangoknál megkeressük a megjeleníthető nevet,
+  // ha az akció létrehozása óta törölték a tételt a CATALOG-ból/RANKS-ból,
+  // egyszerűen a nyers azonosítót mutatjuk (nem hibázik el).
+  const catalogItem = shopCatalog.find((i) => i.id === d.scope_item_id);
+  if (catalogItem) return `Csomag: ${catalogItem.short || catalogItem.label}`;
+  const rank = shopRanks.find((r) => r.id === d.scope_item_id);
+  if (rank) return `Rang: ${rank.label}`;
+  return `Csomag: ${d.scope_item_id}`;
+}
+
+function renderDiscountsAdminList() {
+  $('#discountsAdminList').innerHTML = discountsAdminItems.map((d) => {
+    const expired = d.expires_at && new Date(d.expires_at).getTime() <= Date.now();
+    const statusText = !d.active ? 'Kikapcsolva' : expired ? 'Lejárt' : 'Aktív';
+    const statusClass = !d.active ? 'discount-status-off' : expired ? 'discount-status-off' : 'discount-status-on';
+    return `
+    <div class="badges-admin-item">
+      <div class="badges-admin-item-info">
+        <div class="badges-admin-item-name">${escapeHtml(d.name)} - ${d.percent}%</div>
+        <div class="badges-admin-item-meta">${discountScopeLabel(d)}${d.expires_at ? ' - lejár: ' + formatLedgerDate(d.expires_at) : ''} - <span class="${statusClass}">${statusText}</span></div>
+      </div>
+      <div class="badges-admin-item-actions">
+        <button type="button" class="news-edit-btn" data-discount-id="${d.id}">Szerkesztés</button>
+        <button type="button" class="news-delete-btn" data-discount-id="${d.id}">Törlés</button>
+      </div>
+    </div>
+  `;
+  }).join('') || '<p class="redeem-result">Még nincs egyetlen akció sem.</p>';
+}
+
+async function loadDiscountsAdmin() {
+  if (!session || !session.token || !isOwner) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/discounts', {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    discountsAdminItems = data.ok && Array.isArray(data.discounts) ? data.discounts : [];
+  } catch {
+    discountsAdminItems = [];
+  }
+  renderDiscountsAdminList();
+}
+
+$('#discountDiscardBtn').addEventListener('click', resetDiscountForm);
+
+$('#discountSaveBtn').addEventListener('click', async () => {
+  const resultEl = $('#discountFormResult');
+  const name = $('#discountNameInput').value.trim();
+  const percent = Number($('#discountPercentInput').value);
+  const scope = $('#discountScopeSelect').value;
+  const scopeItemId = scope === 'item' ? $('#discountScopeItemSelect').value : undefined;
+  const active = $('#discountActiveCheckbox').checked;
+  const expiresAt = $('#discountExpiresInput').value || undefined;
+
+  if (!name) { resultEl.textContent = 'Adj meg egy nevet.'; resultEl.className = 'redeem-result error'; return; }
+  if (!Number.isInteger(percent) || percent < 1 || percent > 100) {
+    resultEl.textContent = 'A kedvezmény 1 és 100% között lehet.';
+    resultEl.className = 'redeem-result error';
+    return;
+  }
+  if (scope === 'item' && !scopeItemId) {
+    resultEl.textContent = 'Válassz egy konkrét csomagot.';
+    resultEl.className = 'redeem-result error';
+    return;
+  }
+
+  try {
+    const url = discountEditingId ? BACKEND_URL + '/api/admin/discounts/' + discountEditingId : BACKEND_URL + '/api/admin/discounts';
+    const res = await fetch(url, {
+      method: discountEditingId ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ name, percent, scope, scopeItemId, active, expiresAt })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      resultEl.textContent = data.message || 'Nem sikerült menteni.';
+      resultEl.className = 'redeem-result error';
+      return;
+    }
+    showToast(discountEditingId ? 'Akció frissítve.' : 'Akció létrehozva.');
+    resetDiscountForm();
+    loadDiscountsAdmin();
+  } catch {
+    resultEl.textContent = 'Nem sikerült elérni a szervert.';
+    resultEl.className = 'redeem-result error';
+  }
+});
+
+document.addEventListener('click', (e) => {
+  const editBtn = e.target.closest('.news-edit-btn[data-discount-id]');
+  if (editBtn) {
+    const item = discountsAdminItems.find((d) => String(d.id) === editBtn.dataset.discountId);
+    if (!item) return;
+    discountEditingId = item.id;
+    $('#discountFormTitle').textContent = 'Akció szerkesztése';
+    $('#discountNameInput').value = item.name;
+    $('#discountPercentInput').value = item.percent;
+    $('#discountScopeSelect').value = item.scope;
+    $('#discountScopeItemWrap').hidden = item.scope !== 'item';
+    populateDiscountScopeItemSelect(item.scope_item_id);
+    // ÚJ: a dátum-input "ÉÉÉÉ-HH-NN" alakot vár - a backend teljes ISO
+    // dátumidőt ad vissza (ld. discounts.js normalizálását a nap VÉGÉRE),
+    // ebből csak a dátumrészt vágjuk ki.
+    $('#discountExpiresInput').value = item.expires_at ? item.expires_at.slice(0, 10) : '';
+    $('#discountActiveCheckbox').checked = item.active === 1;
+    $('#discountSaveBtn').textContent = 'Frissítés';
+    $('#discountFormResult').textContent = '';
+    return;
+  }
+  const deleteBtn = e.target.closest('.news-delete-btn[data-discount-id]');
+  if (deleteBtn) {
+    const id = deleteBtn.dataset.discountId;
+    confirmModal('Akció törlése', 'Biztosan törlöd ezt az akciót? Ez nem vonható vissza.', 'Igen, törlés').then((confirmed) => {
+      if (!confirmed) return;
+      fetch(BACKEND_URL + '/api/admin/discounts/' + id, {
+        method: 'DELETE',
+        headers: { Authorization: 'Bearer ' + session.token }
+      }).then((res) => res.json()).then((data) => {
+        if (data.ok) {
+          showToast('Akció törölve.');
+          if (String(discountEditingId) === String(id)) resetDiscountForm();
+          loadDiscountsAdmin();
         } else {
           showToast('Nem sikerült törölni.', true);
         }

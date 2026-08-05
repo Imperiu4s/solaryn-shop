@@ -284,16 +284,31 @@ a { color: inherit; }
 .news-admin-item-meta { font-size: 12px; color: var(--text-faint); margin-top: 3px; }
 .news-admin-item-content { font-size: 13px; color: var(--text-dim); line-height: 1.7; margin-top: 10px; white-space: pre-wrap; }
 .news-admin-item-actions { display: flex; gap: 8px; flex-shrink: 0; }
-.news-admin-item-actions button {
+/* JAVÍTVA: korábban ez a szabály KIZÁRÓLAG a ".news-admin-item-actions"
+   konténerre vonatkozott - mivel a Jelvények lista (ld. lentebb
+   ".badges-admin-item-actions") a PONTOSAN UGYANAZT a ".news-edit-btn"/
+   ".news-delete-btn" osztálypárt használja saját Szerkesztés/Törlés
+   gombjaihoz (ld. app.js renderBadgesAdminList), de a saját konténerének
+   nem volt hozzá tartozó "button" szabálya, ott a natív, stílusozatlan
+   böngésző-gomb jelent meg. Most mindkét konténer megkapja ugyanazt a
+   stílust egyetlen, megosztott szabályból. */
+.news-admin-item-actions button, .badges-admin-item-actions button {
   padding: 7px 12px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer;
   background: transparent; border: 1px solid var(--line); color: var(--text-dim); transition: border-color .16s, color .16s;
 }
-.news-admin-item-actions button:hover { color: var(--text); border-color: var(--gold-2); }
-.news-admin-item-actions .news-delete-btn:hover { color: var(--danger); border-color: var(--danger); }
+.news-admin-item-actions button:hover, .badges-admin-item-actions button:hover { color: var(--text); border-color: var(--gold-2); }
+.news-admin-item-actions .news-delete-btn:hover, .badges-admin-item-actions .news-delete-btn:hover { color: var(--danger); border-color: var(--danger); }
 
 /* ÚJ: kép-feltöltés az "Új felhívás" űrlapon (ld. index.html #newsImageInput) */
 .news-image-preview-wrap { display: flex; align-items: center; gap: 14px; margin-top: 10px; }
 .news-image-preview { width: 90px; height: 90px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); }
+
+/* ÚJ: kompakt, a design-hoz illő kiváltó gomb a natív <input type="file">
+   helyett (ami rejtve marad, "hidden") - ld. index.html #newsImagePickBtn/
+   #badgeIconPickBtn, app.js kattintás-továbbítását a rejtett inputra.
+   Ugyanaz az elv, mint a skin/köpeny #skinDrop/#capeDrop-jánál, csak
+   kompakt gomb formájában, mert ez a form szűk, egysoros mezőkből áll. */
+.file-picker-btn { width: auto; margin-top: 6px; padding: 8px 16px; font-size: 12.5px; }
 
 /* ÚJ: Jelvények (ld. SolarBackend src/badges.js, index.html data-view="badges") */
 .badge-color-input {
@@ -310,6 +325,12 @@ a { color: inherit; }
 .badges-admin-item-info { flex: 1; min-width: 0; }
 .badges-admin-item-name { font-size: 14px; font-weight: 800; }
 .badges-admin-item-meta { font-size: 12px; color: var(--text-faint); margin-top: 2px; }
+
+/* ÚJ: Akciók (ld. SolarBackend src/discounts.js, index.html data-view="discounts") -
+   a lista maga a ".badges-admin-item" mintát újrahasznosítja (ugyanaz az elrendezés,
+   csak ikon nélkül), csak az aktív/lejárt-kikapcsolt állapotjelzéshez kell saját szín. */
+.discount-status-on { color: var(--gold); font-weight: 700; }
+.discount-status-off { color: var(--text-faint); font-weight: 700; }
 .badges-admin-item-actions { display: flex; gap: 8px; flex-shrink: 0; }
 
 /* ÚJ: jelvények a névtábla mellett (Profilod kártya / Játékos-profil).
@@ -805,12 +826,19 @@ a { color: inherit; }
   letter-spacing: .5px; text-transform: uppercase;
 }
 .ban-panel label:first-of-type { margin-top: 4px; }
-.ban-panel input[type="text"], .ban-panel input[type="number"], .ban-panel select {
+.ban-panel input[type="text"], .ban-panel input[type="number"], .ban-panel input[type="date"], .ban-panel select {
   width: 100%; padding: 12px 14px; border-radius: 11px;
   background: var(--bg); border: 1px solid var(--line); color: var(--text); font-size: 14px; outline: none;
   transition: border-color .18s;
+  /* JAVÍTVA: a natív dátumválasztó ikonja alapból sötét (fekete-közeli), a
+     sötét témájú mezőn szinte láthatatlan volt - a böngésző saját ikonját
+     "invertáljuk" (fehér-közelire), hogy látszódjon. */
+  color-scheme: dark;
 }
 .ban-panel input:focus, .ban-panel select:focus { border-color: var(--orange); }
+/* ÚJ: Kedvezmény alfejezet (ld. index.html #adminDiscountCurrent) - a
+   jelenleg beállított egyéni kedvezmény összefoglalója a form fölött. */
+.admin-discount-current { font-size: 12.5px; color: var(--text-dim); margin: 6px 2px 0; }
 .ban-duration-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .ban-panel .btn-glow { width: 100%; margin-top: 20px; background: linear-gradient(180deg, var(--danger), #c23a3a); box-shadow: 0 8px 26px rgba(255,90,90,.35); color: #2a0606; }
 
