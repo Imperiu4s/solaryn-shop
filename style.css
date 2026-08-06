@@ -577,9 +577,24 @@ a { color: inherit; }
 .pkg-category:first-child { margin-top: 0; }
 .pkg-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
 .pkg-card {
+  position: relative;
   background: rgba(255,255,255,.02); border: 1px solid var(--line); border-radius: 15px;
   padding: 26px 18px; text-align: center; display: flex; flex-direction: column; align-items: center;
   transition: transform .16s, border-color .16s, background .16s;
+}
+
+/* ÚJ: aktív akció jelvénye a csomag-/rangkártya sarkában (ld. app.js
+   renderPkgCard/renderRankCard "discountBadge") + az áthúzott eredeti ár. */
+.discount-badge {
+  position: absolute; top: 10px; right: 10px;
+  background: linear-gradient(135deg, #ff6a4d, #ff2f5e);
+  color: #fff; font-size: 11px; font-weight: 800; letter-spacing: .02em;
+  padding: 3px 9px; border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(255,47,94,.35);
+}
+.price-original {
+  text-decoration: line-through; color: var(--text-faint);
+  font-size: 13px; font-weight: 600; margin-right: 7px;
 }
 .pkg-card:hover { transform: translateY(-4px); border-color: var(--gold-2); background: rgba(255,176,32,.05); }
 .pkg-card.featured { border-color: var(--gold); box-shadow: 0 0 20px rgba(255,176,32,.12); }
@@ -626,6 +641,7 @@ a { color: inherit; }
    témáját követi, nem egy máshonnan átvett dizájnt. */
 .rank-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
 .rank-card {
+  position: relative;
   background: rgba(255,255,255,.02); border: 1px solid var(--line); border-radius: 15px;
   padding: 24px 20px; display: flex; flex-direction: column; align-items: center; text-align: center;
   transition: transform .16s, border-color .16s, background .16s;

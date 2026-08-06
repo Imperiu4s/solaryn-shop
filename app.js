@@ -759,8 +759,11 @@ async function enterApp(meData) {
   // A bejelentkezés ELŐTT (szkript-betöltéskor) lefutott loadShopCatalog()
   // még a fenti alapértelmezett (mind-null, azaz mind-zárolt) állapottal
   // rendereli a kitiltáscsökkentés kártyákat - most, hogy tudjuk a valódi
-  // szankció-állapotot, újra kell generálni a gomb-állapotokat.
+  // szankció-állapotot, újra kell generálni a gomb-állapotokat. Ugyanígy
+  // most már ismert a bejelentkezési token is, tehát az esetleges EGYEDI
+  // kedvezmény is bekerülhet mindkét listába (ld. loadShopCatalog/loadRanks).
   loadShopCatalog();
+  loadRanks();
   currentPpBalance = typeof meData?.scBalance === 'number' ? meData.scBalance : 0;
   renderProfilePpBadge();
   isOwner = typeof meData?.rank === 'string' && meData.rank.toLowerCase() === 'tulajdonos';
@@ -2000,6 +2003,11 @@ function formatHuf(n) {
 // egyáltalán elérhetetlenné válik, a hiba is okafogyottá válik.)
 const GIFTABLE_TYPES = new Set(['sc', 'rank']);
 
+// ÚJ: ha a kártya konkrét tételére aktív akció (globális vagy egyedi,
+// játékosonkénti) érvényes, a backend (ld. SolarBackend src/shop.js
+// GET /catalog) "discountPercent"/"originalPriceHuf" mezőket is küld - ekkor
+// egy "-X%" jelvényt és az áthúzott eredeti ár mellett a kedvezményes árat
+// jelenítjük meg, hogy ez a kártyán is látszódjon, ne csak fizetéskor derüljön ki.
 function renderPkgCard(item, locked) {
   const lockedNote = locked
     ? `<div class="pkg-locked-note">Nincs aktív szankciód - nincs mit csökkenteni</div>`
@@ -2007,11 +2015,16 @@ function renderPkgCard(item, locked) {
   const giftBtn = GIFTABLE_TYPES.has(item.type)
     ? `<button type="button" class="btn-outline btn-gift" data-gift-item-id="${item.id}">🎁 Ajándékozás</button>`
     : '';
+  const discountBadge = item.discountPercent > 0 ? `<div class="discount-badge">-${item.discountPercent}%</div>` : '';
+  const priceHtml = item.discountPercent > 0
+    ? `<span class="price-original">${formatHuf(item.originalPriceHuf)}</span>${formatHuf(item.priceHuf)}`
+    : formatHuf(item.priceHuf);
   return `
     <div class="pkg-card${item.featured ? ' featured' : ''}${locked ? ' pkg-card-locked' : ''}">
+      ${discountBadge}
       <div class="pkg-icon">${ICONS[item.icon] || ICONS.coin}</div>
       <div class="pkg-name">${item.short}</div>
-      <div class="pkg-price">${formatHuf(item.priceHuf)}</div>
+      <div class="pkg-price">${priceHtml}</div>
       <button type="button" class="btn-buy" data-item-id="${item.id}"${locked ? ' disabled' : ''}>Vásárlás</button>
       ${giftBtn}
       ${lockedNote}
@@ -2021,7 +2034,12 @@ function renderPkgCard(item, locked) {
 
 async function loadShopCatalog() {
   try {
-    const res = await fetch(BACKEND_URL + '/api/shop/catalog');
+    // ÚJ: ha már be van jelentkezve (session ismert), a tokent is elküldjük -
+    // az esetleges EGYEDI, játékosonkénti kedvezmény csak így számítható be
+    // (a globális akciók bejelentkezés nélkül is látszanak).
+    const res = await fetch(BACKEND_URL + '/api/shop/catalog', session
+      ? { headers: { Authorization: 'Bearer ' + session.token } }
+      : undefined);
     const data = await res.json();
     shopCatalog = data.ok && Array.isArray(data.items) ? data.items : [];
   } catch {
@@ -2068,15 +2086,23 @@ function formatPp(n) {
 let shopRanks = [];
 
 function renderRankCard(rank) {
+  // A "priceCoins" itt MÁR a kedvezménnyel csökkentett ár (ld. GET /ranks) -
+  // az "elég PP van-e" ellenőrzés is helyesen a TÉNYLEGESEN fizetendő,
+  // kedvezményes árhoz hasonlít.
   const affordable = currentPpBalance >= rank.priceCoins;
+  const discountBadge = rank.discountPercent > 0 ? `<div class="discount-badge">-${rank.discountPercent}%</div>` : '';
+  const priceInner = rank.discountPercent > 0
+    ? `<span class="price-original">${formatPp(rank.originalPriceCoins)}</span>${formatPp(rank.priceCoins)}`
+    : formatPp(rank.priceCoins);
   return `
     <div class="rank-card${rank.id === 'solaryn' ? ' featured' : ''}${affordable ? '' : ' insufficient'}">
+      ${discountBadge}
       <div class="rank-card-head">
         <div class="pkg-icon">${ICONS.crown}</div>
         <div class="rank-card-name">${rank.label}</div>
       </div>
       <div class="rank-card-duration">${rank.duration}</div>
-      <div class="pkg-price rank-price"><img src="assets/pp-coin.png" alt="PP" class="rank-price-icon" />${formatPp(rank.priceCoins)}</div>
+      <div class="pkg-price rank-price"><img src="assets/pp-coin.png" alt="PP" class="rank-price-icon" /><span>${priceInner}</span></div>
       <ul class="info-list rank-perm-list">${rank.perms.map((p) => `<li>${p}</li>`).join('')}</ul>
       <button type="button" class="btn-buy" data-rank-id="${rank.id}"${affordable ? '' : ' disabled'}>${affordable ? 'Vásárlás' : 'Nincs elég PP'}</button>
       <button type="button" class="btn-outline btn-gift" data-gift-rank-id="${rank.id}"${affordable ? '' : ' disabled'}>🎁 Ajándékozás</button>
@@ -2090,7 +2116,9 @@ function renderRankGrid() {
 
 async function loadRanks() {
   try {
-    const res = await fetch(BACKEND_URL + '/api/shop/ranks');
+    const res = await fetch(BACKEND_URL + '/api/shop/ranks', session
+      ? { headers: { Authorization: 'Bearer ' + session.token } }
+      : undefined);
     const data = await res.json();
     shopRanks = data.ok && Array.isArray(data.ranks) ? data.ranks : [];
   } catch {
