@@ -1,4 +1,11 @@
-:root {
+/* ── Témák (ld. theme.js) - a data-theme attribútumot a <html>-re a
+   theme.js állítja be, minél korábban (a stíluslap betöltése előtt), hogy
+   ne legyen látható "villanás" az alap témáról. Mind a 4 blokk UGYANAZT a
+   18 tokent definiálja - a fájl többi része kizárólag var(--x)-en keresztül
+   hivatkozik rájuk, tehát máshol semmit nem kell módosítani egy új téma
+   hozzáadásakor, csak egy újabb ilyen blokkot felvenni. ── */
+:root,
+:root[data-theme="solaryn"] {
   --bg: #0a0a0d;
   --bg-2: #101015;
   --panel: #14141b;
@@ -15,6 +22,71 @@
   --orange-glow: rgba(255, 90, 30, 0.45);
   --danger: #ff5a5a;
   --discord: #5865f2;
+  --success: #2ecc71;
+  --btn-ink: #1a1206;
+}
+
+:root[data-theme="ice"] {
+  --bg: #070d13;
+  --bg-2: #0c151f;
+  --panel: #10202e;
+  --panel-2: #16293a;
+  --line: #223a4d;
+  --text: #eaf4fb;
+  --text-dim: #93aebe;
+  --text-faint: #5c7488;
+  --gold: #4fd3ff;
+  --gold-2: #1fa8e0;
+  --gold-glow: rgba(60, 180, 255, 0.45);
+  --orange: #6fe3ff;
+  --orange-2: #33b8e6;
+  --orange-glow: rgba(50, 190, 255, 0.45);
+  --danger: #ff6b6b;
+  --discord: #5865f2;
+  --success: #35d0a8;
+  --btn-ink: #04222e;
+}
+
+:root[data-theme="crimson"] {
+  --bg: #0d0708;
+  --bg-2: #150c0d;
+  --panel: #1e1113;
+  --panel-2: #271619;
+  --line: #3a1f22;
+  --text: #f7ecec;
+  --text-dim: #b08a8c;
+  --text-faint: #7a5c5e;
+  --gold: #ff4d6d;
+  --gold-2: #d81e4a;
+  --gold-glow: rgba(255, 60, 90, 0.45);
+  --orange: #ff7a5c;
+  --orange-2: #e8452a;
+  --orange-glow: rgba(255, 90, 60, 0.45);
+  --danger: #ff3b3b;
+  --discord: #5865f2;
+  --success: #2ecc71;
+  --btn-ink: #250608;
+}
+
+:root[data-theme="emerald"] {
+  --bg: #071009;
+  --bg-2: #0c170e;
+  --panel: #102015;
+  --panel-2: #16291b;
+  --line: #234d2c;
+  --text: #ecf7ef;
+  --text-dim: #8fb89c;
+  --text-faint: #5c8468;
+  --gold: #3ee08a;
+  --gold-2: #14b866;
+  --gold-glow: rgba(30, 200, 120, 0.45);
+  --orange: #7de07a;
+  --orange-2: #3fb84a;
+  --orange-glow: rgba(60, 200, 80, 0.45);
+  --danger: #ff5a5a;
+  --discord: #5865f2;
+  --success: #2ecc71;
+  --btn-ink: #052710;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -120,7 +192,7 @@ a { color: inherit; }
 .auth-forgot-link:hover { color: var(--gold); }
 .btn-glow {
   width: 100%; padding: 12px; margin-top: 10px; border: none; cursor: pointer;
-  border-radius: 11px; font-weight: 700; font-size: 14px; color: #1a1206;
+  border-radius: 11px; font-weight: 700; font-size: 14px; color: var(--btn-ink);
   background: linear-gradient(180deg, var(--gold), var(--gold-2));
   box-shadow: 0 8px 26px var(--gold-glow);
   transition: transform .12s, box-shadow .2s, filter .2s;
@@ -129,7 +201,7 @@ a { color: inherit; }
 .btn-glow:active { transform: translateY(1px); }
 .btn-glow-orange {
   background: linear-gradient(180deg, var(--orange), var(--orange-2));
-  box-shadow: 0 8px 26px var(--orange-glow); color: #2a0f04;
+  box-shadow: 0 8px 26px var(--orange-glow); color: var(--btn-ink);
 }
 .btn-glow-orange:hover { box-shadow: 0 10px 34px var(--orange-glow); }
 
@@ -251,6 +323,34 @@ a { color: inherit; }
   transition: background .14s, color .14s;
 }
 .topbar-dropdown button:hover { background: rgba(255,90,60,.12); color: var(--danger); }
+
+/* ÚJ: téma-választó (ld. theme.js) - ugyanaz a panel/dropdown minta, mint a
+   .topbar-user/.topbar-dropdown-nél, hogy natív testvér-elemnek hasson. */
+.topbar-theme {
+  position: relative; display: flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; border-radius: 12px; cursor: pointer;
+  color: var(--text-dim); transition: background .15s, color .15s;
+}
+.topbar-theme:hover, .topbar-theme.open { background: var(--panel-2); color: var(--gold); }
+.topbar-theme-dropdown {
+  position: absolute; top: calc(100% + 6px); left: 0; min-width: 150px;
+  background: linear-gradient(180deg, var(--panel), var(--bg-2));
+  border: 1px solid var(--line); border-radius: 12px; padding: 6px;
+  box-shadow: 0 18px 40px rgba(0,0,0,.4); z-index: 40;
+  animation: dropdownOpen .16s ease both; transform-origin: top left;
+}
+.topbar-theme-option {
+  display: flex; align-items: center; width: 100%;
+  padding: 9px 10px; border: none; background: transparent; cursor: pointer;
+  border-radius: 8px; color: var(--text); font-size: 13px; font-weight: 600; text-align: left;
+}
+.topbar-theme-option:hover { background: rgba(255,196,46,.12); color: var(--gold); }
+
+/* ÚJ: "Jogok" admin nézet jogosultság-checkboxok, ld. app.js loadPermsEditor() */
+.perms-checkbox-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 6px 16px; margin-bottom: 18px;
+}
 
 .app-content { padding: 40px 48px; max-width: 1320px; margin: 0 auto; width: 100%; flex: 1; }
 .view { display: none; }
@@ -465,10 +565,10 @@ a { color: inherit; }
   display: flex; align-items: center; justify-content: center; gap: 10px;
   width: 100%; padding: 8px 18px; margin-bottom: 18px; border-radius: 10px;
   background: linear-gradient(180deg, var(--gold), var(--gold-2));
-  color: #1a1206; font-weight: 900; font-size: 15px; letter-spacing: 2px;
+  color: var(--btn-ink); font-weight: 900; font-size: 15px; letter-spacing: 2px;
   box-shadow: 0 6px 18px var(--gold-glow);
 }
-.slot-machine-star { color: #1a1206; opacity: .8; }
+.slot-machine-star { color: var(--btn-ink); opacity: .8; }
 .slot-machine-jackpot { text-transform: uppercase; }
 .slot-machine-reels { display: flex; gap: 10px; }
 .slot-reel {
@@ -610,7 +710,7 @@ a { color: inherit; }
 .rank-price-icon { width: 22px; height: 22px; object-fit: contain; }
 .btn-buy {
   display: inline-block; width: 100%; padding: 10px 0; border-radius: 9px; border: none;
-  background: linear-gradient(180deg, var(--gold), var(--gold-2)); color: #1a1206 !important;
+  background: linear-gradient(180deg, var(--gold), var(--gold-2)); color: var(--btn-ink) !important;
   font-weight: 800; font-size: 12px; text-transform: uppercase; text-decoration: none;
   font-family: inherit; cursor: pointer;
   box-shadow: 0 6px 18px var(--gold-glow); transition: filter .16s;
@@ -778,7 +878,7 @@ a { color: inherit; }
 }
 .ledger-table td { padding: 14px 18px; border-bottom: 1px solid var(--line); color: var(--text-dim); vertical-align: top; }
 .ledger-table tr:last-child td { border-bottom: none; }
-.ledger-amount-positive { color: #2ecc71; font-weight: 700; white-space: nowrap; }
+.ledger-amount-positive { color: var(--success); font-weight: 700; white-space: nowrap; }
 .ledger-amount-negative { color: var(--danger); font-weight: 700; white-space: nowrap; }
 .ledger-amount-zero { color: var(--text-dim); font-weight: 700; white-space: nowrap; }
 .ledger-balance { color: var(--text); font-weight: 700; white-space: nowrap; }
@@ -868,7 +968,7 @@ a { color: inherit; }
    jelenleg beállított egyéni kedvezmény összefoglalója a form fölött. */
 .admin-discount-current { font-size: 12.5px; color: var(--text-dim); margin: 6px 2px 0; }
 .ban-duration-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.ban-panel .btn-glow { width: 100%; margin-top: 20px; background: linear-gradient(180deg, var(--danger), #c23a3a); box-shadow: 0 8px 26px rgba(255,90,90,.35); color: #2a0606; }
+.ban-panel .btn-glow { width: 100%; margin-top: 20px; background: linear-gradient(180deg, var(--danger), #c23a3a); box-shadow: 0 8px 26px rgba(255,90,90,.35); color: var(--btn-ink); }
 
 @media (max-width: 760px) {
   .admin-tables-grid { grid-template-columns: 1fr; }
@@ -932,7 +1032,7 @@ a { color: inherit; }
 .btn-search {
   display: flex; align-items: center; gap: 8px;
   padding: 0 26px; border: none; border-radius: 999px; cursor: pointer;
-  background: linear-gradient(180deg, var(--gold), var(--gold-2)); color: #1a1206;
+  background: linear-gradient(180deg, var(--gold), var(--gold-2)); color: var(--btn-ink);
   font-weight: 700; font-size: 13px; transition: filter .16s, transform .16s;
   box-shadow: 0 8px 22px var(--gold-glow);
 }
@@ -956,7 +1056,7 @@ a { color: inherit; }
 /* ÚJ: főoldali "Barátok" kártya (ld. app.js loadHomeFriends) - a .player-card
    mintáját újrahasznosítja, csak a névszín jelzi zölden az elérhető
    barátokat (ugyanaz a zöld, mint a .ledger-amount-positive-nél). */
-.friend-card-name.online { color: #2ecc71; }
+.friend-card-name.online { color: var(--success); }
 #homeFriendsCard .player-result-grid { margin-top: 4px; }
 
 .btn-back {
@@ -986,7 +1086,7 @@ a { color: inherit; }
 }
 .how-step-num {
   width: 32px; height: 32px; border-radius: 10px; margin-bottom: 12px;
-  background: linear-gradient(135deg, var(--gold), var(--gold-2)); color: #1a1206;
+  background: linear-gradient(135deg, var(--gold), var(--gold-2)); color: var(--btn-ink);
   display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px;
 }
 .how-step-title { font-weight: 700; font-size: 14px; margin-bottom: 6px; }
@@ -1000,7 +1100,7 @@ a { color: inherit; }
   font-size: 13px; transition: all .16s;
 }
 .legal-tab:hover { color: var(--text); }
-.legal-tab.active { background: linear-gradient(180deg, var(--gold), var(--gold-2)); color: #1a1206; box-shadow: 0 6px 18px var(--gold-glow); }
+.legal-tab.active { background: linear-gradient(180deg, var(--gold), var(--gold-2)); color: var(--btn-ink); box-shadow: 0 6px 18px var(--gold-glow); }
 .legal-card { max-width: 900px; }
 .legal-panel { display: none; }
 .legal-panel.active { display: block; animation: fadeSlideUp .3s ease both; }
@@ -1037,8 +1137,8 @@ a { color: inherit; }
 /* Vásárlás sikeres-visszaigazolás modál (Stripe checkoutból visszatérve) */
 .purchase-success-card { text-align: center; }
 .purchase-success-icon {
-  width: 64px; height: 64px; margin: 0 auto 18px; color: #2ecc71;
-  border: 2px solid #2ecc71; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  width: 64px; height: 64px; margin: 0 auto 18px; color: var(--success);
+  border: 2px solid var(--success); border-radius: 50%; display: flex; align-items: center; justify-content: center;
   box-shadow: 0 0 24px rgba(46,204,113,.25);
   animation: purchaseCheckPop .35s cubic-bezier(.34,1.56,.64,1) both;
 }

@@ -698,12 +698,44 @@ $('#casinoBuySpinBtn')?.addEventListener('click', buyCasinoSpin);
 // mutathat egy frissítésig.
 let currentPpBalance = 0;
 
-// A "tulajdonos" rangú felhasználóknak jelenik meg a játékos-profilon az
-// Admin panel (email, regisztráció, kliens-eszközök, kliens-tiltás) - a
-// backend a SAJÁT jogosultság-ellenőrzést is elvégzi minden admin
-// végponton (ld. SolarBackend src/client.js requireOwner), ez a kliens-
-// oldali flag csak azt dönti el, MEGJELENÍTSÜK-e egyáltalán a panelt.
+// A "tulajdonos" rangú felhasználóknak MINDIG megjelenik a teljes admin
+// felület - a backend a SAJÁT jogosultság-ellenőrzést is elvégzi minden
+// admin végponton (ld. SolarBackend src/permissions.js requirePermission()),
+// ez a kliens-oldali flag/halmaz csak azt dönti el, MEGJELENÍTSÜK-e
+// egyáltalán az egyes elemeket.
 let isOwner = false;
+// ÚJ: egyedi, játékosonkénti admin-jogosultságok (ld. SolarBackend
+// src/permissions.js PERMISSION_CATALOG) - a /api/me "permissions" mezőjéből
+// töltődik fel (ld. enterApp). hasPerm() a tulajdonosi bypass-t és a
+// ténylegesen megkapott jogokat EGYSÉGESEN kezeli, ezt kell hívni minden
+// admin nav-elem/mező/gomb láthatóságának eldöntésekor a régi, blanket
+// "isOwner" ellenőrzés helyett.
+let permSet = new Set();
+function hasPerm(key) { return isOwner || permSet.has(key); }
+// A player-profil admin panel (ld. openPlayerProfile) EGÉSZE akkor jelenjen
+// meg, ha a hívónak van BÁRMILYEN "player.*" jogköre - a panelen belüli
+// EGYES mezők/gombok láthatóságát külön, a data-perm attribútumuk szerint
+// dönti el applyPermVisibility() (ld. loadAdminPlayerPanel).
+const PLAYER_PANEL_KEYS = [
+  'player.view.email', 'player.view.createdAt', 'player.view.lockStatus', 'player.view.logins',
+  'player.view.devices', 'player.view.discord', 'player.view.media', 'player.view.badges', 'player.view.discount',
+  'player.action.skinDelete', 'player.action.skinBan', 'player.action.capeDelete', 'player.action.capeBan',
+  'player.action.emailChange', 'player.action.lock', 'player.action.unlock', 'player.action.ppAdjust',
+  'player.action.casinoAdjust', 'player.action.delete', 'player.action.badgeGrant', 'player.action.badgeRevoke',
+  'player.action.discountSet', 'player.action.discountRemove'
+];
+// Bármely elemet, aminek van "data-perm" attribútuma, a megfelelő jog
+// szerint mutat/rejt - egyetlen közös helyen, hogy a player-admin-panel és
+// az eszköz-részletek nézet is ugyanazt a logikát használja. Vesszővel
+// felsorolt több kulcs esetén VAGY-kapcsolattal (elég BÁRMELYIK jog), ez
+// kell pl. egy "Fiók zárolása" alcímhez, amit lock VAGY unlock jog is
+// láthatóvá tehet.
+function applyPermVisibility(root = document) {
+  root.querySelectorAll('[data-perm]').forEach((el) => {
+    const keys = el.dataset.perm.split(',').map((k) => k.trim());
+    el.classList.toggle('hidden', !keys.some(hasPerm));
+  });
+}
 
 // ÚJ: a legutóbb lekért /api/me aktív szankció-állapota (ld.
 // renderSanctionStatus fentebb) - a "sanction" (kitiltáscsökkentés) nézet
@@ -767,7 +799,15 @@ async function enterApp(meData) {
   currentPpBalance = typeof meData?.scBalance === 'number' ? meData.scBalance : 0;
   renderProfilePpBadge();
   isOwner = typeof meData?.rank === 'string' && meData.rank.toLowerCase() === 'tulajdonos';
-  $$('.admin-nav-item').forEach((el) => el.classList.toggle('hidden', !isOwner));
+  permSet = new Set(Array.isArray(meData?.permissions) ? meData.permissions : []);
+  // Minden admin nav-elem a SAJÁT "data-permission" kulcsa szerint jelenik
+  // meg (nem egy blanket "isOwner" kapcsolóval) - a "Jogok" nézet (nincs
+  // data-permission attribútuma) kivétel, az kizárólag tulajdonosnak
+  // látszik, mert a jog-adás maga nem delegálható (ld. #navPermissionsBtn
+  // markup indoklását index.html-ben).
+  $$('.admin-nav-item[data-permission]').forEach((el) => el.classList.toggle('hidden', !hasPerm(el.dataset.permission)));
+  $('#navPermissionsBtn')?.classList.toggle('hidden', !isOwner);
+  $('.app-nav-divider.admin-nav-item')?.classList.toggle('hidden', !(isOwner || permSet.size > 0));
 
   loadTopbarAvatar();
   loadHomeSkinPreview();
@@ -1253,8 +1293,9 @@ async function openPlayerProfile(username) {
   });
 
   lastAdminPlayerUsername = username;
-  $('#playerProfileAdminPanel').classList.toggle('hidden', !isOwner);
-  if (isOwner) loadAdminPlayerPanel(username);
+  const canSeeAdminPanel = PLAYER_PANEL_KEYS.some(hasPerm);
+  $('#playerProfileAdminPanel').classList.toggle('hidden', !canSeeAdminPanel);
+  if (canSeeAdminPanel) loadAdminPlayerPanel(username);
 
   const noteEl = $('#playerProfileSkinNote');
   // ÚJ: a köpenyt is lekérdezzük ehhez a MÁSIK játékoshoz - ha van neki
@@ -1326,11 +1367,12 @@ async function ensureAllBadgesLoaded() {
 
 function renderAdminPlayerBadgesList(badgeList) {
   currentAdminPlayerBadges = Array.isArray(badgeList) ? badgeList : [];
+  const canRevoke = hasPerm('player.action.badgeRevoke');
   $('#adminPlayerBadgesList').innerHTML = currentAdminPlayerBadges.map((b) => `
     <span class="admin-player-badge-chip" style="color:${escapeHtml(b.color)}">
       <img src="${badgeIconUrl(b.id)}" alt="" />
       ${escapeHtml(b.name)}
-      <button type="button" data-revoke-badge-id="${b.id}" title="Elvétel">×</button>
+      ${canRevoke ? `<button type="button" data-revoke-badge-id="${b.id}" title="Elvétel">×</button>` : ''}
     </span>
   `).join('') || '<p class="redeem-result">Ennek a játékosnak még nincs egyetlen jelvénye sem.</p>';
 }
@@ -1346,6 +1388,7 @@ async function renderAdminBadgeSelectOptions() {
 }
 
 async function loadAdminPlayerPanel(username) {
+  applyPermVisibility($('#playerProfileAdminPanel'));
   currentAdminEmail = '';
   $('#adminPlayerEmailText').textContent = '…';
   $('#adminPlayerCreatedAt').textContent = '…';
@@ -1387,13 +1430,13 @@ async function loadAdminPlayerPanel(username) {
     renderAdminPlayerBadgesList(data.badges);
     renderAdminMediaState(data.hasSkin, data.hasCape);
     renderAdminDiscountState(data.discount);
-    $('#adminPlayerLoginsBody').innerHTML = data.logins.map((l) => `
+    $('#adminPlayerLoginsBody').innerHTML = (data.logins || []).map((l) => `
       <tr>
         <td>${formatLedgerDate(l.created_at)}</td>
         <td><button type="button" class="device-link" data-device-id="${l.device_id}">#${l.device_id}</button></td>
       </tr>
     `).join('') || '<tr><td colspan="2">Nincs rögzített belépés.</td></tr>';
-    $('#adminPlayerDevicesBody').innerHTML = data.devices.map((d) => `
+    $('#adminPlayerDevicesBody').innerHTML = (data.devices || []).map((d) => `
       <tr>
         <td>${formatLedgerDate(d.last_seen)}</td>
         <td><button type="button" class="device-link" data-device-id="${d.device_id}">#${d.device_id}</button></td>
@@ -1839,6 +1882,7 @@ let currentDeviceBan = null;
 async function openDeviceDetail(deviceId) {
   currentDeviceId = deviceId;
   switchView('deviceDetail');
+  applyPermVisibility($('[data-view="deviceDetail"]'));
   $('#deviceDetailId').textContent = '#' + deviceId;
   $('#deviceDetailBanStatus').textContent = '';
   $('#deviceLoginsBody').innerHTML = '';
@@ -3225,6 +3269,122 @@ document.addEventListener('click', (e) => {
         }
       }).catch(() => showToast('Nem sikerült elérni a szervert.', true));
     });
+  }
+});
+
+// ── Jogok (admin) - egyedi, játékosonkénti admin-jogosultságok, ld.
+// SolarBackend src/permissions.js. Kizárólag a valódi tulajdonos éri el
+// (ld. index.html #navPermissionsBtn - nincs data-permission attribútuma),
+// mert a jog-adás maga nem delegálható. ──
+let permCatalogCache = null;
+let permsEditorUsername = null;
+
+// A katalógus (kulcs+címke+kategória) ritkán változik, kliens-oldalon
+// egyszer betöltve gyorsítótárazzuk - minden játékos-váltásnál újra
+// lekérdezni felesleges kör lenne.
+async function loadPermCatalog() {
+  if (permCatalogCache) return permCatalogCache;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/permissions/catalog', {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    permCatalogCache = data.ok && Array.isArray(data.catalog) ? data.catalog : [];
+  } catch {
+    permCatalogCache = [];
+  }
+  return permCatalogCache;
+}
+
+async function doPermsSearch() {
+  const name = $('#permsPlayerSearchInput').value.trim();
+  const resultEl = $('#permsResult');
+  if (!name) { resultEl.innerHTML = ''; return; }
+  resultEl.innerHTML = '<p class="player-result-note">Keresés...</p>';
+  const data = await apiSearchPlayers(name);
+  if (!data.ok || !data.players.length) {
+    resultEl.innerHTML = '<p class="player-result-note">Nincs található játékos ezzel a névvel.</p>';
+    return;
+  }
+  resultEl.innerHTML = data.players.map((p, i) => `
+    <div class="player-card" data-username="${p.username}">
+      <canvas class="player-card-canvas" data-idx="${i}" width="40" height="40"></canvas>
+      <div class="player-card-info">
+        <div class="player-card-label">Név</div>
+        <div class="player-card-name">${p.username}</div>
+      </div>
+    </div>
+  `).join('');
+  $$('#permsResult .player-card').forEach((card, i) => {
+    const player = data.players[i];
+    drawFaceForPlayer(card.querySelector('canvas'), player);
+    card.addEventListener('click', () => loadPermsEditor(player.username));
+  });
+}
+$('#permsPlayerSearchBtn').addEventListener('click', doPermsSearch);
+$('#permsPlayerSearchInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') doPermsSearch(); });
+
+async function loadPermsEditor(username) {
+  permsEditorUsername = username;
+  $('#permsEditorCard').classList.remove('hidden');
+  $('#permsEditorUsername').textContent = username;
+  $('#permsSaveResult').textContent = '';
+  const container = $('#permsCategoriesContainer');
+  container.innerHTML = '<p class="player-result-note">Betöltés...</p>';
+
+  const [catalog, granted] = await Promise.all([
+    loadPermCatalog(),
+    (async () => {
+      try {
+        const res = await fetch(BACKEND_URL + '/api/admin/permissions/' + encodeURIComponent(username), {
+          headers: { Authorization: 'Bearer ' + session.token }
+        });
+        const data = await res.json();
+        return data.ok && Array.isArray(data.permissions) ? data.permissions : [];
+      } catch {
+        return [];
+      }
+    })()
+  ]);
+
+  const grantedSet = new Set(granted);
+  const categories = [...new Set(catalog.map((p) => p.category))];
+  container.innerHTML = categories.map((cat) => `
+    <div class="admin-subsection-title">${escapeHtml(cat)}</div>
+    <div class="perms-checkbox-grid">
+      ${catalog.filter((p) => p.category === cat).map((p) => `
+        <label class="check-row">
+          <input type="checkbox" data-perm-key="${p.key}" ${grantedSet.has(p.key) ? 'checked' : ''} />
+          <span>${escapeHtml(p.label)}</span>
+        </label>
+      `).join('')}
+    </div>
+  `).join('') || '<p class="player-result-note">Nincs elérhető jogosultság.</p>';
+}
+
+$('#permsSaveBtn').addEventListener('click', async () => {
+  if (!permsEditorUsername) return;
+  const resultEl = $('#permsSaveResult');
+  const keys = $$('#permsCategoriesContainer [data-perm-key]:checked').map((el) => el.dataset.permKey);
+  resultEl.textContent = 'Mentés...';
+  resultEl.className = 'redeem-result';
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/permissions/' + encodeURIComponent(permsEditorUsername), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ permissions: keys })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      resultEl.textContent = data.message || 'Nem sikerült menteni.';
+      resultEl.className = 'redeem-result error';
+      return;
+    }
+    resultEl.textContent = '';
+    showToast('Jogosultságok mentve.');
+  } catch {
+    resultEl.textContent = 'Nem sikerült elérni a szervert.';
+    resultEl.className = 'redeem-result error';
   }
 });
 
