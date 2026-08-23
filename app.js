@@ -698,6 +698,12 @@ $('#casinoBuySpinBtn')?.addEventListener('click', buyCasinoSpin);
 // mutathat egy frissítésig.
 let currentPpBalance = 0;
 
+// ÚJ: valós pénzes "egyenleg" (wallet, ld. SolarBackend src/shop.js POST
+// /wallet/topup + /checkout-with-wallet) - ugyanaz a "csak UX-segéd, a
+// szerver úgyis ellenőriz" elv, mint a fenti currentPpBalance-nál.
+let currentWalletBalanceHuf = 0;
+let lastRenderedWalletBalance = null;
+
 // A "tulajdonos" rangú felhasználóknak MINDIG megjelenik a teljes admin
 // felület - a backend a SAJÁT jogosultság-ellenőrzést is elvégzi minden
 // admin végponton (ld. SolarBackend src/permissions.js requirePermission()),
@@ -769,6 +775,17 @@ function renderProfilePpBadge() {
   lastRenderedPpBalance = currentPpBalance;
 }
 
+// ÚJ: valós pénzes "egyenleg" jelvény (ld. currentWalletBalanceHuf) - a
+// topbar-badge mellett az "Egyenleg" oldal saját összeg-kijelzőjét is
+// frissíti, ha az épp a DOM-ban van.
+function renderWalletBadge() {
+  const from = lastRenderedWalletBalance === null ? 0 : lastRenderedWalletBalance;
+  animateNumberTo($('#topbarWalletValue'), from, currentWalletBalanceHuf, formatHuf);
+  const pageEl = $('#walletPageBalance');
+  if (pageEl) pageEl.textContent = formatHuf(currentWalletBalanceHuf);
+  lastRenderedWalletBalance = currentWalletBalanceHuf;
+}
+
 // meData: opcionálisan előre lekért /api/me válasz (pl. tryAutoLogin()-ból,
 // hogy ne kelljen kétszer lekérdezni) - ha nincs átadva, itt kérjük le.
 async function enterApp(meData) {
@@ -798,6 +815,8 @@ async function enterApp(meData) {
   loadRanks();
   currentPpBalance = typeof meData?.scBalance === 'number' ? meData.scBalance : 0;
   renderProfilePpBadge();
+  currentWalletBalanceHuf = typeof meData?.walletBalanceHuf === 'number' ? meData.walletBalanceHuf : 0;
+  renderWalletBadge();
   isOwner = typeof meData?.rank === 'string' && meData.rank.toLowerCase() === 'tulajdonos';
   permSet = new Set(Array.isArray(meData?.permissions) ? meData.permissions : []);
   // Minden admin nav-elem a SAJÁT "data-permission" kulcsa szerint jelenik
@@ -840,6 +859,8 @@ async function refreshPpBalance() {
   if (res.ok) {
     currentPpBalance = typeof res.scBalance === 'number' ? res.scBalance : 0;
     renderProfilePpBadge();
+    currentWalletBalanceHuf = typeof res.walletBalanceHuf === 'number' ? res.walletBalanceHuf : 0;
+    renderWalletBadge();
     if ($('#rankGrid').dataset.loaded === '1') renderRankGrid();
   }
 }
@@ -897,6 +918,9 @@ function switchView(view) {
   // idejű szinkron, de elég friss ahhoz, hogy a gombok állapota (elég PP
   // van-e) ne legyen régi adaton alapuló.
   if (view === 'ranks') refreshPpBalance();
+  // Az Egyenleg fület minden megnyitáskor frissítjük - ugyanaz az elv, mint a
+  // Rangoknál: friss egyenleget mutasson, ne egy esetleg elavult értéket.
+  if (view === 'wallet') refreshPpBalance();
   // A Napló fület minden megnyitáskor frissítjük - friss bejegyzéseket kér le
   // (a dátum-szűrők szerint), a keresés viszont kliens-oldalon szűr a már
   // letöltött listán, nem küld újabb kérést minden billentyűleütésre.
@@ -2063,13 +2087,23 @@ function renderPkgCard(item, locked) {
   const priceHtml = item.discountPercent > 0
     ? `<span class="price-original">${formatHuf(item.originalPriceHuf)}</span>${formatHuf(item.priceHuf)}`
     : formatHuf(item.priceHuf);
+  // ÚJ: fizetés a feltöltött egyenlegből (ld. buyItemWithWallet lentebb), a
+  // kártyás "Vásárlás" gomb mellett - MINDKÉT gomb mindig látszik (a
+  // felhasználó kérésére, popup-os megerősítés nélkül), az egyenlegből-gomb
+  // csak akkor aktív, ha van rá elég fedezet (és, szankció-csökkentésnél,
+  // ha egyáltalán van mit csökkenteni).
+  const walletAffordable = currentWalletBalanceHuf >= item.priceHuf;
+  const walletDisabled = locked || !walletAffordable;
+  const walletLabel = !locked && !walletAffordable ? 'Nincs elég egyenleged' : 'Fizetés egyenlegből';
+  const walletBtn = `<button type="button" class="btn-outline btn-buy-wallet" data-item-id="${item.id}"${walletDisabled ? ' disabled' : ''}>${walletLabel}</button>`;
   return `
     <div class="pkg-card${item.featured ? ' featured' : ''}${locked ? ' pkg-card-locked' : ''}">
       ${discountBadge}
       <div class="pkg-icon">${ICONS[item.icon] || ICONS.coin}</div>
       <div class="pkg-name">${item.short}</div>
       <div class="pkg-price">${priceHtml}</div>
-      <button type="button" class="btn-buy" data-item-id="${item.id}"${locked ? ' disabled' : ''}>Vásárlás</button>
+      <button type="button" class="btn-buy" data-item-id="${item.id}"${locked ? ' disabled' : ''}>Vásárlás kártyával</button>
+      ${walletBtn}
       ${giftBtn}
       ${lockedNote}
     </div>
@@ -2394,6 +2428,65 @@ $('#transferSubmitBtn').addEventListener('click', async () => {
     resultEl.textContent = 'Nem sikerült elérni a szervert.';
     resultEl.className = 'redeem-result error';
   } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+});
+
+// ── Egyenleg feltöltése - szabadon megadott Ft-összeg, nincsenek előre
+// megadott gyors-összeg gombok (a felhasználó kifejezett kérésére). A
+// tényleges jóváírás a Stripe webhookban történik (ld. SolarBackend
+// src/shop.js) - itt csak a fizetési munkamenetet indítjuk el, ugyanúgy,
+// mint egy katalógus-tétel vásárlásánál (ld. buyItem lentebb). ──
+const WALLET_TOPUP_MIN_HUF = 500;
+const WALLET_TOPUP_MAX_HUF = 500000;
+
+$('#walletTopupInput').addEventListener('input', () => {
+  const amount = parseInt($('#walletTopupInput').value, 10);
+  const preview = $('#walletTopupPreview');
+  preview.innerHTML = Number.isInteger(amount) && amount > 0
+    ? `<b>${formatHuf(amount)}</b> kerül feltöltésre az egyenlegedre.`
+    : 'Add meg a feltöltendő összeget.';
+});
+
+$('#btnWalletTopup').addEventListener('click', async () => {
+  const resultEl = $('#walletTopupResult');
+  resultEl.textContent = '';
+  resultEl.className = 'redeem-result';
+
+  if (!session || !session.token) {
+    showToast('A feltöltéshez jelentkezz be.', true);
+    return;
+  }
+  const amountHuf = parseInt($('#walletTopupInput').value, 10);
+  if (!Number.isInteger(amountHuf) || amountHuf < WALLET_TOPUP_MIN_HUF || amountHuf > WALLET_TOPUP_MAX_HUF) {
+    resultEl.textContent = `Az összeg ${formatHuf(WALLET_TOPUP_MIN_HUF)} és ${formatHuf(WALLET_TOPUP_MAX_HUF)} között lehet.`;
+    resultEl.className = 'redeem-result error';
+    return;
+  }
+
+  const btn = $('#btnWalletTopup');
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Átirányítás...';
+  try {
+    const res = await fetch(BACKEND_URL + '/api/shop/wallet/topup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ amountHuf, returnUrl: window.location.origin + window.location.pathname })
+    });
+    const data = await res.json();
+    if (!data.ok || !data.url) {
+      resultEl.textContent = data.message || 'Nem sikerült elindítani a fizetést.';
+      resultEl.className = 'redeem-result error';
+      btn.disabled = false;
+      btn.textContent = originalText;
+      return;
+    }
+    window.location.href = data.url;
+  } catch {
+    resultEl.textContent = 'Nem sikerült elérni a szervert.';
+    resultEl.className = 'redeem-result error';
     btn.disabled = false;
     btn.textContent = originalText;
   }
@@ -3553,6 +3646,15 @@ document.addEventListener('click', (e) => {
   if (btn) buyItem(btn.dataset.itemId, btn);
 });
 
+// ÚJ: fizetés a feltöltött egyenlegből (ld. renderPkgCard fenti
+// walletBtn-jét) - ELLENTÉTBEN buyItem()-mel, ez NEM irányít át Stripe-ra,
+// szinkron, azonnali választ ad (ld. SolarBackend src/shop.js
+// POST /checkout-with-wallet).
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.btn-buy-wallet[data-item-id]');
+  if (btn && !btn.disabled) buyItemWithWallet(btn.dataset.itemId, btn);
+});
+
 async function buyItem(itemId, buttonEl, giftTo, giftMessage) {
   if (!session || !session.token) {
     showToast('A vásárláshoz jelentkezz be.', true);
@@ -3585,6 +3687,42 @@ async function buyItem(itemId, buttonEl, giftTo, giftMessage) {
       return;
     }
     window.location.href = data.url;
+  } catch {
+    showToast('Nem sikerült elérni a szervert.', true);
+    buttonEl.disabled = false;
+    buttonEl.textContent = originalText;
+  }
+}
+
+async function buyItemWithWallet(itemId, buttonEl) {
+  if (!session || !session.token) {
+    showToast('A vásárláshoz jelentkezz be.', true);
+    return;
+  }
+  const originalText = buttonEl.textContent;
+  buttonEl.disabled = true;
+  buttonEl.textContent = 'Vásárlás...';
+  try {
+    const res = await fetch(BACKEND_URL + '/api/shop/checkout-with-wallet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ itemId })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      showToast(data.message || 'Nem sikerült elindítani a vásárlást.', true);
+      buttonEl.disabled = false;
+      buttonEl.textContent = originalText;
+      return;
+    }
+    currentWalletBalanceHuf = typeof data.walletBalanceHuf === 'number' ? data.walletBalanceHuf : currentWalletBalanceHuf;
+    renderWalletBadge();
+    // Újratöltjük a teljes katalógust, hogy a MARADÉK kártyák "Fizetés
+    // egyenlegből" gombjainak fedezet-állapota is naprakész legyen (ld.
+    // renderPkgCard walletAffordable-je) - ugyanaz az elv, mint
+    // refreshPpBalance() a Rangoknál.
+    loadShopCatalog();
+    showPurchaseSuccessModal();
   } catch {
     showToast('Nem sikerült elérni a szervert.', true);
     buttonEl.disabled = false;
