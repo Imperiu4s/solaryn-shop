@@ -304,6 +304,16 @@
 
           <div id="statBadgeGrid" class="stat-badge-grid"></div>
 
+          <!-- ÚJ: nagyban kiírt egyenleg a főoldalon (ld. app.js renderWalletBadge) -
+               SZÁNDÉKOSAN nem a #statBadgeGrid-be került, mert az a "Játékosok"
+               keresőben MÁSOK profiljának megjelenítésére is újrahasznosított
+               (renderStatBadges), az egyenleg viszont valós pénz, csak a
+               SAJÁT profilon jelenhet meg. -->
+          <div class="card wallet-highlight-card">
+            <div class="wallet-highlight-label">Egyenleged</div>
+            <div class="wallet-highlight-value" id="homeWalletBalance">0 Ft</div>
+          </div>
+
           <div class="content-grid">
             <div>
               <div class="card">
@@ -997,6 +1007,16 @@
               <label>Indoklás (nem kötelező)</label>
               <input type="text" id="adminPpAdjustReasonInput" placeholder="Pl. kártalanítás, esemény-nyeremény..." />
               <button type="button" class="btn-glow admin-lock-btn" id="adminPpAdjustBtn">Módosítás végrehajtása</button>
+            </div>
+
+            <div class="admin-subsection-title" data-perm="player.action.walletAdjust">Egyenleg módosítása</div>
+            <div class="ban-panel admin-wallet-panel" data-perm="player.action.walletAdjust">
+              <p class="redeem-result" id="adminWalletAdjustStatus"></p>
+              <label>Összeg Ft-ban (negatív = levonás)</label>
+              <input type="number" id="adminWalletAdjustAmountInput" placeholder="Pl. 1000 vagy -500" step="1" />
+              <label>Indoklás (nem kötelező)</label>
+              <input type="text" id="adminWalletAdjustReasonInput" placeholder="Pl. kártalanítás, hibás terhelés jóváírása..." />
+              <button type="button" class="btn-glow admin-lock-btn" id="adminWalletAdjustBtn">Módosítás végrehajtása</button>
             </div>
 
             <div class="admin-subsection-title" data-perm="player.view.discount,player.action.discountSet,player.action.discountRemove">Kedvezmény beállítása</div>

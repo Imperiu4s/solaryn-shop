@@ -727,6 +727,7 @@ const PLAYER_PANEL_KEYS = [
   'player.view.devices', 'player.view.discord', 'player.view.media', 'player.view.badges', 'player.view.discount',
   'player.action.skinDelete', 'player.action.skinBan', 'player.action.capeDelete', 'player.action.capeBan',
   'player.action.emailChange', 'player.action.lock', 'player.action.unlock', 'player.action.ppAdjust',
+  'player.action.walletAdjust',
   'player.action.casinoAdjust', 'player.action.delete', 'player.action.badgeGrant', 'player.action.badgeRevoke',
   'player.action.discountSet', 'player.action.discountRemove'
 ];
@@ -783,6 +784,9 @@ function renderWalletBadge() {
   animateNumberTo($('#topbarWalletValue'), from, currentWalletBalanceHuf, formatHuf);
   const pageEl = $('#walletPageBalance');
   if (pageEl) pageEl.textContent = formatHuf(currentWalletBalanceHuf);
+  // ÚJ: nagyban kiírt egyenleg a főoldalon (ld. index.html #homeWalletBalance).
+  const homeEl = $('#homeWalletBalance');
+  if (homeEl) animateNumberTo(homeEl, lastRenderedWalletBalance === null ? 0 : lastRenderedWalletBalance, currentWalletBalanceHuf, formatHuf);
   lastRenderedWalletBalance = currentWalletBalanceHuf;
 }
 
@@ -1690,6 +1694,49 @@ $('#adminPpAdjustBtn').addEventListener('click', async () => {
   }
 });
 
+// ÚJ: tulajdonosi valós pénzes "egyenleg" (wallet) módosítás - ELLENTÉTBEN a
+// fenti PP-módosítással, ez KÖZVETLENÜL, szinkron módon történik (nincs
+// beváltó-plugin-kör, ld. SolarBackend src/client.js POST
+// /api/admin/player/:username/wallet-adjust megjegyzését) - a válasz azonnal
+// a friss egyenleget adja vissza, nincs "kb. 1 percen belül" várakozás.
+$('#adminWalletAdjustBtn').addEventListener('click', async () => {
+  if (!lastAdminPlayerUsername) return;
+  const statusEl = $('#adminWalletAdjustStatus');
+  const amount = parseInt($('#adminWalletAdjustAmountInput').value, 10);
+  const reason = $('#adminWalletAdjustReasonInput').value.trim();
+  if (!Number.isInteger(amount) || amount === 0) {
+    statusEl.textContent = 'Adj meg egy nullától eltérő, egész összeget.';
+    statusEl.className = 'redeem-result error';
+    return;
+  }
+  const confirmed = await confirmModal(
+    'Egyenleg módosítása',
+    `Biztosan ${amount > 0 ? 'jóváírsz' : 'levonsz'} <b>${formatHuf(Math.abs(amount))}</b>-ot <b>${lastAdminPlayerUsername}</b> egyenlegén?`,
+    'Igen, végrehajtás'
+  );
+  if (!confirmed) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/player/' + encodeURIComponent(lastAdminPlayerUsername) + '/wallet-adjust', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ amount, reason: reason || undefined })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      statusEl.textContent = data.message || 'Nem sikerült végrehajtani a módosítást.';
+      statusEl.className = 'redeem-result error';
+      return;
+    }
+    statusEl.textContent = `Sikeres módosítás - új egyenleg: ${formatHuf(data.walletBalanceHuf)}.`;
+    statusEl.className = 'redeem-result';
+    $('#adminWalletAdjustAmountInput').value = '';
+    $('#adminWalletAdjustReasonInput').value = '';
+  } catch {
+    statusEl.textContent = 'Nem sikerült elérni a szervert.';
+    statusEl.className = 'redeem-result error';
+  }
+});
+
 // ÚJ: egyedi, játékosonkénti kedvezmény beállítása/törlése (ld.
 // SolarBackend src/discounts.js POST/DELETE /api/admin/player/:username/discount) -
 // ELLENTÉTBEN a fenti PP-/casino-módosítással, ez KÖZVETLENÜL, szinkron
@@ -2102,7 +2149,7 @@ function renderPkgCard(item, locked) {
       <div class="pkg-icon">${ICONS[item.icon] || ICONS.coin}</div>
       <div class="pkg-name">${item.short}</div>
       <div class="pkg-price">${priceHtml}</div>
-      <button type="button" class="btn-buy" data-item-id="${item.id}"${locked ? ' disabled' : ''}>Vásárlás kártyával</button>
+      <button type="button" class="btn-buy" data-item-id="${item.id}"${locked ? ' disabled' : ''}>Vásárlás</button>
       ${walletBtn}
       ${giftBtn}
       ${lockedNote}
