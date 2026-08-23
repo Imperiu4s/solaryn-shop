@@ -972,6 +972,24 @@ a { color: inherit; }
 /* Admin panel (játékos-profil, csak "tulajdonos" rangnak) + Gép-részletek */
 .admin-panel { border-top: 3px solid var(--orange); margin-top: 24px; }
 .admin-info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 24px; }
+
+/* ÚJ: a korábban egyetlen hosszú, felülről lefelé görgetendő oszlopban
+   sorjázó admin-alszekciók (zárolás/PP/egyenleg/kedvezmény/casino/jelvények/
+   skin-köpeny) most saját, önálló "kártyaként" jelennek meg egy reszponzív
+   rácsban - lényegesen rövidebbnek/áttekinthetőbbnek hat, mint a régi egy
+   hosszú lista. A "Kliens" (táblák) és a veszélyes "Fiók törlése" szekció
+   szándékosan .admin-card-wide (teljes szélesség), mert tartalmuk (táblák,
+   ill. a törlés súlya) nem fér/illik jól egy keskeny kártyába. */
+.admin-cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; margin-bottom: 18px; }
+.admin-card {
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 16px;
+  padding: 20px 22px; display: flex; flex-direction: column;
+}
+.admin-card.admin-card-wide { grid-column: 1 / -1; }
+.admin-card.admin-card-danger { border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); }
+.admin-card > .admin-subsection-title { margin: 0 0 14px; }
+.admin-card > .admin-subsection-title:not(:first-child) { margin-top: 28px; }
+.admin-card .ban-panel:last-child { flex: 1; }
 .admin-info-item {
   background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px;
   display: flex; flex-direction: column; gap: 4px;

@@ -262,6 +262,10 @@
           <svg viewBox="0 0 24 24"><path d="M20 12l-8 8-9-9V4h7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>
           <span>Akciók</span>
         </button>
+        <button class="app-nav-item admin-nav-item hidden" data-view="coupons" data-permission="global.couponsManage">
+          <svg viewBox="0 0 24 24"><path d="M3 9a2 2 0 0 0 0 6v2a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-2a2 2 0 0 1 0-6V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M10 8v8" stroke="currentColor" stroke-width="1.6" stroke-dasharray="1.6 2" stroke-linecap="round"/></svg>
+          <span>Kuponok</span>
+        </button>
         <!-- Kizárólag a valódi tulajdonosnak látszik (nincs data-permission -
              a jog-adás maga nem delegálható, ld. SolarBackend
              src/permissions.js megjegyzését). -->
@@ -754,8 +758,8 @@
 
             <!-- Bekapcsolt állapot: "Kikapcsolás" + kódok újragenerálása -->
             <div id="securityTotpEnabledPanel" class="hidden">
-              <label>Jelszó (a művelet megerősítéséhez)</label>
-              <input type="password" id="securityTotpPasswordInput" autocomplete="current-password" placeholder="••••••••" />
+              <label class="gift-modal-label">Jelszó (a művelet megerősítéséhez)</label>
+              <input type="password" id="securityTotpPasswordInput" class="gift-modal-input" autocomplete="current-password" placeholder="••••••••" />
               <p class="redeem-result error" id="securityTotpActionError"></p>
               <button type="button" class="btn-outline" id="btnRegenerateRecoveryCodes">Új helyreállítási kódok generálása</button>
               <button type="button" class="btn-glow admin-delete-btn" id="btnDisable2fa" style="margin-top:8px;">2FA kikapcsolása</button>
@@ -957,6 +961,47 @@
           <div id="discountsAdminList"></div>
         </section>
 
+        <!-- KUPONOK - a "Kódbeváltás" nézeten beváltható kódok (ld.
+             app.js couponsAdmin* / #redeemSubmit). Ugyanaz a CRUD-minta, mint
+             az Akciók fent, csak a "Jutalom" mezőkkel (típus + mennyiség +
+             felhasználhatóság + érvényességi ablak) az érvényességi kör
+             helyett. -->
+        <section class="view" data-view="coupons">
+          <h1 class="page-title">Kuponok</h1>
+          <p class="page-note">A létrehozott kódokat a játékosok a "Kódbeváltás" nézeten válthatják be - a PrémiumPont-jutalom a következő szerverre lépéskor íródik jóvá (ugyanúgy, mint egy tulajdonosi PP-módosítás), az egyenleg-jutalom viszont azonnal.</p>
+
+          <div class="card">
+            <div class="card-title" id="couponFormTitle">Új kupon</div>
+            <label class="gift-modal-label" style="margin-top:0;">Kód</label>
+            <input type="text" id="couponCodeInput" class="gift-modal-input" placeholder="Pl. NYAR2026" maxlength="32" style="text-transform:uppercase;" />
+            <label class="gift-modal-label">Jutalom típusa</label>
+            <select id="couponRewardTypeSelect" class="gift-modal-input">
+              <option value="pp">PrémiumPont</option>
+              <option value="wallet">Egyenleg (Ft)</option>
+            </select>
+            <label class="gift-modal-label">Jutalom mennyisége</label>
+            <input type="number" id="couponRewardAmountInput" class="gift-modal-input" placeholder="Pl. 500" min="1" step="1" />
+            <label class="gift-modal-label">Felhasználhatóság (nem kötelező, üres = korlátlan)</label>
+            <input type="number" id="couponMaxUsesInput" class="gift-modal-input" placeholder="Pl. 100" min="1" step="1" />
+            <label class="gift-modal-label">Kezdet (nem kötelező)</label>
+            <input type="date" id="couponStartsInput" class="gift-modal-input" />
+            <label class="gift-modal-label">Lejárat (nem kötelező)</label>
+            <input type="date" id="couponExpiresInput" class="gift-modal-input" />
+            <label class="check-row" style="margin-top:10px;">
+              <input type="checkbox" id="couponActiveCheckbox" checked />
+              Aktív (a kikapcsolt kupon mentve marad, de nem váltható be)
+            </label>
+            <p class="redeem-result" id="couponFormResult"></p>
+            <div class="modal-actions" style="margin-top:14px;">
+              <button type="button" class="btn-outline" id="couponDiscardBtn">Elvetés</button>
+              <button type="button" class="btn-glow" id="couponSaveBtn" style="margin-top:0;">Mentés</button>
+            </div>
+          </div>
+
+          <div class="admin-subsection-title">Meglévő kuponok</div>
+          <div id="couponsAdminList"></div>
+        </section>
+
         <!-- JOGOK - kizárólag a valódi tulajdonosnak (ld. app.js
              #navPermissionsBtn), a jog-adás maga nem delegálható. -->
         <section class="view" data-view="permissions">
@@ -1060,117 +1105,140 @@
             </div>
             <p class="redeem-result" id="adminEmailResult"></p>
 
-            <div class="admin-subsection-title" data-perm="player.view.lockStatus,player.action.lock,player.action.unlock">Fiók zárolása</div>
-            <div class="ban-panel admin-lock-panel" data-perm="player.view.lockStatus,player.action.lock,player.action.unlock">
-              <p class="redeem-result" id="adminLockStatus" data-perm="player.view.lockStatus"></p>
-              <label>Indoklás</label>
-              <input type="text" id="adminLockReasonInput" placeholder="Pl. csalás, szabályszegés..." />
-              <button type="button" class="btn-glow admin-lock-btn" id="adminLockBtn" data-perm="player.action.lock">Fiók zárolása</button>
-              <button type="button" class="btn-outline" id="adminUnlockBtn" data-perm="player.action.unlock">Zárolás feloldása</button>
-            </div>
-
-            <div class="admin-subsection-title" data-perm="player.action.ppAdjust">PrémiumPont módosítása</div>
-            <div class="ban-panel admin-pp-panel" data-perm="player.action.ppAdjust">
-              <p class="redeem-result" id="adminPpAdjustStatus"></p>
-              <label>Összeg (negatív = levonás)</label>
-              <input type="number" id="adminPpAdjustAmountInput" placeholder="Pl. 1000 vagy -500" step="1" />
-              <label>Indoklás (nem kötelező)</label>
-              <input type="text" id="adminPpAdjustReasonInput" placeholder="Pl. kártalanítás, esemény-nyeremény..." />
-              <button type="button" class="btn-glow admin-lock-btn" id="adminPpAdjustBtn">Módosítás végrehajtása</button>
-            </div>
-
-            <div class="admin-subsection-title" data-perm="player.action.walletAdjust">Egyenleg módosítása</div>
-            <div class="ban-panel admin-wallet-panel" data-perm="player.action.walletAdjust">
-              <p class="redeem-result" id="adminWalletAdjustStatus"></p>
-              <label>Összeg Ft-ban (negatív = levonás)</label>
-              <input type="number" id="adminWalletAdjustAmountInput" placeholder="Pl. 1000 vagy -500" step="1" />
-              <label>Indoklás (nem kötelező)</label>
-              <input type="text" id="adminWalletAdjustReasonInput" placeholder="Pl. kártalanítás, hibás terhelés jóváírása..." />
-              <button type="button" class="btn-glow admin-lock-btn" id="adminWalletAdjustBtn">Módosítás végrehajtása</button>
-            </div>
-
-            <div class="admin-subsection-title" data-perm="player.view.discount,player.action.discountSet,player.action.discountRemove">Kedvezmény beállítása</div>
-            <div class="ban-panel admin-discount-panel" data-perm="player.view.discount,player.action.discountSet,player.action.discountRemove">
-              <p class="redeem-result" id="adminDiscountStatus"></p>
-              <p class="admin-discount-current" id="adminDiscountCurrent" data-perm="player.view.discount"></p>
-              <label>Kedvezmény (%)</label>
-              <input type="number" id="adminDiscountPercentInput" placeholder="Pl. 20" min="1" max="100" step="1" />
-              <label>Indoklás (nem kötelező)</label>
-              <input type="text" id="adminDiscountReasonInput" placeholder="Pl. hűségjutalom, kártalanítás..." />
-              <label>Lejárat (nem kötelező)</label>
-              <input type="date" id="adminDiscountExpiresInput" />
-              <button type="button" class="btn-glow admin-lock-btn" id="adminDiscountSetBtn" data-perm="player.action.discountSet">Kedvezmény beállítása</button>
-              <button type="button" class="btn-outline" id="adminDiscountRevokeBtn" data-perm="player.action.discountRemove">Kedvezmény törlése</button>
-            </div>
-
-            <div class="admin-subsection-title" data-perm="player.action.casinoAdjust">Casino pörgetések (SolarLucky)</div>
-            <div class="ban-panel admin-casino-panel" data-perm="player.action.casinoAdjust">
-              <p class="redeem-result" id="adminCasinoAdjustStatus"></p>
-              <label>Pörgetés mennyisége (negatív = elvétel)</label>
-              <input type="number" id="adminCasinoAdjustAmountInput" placeholder="Pl. 1 vagy -1" step="1" />
-              <button type="button" class="btn-glow admin-lock-btn" id="adminCasinoAdjustBtn">Módosítás végrehajtása</button>
-            </div>
-
-            <div class="admin-subsection-title" data-perm="player.view.badges,player.action.badgeGrant,player.action.badgeRevoke">Jelvények</div>
-            <div class="ban-panel admin-badges-panel" data-perm="player.view.badges,player.action.badgeGrant,player.action.badgeRevoke">
-              <p class="redeem-result" id="adminBadgeGrantStatus"></p>
-              <label data-perm="player.action.badgeGrant">Jelvény kiosztása</label>
-              <div class="admin-badge-grant-row" data-perm="player.action.badgeGrant">
-                <select id="adminBadgeSelect"></select>
-                <button type="button" class="device-link" id="adminBadgeGrantBtn">Adás</button>
-              </div>
-              <div id="adminPlayerBadgesList" class="admin-player-badges-list" data-perm="player.view.badges"></div>
-            </div>
-
-            <div class="admin-subsection-title" data-perm="player.view.media,player.action.skinDelete,player.action.skinBan,player.action.capeDelete,player.action.capeBan">Skin / Köpeny</div>
-            <div class="ban-panel admin-media-panel" data-perm="player.view.media,player.action.skinDelete,player.action.skinBan,player.action.capeDelete,player.action.capeBan">
-              <p class="redeem-result" id="adminMediaStatus"></p>
-              <div class="admin-media-row">
-                <span class="admin-media-label">Skin: <b id="adminSkinState">-</b></span>
-                <div class="admin-media-actions">
-                  <button type="button" class="btn-outline" id="adminSkinDeleteBtn" disabled data-perm="player.action.skinDelete">Törlés</button>
-                  <button type="button" class="btn-glow admin-lock-btn" id="adminSkinBanBtn" disabled style="margin-top:0;" data-perm="player.action.skinBan">Tiltás</button>
+            <!-- ÚJ: kártyás rács - ld. style.css .admin-cards-grid/.admin-card
+                 megjegyzése, miért lett szétbontva a korábbi egy hosszú
+                 oszlopból ide. -->
+            <div class="admin-cards-grid">
+              <div class="admin-card" data-perm="player.view.lockStatus,player.action.lock,player.action.unlock">
+                <div class="admin-subsection-title">Fiók zárolása</div>
+                <div class="ban-panel admin-lock-panel">
+                  <p class="redeem-result" id="adminLockStatus" data-perm="player.view.lockStatus"></p>
+                  <label>Indoklás</label>
+                  <input type="text" id="adminLockReasonInput" placeholder="Pl. csalás, szabályszegés..." />
+                  <button type="button" class="btn-glow admin-lock-btn" id="adminLockBtn" data-perm="player.action.lock">Fiók zárolása</button>
+                  <button type="button" class="btn-outline" id="adminUnlockBtn" data-perm="player.action.unlock">Zárolás feloldása</button>
                 </div>
               </div>
-              <div class="admin-media-row">
-                <span class="admin-media-label">Köpeny: <b id="adminCapeState">-</b></span>
-                <div class="admin-media-actions">
-                  <button type="button" class="btn-outline" id="adminCapeDeleteBtn" disabled data-perm="player.action.capeDelete">Törlés</button>
-                  <button type="button" class="btn-glow admin-lock-btn" id="adminCapeBanBtn" disabled style="margin-top:0;" data-perm="player.action.capeBan">Tiltás</button>
-                </div>
-              </div>
-              <p class="pkg-locked-note">A "Törlés" csak elveszi a jelenlegi fájlt - a "Tiltás" ezen felül véglegesen letiltja EZT A KONKRÉT KÉPET, azt utána senki sem tudja feltölteni sem skinként, sem köpenyként.</p>
-            </div>
 
-            <div class="admin-subsection-title" data-perm="player.view.logins,player.view.devices">Kliens</div>
-            <div class="admin-tables-grid">
-              <div data-perm="player.view.logins">
-                <div class="admin-table-title">Belépések</div>
-                <div class="ledger-table-wrap">
-                  <table class="ledger-table">
-                    <thead><tr><th>Dátum</th><th>Gép</th></tr></thead>
-                    <tbody id="adminPlayerLoginsBody"></tbody>
-                  </table>
+              <div class="admin-card" data-perm="player.action.ppAdjust">
+                <div class="admin-subsection-title">PrémiumPont módosítása</div>
+                <div class="ban-panel admin-pp-panel">
+                  <p class="redeem-result" id="adminPpAdjustStatus"></p>
+                  <label>Összeg (negatív = levonás)</label>
+                  <input type="number" id="adminPpAdjustAmountInput" placeholder="Pl. 1000 vagy -500" step="1" />
+                  <label>Indoklás (nem kötelező)</label>
+                  <input type="text" id="adminPpAdjustReasonInput" placeholder="Pl. kártalanítás, esemény-nyeremény..." />
+                  <button type="button" class="btn-glow admin-lock-btn" id="adminPpAdjustBtn">Módosítás végrehajtása</button>
                 </div>
               </div>
-              <div data-perm="player.view.devices">
-                <div class="admin-table-title">Összes gép</div>
-                <div class="ledger-table-wrap">
-                  <table class="ledger-table">
-                    <thead><tr><th>Utoljára látva</th><th>Gép</th><th>Belépések</th></tr></thead>
-                    <tbody id="adminPlayerDevicesBody"></tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
 
-            <div class="admin-subsection-title admin-danger-title" data-perm="player.action.delete">Fiók végleges törlése</div>
-            <div class="ban-panel admin-delete-panel" data-perm="player.action.delete">
-              <p class="redeem-result error">Ez a művelet VÉGLEGES és VISSZAVONHATATLAN - törli a fiókot, a skint, a vásárlási előzményt és a PrémiumPont-egyenleget. Nem lehet visszaállítani.</p>
-              <label>Írd be a felhasználónevet a megerősítéshez (<span id="adminDeleteUsernameHint">-</span>)</label>
-              <input type="text" id="adminDeleteConfirmInput" placeholder="felhasználónév" autocomplete="off" />
-              <button type="button" class="btn-glow admin-delete-btn" id="adminDeleteBtn" disabled>Fiók végleges törlése</button>
-              <p class="redeem-result" id="adminDeleteResult"></p>
+              <div class="admin-card" data-perm="player.action.walletAdjust">
+                <div class="admin-subsection-title">Egyenleg módosítása</div>
+                <div class="ban-panel admin-wallet-panel">
+                  <p class="redeem-result" id="adminWalletAdjustStatus"></p>
+                  <label>Összeg Ft-ban (negatív = levonás)</label>
+                  <input type="number" id="adminWalletAdjustAmountInput" placeholder="Pl. 1000 vagy -500" step="1" />
+                  <label>Indoklás (nem kötelező)</label>
+                  <input type="text" id="adminWalletAdjustReasonInput" placeholder="Pl. kártalanítás, hibás terhelés jóváírása..." />
+                  <button type="button" class="btn-glow admin-lock-btn" id="adminWalletAdjustBtn">Módosítás végrehajtása</button>
+                </div>
+              </div>
+
+              <div class="admin-card" data-perm="player.view.discount,player.action.discountSet,player.action.discountRemove">
+                <div class="admin-subsection-title">Kedvezmény beállítása</div>
+                <div class="ban-panel admin-discount-panel">
+                  <p class="redeem-result" id="adminDiscountStatus"></p>
+                  <p class="admin-discount-current" id="adminDiscountCurrent" data-perm="player.view.discount"></p>
+                  <label>Kedvezmény (%)</label>
+                  <input type="number" id="adminDiscountPercentInput" placeholder="Pl. 20" min="1" max="100" step="1" />
+                  <label>Indoklás (nem kötelező)</label>
+                  <input type="text" id="adminDiscountReasonInput" placeholder="Pl. hűségjutalom, kártalanítás..." />
+                  <label>Lejárat (nem kötelező)</label>
+                  <input type="date" id="adminDiscountExpiresInput" />
+                  <button type="button" class="btn-glow admin-lock-btn" id="adminDiscountSetBtn" data-perm="player.action.discountSet">Kedvezmény beállítása</button>
+                  <button type="button" class="btn-outline" id="adminDiscountRevokeBtn" data-perm="player.action.discountRemove">Kedvezmény törlése</button>
+                </div>
+              </div>
+
+              <div class="admin-card" data-perm="player.action.casinoAdjust">
+                <div class="admin-subsection-title">Casino pörgetések (SolarLucky)</div>
+                <div class="ban-panel admin-casino-panel">
+                  <p class="redeem-result" id="adminCasinoAdjustStatus"></p>
+                  <label>Pörgetés mennyisége (negatív = elvétel)</label>
+                  <input type="number" id="adminCasinoAdjustAmountInput" placeholder="Pl. 1 vagy -1" step="1" />
+                  <button type="button" class="btn-glow admin-lock-btn" id="adminCasinoAdjustBtn">Módosítás végrehajtása</button>
+                </div>
+              </div>
+
+              <div class="admin-card" data-perm="player.view.badges,player.action.badgeGrant,player.action.badgeRevoke">
+                <div class="admin-subsection-title">Jelvények</div>
+                <div class="ban-panel admin-badges-panel">
+                  <p class="redeem-result" id="adminBadgeGrantStatus"></p>
+                  <label data-perm="player.action.badgeGrant">Jelvény kiosztása</label>
+                  <div class="admin-badge-grant-row" data-perm="player.action.badgeGrant">
+                    <select id="adminBadgeSelect"></select>
+                    <button type="button" class="device-link" id="adminBadgeGrantBtn">Adás</button>
+                  </div>
+                  <div id="adminPlayerBadgesList" class="admin-player-badges-list" data-perm="player.view.badges"></div>
+                </div>
+              </div>
+
+              <div class="admin-card admin-card-wide" data-perm="player.view.media,player.action.skinDelete,player.action.skinBan,player.action.capeDelete,player.action.capeBan">
+                <div class="admin-subsection-title">Skin / Köpeny</div>
+                <div class="ban-panel admin-media-panel">
+                  <p class="redeem-result" id="adminMediaStatus"></p>
+                  <div class="admin-media-row">
+                    <span class="admin-media-label">Skin: <b id="adminSkinState">-</b></span>
+                    <div class="admin-media-actions">
+                      <button type="button" class="btn-outline" id="adminSkinDeleteBtn" disabled data-perm="player.action.skinDelete">Törlés</button>
+                      <button type="button" class="btn-glow admin-lock-btn" id="adminSkinBanBtn" disabled style="margin-top:0;" data-perm="player.action.skinBan">Tiltás</button>
+                    </div>
+                  </div>
+                  <div class="admin-media-row">
+                    <span class="admin-media-label">Köpeny: <b id="adminCapeState">-</b></span>
+                    <div class="admin-media-actions">
+                      <button type="button" class="btn-outline" id="adminCapeDeleteBtn" disabled data-perm="player.action.capeDelete">Törlés</button>
+                      <button type="button" class="btn-glow admin-lock-btn" id="adminCapeBanBtn" disabled style="margin-top:0;" data-perm="player.action.capeBan">Tiltás</button>
+                    </div>
+                  </div>
+                  <p class="pkg-locked-note">A "Törlés" csak elveszi a jelenlegi fájlt - a "Tiltás" ezen felül véglegesen letiltja EZT A KONKRÉT KÉPET, azt utána senki sem tudja feltölteni sem skinként, sem köpenyként.</p>
+                </div>
+              </div>
+
+              <div class="admin-card admin-card-wide" data-perm="player.view.logins,player.view.devices">
+                <div class="admin-subsection-title">Kliens</div>
+                <div class="admin-tables-grid">
+                  <div data-perm="player.view.logins">
+                    <div class="admin-table-title">Belépések</div>
+                    <div class="ledger-table-wrap">
+                      <table class="ledger-table">
+                        <thead><tr><th>Dátum</th><th>Gép</th></tr></thead>
+                        <tbody id="adminPlayerLoginsBody"></tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <div data-perm="player.view.devices">
+                    <div class="admin-table-title">Összes gép</div>
+                    <div class="ledger-table-wrap">
+                      <table class="ledger-table">
+                        <thead><tr><th>Utoljára látva</th><th>Gép</th><th>Belépések</th></tr></thead>
+                        <tbody id="adminPlayerDevicesBody"></tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="admin-card admin-card-wide admin-card-danger" data-perm="player.action.delete">
+                <div class="admin-subsection-title admin-danger-title">Fiók végleges törlése</div>
+                <div class="ban-panel admin-delete-panel">
+                  <p class="redeem-result error">Ez a művelet VÉGLEGES és VISSZAVONHATATLAN - törli a fiókot, a skint, a vásárlási előzményt és a PrémiumPont-egyenleget. Nem lehet visszaállítani.</p>
+                  <label>Írd be a felhasználónevet a megerősítéshez (<span id="adminDeleteUsernameHint">-</span>)</label>
+                  <input type="text" id="adminDeleteConfirmInput" placeholder="felhasználónév" autocomplete="off" />
+                  <button type="button" class="btn-glow admin-delete-btn" id="adminDeleteBtn" disabled>Fiók végleges törlése</button>
+                  <p class="redeem-result" id="adminDeleteResult"></p>
+                </div>
+              </div>
             </div>
           </div>
         </section>

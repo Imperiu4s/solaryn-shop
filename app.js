@@ -1335,6 +1335,7 @@ function switchView(view) {
   if (view === 'newsAdmin') { resetNewsForm(); loadNewsAdmin(); }
   if (view === 'badges') { resetBadgeForm(); loadBadgesAdmin(); }
   if (view === 'discounts') { resetDiscountForm(); loadDiscountsAdmin(); }
+  if (view === 'coupons') { resetCouponForm(); loadCouponsAdmin(); }
   if (view === 'casino') loadCasino();
 }
 $$('.app-nav-item[data-view]').forEach((btn) => {
@@ -1592,14 +1593,40 @@ async function uploadCapeFile(file) {
   }
 }
 
-// ── Kódbeváltás (stub - nincs valódi kód-adatbázis egyenlőre) ──
-$('#redeemSubmit').addEventListener('click', () => {
+// ── Kódbeváltás (ld. SolarBackend src/coupons.js POST /api/coupons/redeem) ──
+$('#redeemSubmit').addEventListener('click', async () => {
   const val = $('#redeemInput').value.trim();
   const resultEl = $('#redeemResult');
   resultEl.classList.remove('error');
   if (!val) { resultEl.textContent = ''; return; }
-  resultEl.classList.add('error');
-  resultEl.textContent = 'Ismeretlen kód.';
+  if (!session || !session.token) { resultEl.classList.add('error'); resultEl.textContent = 'Jelentkezz be a beváltáshoz.'; return; }
+
+  $('#redeemSubmit').disabled = true;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/coupons/redeem', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ code: val })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      resultEl.classList.add('error');
+      resultEl.textContent = data.message || 'Ismeretlen kód.';
+      return;
+    }
+    if (data.rewardType === 'wallet') {
+      resultEl.textContent = `Sikeres beváltás! +${formatHuf(data.rewardAmount)} jóváírva az egyenlegeden.`;
+      refreshPpBalance();
+    } else {
+      resultEl.textContent = `Sikeres beváltás! +${formatPp(data.rewardAmount)} PP a következő szerverre lépéskor íródik jóvá.`;
+    }
+    $('#redeemInput').value = '';
+  } catch {
+    resultEl.classList.add('error');
+    resultEl.textContent = 'Nem sikerült elérni a szervert.';
+  } finally {
+    $('#redeemSubmit').disabled = false;
+  }
 });
 $('#redeemInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#redeemSubmit').click(); });
 
@@ -3800,6 +3827,156 @@ document.addEventListener('click', (e) => {
           showToast('Akció törölve.');
           if (String(discountEditingId) === String(id)) resetDiscountForm();
           loadDiscountsAdmin();
+        } else {
+          showToast('Nem sikerült törölni.', true);
+        }
+      }).catch(() => showToast('Nem sikerült elérni a szervert.', true));
+    });
+  }
+});
+
+// ── Kuponok (admin, ld. SolarBackend src/coupons.js) - ugyanaz a CRUD-minta,
+// mint a fenti Akciók, csak a "Jutalom" mezőkkel (típus + mennyiség +
+// felhasználhatóság + kezdet/lejárat) az érvényességi kör helyett - nincs
+// fájlfeltöltés, ezért egyszerű JSON POST/PUT, nem FormData. ──
+let couponEditingId = null;
+let couponsAdminItems = [];
+
+function resetCouponForm() {
+  couponEditingId = null;
+  $('#couponFormTitle').textContent = 'Új kupon';
+  $('#couponCodeInput').value = '';
+  $('#couponRewardTypeSelect').value = 'pp';
+  $('#couponRewardAmountInput').value = '';
+  $('#couponMaxUsesInput').value = '';
+  $('#couponStartsInput').value = '';
+  $('#couponExpiresInput').value = '';
+  $('#couponActiveCheckbox').checked = true;
+  $('#couponFormResult').textContent = '';
+  $('#couponFormResult').className = 'redeem-result';
+  $('#couponSaveBtn').textContent = 'Mentés';
+}
+
+function couponRewardLabel(c) {
+  return c.reward_type === 'wallet' ? `${formatHuf(c.reward_amount)} egyenleg` : `${formatPp(c.reward_amount)} PP`;
+}
+
+function renderCouponsAdminList() {
+  $('#couponsAdminList').innerHTML = couponsAdminItems.map((c) => {
+    const notStarted = c.starts_at && new Date(c.starts_at).getTime() > Date.now();
+    const expired = c.expires_at && new Date(c.expires_at).getTime() <= Date.now();
+    const exhausted = c.max_uses !== null && c.used_count >= c.max_uses;
+    const statusText = !c.active ? 'Kikapcsolva' : exhausted ? 'Elfogyott' : expired ? 'Lejárt' : notStarted ? 'Még nem aktív' : 'Aktív';
+    const statusClass = c.active && !exhausted && !expired && !notStarted ? 'discount-status-on' : 'discount-status-off';
+    const usesText = c.max_uses !== null ? `${c.used_count}/${c.max_uses} felhasználva` : `${c.used_count}x felhasználva (korlátlan)`;
+    const windowParts = [];
+    if (c.starts_at) windowParts.push('kezdet: ' + formatLedgerDate(c.starts_at));
+    if (c.expires_at) windowParts.push('lejár: ' + formatLedgerDate(c.expires_at));
+    return `
+    <div class="badges-admin-item">
+      <div class="badges-admin-item-info">
+        <div class="badges-admin-item-name">${escapeHtml(c.code)} - ${couponRewardLabel(c)}</div>
+        <div class="badges-admin-item-meta">${usesText}${windowParts.length ? ' - ' + windowParts.join(', ') : ''} - <span class="${statusClass}">${statusText}</span></div>
+      </div>
+      <div class="badges-admin-item-actions">
+        <button type="button" class="news-edit-btn" data-coupon-id="${c.id}">Szerkesztés</button>
+        <button type="button" class="news-delete-btn" data-coupon-id="${c.id}">Törlés</button>
+      </div>
+    </div>
+  `;
+  }).join('') || '<p class="redeem-result">Még nincs egyetlen kupon sem.</p>';
+}
+
+async function loadCouponsAdmin() {
+  if (!session || !session.token || !isOwner) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/coupons', {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    couponsAdminItems = data.ok && Array.isArray(data.coupons) ? data.coupons : [];
+  } catch {
+    couponsAdminItems = [];
+  }
+  renderCouponsAdminList();
+}
+
+$('#couponDiscardBtn').addEventListener('click', resetCouponForm);
+
+$('#couponSaveBtn').addEventListener('click', async () => {
+  const resultEl = $('#couponFormResult');
+  const code = $('#couponCodeInput').value.trim();
+  const rewardType = $('#couponRewardTypeSelect').value;
+  const rewardAmount = Number($('#couponRewardAmountInput').value);
+  const maxUsesRaw = $('#couponMaxUsesInput').value;
+  const maxUses = maxUsesRaw ? Number(maxUsesRaw) : undefined;
+  const startsAt = $('#couponStartsInput').value || undefined;
+  const expiresAt = $('#couponExpiresInput').value || undefined;
+  const active = $('#couponActiveCheckbox').checked;
+
+  if (!code) { resultEl.textContent = 'Adj meg egy kódot.'; resultEl.className = 'redeem-result error'; return; }
+  if (!Number.isInteger(rewardAmount) || rewardAmount < 1) {
+    resultEl.textContent = 'Adj meg egy érvényes jutalom-mennyiséget.';
+    resultEl.className = 'redeem-result error';
+    return;
+  }
+
+  try {
+    const url = couponEditingId ? BACKEND_URL + '/api/admin/coupons/' + couponEditingId : BACKEND_URL + '/api/admin/coupons';
+    const res = await fetch(url, {
+      method: couponEditingId ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ code, rewardType, rewardAmount, maxUses, startsAt, expiresAt, active })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      resultEl.textContent = data.message || 'Nem sikerült menteni.';
+      resultEl.className = 'redeem-result error';
+      return;
+    }
+    showToast(couponEditingId ? 'Kupon frissítve.' : 'Kupon létrehozva.');
+    resetCouponForm();
+    loadCouponsAdmin();
+  } catch {
+    resultEl.textContent = 'Nem sikerült elérni a szervert.';
+    resultEl.className = 'redeem-result error';
+  }
+});
+
+document.addEventListener('click', (e) => {
+  const editBtn = e.target.closest('.news-edit-btn[data-coupon-id]');
+  if (editBtn) {
+    const item = couponsAdminItems.find((c) => String(c.id) === editBtn.dataset.couponId);
+    if (!item) return;
+    couponEditingId = item.id;
+    $('#couponFormTitle').textContent = 'Kupon szerkesztése';
+    $('#couponCodeInput').value = item.code;
+    $('#couponRewardTypeSelect').value = item.reward_type;
+    $('#couponRewardAmountInput').value = item.reward_amount;
+    $('#couponMaxUsesInput').value = item.max_uses !== null ? item.max_uses : '';
+    // ÚJ: a dátum-input "ÉÉÉÉ-HH-NN" alakot vár - a backend teljes ISO
+    // dátumidőt ad vissza (ld. coupons.js normalizálását), ebből csak a
+    // dátumrészt vágjuk ki.
+    $('#couponStartsInput').value = item.starts_at ? item.starts_at.slice(0, 10) : '';
+    $('#couponExpiresInput').value = item.expires_at ? item.expires_at.slice(0, 10) : '';
+    $('#couponActiveCheckbox').checked = item.active === 1;
+    $('#couponSaveBtn').textContent = 'Frissítés';
+    $('#couponFormResult').textContent = '';
+    return;
+  }
+  const deleteBtn = e.target.closest('.news-delete-btn[data-coupon-id]');
+  if (deleteBtn) {
+    const id = deleteBtn.dataset.couponId;
+    confirmModal('Kupon törlése', 'Biztosan törlöd ezt a kupont? Ez nem vonható vissza.', 'Igen, törlés').then((confirmed) => {
+      if (!confirmed) return;
+      fetch(BACKEND_URL + '/api/admin/coupons/' + id, {
+        method: 'DELETE',
+        headers: { Authorization: 'Bearer ' + session.token }
+      }).then((res) => res.json()).then((data) => {
+        if (data.ok) {
+          showToast('Kupon törölve.');
+          if (String(couponEditingId) === String(id)) resetCouponForm();
+          loadCouponsAdmin();
         } else {
           showToast('Nem sikerült törölni.', true);
         }
