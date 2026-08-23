@@ -60,15 +60,79 @@ const $$ = (sel) => Array.from(document.querySelectorAll(sel));
   requestAnimationFrame(tick);
 })();
 
+// ÚJ: gyors fiókváltás (a SolarLauncher accounts/activeUsername mintáját
+// követve, ld. SolarLauncher src/config.js+renderer.js) - több elmentett
+// fiók (max 5), egy "aktív" közülük. A "session" változó MARAD a fájl
+// TÖBBI RÉSZÉBEN mindenhol hivatkozott, származtatott {username, token} pár
+// (az aktív fióké) - így nem kellett a fájlban szétszórt session.token/
+// session.username hivatkozásokat egyenként átírni, csak a MÖGÖTTES tárolást
+// alakítottuk többfiókosra.
+let accounts = [];
+let activeUsername = '';
 let session = null;
-try {
-  const saved = localStorage.getItem('solarcenter_session');
-  if (saved) session = JSON.parse(saved);
-} catch { session = null; }
 
+// Egyszeri migráció a régi, egyfiókos "solarcenter_session" kulcsról - ha
+// már létezik az új "solarcenter_accounts" kulcs, nincs teendő.
+(function migrateOldSession() {
+  if (localStorage.getItem('solarcenter_accounts')) return;
+  try {
+    const old = JSON.parse(localStorage.getItem('solarcenter_session') || 'null');
+    if (old && old.username && old.token) {
+      accounts = [{ username: old.username, token: old.token }];
+      activeUsername = old.username;
+      // JAVÍTVA: enélkül a lenti blokk localStorage.getItem('solarcenter_accounts')
+      // hívása még mindig null-t adott volna vissza (még nem írtuk ki), és
+      // felülírta volna az imént migrált "accounts"-ot egy üres tömbre,
+      // miközben "activeUsername" tévesen megmaradt volna - a végeredmény egy
+      // "van aktív felhasználónév, de nincs hozzá tartozó fiók" hibás állapot
+      // lett volna (session=null annak ellenére, hogy volt érvényes régi token).
+      localStorage.setItem('solarcenter_accounts', JSON.stringify(accounts));
+      localStorage.setItem('solarcenter_active_username', activeUsername);
+    }
+  } catch { /* nincs (érvényes) régi munkamenet - nincs mit migrálni */ }
+  localStorage.removeItem('solarcenter_session');
+})();
+try {
+  const savedAccounts = JSON.parse(localStorage.getItem('solarcenter_accounts') || '[]');
+  if (Array.isArray(savedAccounts)) accounts = savedAccounts;
+  activeUsername = localStorage.getItem('solarcenter_active_username') || activeUsername;
+} catch { accounts = []; }
+
+function syncSessionFromAccounts() {
+  const acc = accounts.find((a) => a.username === activeUsername);
+  session = acc ? { username: acc.username, token: acc.token } : null;
+}
+function persistAccounts() {
+  localStorage.setItem('solarcenter_accounts', JSON.stringify(accounts));
+  localStorage.setItem('solarcenter_active_username', activeUsername);
+}
+syncSessionFromAccounts();
+
+// A fájlban MINDENHOL meglévő hívási pont (login/register/auto-login/
+// zárolt-fiók-kijelentkezés stb. - "session = {...}; saveSession();" VAGY
+// "session = null; saveSession();") - a belseje mostantól a többfiókos
+// tárolást tartja karban, a hívási pontokat NEM kellett módosítani.
 function saveSession() {
-  if (session) localStorage.setItem('solarcenter_session', JSON.stringify(session));
-  else localStorage.removeItem('solarcenter_session');
+  if (session) {
+    // Felvesz VAGY frissít + aktívvá tesz - ugyanaz, mint a launcher
+    // upsertAccountAndActivate()-je. Max 5 fiók, a legrégebbi esik ki.
+    const idx = accounts.findIndex((a) => a.username === session.username);
+    if (idx >= 0) accounts[idx].token = session.token;
+    else {
+      accounts.push({ username: session.username, token: session.token });
+      if (accounts.length > 5) accounts.shift();
+    }
+    activeUsername = session.username;
+  } else if (activeUsername) {
+    // session=null -> az AKTÍV fiók már nem érvényes (zárolva/törölve/
+    // kijelentkezés) - ugyanaz, mint a launcher removeAccount()-ja: csak
+    // azt az egy sort vesszük ki, a többi elmentett fiók megmarad, és ha
+    // maradt másik, arra váltunk.
+    accounts = accounts.filter((a) => a.username !== activeUsername);
+    activeUsername = accounts[0]?.username || '';
+    syncSessionFromAccounts();
+  }
+  persistAccounts();
 }
 
 async function apiPost(path, body) {
@@ -110,14 +174,95 @@ $$('.auth-tab').forEach((tab) => tab.addEventListener('click', () => setAuthMode
 $('#switchToLogin').addEventListener('click', () => setAuthMode('login'));
 
 // ── Bejelentkezés ──
-$('#authSubmit').addEventListener('click', doLogin);
-$('#authPass').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+// JAVÍTVA: a #loginForm mostantól VALÓDI <form> (ld. index.html megjegyzését
+// a jelszókezelő-barátságról) - natív "submit" eseményt figyelünk (Enterrel
+// VAGY a gombra kattintva egyaránt kiváltódik), preventDefault()-tal, hogy
+// ne töltődjön újra az oldal.
+$('#loginForm').addEventListener('submit', (e) => { e.preventDefault(); doLogin(); });
+
+// ÚJ: 2FA-tudatos bejelentkezés - a POST /api/login VAGY egy azonnali
+// {ok,username,token} választ ad, VAGY (ha a fióknak be van kapcsolva a
+// 2FA-ja) egy {requiresTotp:true, pendingToken}-et, amit a
+// promptTotpModal()-lal bekért kóddal kell beváltani a POST /api/login/totp
+// végponton. Ugyanezt a függvényt hívja a fő bejelentkezési űrlap ÉS a
+// fiókváltó-modál "Fiók hozzáadása" mini-űrlapja is (ld. lentebb) - így a
+// 2FA-lépés UI-ja egyetlen helyen él, nem duplikálódik.
+async function performLogin(username, password, rememberMe) {
+  const res = await apiPost('/api/login', { username, password, rememberMe: rememberMe === true });
+  if (!res.ok || !res.requiresTotp) return res;
+  const totpInput = await promptTotpModal();
+  if (!totpInput) return { ok: false, message: 'Megszakítva.' };
+  return apiPost('/api/login/totp', { pendingToken: res.pendingToken, ...totpInput });
+}
+
+// Promise-alapú 2FA-kód bekérő modal - a confirmModal() mintáját követi,
+// DE statikus (nem futásidőben generált) markup (ld. index.html
+// #totpPromptModal), mert a kód/helyreállítási-kód mezőknek stabil id-ra
+// van szükségük.
+function promptTotpModal() {
+  return new Promise((resolve) => {
+    const overlay = $('#totpPromptModal');
+    const codeInput = $('#totpPromptCodeInput');
+    const recoveryInput = $('#totpPromptRecoveryInput');
+    const useRecoveryLink = $('#totpPromptUseRecovery');
+    const errEl = $('#totpPromptError');
+    codeInput.value = '';
+    recoveryInput.value = '';
+    errEl.textContent = '';
+    codeInput.classList.remove('hidden');
+    recoveryInput.classList.add('hidden');
+    useRecoveryLink.textContent = 'Helyreállítási kód használata';
+    let usingRecovery = false;
+
+    overlay.classList.remove('hidden');
+    codeInput.focus();
+
+    function cleanup() {
+      overlay.classList.add('hidden');
+      useRecoveryLink.removeEventListener('click', toggleRecovery);
+      cancelBtn.removeEventListener('click', onCancel);
+      submitBtn.removeEventListener('click', onSubmit);
+      overlay.removeEventListener('click', onOverlayClick);
+    }
+    function toggleRecovery() {
+      usingRecovery = !usingRecovery;
+      codeInput.classList.toggle('hidden', usingRecovery);
+      recoveryInput.classList.toggle('hidden', !usingRecovery);
+      useRecoveryLink.textContent = usingRecovery ? 'Kód használata inkább' : 'Helyreállítási kód használata';
+      errEl.textContent = '';
+      (usingRecovery ? recoveryInput : codeInput).focus();
+    }
+    function onSubmit() {
+      if (usingRecovery) {
+        const recoveryCode = recoveryInput.value.trim();
+        if (!recoveryCode) { errEl.textContent = 'Add meg a helyreállítási kódot.'; return; }
+        cleanup();
+        resolve({ recoveryCode });
+      } else {
+        const code = codeInput.value.trim();
+        if (!/^\d{6}$/.test(code)) { errEl.textContent = 'A kód 6 számjegyből áll.'; return; }
+        cleanup();
+        resolve({ code });
+      }
+    }
+    function onCancel() { cleanup(); resolve(null); }
+    function onOverlayClick(e) { if (e.target === overlay) onCancel(); }
+
+    const cancelBtn = $('#totpPromptCancel');
+    const submitBtn = $('#totpPromptSubmit');
+    useRecoveryLink.addEventListener('click', toggleRecovery);
+    cancelBtn.addEventListener('click', onCancel);
+    submitBtn.addEventListener('click', onSubmit);
+    overlay.addEventListener('click', onOverlayClick);
+  });
+}
 
 async function doLogin() {
   const user = $('#authUser').value.trim();
   const pass = $('#authPass').value;
+  const rememberMe = $('#authRememberMe').checked;
   $('#authError').textContent = '';
-  const res = await apiPost('/api/login', { username: user, password: pass });
+  const res = await performLogin(user, pass, rememberMe);
   if (!res.ok) {
     if (res.locked) { showLockedScreen(res.reason); return; }
     $('#authError').textContent = res.message || 'Sikertelen bejelentkezés.';
@@ -912,6 +1057,254 @@ $('#btnLogout').addEventListener('click', (e) => {
   location.reload();
 });
 
+// ── Gyors fiókváltás (ld. accounts/activeUsername fent) - a SolarLauncher
+// fiókváltó-modáljának 1:1 UX-portja. ──
+const accountModal = $('#accountModal');
+function openAccountModal() {
+  $('#addAccountForm').classList.add('hidden');
+  $('#addAcctUser').value = '';
+  $('#addAcctPass').value = '';
+  $('#addAcctError').textContent = '';
+  renderAccountList();
+  accountModal.classList.remove('hidden');
+}
+function closeAccountModal() { accountModal.classList.add('hidden'); }
+$('#btnManageAccounts').addEventListener('click', (e) => {
+  e.stopPropagation();
+  topbarDropdown.classList.add('hidden');
+  topbarUserBtn.classList.remove('open');
+  openAccountModal();
+});
+$('#accountModalClose').addEventListener('click', closeAccountModal);
+accountModal.addEventListener('click', (e) => { if (e.target === accountModal) closeAccountModal(); });
+
+function renderAccountList() {
+  const listEl = $('#accountList');
+  listEl.innerHTML = accounts.map((a, i) => `
+    <div class="account-row${a.username === activeUsername ? ' active' : ''}" data-idx="${i}">
+      <canvas class="account-row-avatar" data-idx="${i}" width="32" height="32"></canvas>
+      <span class="account-row-name">${escapeHtml(a.username)}</span>
+      ${a.username === activeUsername ? '<span class="account-row-badge">Aktív</span>' : ''}
+      <button type="button" class="account-row-remove" data-remove-username="${escapeHtml(a.username)}" title="Eltávolítás">×</button>
+    </div>
+  `).join('') || '<p class="player-result-note">Nincs elmentett fiók.</p>';
+  $$('#accountList .account-row-avatar').forEach((canvas, i) => {
+    drawFaceForPlayer(canvas, { username: accounts[i].username, hasSkin: true });
+  });
+  $$('#accountList .account-row').forEach((row) => {
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('.account-row-remove')) return;
+      const idx = Number(row.dataset.idx);
+      const acc = accounts[idx];
+      if (acc && acc.username !== activeUsername) switchAccount(acc.username);
+    });
+  });
+  $$('#accountList .account-row-remove').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      removeAccountEntry(btn.dataset.removeUsername);
+    });
+  });
+}
+
+// Váltás egy MÁR elmentett fiókra - a launcher mintáját követve friss
+// apiGetMe()-vel újra-ellenőrizve (a token időközben lejárhatott/a fiók
+// zárolásra kerülhetett), mielőtt ténylegesen aktívvá tennénk.
+async function switchAccount(username) {
+  const acc = accounts.find((a) => a.username === username);
+  if (!acc) return;
+  const res = await apiGetMe(acc.token);
+  if (res.ok) {
+    activeUsername = username;
+    persistAccounts();
+    syncSessionFromAccounts();
+    closeAccountModal();
+    enterApp(res);
+  } else if (res.locked) {
+    closeAccountModal();
+    showLockedScreen(res.reason);
+  } else {
+    // Lejárt/érvénytelen - a launcher mintáját követve kivesszük a listából.
+    accounts = accounts.filter((a) => a.username !== username);
+    persistAccounts();
+    renderAccountList();
+    showToast('Ez a munkamenet lejárt - jelentkezz be újra.', true);
+  }
+}
+
+// "×" gombbal explicit eltávolítás a modálban - ELLENTÉTBEN a saveSession()
+// session=null ágával (ami az AKTÍV fiók érvénytelenné válásakor fut le),
+// ez bármelyik (akár nem-aktív) fiókot eltávolíthatja.
+function removeAccountEntry(username) {
+  const wasActive = username === activeUsername;
+  accounts = accounts.filter((a) => a.username !== username);
+  if (wasActive) {
+    activeUsername = accounts[0]?.username || '';
+    syncSessionFromAccounts();
+  }
+  persistAccounts();
+  if (wasActive) {
+    // Ugyanaz, mint a "Kijelentkezés" gomb - egy reload újraindítja a
+    // tryAutoLogin()-t a (esetleg) megmaradt fiókkal.
+    location.reload();
+  } else {
+    renderAccountList();
+  }
+}
+
+$('#btnShowAddAccount').addEventListener('click', () => {
+  $('#addAccountForm').classList.toggle('hidden');
+  $('#addAcctUser').focus();
+});
+$('#btnDoAddAccount').addEventListener('click', async () => {
+  const username = $('#addAcctUser').value.trim();
+  const password = $('#addAcctPass').value;
+  const errEl = $('#addAcctError');
+  errEl.textContent = '';
+  if (!username || !password) { errEl.textContent = 'Add meg a felhasználóneved és a jelszavad.'; return; }
+  const res = await performLogin(username, password, false);
+  if (!res.ok) {
+    if (res.locked) { closeAccountModal(); showLockedScreen(res.reason); return; }
+    errEl.textContent = res.message || 'Sikertelen bejelentkezés.';
+    return;
+  }
+  session = { username: res.username, token: res.token };
+  saveSession();
+  closeAccountModal();
+  enterApp();
+});
+
+// ── Biztonság (2FA/TOTP) - ld. SolarBackend src/totp.js ──
+let lastGeneratedRecoveryCodes = null;
+
+function showSecurityPanel(panelId) {
+  ['securityTotpDisabledPanel', 'securityTotpSetupPanel', 'securityRecoveryCodesPanel', 'securityTotpEnabledPanel']
+    .forEach((id) => $('#' + id).classList.toggle('hidden', id !== panelId));
+}
+
+async function loadSecurityStatus() {
+  if (!session || !session.token) return;
+  const statusEl = $('#securityTotpStatus');
+  statusEl.textContent = 'Betöltés...';
+  try {
+    const res = await fetch(BACKEND_URL + '/api/2fa/status', { headers: { Authorization: 'Bearer ' + session.token } });
+    const data = await res.json();
+    if (!data.ok) { statusEl.textContent = 'Nem sikerült lekérdezni az állapotot.'; return; }
+    if (data.enabled) {
+      statusEl.textContent = 'A kétlépcsős azonosítás BE van kapcsolva a fiókodon.';
+      $('#securityTotpPasswordInput').value = '';
+      $('#securityTotpActionError').textContent = '';
+      showSecurityPanel('securityTotpEnabledPanel');
+    } else {
+      statusEl.textContent = 'A kétlépcsős azonosítás jelenleg NINCS bekapcsolva.';
+      showSecurityPanel('securityTotpDisabledPanel');
+    }
+  } catch {
+    statusEl.textContent = 'Nem sikerült elérni a szervert.';
+  }
+}
+
+$('#btnStart2faSetup').addEventListener('click', async () => {
+  try {
+    const res = await fetch(BACKEND_URL + '/api/2fa/setup', { method: 'POST', headers: { Authorization: 'Bearer ' + session.token } });
+    const data = await res.json();
+    if (!data.ok) { showToast(data.message || 'Nem sikerült elindítani a beállítást.', true); return; }
+    $('#securityTotpQr').src = data.qrCodeDataUrl;
+    $('#securityTotpSecretText').textContent = 'Kézi megadáshoz: ' + data.secret;
+    $('#securityTotpConfirmInput').value = '';
+    $('#securityTotpSetupError').textContent = '';
+    showSecurityPanel('securityTotpSetupPanel');
+  } catch {
+    showToast('Nem sikerült elérni a szervert.', true);
+  }
+});
+
+$('#btnCancel2faSetup').addEventListener('click', () => showSecurityPanel('securityTotpDisabledPanel'));
+
+$('#btnConfirm2faSetup').addEventListener('click', async () => {
+  const code = $('#securityTotpConfirmInput').value.trim();
+  const errEl = $('#securityTotpSetupError');
+  if (!/^\d{6}$/.test(code)) { errEl.textContent = 'A kód 6 számjegyből áll.'; return; }
+  try {
+    const res = await fetch(BACKEND_URL + '/api/2fa/enable', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ code })
+    });
+    const data = await res.json();
+    if (!data.ok) { errEl.textContent = data.message || 'Érvénytelen kód.'; return; }
+    showRecoveryCodes(data.recoveryCodes);
+  } catch {
+    errEl.textContent = 'Nem sikerült elérni a szervert.';
+  }
+});
+
+function showRecoveryCodes(codes) {
+  lastGeneratedRecoveryCodes = codes;
+  $('#securityRecoveryCodesList').innerHTML = codes.map((c) => `<div class="account-row" style="cursor:default;"><span class="account-row-name" style="text-align:center; font-family:monospace; letter-spacing:.05em;">${escapeHtml(c)}</span></div>`).join('');
+  showSecurityPanel('securityRecoveryCodesPanel');
+}
+
+$('#btnDownloadRecoveryCodes').addEventListener('click', () => {
+  if (!lastGeneratedRecoveryCodes) return;
+  const text = 'Solaryn - 2FA helyreállítási kódok\n\nEzeket a kódokat csak EGYSZER tudod felhasználni, ha elveszíted a hitelesítő eszközödet.\nTárold biztonságos helyen!\n\n' + lastGeneratedRecoveryCodes.join('\n') + '\n';
+  const blob = new Blob([text], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'solaryn-2fa-helyreallitasi-kodok.txt';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+});
+
+$('#btnDoneRecoveryCodes').addEventListener('click', () => {
+  lastGeneratedRecoveryCodes = null;
+  loadSecurityStatus();
+});
+
+$('#btnDisable2fa').addEventListener('click', async () => {
+  const password = $('#securityTotpPasswordInput').value;
+  const errEl = $('#securityTotpActionError');
+  if (!password) { errEl.textContent = 'Add meg a jelszavad.'; return; }
+  const confirmed = await confirmModal('2FA kikapcsolása', 'Biztosan kikapcsolod a kétlépcsős azonosítást? A bejelentkezéshez ezután újra elég lesz csak a jelszavad.', 'Igen, kikapcsolás');
+  if (!confirmed) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/2fa/disable', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ password })
+    });
+    const data = await res.json();
+    if (!data.ok) { errEl.textContent = data.message || 'Nem sikerült kikapcsolni.'; return; }
+    showToast('A kétlépcsős azonosítás kikapcsolva.');
+    loadSecurityStatus();
+  } catch {
+    errEl.textContent = 'Nem sikerült elérni a szervert.';
+  }
+});
+
+$('#btnRegenerateRecoveryCodes').addEventListener('click', async () => {
+  const password = $('#securityTotpPasswordInput').value;
+  const errEl = $('#securityTotpActionError');
+  if (!password) { errEl.textContent = 'Add meg a jelszavad az új kódok generálásához.'; return; }
+  const confirmed = await confirmModal('Új helyreállítási kódok', 'A régi helyreállítási kódjaid ÉRVÉNYÜKET VESZTIK, csak az újak fognak működni. Folytatod?', 'Igen, új kódok');
+  if (!confirmed) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/2fa/regenerate-recovery-codes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ password })
+    });
+    const data = await res.json();
+    if (!data.ok) { errEl.textContent = data.message || 'Nem sikerült generálni.'; return; }
+    showRecoveryCodes(data.recoveryCodes);
+  } catch {
+    errEl.textContent = 'Nem sikerült elérni a szervert.';
+  }
+});
+
 // ── Oldalsáv / nézetváltás ──
 function switchView(view) {
   $$('.app-nav-item[data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
@@ -925,6 +1318,9 @@ function switchView(view) {
   // Az Egyenleg fület minden megnyitáskor frissítjük - ugyanaz az elv, mint a
   // Rangoknál: friss egyenleget mutasson, ne egy esetleg elavult értéket.
   if (view === 'wallet') refreshPpBalance();
+  // A Biztonság fület minden megnyitáskor frissítjük - friss 2FA-állapotot
+  // mutasson (ld. loadSecurityStatus).
+  if (view === 'security') loadSecurityStatus();
   // A Napló fület minden megnyitáskor frissítjük - friss bejegyzéseket kér le
   // (a dátum-szűrők szerint), a keresés viszont kliens-oldalon szűr a már
   // letöltött listán, nem küld újabb kérést minden billentyűleütésre.

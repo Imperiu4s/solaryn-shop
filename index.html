@@ -30,25 +30,40 @@
         </div>
 
         <!-- Bejelentkezés -->
-        <div class="auth-form" id="loginForm">
+        <!-- JAVÍTVA: a felhasználó kérésére VALÓDI <form> (nem <div>) + helyes
+             autocomplete attribútumok (korábban "off" volt, ami AKTÍVAN
+             megakadályozta a böngésző jelszókezelőjét a mentés-felajánlásban) -
+             a legtöbb jelszókezelő ezt várja a mentés-ajánlathoz. -->
+        <form class="auth-form" id="loginForm">
           <label>Felhasználónév</label>
-          <input id="authUser" type="text" autocomplete="off" placeholder="Játékosneved" />
+          <input id="authUser" type="text" autocomplete="username" placeholder="Játékosneved" />
           <label>Jelszó</label>
-          <input id="authPass" type="password" autocomplete="off" placeholder="••••••••" />
+          <input id="authPass" type="password" autocomplete="current-password" placeholder="••••••••" />
+          <label class="check-row auth-remember-row">
+            <input type="checkbox" id="authRememberMe" />
+            <span>Maradj bejelentkezve</span>
+          </label>
           <div id="authError" class="auth-error"></div>
-          <button id="authSubmit" class="btn-glow">Bejelentkezés</button>
+          <button type="submit" id="authSubmit" class="btn-glow">Bejelentkezés</button>
           <a href="#" id="btnForgotPassword" class="auth-forgot-link">Elfelejtett jelszó?</a>
-        </div>
+        </form>
 
         <!-- Regisztráció -->
         <div class="auth-form hidden" id="registerForm">
+          <!-- JAVÍTVA: helyes autocomplete attribútumok (ld. #loginForm
+               megjegyzését) - a jelszó mezők "new-password"-öt kapnak (nem
+               "current-password"-öt), hogy a jelszókezelő tudja: itt egy ÚJ
+               jelszót generálhat/menthet, nem egy meglévőt tölt ki. Az
+               "újra" mezőknél SZÁNDÉKOSAN maradt "off" - ezek elgépelés-
+               ellenőrző duplikátumok, az automatikus kitöltésük épp a
+               céljukat (két FÜGGETLEN begépelés összevetése) hiúsítaná meg. -->
           <label>Játékos név *</label>
-          <input id="regUser" type="text" autocomplete="off" placeholder="Játékos név" />
+          <input id="regUser" type="text" autocomplete="username" placeholder="Játékos név" />
 
           <div class="form-row-2">
             <div>
               <label>Email cím *</label>
-              <input id="regEmail" type="email" autocomplete="off" placeholder="Valós email cím" />
+              <input id="regEmail" type="email" autocomplete="email" placeholder="Valós email cím" />
             </div>
             <div>
               <label>Email cím újra *</label>
@@ -66,11 +81,11 @@
           <div class="form-row-2">
             <div>
               <label>Jelszó *</label>
-              <input id="regPass" type="password" autocomplete="off" placeholder="Jelszó" />
+              <input id="regPass" type="password" autocomplete="new-password" placeholder="Jelszó" />
             </div>
             <div>
               <label>Jelszó újra *</label>
-              <input id="regPass2" type="password" autocomplete="off" placeholder="Jelszó újra" />
+              <input id="regPass2" type="password" autocomplete="new-password" placeholder="Jelszó újra" />
             </div>
           </div>
 
@@ -215,6 +230,10 @@
           <svg viewBox="0 0 24 24"><path d="M11 2a5 5 0 1 0 5 5 5 5 0 0 0-5-5zm-8.5 20a8.5 8.5 0 0 1 17 0zM19 8a3.5 3.5 0 1 0 0 7 .5.5 0 0 0 0-1 2.5 2.5 0 1 1 0-5 .5.5 0 0 0 0-1z"/></svg>
           <span>Játékosok</span>
         </button>
+        <button class="app-nav-item" data-view="security">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2l7 3v6c0 5-3.4 8.4-7 11-3.6-2.6-7-6-7-11V5z" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Biztonság</span>
+        </button>
         <!-- Az egyes elemek a saját "data-permission" kulcsuk szerint jelennek
              meg, ld. app.js enterApp()/hasPerm() - NEM egy blanket "isOwner"
              kapcsolóval. -->
@@ -287,6 +306,11 @@
           <svg class="topbar-caret" viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M7 10l5 5 5-5z"/></svg>
 
           <div class="topbar-dropdown hidden" id="topbarDropdown">
+            <!-- ÚJ: gyors fiókváltás (mint a SolarLauncherben) -->
+            <button id="btnManageAccounts">
+              <svg viewBox="0 0 24 24" width="15" height="15"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              <span>Fiókok kezelése</span>
+            </button>
             <button id="btnLogout">
               <svg viewBox="0 0 24 24" width="15" height="15"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M16 17l5-5-5-5M21 12H9m3 9H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7"/></svg>
               <span>Kijelentkezés</span>
@@ -691,6 +715,52 @@
 
           <h2 id="playerResultHeading" class="player-result-heading hidden">Talált <span class="text-accent">játékosok</span></h2>
           <div id="playerResult" class="player-result-grid"></div>
+        </section>
+
+        <!-- ÚJ: BIZTONSÁG - 2FA (TOTP) be/kikapcsolása a SAJÁT fiókhoz, ld.
+             app.js loadSecurityStatus/start2faSetup. -->
+        <section class="view" data-view="security">
+          <h1 class="page-title">Biztonság</h1>
+          <p class="page-note">Kétlépcsős azonosítás (2FA) - bejelentkezéskor a jelszó mellett egy hitelesítő alkalmazásban (pl. Google Authenticator, Authy) megjelenő kódot is be kell majd írnod.</p>
+
+          <div class="card">
+            <div class="card-title">Kétlépcsős azonosítás</div>
+            <p class="redeem-result" id="securityTotpStatus">Betöltés...</p>
+
+            <!-- Kikapcsolt állapot: "Bekapcsolás" indítja a folyamatot -->
+            <div id="securityTotpDisabledPanel" class="hidden">
+              <button type="button" class="btn-glow" id="btnStart2faSetup">2FA bekapcsolása</button>
+            </div>
+
+            <!-- Beállítás folyamatban: QR + kód-megerősítés -->
+            <div id="securityTotpSetupPanel" class="hidden">
+              <p>Olvasd be az alábbi QR-kódot a hitelesítő alkalmazásoddal, vagy add meg kézzel a titkot:</p>
+              <img id="securityTotpQr" alt="QR-kód" style="display:block; margin:14px auto; border-radius:10px;" />
+              <p class="redeem-result" id="securityTotpSecretText" style="text-align:center; word-break:break-all;"></p>
+              <label class="gift-modal-label">Add meg a 6 jegyű kódot a megerősítéshez</label>
+              <input type="text" id="securityTotpConfirmInput" class="gift-modal-input" inputmode="numeric" maxlength="6" placeholder="000000" />
+              <p class="redeem-result error" id="securityTotpSetupError"></p>
+              <button type="button" class="btn-glow" id="btnConfirm2faSetup" style="margin-top:10px;">Megerősítés és bekapcsolás</button>
+              <button type="button" class="btn-outline" id="btnCancel2faSetup" style="margin-top:8px;">Mégse</button>
+            </div>
+
+            <!-- Helyreállítási kódok - EGYETLEN alkalommal jelennek meg -->
+            <div id="securityRecoveryCodesPanel" class="hidden">
+              <p class="redeem-result error">Mentsd el ezeket a kódokat biztonságos helyre - ha elveszíted a hitelesítő eszközödet, ezekkel tudsz újra bejelentkezni. TÖBBÉ NEM FOGOD ŐKET LÁTNI.</p>
+              <div id="securityRecoveryCodesList" class="account-list"></div>
+              <button type="button" class="btn-outline" id="btnDownloadRecoveryCodes">Letöltés .txt-ként</button>
+              <button type="button" class="btn-glow" id="btnDoneRecoveryCodes" style="margin-top:10px;">Elmentettem, kész</button>
+            </div>
+
+            <!-- Bekapcsolt állapot: "Kikapcsolás" + kódok újragenerálása -->
+            <div id="securityTotpEnabledPanel" class="hidden">
+              <label>Jelszó (a művelet megerősítéséhez)</label>
+              <input type="password" id="securityTotpPasswordInput" autocomplete="current-password" placeholder="••••••••" />
+              <p class="redeem-result error" id="securityTotpActionError"></p>
+              <button type="button" class="btn-outline" id="btnRegenerateRecoveryCodes">Új helyreállítási kódok generálása</button>
+              <button type="button" class="btn-glow admin-delete-btn" id="btnDisable2fa" style="margin-top:8px;">2FA kikapcsolása</button>
+            </div>
+          </div>
         </section>
 
         <!-- NAPLÓ (ADMIN) - csak "tulajdonos" rangnak, ld. app.js isOwner -->
@@ -1337,6 +1407,46 @@
       <div class="modal-actions">
         <button class="btn-outline" id="setNewPasswordCancelBtn">Mégse</button>
         <button class="btn-glow" id="setNewPasswordSubmitBtn">Jelszó megváltoztatása</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ÚJ: gyors fiókváltás (ld. app.js renderAccountList/switchAccount) -
+       a SolarLauncher fiókváltó-modáljának webes megfelelője. -->
+  <div class="modal-overlay hidden" id="accountModal">
+    <div class="modal-card account-modal-card">
+      <h3>Fiókok</h3>
+      <div id="accountList" class="account-list"></div>
+      <button type="button" class="btn-outline" id="btnShowAddAccount">+ Fiók hozzáadása</button>
+      <div class="hidden" id="addAccountForm">
+        <label class="gift-modal-label">Felhasználónév</label>
+        <input type="text" id="addAcctUser" class="gift-modal-input" autocomplete="username" placeholder="Játékosneved" />
+        <label class="gift-modal-label">Jelszó</label>
+        <input type="password" id="addAcctPass" class="gift-modal-input" autocomplete="current-password" placeholder="••••••••" />
+        <div id="addAcctError" class="redeem-result error"></div>
+        <button type="button" class="btn-glow" id="btnDoAddAccount" style="margin-top:10px;">Hozzáadás és váltás</button>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-outline" id="accountModalClose">Bezárás</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ÚJ: 2FA-kód bekérése bejelentkezéskor (ld. app.js promptTotpModal) -
+       Promise-alapú, a confirmModal() mintáját követi, de itt statikus
+       markup (nem futásidőben generált), mert a form-mezőknek stabil id-ra
+       van szükségük az input-eseményekhez. -->
+  <div class="modal-overlay hidden" id="totpPromptModal">
+    <div class="modal-card">
+      <h3>Kétlépcsős azonosítás</h3>
+      <p>Add meg a hitelesítő alkalmazásodban (pl. Google Authenticator) megjelenő 6 jegyű kódot.</p>
+      <input type="text" id="totpPromptCodeInput" class="gift-modal-input" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" />
+      <p class="link-inline" id="totpPromptUseRecovery" style="margin-top:10px; display:inline-block;">Helyreállítási kód használata</p>
+      <input type="text" id="totpPromptRecoveryInput" class="gift-modal-input hidden" autocomplete="off" placeholder="XXXXX-XXXXX" style="margin-top:8px;" />
+      <div id="totpPromptError" class="redeem-result error"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn-outline" id="totpPromptCancel">Mégse</button>
+        <button type="button" class="btn-glow" id="totpPromptSubmit" style="margin-top:0;">Megerősítés</button>
       </div>
     </div>
   </div>

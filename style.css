@@ -258,6 +258,7 @@ a { color: inherit; }
   display: flex; align-items: flex-start; gap: 9px; cursor: pointer;
   font-size: 12px; color: var(--text-dim); line-height: 1.5;
 }
+.auth-remember-row { margin: 12px 0 6px; }
 .check-row input[type="checkbox"] {
   margin-top: 2px; width: 15px; height: 15px; flex-shrink: 0; accent-color: var(--gold); cursor: pointer;
 }
@@ -1211,6 +1212,31 @@ a { color: inherit; }
 .cookie-options { display: flex; flex-direction: column; gap: 12px; margin-bottom: 22px; }
 .modal-actions { display: flex; gap: 10px; }
 .modal-actions button { flex: 1; margin-top: 0; }
+
+/* ÚJ: gyors fiókváltás modál (ld. app.js renderAccountList) - a
+   .player-card sorstílusát követi, kompaktabb (kisebb avatár/padding),
+   hogy a modálban több fiók is kényelmesen elférjen. */
+.account-modal-card { width: 380px; }
+.account-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; max-height: 260px; overflow-y: auto; }
+.account-row {
+  display: flex; align-items: center; gap: 12px; cursor: pointer;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px;
+  padding: 10px 12px; transition: border-color .16s;
+}
+.account-row:hover { border-color: var(--gold-2); }
+.account-row.active { border-color: var(--gold); cursor: default; }
+.account-row-avatar { border-radius: 8px; background: var(--bg-2); image-rendering: pixelated; flex-shrink: 0; }
+.account-row-name { flex: 1; font-weight: 700; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-row-badge {
+  font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--gold); background: color-mix(in srgb, var(--gold) 15%, transparent);
+  border-radius: 999px; padding: 3px 8px;
+}
+.account-row-remove {
+  background: transparent; border: none; color: var(--text-faint); font-size: 18px; line-height: 1;
+  cursor: pointer; padding: 4px 6px; border-radius: 6px; transition: color .16s, background .16s;
+}
+.account-row-remove:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
 .btn-outline {
   padding: 12px; border-radius: 11px; cursor: pointer; font-size: 13px; font-weight: 700;
   background: transparent; color: var(--text); border: 1px solid var(--line);
