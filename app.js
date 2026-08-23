@@ -3272,16 +3272,21 @@ document.addEventListener('click', (e) => {
   }
 });
 
-// ── Jogok (admin) - egyedi, játékosonkénti admin-jogosultságok, ld.
-// SolarBackend src/permissions.js. Kizárólag a valódi tulajdonos éri el
-// (ld. index.html #navPermissionsBtn - nincs data-permission attribútuma),
-// mert a jog-adás maga nem delegálható. ──
+// ── Jogok (admin) - admin-jogosultságok, ld. SolarBackend src/permissions.js.
+// Kizárólag a valódi tulajdonos éri el (ld. index.html #navPermissionsBtn -
+// nincs data-permission attribútuma), mert a jog-adás maga nem delegálható.
+// KÉT fül: "Játékos szerint" (egy konkrét felhasználónak) és "Rang szerint"
+// (egy egész rangnak, ld. users.rank_name) - a két forrás a backenden
+// EGYMÁSTÓL FÜGGETLENÜL tárolódik és összeadódik (ld. permissions.js
+// getEffectivePermissionKeys()), itt is külön-külön szerkeszthetők. ──
 let permCatalogCache = null;
-let permsEditorUsername = null;
+let permRankListCache = null;
+let permsMode = 'player'; // 'player' | 'rank'
+let permsEditorTarget = null; // username (player módban) vagy rank_name (rang módban)
 
 // A katalógus (kulcs+címke+kategória) ritkán változik, kliens-oldalon
-// egyszer betöltve gyorsítótárazzuk - minden játékos-váltásnál újra
-// lekérdezni felesleges kör lenne.
+// egyszer betöltve gyorsítótárazzuk - minden váltásnál újra lekérdezni
+// felesleges kör lenne.
 async function loadPermCatalog() {
   if (permCatalogCache) return permCatalogCache;
   try {
@@ -3295,6 +3300,47 @@ async function loadPermCatalog() {
   }
   return permCatalogCache;
 }
+
+function setPermsMode(mode) {
+  permsMode = mode;
+  permsEditorTarget = null;
+  $('#permsModePlayerBtn').classList.toggle('active', mode === 'player');
+  $('#permsModeRankBtn').classList.toggle('active', mode === 'rank');
+  $('#permsPlayerSearchPanel').classList.toggle('hidden', mode !== 'player');
+  $('#permsResult').classList.toggle('hidden', mode !== 'player');
+  $('#permsRankSelectPanel').classList.toggle('hidden', mode !== 'rank');
+  $('#permsEditorCard').classList.add('hidden');
+  if (mode === 'rank') loadRankSelect();
+}
+$('#permsModePlayerBtn').addEventListener('click', () => setPermsMode('player'));
+$('#permsModeRankBtn').addEventListener('click', () => setPermsMode('rank'));
+
+// A ténylegesen élő rangnevek listája (ld. GET /api/admin/permissions/ranks) -
+// egyszer betöltve gyorsítótárazzuk, ugyanúgy, mint a katalógust.
+async function loadRankSelect() {
+  const select = $('#permsRankSelect');
+  select.innerHTML = '<option>Betöltés...</option>';
+  $('#permsRankNote').textContent = '';
+  if (!permRankListCache) {
+    try {
+      const res = await fetch(BACKEND_URL + '/api/admin/permissions/ranks', {
+        headers: { Authorization: 'Bearer ' + session.token }
+      });
+      const data = await res.json();
+      permRankListCache = data.ok && Array.isArray(data.ranks) ? data.ranks : [];
+    } catch {
+      permRankListCache = [];
+    }
+  }
+  if (!permRankListCache.length) {
+    select.innerHTML = '<option value="">Nincs elérhető rang</option>';
+    $('#permsRankNote').textContent = 'Jelenleg nincs a tulajdonoson kívüli rangja egyetlen szinkronizált játékosnak sem.';
+    return;
+  }
+  select.innerHTML = permRankListCache.map((r) => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join('');
+  loadPermsEditor(select.value);
+}
+$('#permsRankSelect').addEventListener('change', () => loadPermsEditor($('#permsRankSelect').value));
 
 async function doPermsSearch() {
   const name = $('#permsPlayerSearchInput').value.trim();
@@ -3324,10 +3370,20 @@ async function doPermsSearch() {
 $('#permsPlayerSearchBtn').addEventListener('click', doPermsSearch);
 $('#permsPlayerSearchInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') doPermsSearch(); });
 
-async function loadPermsEditor(username) {
-  permsEditorUsername = username;
+// A jelenlegi permsMode dönti el, melyik végpontot kérdezzük/írjuk - a
+// checkbox-lista renderelése és a mentés-logika egyébként azonos.
+function permsTargetUrl(target) {
+  return permsMode === 'rank'
+    ? '/api/admin/permissions/rank/' + encodeURIComponent(target)
+    : '/api/admin/permissions/' + encodeURIComponent(target);
+}
+
+async function loadPermsEditor(target) {
+  if (!target) return;
+  permsEditorTarget = target;
   $('#permsEditorCard').classList.remove('hidden');
-  $('#permsEditorUsername').textContent = username;
+  $('#permsEditorTypeLabel').textContent = permsMode === 'rank' ? 'Rang' : 'Játékos';
+  $('#permsEditorUsername').textContent = target;
   $('#permsSaveResult').textContent = '';
   const container = $('#permsCategoriesContainer');
   container.innerHTML = '<p class="player-result-note">Betöltés...</p>';
@@ -3336,7 +3392,7 @@ async function loadPermsEditor(username) {
     loadPermCatalog(),
     (async () => {
       try {
-        const res = await fetch(BACKEND_URL + '/api/admin/permissions/' + encodeURIComponent(username), {
+        const res = await fetch(BACKEND_URL + permsTargetUrl(target), {
           headers: { Authorization: 'Bearer ' + session.token }
         });
         const data = await res.json();
@@ -3363,13 +3419,13 @@ async function loadPermsEditor(username) {
 }
 
 $('#permsSaveBtn').addEventListener('click', async () => {
-  if (!permsEditorUsername) return;
+  if (!permsEditorTarget) return;
   const resultEl = $('#permsSaveResult');
   const keys = $$('#permsCategoriesContainer [data-perm-key]:checked').map((el) => el.dataset.permKey);
   resultEl.textContent = 'Mentés...';
   resultEl.className = 'redeem-result';
   try {
-    const res = await fetch(BACKEND_URL + '/api/admin/permissions/' + encodeURIComponent(permsEditorUsername), {
+    const res = await fetch(BACKEND_URL + permsTargetUrl(permsEditorTarget), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
       body: JSON.stringify({ permissions: keys })
@@ -3381,7 +3437,7 @@ $('#permsSaveBtn').addEventListener('click', async () => {
       return;
     }
     resultEl.textContent = '';
-    showToast('Jogosultságok mentve.');
+    showToast(permsMode === 'rank' ? 'Rang jogosultságai mentve.' : 'Jogosultságok mentve.');
   } catch {
     resultEl.textContent = 'Nem sikerült elérni a szervert.';
     resultEl.className = 'redeem-result error';

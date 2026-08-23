@@ -9,7 +9,9 @@
     { key: 'solaryn', label: 'Solaryn (alap)' },
     { key: 'ice', label: 'Jégkék' },
     { key: 'crimson', label: 'Bíbor' },
-    { key: 'emerald', label: 'Smaragd' }
+    { key: 'emerald', label: 'Smaragd' },
+    { key: 'amethyst', label: 'Ametiszt' },
+    { key: 'turquoise', label: 'Türkiz' }
   ];
 
   function getSavedTheme() {

@@ -89,6 +89,48 @@
   --btn-ink: #052710;
 }
 
+:root[data-theme="amethyst"] {
+  --bg: #0d0a13;
+  --bg-2: #14101c;
+  --panel: #1c1526;
+  --panel-2: #251b33;
+  --line: #3a2a4d;
+  --text: #f3ecfa;
+  --text-dim: #a996ba;
+  --text-faint: #6f5c85;
+  --gold: #b565ff;
+  --gold-2: #8b3ce0;
+  --gold-glow: rgba(150, 60, 255, 0.45);
+  --orange: #d68cff;
+  --orange-2: #b054e6;
+  --orange-glow: rgba(190, 80, 255, 0.45);
+  --danger: #ff5a5a;
+  --discord: #5865f2;
+  --success: #2ecc71;
+  --btn-ink: #1d0630;
+}
+
+:root[data-theme="turquoise"] {
+  --bg: #061212;
+  --bg-2: #0a1a1a;
+  --panel: #0f2626;
+  --panel-2: #143333;
+  --line: #205050;
+  --text: #e8fbfa;
+  --text-dim: #85b8b5;
+  --text-faint: #567d7b;
+  --gold: #2dd4bf;
+  --gold-2: #14a89a;
+  --gold-glow: rgba(30, 210, 190, 0.45);
+  --orange: #5eead4;
+  --orange-2: #2bbfa8;
+  --orange-glow: rgba(60, 230, 200, 0.45);
+  --danger: #ff5a5a;
+  --discord: #5865f2;
+  --success: #2ecc71;
+  --btn-ink: #042220;
+}
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 html, body {
@@ -303,8 +345,8 @@ a { color: inherit; }
 .topbar-pp-badge {
   display: inline-flex; align-items: center; gap: 4px; width: fit-content;
   padding: 2px 9px; border-radius: 999px;
-  background: linear-gradient(180deg, rgba(255,122,61,.18), rgba(255,77,31,.08));
-  border: 1px solid rgba(255,122,61,.45);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--orange) 18%, transparent), color-mix(in srgb, var(--orange-2) 8%, transparent));
+  border: 1px solid var(--orange-glow);
   color: var(--orange); font-weight: 800; font-size: 11px;
 }
 .topbar-pp-badge svg, .topbar-pp-badge img { width: 13px; height: 13px; object-fit: contain; }
@@ -351,6 +393,15 @@ a { color: inherit; }
   display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 6px 16px; margin-bottom: 18px;
 }
+/* ÚJ: "Jogok" admin nézet Játékos/Rang mód-váltója - vizuálisan a .legal-tab
+   mintáját követi, de SAJÁT osztály (ld. index.html megjegyzését arról,
+   hogy a .legal-tab-hoz kötött kattintás-figyelővel összeakadna). */
+.perms-mode-tab {
+  background: var(--panel); border: 1px solid var(--line); color: var(--text-dim);
+  padding: 10px 20px; border-radius: 11px; cursor: pointer; font-weight: 700;
+  font-size: 13px; transition: all .16s;
+}
+.perms-mode-tab.active { background: linear-gradient(180deg, var(--gold), var(--gold-2)); color: var(--btn-ink); box-shadow: 0 6px 18px var(--gold-glow); }
 
 .app-content { padding: 40px 48px; max-width: 1320px; margin: 0 auto; width: 100%; flex: 1; }
 .view { display: none; }
@@ -815,7 +866,7 @@ a { color: inherit; }
 .transfer-card input:focus { border-color: var(--orange); }
 .transfer-fee-note {
   font-size: 12.5px; color: var(--text-dim); margin-top: 18px; padding: 12px 14px;
-  border-radius: 10px; background: rgba(255,122,61,.06); border: 1px solid rgba(255,122,61,.25);
+  border-radius: 10px; background: color-mix(in srgb, var(--orange) 6%, transparent); border: 1px solid color-mix(in srgb, var(--orange) 25%, transparent);
 }
 .transfer-fee-note b { color: var(--orange); }
 .transfer-card .btn-glow { width: 100%; margin-top: 20px; }
@@ -943,11 +994,15 @@ a { color: inherit; }
 .admin-tables-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .admin-table-title { font-size: 13px; font-weight: 700; margin-bottom: 10px; color: var(--text); }
 .device-link {
-  background: transparent; border: 1px solid rgba(255,122,61,.4); color: var(--orange);
+  /* JAVÍTVA: korábban nyers rgba(255,122,61,...) (a Solaryn téma narancsának
+     szó szerinti értéke) volt beégetve, ezért más témán váltva is mindig
+     narancssárga maradt - a color-mix() a var(--orange)-ból számol, tehát
+     témánként automatikusan a megfelelő árnyalatot adja. */
+  background: transparent; border: 1px solid color-mix(in srgb, var(--orange) 40%, transparent); color: var(--orange);
   border-radius: 8px; padding: 4px 10px; font-size: 12.5px; font-weight: 700; cursor: pointer;
   transition: background .16s, border-color .16s;
 }
-.device-link:hover { background: rgba(255,122,61,.12); border-color: var(--orange); }
+.device-link:hover { background: color-mix(in srgb, var(--orange) 12%, transparent); border-color: var(--orange); }
 
 .ban-panel label {
   display: block; font-size: 11px; color: var(--text-dim); margin: 16px 2px 6px;

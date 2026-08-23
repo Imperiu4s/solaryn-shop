@@ -848,9 +848,18 @@
              #navPermissionsBtn), a jog-adás maga nem delegálható. -->
         <section class="view" data-view="permissions">
           <h1 class="page-title">Jogok</h1>
-          <p class="page-note">Adj egyedi admin-jogosultságokat egy játékosnak - a tulajdonos mindig mindenhez hozzáfér, a jogok itt kategóriánként, egyenként állíthatók be másoknak.</p>
+          <p class="page-note">Adj admin-jogosultságokat egy KONKRÉT játékosnak, vagy egy egész RANGNAK (mindenkinek, akinek éppen az a rangja) - a tulajdonos mindig mindenhez hozzáfér, a két forrás egymástól függetlenül szerkeszthető, a tényleges hozzáférés a kettő összege.</p>
 
-          <div class="card player-search-panel">
+          <!-- ÚJ: SZÁNDÉKOSAN NEM .legal-tab (bár vizuálisan onnan másolt stílus,
+               ld. style.css) - a "Jogi dokumentumok" nézet egy delegált
+               kattintás-figyelőt köt MINDEN .legal-tab elemre (ld. app.js
+               setLegalTab), ugyanaz a class itt összeakadt volna azzal. -->
+          <div class="legal-tabs">
+            <button type="button" class="perms-mode-tab active" id="permsModePlayerBtn">Játékos szerint</button>
+            <button type="button" class="perms-mode-tab" id="permsModeRankBtn">Rang szerint</button>
+          </div>
+
+          <div class="card player-search-panel" id="permsPlayerSearchPanel">
             <label class="player-search-label">Játékosnév</label>
             <div class="player-search-row">
               <div class="player-search-field">
@@ -863,11 +872,16 @@
               </button>
             </div>
           </div>
-
           <div id="permsResult" class="player-result-grid"></div>
 
+          <div class="card hidden" id="permsRankSelectPanel">
+            <label class="player-search-label">Rang</label>
+            <select id="permsRankSelect" class="gift-modal-input"></select>
+            <p class="player-result-note" id="permsRankNote"></p>
+          </div>
+
           <div class="card hidden" id="permsEditorCard">
-            <div class="card-title">Jogosultságok: <span id="permsEditorUsername"></span></div>
+            <div class="card-title">Jogosultságok - <span id="permsEditorTypeLabel">Játékos</span>: <span id="permsEditorUsername"></span></div>
             <div id="permsCategoriesContainer"></div>
             <p class="redeem-result" id="permsSaveResult"></p>
             <div class="modal-actions" style="margin-top:14px;">
