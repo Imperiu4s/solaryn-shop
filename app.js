@@ -549,16 +549,26 @@ function formatStats(data) {
 // illetve a tulajdonosi Játékos-profil admin panelje) - ugyanazt a
 // data.discordUsername/discordAvatar mezőpárt használja mindkét helyen (ld.
 // SolarBackend /api/me, /api/profile/:username, /api/admin/player/:username).
-function renderDiscordLinkBadge(container, data) {
+// ÚJ: "opts.mode" dönti el, a leválasztás-gomb (ha "data" össze van kötve)
+// a SAJÁT fiókot (mode:'self', ld. #profileDiscordLink - nincs jogosultsághoz
+// kötve, mindenki leválaszthatja a sajátját) vagy egy MÁSIK, admin panelen
+// megnyitott játékos fiókját válassza-e le (mode:'admin' - "data-perm"
+// attribútumot kap, ld. applyPermVisibility()). opts hiányában (pl. régebbi
+// hívási pont) nincs leválasztás-gomb - ugyanaz a viselkedés, mint korábban.
+function renderDiscordLinkBadge(container, data, opts) {
   if (!container) return;
   if (data && data.discordUsername) {
     const avatarHtml = data.discordAvatar
       ? `<img class="discord-link-avatar" src="${data.discordAvatar}" alt="" />`
       : '';
+    const unlinkBtn = opts
+      ? `<button type="button" class="link-btn discord-unlink-btn" data-mode="${opts.mode}"${opts.mode === 'admin' ? ' data-perm="player.action.discordUnlink"' : ''}>Leválasztás</button>`
+      : '';
     container.innerHTML = `
       <div class="discord-link-badge discord-link-badge-connected">
         ${avatarHtml}
         <span>Összekötve ezzel: <b>${data.discordUsername}</b></span>
+        ${unlinkBtn}
       </div>
     `;
   } else {
@@ -569,6 +579,39 @@ function renderDiscordLinkBadge(container, data) {
     `;
   }
 }
+
+// ── Discord leválasztás (saját fiók VAGY - jogosultsággal - egy másik
+// játékos fiókja az admin panelről, ld. renderDiscordLinkBadge fenti
+// megjegyzését) - ld. SolarBackend src/discord.js POST /api/discord/unlink
+// és POST /api/admin/player/:username/discord/unlink. ──
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.discord-unlink-btn');
+  if (!btn) return;
+  const mode = btn.dataset.mode;
+  confirmModal(
+    'Discord leválasztása',
+    'Biztosan leválasztod ezt a Discord-fiókot? A leválasztás után a szerveren a /link paranccsal köthető össze újra.',
+    'Igen, leválasztás'
+  ).then((confirmed) => {
+    if (!confirmed) return;
+    const url = mode === 'admin'
+      ? BACKEND_URL + '/api/admin/player/' + encodeURIComponent(lastAdminPlayerUsername) + '/discord/unlink'
+      : BACKEND_URL + '/api/discord/unlink';
+    fetch(url, { method: 'POST', headers: { Authorization: 'Bearer ' + session.token } })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.ok) { showToast(data.message || 'Nem sikerült leválasztani.', true); return; }
+        showToast('Discord-fiók leválasztva.');
+        if (mode === 'admin') {
+          renderDiscordLinkBadge($('#adminPlayerDiscordLink'), null, { mode: 'admin' });
+          applyPermVisibility($('#adminPlayerDiscordLink'));
+        } else {
+          renderDiscordLinkBadge($('#profileDiscordLink'), null, { mode: 'self' });
+        }
+      })
+      .catch(() => showToast('Nem sikerült elérni a szervert.', true));
+  });
+});
 
 // ÚJ: "van-e aktív némításod/kitiltásod/kliens-tiltásod" jelvény(ek) a
 // profil-kártyán - a data.activeMute/activeBan/activeCban mezőket a
@@ -874,7 +917,7 @@ const PLAYER_PANEL_KEYS = [
   'player.action.emailChange', 'player.action.lock', 'player.action.unlock', 'player.action.ppAdjust',
   'player.action.walletAdjust',
   'player.action.casinoAdjust', 'player.action.delete', 'player.action.badgeGrant', 'player.action.badgeRevoke',
-  'player.action.discountSet', 'player.action.discountRemove'
+  'player.action.discountSet', 'player.action.discountRemove', 'player.action.discordUnlink'
 ];
 // Bármely elemet, aminek van "data-perm" attribútuma, a megfelelő jog
 // szerint mutat/rejt - egyetlen közös helyen, hogy a player-admin-panel és
@@ -946,7 +989,7 @@ async function enterApp(meData) {
 
   if (!meData) meData = await apiGetMe(session.token);
   renderStatBadges($('#statBadgeGrid'), formatStats(meData));
-  renderDiscordLinkBadge($('#profileDiscordLink'), meData);
+  renderDiscordLinkBadge($('#profileDiscordLink'), meData, { mode: 'self' });
   renderSanctionStatus($('#profileSanctionStatus'), meData);
   renderNameBadges($('#profileNameBadges'), meData?.badges);
   currentSanctionStatus = {
@@ -1117,9 +1160,17 @@ async function switchAccount(username) {
   if (res.ok) {
     activeUsername = username;
     persistAccounts();
-    syncSessionFromAccounts();
-    closeAccountModal();
-    enterApp(res);
+    // JAVÍTVA: korábban itt egyszerűen enterApp(res)-t hívtuk újratöltés
+    // nélkül - ha admin fiókról egy sima játékos-fiókra (vagy fordítva)
+    // váltottunk, az admin-only nézetek/állapotok (pl. épp nyitva volt egy
+    // admin nézet) NEM ürültek ki, a régi fiók admin-jogaival lehetett volna
+    // tovább műveleteket végezni az újonnan aktív, jogosulatlan fiókkal is -
+    // ugyanaz a hiba osztály, amit a removeAccountEntry() lejjebbi
+    // location.reload()-ja már elkerül a "×" gombos eltávolításnál. Egy
+    // teljes újratöltés a legegyszerűbb módja annak, hogy MINDEN nézet/
+    // állapot friss, a most aktív fiókhoz tartozó legyen - tryAutoLogin()
+    // a betöltéskor úgyis a most elmentett aktív fiókkal jelentkezik be.
+    location.reload();
   } else if (res.locked) {
     closeAccountModal();
     showLockedScreen(res.reason);
@@ -1704,20 +1755,28 @@ async function doPlayerSearch() {
   });
 }
 
+// JAVÍTVA: korábban a méret mindenhol be volt égetve 40-re, ami a
+// player-card-canvas (mindig 40x40) hívásoknál nem számított, de a
+// fiókváltó-modál KOMPAKTABB, 32x32-es account-row-avatar canvasán (ld.
+// renderAccountList) elcsúszott/kilógott képet eredményezett, mert a
+// rajzolás egy nála nagyobb (40x40) területet feltételezett. Most a canvas
+// SAJÁT width attribútumából olvassuk ki a tényleges méretet, így bármilyen
+// négyzet alakú canvasra helyesen rajzol.
 async function drawFaceForPlayer(canvas, player) {
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingEnabled = false;
+  const size = canvas.width;
   const img = player.hasSkin ? await loadSkinImage(player.username) : null;
   if (img) {
-    ctx.clearRect(0, 0, 40, 40);
+    ctx.clearRect(0, 0, size, size);
     // JAVÍTVA: ld. drawFaceFromSkin ugyanezen HD-skálázási javítását.
     const scale = (img.naturalWidth || img.width) / 64;
-    ctx.drawImage(img, 8 * scale, 8 * scale, 8 * scale, 8 * scale, 0, 0, 40, 40);
+    ctx.drawImage(img, 8 * scale, 8 * scale, 8 * scale, 8 * scale, 0, 0, size, size);
     if ((img.naturalHeight || img.height) > (img.naturalWidth || img.width) / 2) {
-      ctx.drawImage(img, 40 * scale, 8 * scale, 8 * scale, 8 * scale, 0, 0, 40, 40);
+      ctx.drawImage(img, 40 * scale, 8 * scale, 8 * scale, 8 * scale, 0, 0, size, size);
     }
   } else {
-    drawDefaultFace(ctx, 40);
+    drawDefaultFace(ctx, size);
   }
 }
 
@@ -1876,7 +1935,8 @@ async function loadAdminPlayerPanel(username) {
     currentAdminEmail = data.email || '';
     $('#adminPlayerEmailText').textContent = currentAdminEmail || '-';
     $('#adminPlayerCreatedAt').textContent = formatLedgerDate(data.createdAt);
-    renderDiscordLinkBadge($('#adminPlayerDiscordLink'), data);
+    renderDiscordLinkBadge($('#adminPlayerDiscordLink'), data, { mode: 'admin' });
+    applyPermVisibility($('#adminPlayerDiscordLink'));
     renderAdminLockStatus(data.locked);
     renderAdminPlayerBadgesList(data.badges);
     renderAdminMediaState(data.hasSkin, data.hasCape);
@@ -3855,10 +3915,30 @@ function resetCouponForm() {
   $('#couponFormResult').textContent = '';
   $('#couponFormResult').className = 'redeem-result';
   $('#couponSaveBtn').textContent = 'Mentés';
+  populateCouponRequiredRankSelect();
+}
+
+// A "shopRanks" globális tömböt használja (ld. loadRanks fentebb - MÁR
+// betöltődik oldalbetöltéskor) - ugyanaz a minta, mint
+// populateDiscountScopeItemSelect() a fenti Akciók admin formnál.
+function populateCouponRequiredRankSelect(selectedId) {
+  const sel = $('#couponRequiredRankSelect');
+  const rankOptions = shopRanks.map((r) => `<option value="${r.id}">${escapeHtml(r.label)}</option>`).join('');
+  sel.innerHTML = `<option value="">— Bárki beválthatja —</option>${rankOptions}`;
+  sel.value = selectedId || '';
 }
 
 function couponRewardLabel(c) {
   return c.reward_type === 'wallet' ? `${formatHuf(c.reward_amount)} egyenleg` : `${formatPp(c.reward_amount)} PP`;
+}
+
+// A required_rank a users.rank_name-mel egyezik (LuckPerms-csoportnév) -
+// ha a shopRanks katalógusban megtalálható, a szebb címkéjét mutatjuk,
+// egyébként a nyers rangnevet (pl. egy staff-rang, ami nem vásárolható,
+// de attól még beállítható szükséges rangnak).
+function couponRequiredRankLabel(requiredRank) {
+  const rank = shopRanks.find((r) => r.id === requiredRank);
+  return rank ? rank.label : requiredRank;
 }
 
 function renderCouponsAdminList() {
@@ -3872,6 +3952,7 @@ function renderCouponsAdminList() {
     const windowParts = [];
     if (c.starts_at) windowParts.push('kezdet: ' + formatLedgerDate(c.starts_at));
     if (c.expires_at) windowParts.push('lejár: ' + formatLedgerDate(c.expires_at));
+    if (c.required_rank) windowParts.push('csak: ' + couponRequiredRankLabel(c.required_rank));
     return `
     <div class="badges-admin-item">
       <div class="badges-admin-item-info">
@@ -3910,6 +3991,7 @@ $('#couponSaveBtn').addEventListener('click', async () => {
   const rewardAmount = Number($('#couponRewardAmountInput').value);
   const maxUsesRaw = $('#couponMaxUsesInput').value;
   const maxUses = maxUsesRaw ? Number(maxUsesRaw) : undefined;
+  const requiredRank = $('#couponRequiredRankSelect').value || undefined;
   const startsAt = $('#couponStartsInput').value || undefined;
   const expiresAt = $('#couponExpiresInput').value || undefined;
   const active = $('#couponActiveCheckbox').checked;
@@ -3926,7 +4008,7 @@ $('#couponSaveBtn').addEventListener('click', async () => {
     const res = await fetch(url, {
       method: couponEditingId ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
-      body: JSON.stringify({ code, rewardType, rewardAmount, maxUses, startsAt, expiresAt, active })
+      body: JSON.stringify({ code, rewardType, rewardAmount, maxUses, requiredRank, startsAt, expiresAt, active })
     });
     const data = await res.json();
     if (!data.ok) {
@@ -3954,6 +4036,7 @@ document.addEventListener('click', (e) => {
     $('#couponRewardTypeSelect').value = item.reward_type;
     $('#couponRewardAmountInput').value = item.reward_amount;
     $('#couponMaxUsesInput').value = item.max_uses !== null ? item.max_uses : '';
+    populateCouponRequiredRankSelect(item.required_rank);
     // ÚJ: a dátum-input "ÉÉÉÉ-HH-NN" alakot vár - a backend teljes ISO
     // dátumidőt ad vissza (ld. coupons.js normalizálását), ebből csak a
     // dátumrészt vágjuk ki.
@@ -4436,7 +4519,7 @@ async function tryConsumeDiscordLink() {
     const result = await res.json();
     if (result.ok) {
       showToast(`Discord fiók összekötve: ${result.discordUsername}`);
-      renderDiscordLinkBadge($('#profileDiscordLink'), { discordUsername: result.discordUsername, discordAvatar: result.discordAvatar });
+      renderDiscordLinkBadge($('#profileDiscordLink'), { discordUsername: result.discordUsername, discordAvatar: result.discordAvatar }, { mode: 'self' });
     } else {
       showToast(result.message || 'A Discord-összekötés sikertelen.', true);
     }

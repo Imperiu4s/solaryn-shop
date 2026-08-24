@@ -1255,6 +1255,13 @@ a { color: inherit; }
   cursor: pointer; padding: 4px 6px; border-radius: 6px; transition: color .16s, background .16s;
 }
 .account-row-remove:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
+/* JAVÍTVA: a "+ Fiók hozzáadása" gomb korábban a tartalmához igazodó
+   (a ".modal-actions button"-tól eltérően nem "flex:1"-es) szélességű volt,
+   ezért keskenyebb lett, mint az alatta lévő "Bezárás", ÉS a kettő közt
+   nem volt margó - vizuálisan egymáson lógtak. Explicit szélesség +
+   alsó margó igazítja/választja szét őket. */
+#btnShowAddAccount { width: 100%; margin-bottom: 14px; }
+#addAccountForm:not(.hidden) { margin-bottom: 14px; }
 .btn-outline {
   padding: 12px; border-radius: 11px; cursor: pointer; font-size: 13px; font-weight: 700;
   background: transparent; color: var(--text); border: 1px solid var(--line);
