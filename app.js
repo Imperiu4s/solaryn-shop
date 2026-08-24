@@ -1376,11 +1376,12 @@ function switchView(view) {
   // (a dátum-szűrők szerint), a keresés viszont kliens-oldalon szűr a már
   // letöltött listán, nem küld újabb kérést minden billentyűleütésre.
   if (view === 'ledger') loadLedger();
-  // A tulajdonosi Napló (admin) fület minden megnyitáskor a globális
+  // A Vásárlás napló/Napló (admin) fület minden megnyitáskor a globális
   // (mindenkire kiterjedő) nézetre állítjuk vissza - a korábban beírt
   // játékosnév-szűrés nem marad meg fülváltás után, hogy ne legyen
   // meglepő/régi szűrt nézet a legközelebbi megnyitáskor.
-  if (view === 'adminLogs') loadAdminLogsGlobal();
+  if (view === 'purchaseLogs') loadPurchaseLogsGlobal();
+  if (view === 'staffActionLogs') loadStaffActionLogsGlobal();
   if (view === 'staffStats') loadStaffStats();
   if (view === 'revenue') loadRevenue();
   if (view === 'newsAdmin') { resetNewsForm(); loadNewsAdmin(); }
@@ -3094,14 +3095,22 @@ async function loadLedger() {
 
 $('#ledgerSearchInput').addEventListener('input', renderLedgerTable);
 
-// ── Napló (admin) - tulajdonosi rálátás MINDEN játékos pp_ledger
+// ── Vásárlás napló (admin) - jogosultsági rálátás MINDEN játékos pp_ledger
 // bejegyzésére (ld. SolarBackend GET /api/admin/logs[/:username]), szemben a
 // fenti (saját) Napló füllel - ugyanazt a "ledger-table" HTML/CSS mintát és
 // segédfüggvényeket (formatLedgerDate/LEDGER_TYPE_LABELS/formatPp) használja,
-// csak egy plusz "Játékos" oszloppal, mert itt több felhasználó keveredik. ──
-let adminLogsEntries = [];
+// csak egy plusz "Játékos" oszloppal, mert itt több felhasználó keveredik.
+// KORÁBBAN "Napló (admin)" néven futott - a felhasználó kérésére "Vásárlás
+// napló"-ra átnevezve, hogy a staff-tevékenységeket mutató, ÚJ nézettől (ld.
+// lejjebb) megkülönböztethető legyen; a jogosultsági kulcs (global.logs)
+// VÁLTOZATLAN maradt. JAVÍTVA: a betöltő függvények korábban "!isOwner"-t
+// ellenőriztek "!hasPerm(...)" helyett - egy "global.logs" jogot kapott
+// (de nem tulajdonos) staff a nav-gombot látta, de a nézet üresen maradt
+// volna (ugyanez a hiba a többi admin-nézet betöltőjében is megvan, azok
+// egyelőre változatlanok). ──
+let purchaseLogsEntries = [];
 
-function renderAdminLogRow(entry) {
+function renderPurchaseLogRow(entry) {
   const typeLabel = LEDGER_TYPE_LABELS[entry.type] || entry.type;
   const amountClass = entry.amount > 0 ? 'ledger-amount-positive' : entry.amount < 0 ? 'ledger-amount-negative' : 'ledger-amount-zero';
   const amountText = (entry.amount > 0 ? '+' : '') + formatPp(entry.amount);
@@ -3118,50 +3127,131 @@ function renderAdminLogRow(entry) {
   `;
 }
 
-function renderAdminLogsTable() {
-  $('#adminLogsTableBody').innerHTML = adminLogsEntries.map(renderAdminLogRow).join('');
-  $('#adminLogsEmptyNote').classList.toggle('hidden', adminLogsEntries.length > 0);
+function renderPurchaseLogsTable() {
+  $('#purchaseLogsTableBody').innerHTML = purchaseLogsEntries.map(renderPurchaseLogRow).join('');
+  $('#purchaseLogsEmptyNote').classList.toggle('hidden', purchaseLogsEntries.length > 0);
 }
 
-async function loadAdminLogsGlobal() {
-  if (!session || !session.token || !isOwner) return;
-  $('#adminLogsUserSearchInput').value = '';
-  $('#adminLogsScopeNote').textContent = 'Legutóbbi 100 bejegyzés (globális, minden játékos).';
+async function loadPurchaseLogsGlobal() {
+  if (!session || !session.token || !hasPerm('global.logs')) return;
+  $('#purchaseLogsUserSearchInput').value = '';
+  $('#purchaseLogsScopeNote').textContent = 'Legutóbbi 100 bejegyzés (globális, minden játékos).';
   try {
     const res = await fetch(BACKEND_URL + '/api/admin/logs', {
       headers: { Authorization: 'Bearer ' + session.token }
     });
     const data = await res.json();
-    adminLogsEntries = data.ok && Array.isArray(data.entries) ? data.entries : [];
+    purchaseLogsEntries = data.ok && Array.isArray(data.entries) ? data.entries : [];
   } catch {
-    adminLogsEntries = [];
+    purchaseLogsEntries = [];
   }
-  renderAdminLogsTable();
+  renderPurchaseLogsTable();
 }
 
-async function loadAdminLogsForUser(username) {
-  if (!session || !session.token || !isOwner || !username) return;
-  $('#adminLogsScopeNote').textContent = `"${username}" legutóbbi 100 bejegyzése.`;
+async function loadPurchaseLogsForUser(username) {
+  if (!session || !session.token || !hasPerm('global.logs') || !username) return;
+  $('#purchaseLogsScopeNote').textContent = `"${username}" legutóbbi 100 bejegyzése.`;
   try {
     const res = await fetch(BACKEND_URL + '/api/admin/logs/' + encodeURIComponent(username), {
       headers: { Authorization: 'Bearer ' + session.token }
     });
     const data = await res.json();
-    adminLogsEntries = data.ok && Array.isArray(data.entries) ? data.entries : [];
+    purchaseLogsEntries = data.ok && Array.isArray(data.entries) ? data.entries : [];
   } catch {
-    adminLogsEntries = [];
+    purchaseLogsEntries = [];
   }
-  renderAdminLogsTable();
+  renderPurchaseLogsTable();
 }
 
-$('#adminLogsUserSearchBtn').addEventListener('click', () => {
-  const username = $('#adminLogsUserSearchInput').value.trim();
-  if (username) loadAdminLogsForUser(username); else loadAdminLogsGlobal();
+$('#purchaseLogsUserSearchBtn').addEventListener('click', () => {
+  const username = $('#purchaseLogsUserSearchInput').value.trim();
+  if (username) loadPurchaseLogsForUser(username); else loadPurchaseLogsGlobal();
 });
-$('#adminLogsUserSearchInput').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') $('#adminLogsUserSearchBtn').click();
+$('#purchaseLogsUserSearchInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') $('#purchaseLogsUserSearchBtn').click();
 });
-$('#adminLogsClearBtn').addEventListener('click', loadAdminLogsGlobal);
+$('#purchaseLogsClearBtn').addEventListener('click', loadPurchaseLogsGlobal);
+
+// ── Napló (admin) - staff-tevékenységek (ld. SolarBackend src/adminLog.js
+// GET /api/admin/staff-action-logs[/:username]) - ugyanaz a minta, mint a
+// fenti Vásárlás napló, csak "Összeg"/"Egyenleg utána" oszlopok nélkül
+// (ezek a bejegyzések nem pénzösszeg-alapúak), és egy "Tevékenység"-címke
+// térképpel (ADMIN_ACTION_LABELS) az "action" gépi kulcshoz. ──
+const ADMIN_ACTION_LABELS = {
+  'player.lock': 'Fiók zárolása', 'player.unlock': 'Zárolás feloldása',
+  'player.ppAdjust': 'PrémiumPont módosítása', 'player.walletAdjust': 'Egyenleg módosítása',
+  'player.casinoAdjust': 'Casino pörgetés módosítása', 'player.delete': 'Fiók törlése',
+  'player.skinDelete': 'Skin törlése', 'player.skinBan': 'Skin tiltása',
+  'player.capeDelete': 'Köpeny törlése', 'player.capeBan': 'Köpeny tiltása',
+  'player.emailChange': 'Email módosítása', 'player.discordUnlink': 'Discord leválasztása',
+  'device.ban': 'Eszköz tiltása', 'device.unban': 'Eszköz tiltásának feloldása',
+  'badge.create': 'Jelvény létrehozása', 'badge.edit': 'Jelvény szerkesztése', 'badge.delete': 'Jelvény törlése',
+  'badge.grant': 'Jelvény kiosztása', 'badge.revoke': 'Jelvény elvétele',
+  'discount.create': 'Akció létrehozása', 'discount.edit': 'Akció szerkesztése', 'discount.delete': 'Akció törlése',
+  'discount.playerSet': 'Egyedi kedvezmény beállítása', 'discount.playerRemove': 'Egyedi kedvezmény törlése',
+  'coupon.create': 'Kupon létrehozása', 'coupon.edit': 'Kupon szerkesztése', 'coupon.delete': 'Kupon törlése',
+  'news.create': 'Felhívás létrehozása', 'news.edit': 'Felhívás szerkesztése', 'news.delete': 'Felhívás törlése'
+};
+
+let staffActionLogsEntries = [];
+
+function renderStaffActionLogRow(entry) {
+  const actionLabel = ADMIN_ACTION_LABELS[entry.action] || entry.action;
+  return `
+    <tr>
+      <td>${formatLedgerDate(entry.created_at)}</td>
+      <td>${entry.actor_username}</td>
+      <td>${entry.target_username || '-'}</td>
+      <td>${actionLabel}</td>
+      <td>${entry.detail || '-'}</td>
+    </tr>
+  `;
+}
+
+function renderStaffActionLogsTable() {
+  $('#staffActionLogsTableBody').innerHTML = staffActionLogsEntries.map(renderStaffActionLogRow).join('');
+  $('#staffActionLogsEmptyNote').classList.toggle('hidden', staffActionLogsEntries.length > 0);
+}
+
+async function loadStaffActionLogsGlobal() {
+  if (!session || !session.token || !hasPerm('global.staffActionLogs')) return;
+  $('#staffActionLogsUserSearchInput').value = '';
+  $('#staffActionLogsScopeNote').textContent = 'Legutóbbi 100 bejegyzés (globális, minden staff-tevékenység).';
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/staff-action-logs', {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    staffActionLogsEntries = data.ok && Array.isArray(data.entries) ? data.entries : [];
+  } catch {
+    staffActionLogsEntries = [];
+  }
+  renderStaffActionLogsTable();
+}
+
+async function loadStaffActionLogsForUser(username) {
+  if (!session || !session.token || !hasPerm('global.staffActionLogs') || !username) return;
+  $('#staffActionLogsScopeNote').textContent = `"${username}" legutóbbi 100 bejegyzése.`;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/staff-action-logs/' + encodeURIComponent(username), {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    staffActionLogsEntries = data.ok && Array.isArray(data.entries) ? data.entries : [];
+  } catch {
+    staffActionLogsEntries = [];
+  }
+  renderStaffActionLogsTable();
+}
+
+$('#staffActionLogsUserSearchBtn').addEventListener('click', () => {
+  const username = $('#staffActionLogsUserSearchInput').value.trim();
+  if (username) loadStaffActionLogsForUser(username); else loadStaffActionLogsGlobal();
+});
+$('#staffActionLogsUserSearchInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') $('#staffActionLogsUserSearchBtn').click();
+});
+$('#staffActionLogsClearBtn').addEventListener('click', loadStaffActionLogsGlobal);
 $('#ledgerFromInput').addEventListener('change', loadLedger);
 $('#ledgerToInput').addEventListener('change', loadLedger);
 
