@@ -1388,6 +1388,7 @@ function switchView(view) {
   if (view === 'badges') { resetBadgeForm(); loadBadgesAdmin(); }
   if (view === 'discounts') { resetDiscountForm(); loadDiscountsAdmin(); }
   if (view === 'coupons') { resetCouponForm(); loadCouponsAdmin(); }
+  if (view === 'creatorCodes') { resetCreatorCodeForm(); loadCreatorCodesAdmin(); }
   if (view === 'casino') loadCasino();
 }
 $$('.app-nav-item[data-view]').forEach((btn) => {
@@ -3190,6 +3191,10 @@ const ADMIN_ACTION_LABELS = {
   'discount.create': 'Akció létrehozása', 'discount.edit': 'Akció szerkesztése', 'discount.delete': 'Akció törlése',
   'discount.playerSet': 'Egyedi kedvezmény beállítása', 'discount.playerRemove': 'Egyedi kedvezmény törlése',
   'coupon.create': 'Kupon létrehozása', 'coupon.edit': 'Kupon szerkesztése', 'coupon.delete': 'Kupon törlése',
+  'creatorCode.create': 'Creator kód létrehozása', 'creatorCode.edit': 'Creator kód szerkesztése',
+  'creatorCode.delete': 'Creator kód törlése', 'creatorCode.activate': 'Creator kód aktiválása',
+  'creatorCode.deactivate': 'Creator kód inaktiválása', 'creatorCode.redeem': 'Creator kód beváltva regisztrációkor',
+  'creatorCode.rankExpired': 'Creator kód rang-jutalma lejárt',
   'news.create': 'Felhívás létrehozása', 'news.edit': 'Felhívás szerkesztése', 'news.delete': 'Felhívás törlése'
 };
 
@@ -3451,13 +3456,88 @@ function newsImageUrl(id) {
   return BACKEND_URL + '/api/news/' + id + '/image';
 }
 
+// ── Formázott szöveg eszköztár (Felhívások cím/tartalom) - a felhasználó
+// kifejezett kérésére: félkövér/dőlt/aláhúzott/méret/szín/igazítás. A
+// document.execCommand ELAVULT API, de Electronban/Chromiumban (a
+// SolarCenter itt egyetlen, ismert rendermotoron fut, nincs böngésző-
+// kompatibilitási kockázat) még megbízhatóan működik erre az egyszerű,
+// belső admin-eszközre - a kimeneti HTML-t a SolarBackend (src/news.js
+// sanitize-html) szigorúan tisztítja mentés előtt, függetlenül attól, hogy
+// execCommand pontosan milyen jelölést generál.
+//
+// JAVÍTVA (ismert execCommand+eszköztár csapda): egy eszköztár-gombra
+// kattintva a böngésző ALAPÉRTELMEZETTEN elveszi a fókuszt (és vele a
+// szövegkijelölést) a contenteditable mezőtől, MIELŐTT a click-handler
+// lefutna - ezért a gombokon mousedown-kor preventDefault()-tal
+// megakadályozzuk a fókuszváltást, a színválasztó/méret legördülő viszont
+// natívan MUSZÁJ hogy fókuszt kapjon (ott nem lehet preventDefault-olni) -
+// ezeknél a KIJELÖLÉST magát mentjük el/állítjuk vissza kézzel.
+let richTextSavedRange = null;
+let richTextSavedEditable = null;
+
+function saveRichTextSelection(editable) {
+  const sel = window.getSelection();
+  if (sel.rangeCount > 0 && editable.contains(sel.anchorNode)) {
+    richTextSavedRange = sel.getRangeAt(0).cloneRange();
+    richTextSavedEditable = editable;
+  }
+}
+
+function restoreRichTextSelection() {
+  if (!richTextSavedRange || !richTextSavedEditable) return;
+  richTextSavedEditable.focus();
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(richTextSavedRange);
+}
+
+function initRichTextToolbar(toolbarEl, editableEl) {
+  editableEl.addEventListener('mouseup', () => saveRichTextSelection(editableEl));
+  editableEl.addEventListener('keyup', () => saveRichTextSelection(editableEl));
+  editableEl.addEventListener('focus', () => saveRichTextSelection(editableEl));
+
+  toolbarEl.querySelectorAll('button[data-rt-cmd]').forEach((btn) => {
+    btn.addEventListener('mousedown', (e) => e.preventDefault());
+    btn.addEventListener('click', () => {
+      restoreRichTextSelection();
+      document.execCommand(btn.dataset.rtCmd, false, null);
+      saveRichTextSelection(editableEl);
+    });
+  });
+
+  const sizeSelect = toolbarEl.querySelector('select[data-rt-cmd="fontSize"]');
+  if (sizeSelect) {
+    sizeSelect.addEventListener('mousedown', () => saveRichTextSelection(editableEl));
+    sizeSelect.addEventListener('change', () => {
+      if (!sizeSelect.value) return;
+      restoreRichTextSelection();
+      document.execCommand('fontSize', false, sizeSelect.value);
+      saveRichTextSelection(editableEl);
+      sizeSelect.value = '';
+    });
+  }
+
+  const colorInput = toolbarEl.querySelector('input[type="color"][data-rt-cmd="foreColor"]');
+  if (colorInput) {
+    colorInput.addEventListener('mousedown', () => saveRichTextSelection(editableEl));
+    colorInput.addEventListener('input', () => {
+      restoreRichTextSelection();
+      document.execCommand('foreColor', false, colorInput.value);
+      saveRichTextSelection(editableEl);
+    });
+  }
+}
+
+initRichTextToolbar($('#newsTitleToolbar'), $('#newsTitleInput'));
+initRichTextToolbar($('#newsContentToolbar'), $('#newsContentInput'));
+
 function resetNewsForm() {
   newsEditingId = null;
   newsSelectedImageFile = null;
   newsRemoveExistingImage = false;
   $('#newsFormTitle').textContent = 'Új felhívás';
-  $('#newsTitleInput').value = '';
-  $('#newsContentInput').value = '';
+  $('#newsTitleInput').innerHTML = '';
+  $('#newsContentInput').innerHTML = '';
   $('#newsImageInput').value = '';
   $('#newsImagePreviewWrap').hidden = true;
   $('#newsImagePreview').src = '';
@@ -3478,7 +3558,7 @@ function renderNewsAdminList() {
       ${n.image_ext ? `<img class="news-admin-item-image" src="${newsImageUrl(n.id)}" alt="" />` : ''}
       <div class="news-admin-item-head">
         <div>
-          <div class="news-admin-item-title">${escapeHtml(n.title)}</div>
+          <div class="news-admin-item-title">${n.title}</div>
           <div class="news-admin-item-meta">${escapeHtml(n.created_by)} - ${formatLedgerDate(n.created_at)}${n.updated_at ? ' (szerkesztve: ' + formatLedgerDate(n.updated_at) + ')' : ''}</div>
         </div>
         <div class="news-admin-item-actions">
@@ -3486,7 +3566,7 @@ function renderNewsAdminList() {
           <button type="button" class="news-delete-btn" data-news-id="${n.id}">Törlés</button>
         </div>
       </div>
-      <p class="news-admin-item-content">${escapeHtml(n.content)}</p>
+      <p class="news-admin-item-content">${n.content}</p>
     </div>
   `).join('') || '<p class="redeem-result">Még nincs egyetlen felhívás sem.</p>';
 }
@@ -3538,9 +3618,16 @@ $('#newsDiscardBtn').addEventListener('click', resetNewsForm);
 
 $('#newsSaveBtn').addEventListener('click', async () => {
   const resultEl = $('#newsFormResult');
-  const title = $('#newsTitleInput').value.trim();
-  const content = $('#newsContentInput').value.trim();
-  if (!title || !content) {
+  // ÚJ: a cím/tartalom mostantól formázott (contenteditable) mező - a
+  // MENTETT érték a teljes innerHTML (a formázás is benne marad, a backend
+  // sanitize-html-je tisztítja végleg, ld. SolarBackend src/news.js), de az
+  // "üres-e" ELLENŐRZÉS a textContent alapján történik, mert egy puszta
+  // "<br>"-t (üres sor) NEM szabad érvényes címnek/tartalomnak elfogadni.
+  const titleEl = $('#newsTitleInput');
+  const contentEl = $('#newsContentInput');
+  const title = titleEl.innerHTML.trim();
+  const content = contentEl.innerHTML.trim();
+  if (!titleEl.textContent.trim() || !contentEl.textContent.trim()) {
     resultEl.textContent = 'Adj meg címet és tartalmat.';
     resultEl.className = 'redeem-result error';
     return;
@@ -3597,8 +3684,8 @@ document.addEventListener('click', (e) => {
     newsRemoveExistingImage = false;
     $('#newsImageInput').value = '';
     $('#newsFormTitle').textContent = 'Felhívás szerkesztése';
-    $('#newsTitleInput').value = item.title;
-    $('#newsContentInput').value = item.content;
+    $('#newsTitleInput').innerHTML = item.title;
+    $('#newsContentInput').innerHTML = item.content;
     $('#newsSaveBtn').textContent = 'Frissítés';
     // Szerkesztésnél a backend úgyis figyelmen kívül hagyja a "sendEmail"
     // mezőt (ld. resetNewsForm megjegyzését) - elrejtjük, ne tűnjön úgy,
@@ -4158,6 +4245,245 @@ document.addEventListener('click', (e) => {
   }
 });
 
+// ── Creator kódok (admin, ld. SolarBackend src/creatorCodes.js) - ugyanaz a
+// CRUD-minta, mint a fenti Kuponok, plusz egy aktivál/inaktivál gyorsgomb
+// (a felhasználó kifejezett kérésére: "ha valaki megszűntetné velünk a
+// kapcsolatot és később vissza jönne akkor tudjuk újra aktiválni") és egy
+// "kik regisztráltak" részletező modál. ──
+let creatorCodeEditingId = null;
+let creatorCodesAdminItems = [];
+
+function resetCreatorCodeForm() {
+  creatorCodeEditingId = null;
+  $('#creatorCodeFormTitle').textContent = 'Új creator kód';
+  $('#creatorCodeCodeInput').value = '';
+  $('#creatorCodeLabelInput').value = '';
+  $('#creatorCodeRewardTypeSelect').value = 'none';
+  $('#creatorCodeRewardAmountInput').value = '';
+  $('#creatorCodeDurationInput').value = '';
+  $('#creatorCodeValidFromInput').value = '';
+  $('#creatorCodeValidUntilInput').value = '';
+  $('#creatorCodeActiveCheckbox').checked = true;
+  $('#creatorCodeFormResult').textContent = '';
+  $('#creatorCodeFormResult').className = 'redeem-result';
+  $('#creatorCodeSaveBtn').textContent = 'Mentés';
+  populateCreatorCodeRankSelect();
+  updateCreatorCodeRewardRowVisibility();
+}
+
+// A "shopRanks" globális tömböt használja (ld. loadRanks - MÁR betöltődik
+// oldalbetöltéskor) - ugyanaz a minta, mint populateCouponRequiredRankSelect().
+function populateCreatorCodeRankSelect(selectedId) {
+  const sel = $('#creatorCodeRewardRankSelect');
+  sel.innerHTML = shopRanks.map((r) => `<option value="${r.id}">${escapeHtml(r.label)}</option>`).join('');
+  sel.value = selectedId || (shopRanks[0] ? shopRanks[0].id : '');
+}
+
+function updateCreatorCodeRewardRowVisibility() {
+  const type = $('#creatorCodeRewardTypeSelect').value;
+  $('#creatorCodeAmountRow').classList.toggle('hidden', type !== 'pp' && type !== 'wallet');
+  $('#creatorCodeRankRow').classList.toggle('hidden', type !== 'rank');
+}
+$('#creatorCodeRewardTypeSelect').addEventListener('change', updateCreatorCodeRewardRowVisibility);
+
+function creatorCodeRewardLabel(c) {
+  if (c.reward_type === 'pp') return `${formatPp(c.reward_amount)} PP`;
+  if (c.reward_type === 'wallet') return `${formatHuf(c.reward_amount)} egyenleg`;
+  if (c.reward_type === 'rank') {
+    const rank = shopRanks.find((r) => r.id === c.reward_rank);
+    const rankLabel = rank ? rank.label : c.reward_rank;
+    return c.reward_duration_days ? `${rankLabel} rang (${c.reward_duration_days} napig)` : `${rankLabel} rang (végleges)`;
+  }
+  return 'Nincs jutalom';
+}
+
+function renderCreatorCodesAdminList() {
+  $('#creatorCodesAdminList').innerHTML = creatorCodesAdminItems.map((c) => {
+    const notStarted = c.valid_from && new Date(c.valid_from).getTime() > Date.now();
+    const expired = c.valid_until && new Date(c.valid_until).getTime() <= Date.now();
+    const statusText = !c.active ? 'Kikapcsolva' : expired ? 'Lejárt' : notStarted ? 'Még nem aktív' : 'Aktív';
+    const statusClass = c.active && !expired && !notStarted ? 'discount-status-on' : 'discount-status-off';
+    const windowParts = [];
+    if (c.valid_from) windowParts.push('érvényes ettől: ' + formatLedgerDate(c.valid_from));
+    if (c.valid_until) windowParts.push('érvényes eddig: ' + formatLedgerDate(c.valid_until));
+    const metaParts = [creatorCodeRewardLabel(c), `${c.redemptionCount} regisztráció`, ...windowParts];
+    return `
+    <div class="badges-admin-item">
+      <div class="badges-admin-item-info">
+        <div class="badges-admin-item-name">${escapeHtml(c.code)}${c.creator_label ? ' - ' + escapeHtml(c.creator_label) : ''}</div>
+        <div class="badges-admin-item-meta">${metaParts.join(' - ')} - <span class="${statusClass}">${statusText}</span></div>
+      </div>
+      <div class="badges-admin-item-actions">
+        <button type="button" class="news-edit-btn" data-cc-redemptions-id="${c.id}">Regisztráltak</button>
+        <button type="button" class="news-edit-btn" data-cc-toggle-id="${c.id}">${c.active ? 'Inaktiválás' : 'Aktiválás'}</button>
+        <button type="button" class="news-edit-btn" data-cc-edit-id="${c.id}">Szerkesztés</button>
+        <button type="button" class="news-delete-btn" data-cc-delete-id="${c.id}">Törlés</button>
+      </div>
+    </div>
+  `;
+  }).join('') || '<p class="redeem-result">Még nincs egyetlen creator kód sem.</p>';
+}
+
+async function loadCreatorCodesAdmin() {
+  if (!session || !session.token || !hasPerm('global.creatorCodesManage')) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/creator-codes', {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    creatorCodesAdminItems = data.ok && Array.isArray(data.codes) ? data.codes : [];
+  } catch {
+    creatorCodesAdminItems = [];
+  }
+  renderCreatorCodesAdminList();
+}
+
+$('#creatorCodeDiscardBtn').addEventListener('click', resetCreatorCodeForm);
+
+$('#creatorCodeSaveBtn').addEventListener('click', async () => {
+  const resultEl = $('#creatorCodeFormResult');
+  const code = $('#creatorCodeCodeInput').value.trim();
+  const creatorLabel = $('#creatorCodeLabelInput').value.trim() || undefined;
+  const rewardType = $('#creatorCodeRewardTypeSelect').value;
+  const rewardAmount = (rewardType === 'pp' || rewardType === 'wallet') ? Number($('#creatorCodeRewardAmountInput').value) : undefined;
+  const rewardRank = rewardType === 'rank' ? $('#creatorCodeRewardRankSelect').value : undefined;
+  const durationRaw = $('#creatorCodeDurationInput').value;
+  const rewardDurationDays = rewardType === 'rank' && durationRaw ? Number(durationRaw) : undefined;
+  const validFrom = $('#creatorCodeValidFromInput').value || undefined;
+  const validUntil = $('#creatorCodeValidUntilInput').value || undefined;
+  const active = $('#creatorCodeActiveCheckbox').checked;
+
+  if (!code) { resultEl.textContent = 'Adj meg egy kódot.'; resultEl.className = 'redeem-result error'; return; }
+  if ((rewardType === 'pp' || rewardType === 'wallet') && (!Number.isInteger(rewardAmount) || rewardAmount < 1)) {
+    resultEl.textContent = 'Adj meg egy érvényes jutalom-mennyiséget.';
+    resultEl.className = 'redeem-result error';
+    return;
+  }
+  if (rewardType === 'rank' && !rewardRank) {
+    resultEl.textContent = 'Válassz egy rangot.';
+    resultEl.className = 'redeem-result error';
+    return;
+  }
+
+  try {
+    const url = creatorCodeEditingId ? BACKEND_URL + '/api/admin/creator-codes/' + creatorCodeEditingId : BACKEND_URL + '/api/admin/creator-codes';
+    const res = await fetch(url, {
+      method: creatorCodeEditingId ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ code, creatorLabel, rewardType, rewardAmount, rewardRank, rewardDurationDays, validFrom, validUntil, active })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      resultEl.textContent = data.message || 'Nem sikerült menteni.';
+      resultEl.className = 'redeem-result error';
+      return;
+    }
+    showToast(creatorCodeEditingId ? 'Creator kód frissítve.' : 'Creator kód létrehozva.');
+    resetCreatorCodeForm();
+    loadCreatorCodesAdmin();
+  } catch {
+    resultEl.textContent = 'Nem sikerült elérni a szervert.';
+    resultEl.className = 'redeem-result error';
+  }
+});
+
+function renderCreatorCodeRedemptionsList(redemptions) {
+  $('#creatorCodeRedemptionsList').innerHTML = redemptions.map((r) => `
+    <div class="badges-admin-item">
+      <div class="badges-admin-item-info">
+        <div class="badges-admin-item-name">${escapeHtml(r.username)}</div>
+        <div class="badges-admin-item-meta">${formatLedgerDate(r.redeemed_at)}${r.rank_expires_at ? (r.reverted ? ' - rang lejárt' : ' - rang lejár: ' + formatLedgerDate(r.rank_expires_at)) : ''}</div>
+      </div>
+    </div>
+  `).join('') || '<p class="redeem-result">Ezzel a kóddal még senki nem regisztrált.</p>';
+}
+
+async function openCreatorCodeRedemptions(id) {
+  const item = creatorCodesAdminItems.find((c) => String(c.id) === String(id));
+  $('#creatorCodeRedemptionsTitle').textContent = item ? `Regisztráltak - ${item.code}` : 'Regisztráltak';
+  $('#creatorCodeRedemptionsList').innerHTML = '<p class="redeem-result">Betöltés...</p>';
+  $('#creatorCodeRedemptionsModal').classList.remove('hidden');
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/creator-codes/' + id + '/redemptions', {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    renderCreatorCodeRedemptionsList(data.ok && Array.isArray(data.redemptions) ? data.redemptions : []);
+  } catch {
+    $('#creatorCodeRedemptionsList').innerHTML = '<p class="redeem-result error">Nem sikerült elérni a szervert.</p>';
+  }
+}
+$('#creatorCodeRedemptionsClose').addEventListener('click', () => $('#creatorCodeRedemptionsModal').classList.add('hidden'));
+
+document.addEventListener('click', (e) => {
+  const redemptionsBtn = e.target.closest('[data-cc-redemptions-id]');
+  if (redemptionsBtn) {
+    openCreatorCodeRedemptions(redemptionsBtn.dataset.ccRedemptionsId);
+    return;
+  }
+
+  const toggleBtn = e.target.closest('[data-cc-toggle-id]');
+  if (toggleBtn) {
+    const id = toggleBtn.dataset.ccToggleId;
+    fetch(BACKEND_URL + '/api/admin/creator-codes/' + id + '/toggle-active', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + session.token }
+    }).then((res) => res.json()).then((data) => {
+      if (data.ok) {
+        showToast(data.code.active ? 'Creator kód aktiválva.' : 'Creator kód inaktiválva.');
+        loadCreatorCodesAdmin();
+      } else {
+        showToast('Nem sikerült módosítani.', true);
+      }
+    }).catch(() => showToast('Nem sikerült elérni a szervert.', true));
+    return;
+  }
+
+  const editBtn = e.target.closest('[data-cc-edit-id]');
+  if (editBtn) {
+    const item = creatorCodesAdminItems.find((c) => String(c.id) === editBtn.dataset.ccEditId);
+    if (!item) return;
+    creatorCodeEditingId = item.id;
+    $('#creatorCodeFormTitle').textContent = 'Creator kód szerkesztése';
+    $('#creatorCodeCodeInput').value = item.code;
+    $('#creatorCodeLabelInput').value = item.creator_label || '';
+    $('#creatorCodeRewardTypeSelect').value = item.reward_type;
+    $('#creatorCodeRewardAmountInput').value = item.reward_amount !== null ? item.reward_amount : '';
+    $('#creatorCodeDurationInput').value = item.reward_duration_days !== null ? item.reward_duration_days : '';
+    populateCreatorCodeRankSelect(item.reward_rank);
+    updateCreatorCodeRewardRowVisibility();
+    // ÚJ: a dátum-input "ÉÉÉÉ-HH-NN" alakot vár - a backend teljes ISO
+    // dátumidőt ad vissza (ld. creatorCodes.js normalizálását), ebből csak a
+    // dátumrészt vágjuk ki.
+    $('#creatorCodeValidFromInput').value = item.valid_from ? item.valid_from.slice(0, 10) : '';
+    $('#creatorCodeValidUntilInput').value = item.valid_until ? item.valid_until.slice(0, 10) : '';
+    $('#creatorCodeActiveCheckbox').checked = item.active === 1;
+    $('#creatorCodeSaveBtn').textContent = 'Frissítés';
+    $('#creatorCodeFormResult').textContent = '';
+    return;
+  }
+
+  const deleteBtn = e.target.closest('[data-cc-delete-id]');
+  if (deleteBtn) {
+    const id = deleteBtn.dataset.ccDeleteId;
+    confirmModal('Creator kód törlése', 'Biztosan törlöd ezt a creator kódot? Ez nem vonható vissza.', 'Igen, törlés').then((confirmed) => {
+      if (!confirmed) return;
+      fetch(BACKEND_URL + '/api/admin/creator-codes/' + id, {
+        method: 'DELETE',
+        headers: { Authorization: 'Bearer ' + session.token }
+      }).then((res) => res.json()).then((data) => {
+        if (data.ok) {
+          showToast('Creator kód törölve.');
+          if (String(creatorCodeEditingId) === String(id)) resetCreatorCodeForm();
+          loadCreatorCodesAdmin();
+        } else {
+          showToast('Nem sikerült törölni.', true);
+        }
+      }).catch(() => showToast('Nem sikerült elérni a szervert.', true));
+    });
+  }
+});
+
 // ── Jogok (admin) - admin-jogosultságok, ld. SolarBackend src/permissions.js.
 // Kizárólag a valódi tulajdonos éri el (ld. index.html #navPermissionsBtn -
 // nincs data-permission attribútuma), mert a jog-adás maga nem delegálható.
@@ -4367,9 +4693,13 @@ async function loadHomeNews() {
       imageEl.classList.add('hidden');
       imageEl.src = '';
     }
-    $('#homeNewsTitle').textContent = news.title;
+    // ÚJ: a cím/tartalom mostantól formázott (a backend sanitize-html-je
+    // által tisztított) HTML lehet - innerHTML-lel jelenítjük meg, hogy a
+    // félkövér/dőlt/szín/igazítás stb. ténylegesen látszódjon, nem csak
+    // nyers szövegként a tag-ekkel együtt.
+    $('#homeNewsTitle').innerHTML = news.title;
     $('#homeNewsMeta').textContent = formatLedgerDate(news.created_at);
-    $('#homeNewsContent').textContent = news.content;
+    $('#homeNewsContent').innerHTML = news.content;
     card.classList.remove('hidden');
   } catch {
     // Csendben kihagyjuk - a kártya rejtve marad, a következő belépéskor újra próbálkozunk.

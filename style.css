@@ -1299,6 +1299,35 @@ a { color: inherit; }
   transition: border-color .18s; resize: vertical;
 }
 .gift-modal-input:focus { border-color: var(--gold); }
+
+/* ÚJ: formázott szöveg eszköztár (Felhívások cím/tartalom, ld. app.js
+   initRichTextToolbar) */
+.richtext-toolbar {
+  display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+  margin-top: 6px; margin-bottom: 6px;
+}
+.richtext-toolbar button {
+  width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--text); font-size: 13px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: border-color .15s, background .15s;
+}
+.richtext-toolbar button:hover { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 8%, transparent); }
+.richtext-toolbar select {
+  height: 30px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--text); font-size: 12.5px; padding: 0 6px; cursor: pointer;
+}
+.richtext-toolbar input[type="color"] {
+  width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--bg); padding: 2px; cursor: pointer;
+}
+.richtext-editable {
+  min-height: 44px; cursor: text; line-height: 1.5;
+}
+.richtext-editable-tall { min-height: 140px; }
+.richtext-editable:empty:before {
+  content: attr(data-placeholder); color: var(--text-faint); pointer-events: none;
+}
 .gift-message {
   font-style: italic; color: var(--text); background: color-mix(in srgb, var(--gold) 6%, transparent);
   border: 1px solid color-mix(in srgb, var(--gold) 20%, transparent); border-radius: 10px; padding: 12px 14px; margin: -8px 0 18px;

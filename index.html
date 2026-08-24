@@ -270,6 +270,10 @@
           <svg viewBox="0 0 24 24"><path d="M3 9a2 2 0 0 0 0 6v2a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-2a2 2 0 0 1 0-6V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M10 8v8" stroke="currentColor" stroke-width="1.6" stroke-dasharray="1.6 2" stroke-linecap="round"/></svg>
           <span>Kuponok</span>
         </button>
+        <button class="app-nav-item admin-nav-item hidden" data-view="creatorCodes" data-permission="global.creatorCodesManage">
+          <svg viewBox="0 0 24 24"><path d="M15 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5 20c0-3.3 3.1-6 7-6s7 2.7 7 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M19 3l1 2 2 1-2 1-1 2-1-2-2-1 2-1z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+          <span>Creator kódok</span>
+        </button>
         <!-- Kizárólag a valódi tulajdonosnak látszik (nincs data-permission -
              a jog-adás maga nem delegálható, ld. SolarBackend
              src/permissions.js megjegyzését). -->
@@ -917,10 +921,50 @@
 
           <div class="card">
             <div class="card-title" id="newsFormTitle">Új felhívás</div>
+
+            <!-- ÚJ (a felhasználó kifejezett kérésére): a cím ÉS a tartalom
+                 is formázható (félkövér/dőlt/aláhúzott/méret/szín/igazítás) -
+                 ld. app.js initRichTextToolbar(). A tényleges kimeneti HTML-t
+                 a SolarBackend (src/news.js sanitize-html) szigorúan
+                 tisztítja mentés előtt, ez a szerkesztő csak a bemenetet
+                 állítja elő. -->
             <label class="gift-modal-label" style="margin-top:0;">Cím</label>
-            <input type="text" id="newsTitleInput" class="gift-modal-input" placeholder="Pl. Karbantartás értesítő" maxlength="120" />
+            <div class="richtext-toolbar" id="newsTitleToolbar">
+              <button type="button" data-rt-cmd="bold" title="Félkövér"><b>B</b></button>
+              <button type="button" data-rt-cmd="italic" title="Dőlt"><i>I</i></button>
+              <button type="button" data-rt-cmd="underline" title="Aláhúzott"><u>U</u></button>
+              <select data-rt-cmd="fontSize" title="Szövegméret">
+                <option value="">Méret</option>
+                <option value="2">Kicsi</option>
+                <option value="3">Normál</option>
+                <option value="5">Nagy</option>
+                <option value="7">Extra nagy</option>
+              </select>
+              <input type="color" data-rt-cmd="foreColor" title="Szövegszín" value="#f2f2f5" />
+              <button type="button" data-rt-cmd="justifyLeft" title="Balra igazítás">⯇</button>
+              <button type="button" data-rt-cmd="justifyCenter" title="Középre igazítás">≡</button>
+              <button type="button" data-rt-cmd="justifyRight" title="Jobbra igazítás">⯈</button>
+            </div>
+            <div id="newsTitleInput" class="gift-modal-input richtext-editable" contenteditable="true" data-placeholder="Pl. Karbantartás értesítő"></div>
+
             <label class="gift-modal-label">Tartalom</label>
-            <textarea id="newsContentInput" class="gift-modal-input" placeholder="A felhívás szövege..." rows="6" maxlength="4000"></textarea>
+            <div class="richtext-toolbar" id="newsContentToolbar">
+              <button type="button" data-rt-cmd="bold" title="Félkövér"><b>B</b></button>
+              <button type="button" data-rt-cmd="italic" title="Dőlt"><i>I</i></button>
+              <button type="button" data-rt-cmd="underline" title="Aláhúzott"><u>U</u></button>
+              <select data-rt-cmd="fontSize" title="Szövegméret">
+                <option value="">Méret</option>
+                <option value="2">Kicsi</option>
+                <option value="3">Normál</option>
+                <option value="5">Nagy</option>
+                <option value="7">Extra nagy</option>
+              </select>
+              <input type="color" data-rt-cmd="foreColor" title="Szövegszín" value="#f2f2f5" />
+              <button type="button" data-rt-cmd="justifyLeft" title="Balra igazítás">⯇</button>
+              <button type="button" data-rt-cmd="justifyCenter" title="Középre igazítás">≡</button>
+              <button type="button" data-rt-cmd="justifyRight" title="Jobbra igazítás">⯈</button>
+            </div>
+            <div id="newsContentInput" class="gift-modal-input richtext-editable richtext-editable-tall" contenteditable="true" data-placeholder="A felhívás szövege..."></div>
             <label class="gift-modal-label">Kép (nem kötelező, PNG vagy JPEG)</label>
             <input type="file" id="newsImageInput" accept="image/png,image/jpeg" hidden />
             <button type="button" class="btn-outline file-picker-btn" id="newsImagePickBtn">Kép kiválasztása</button>
@@ -1057,6 +1101,56 @@
 
           <div class="admin-subsection-title">Meglévő kuponok</div>
           <div id="couponsAdminList"></div>
+        </section>
+
+        <!-- CREATOR KÓDOK - a regisztrációs űrlap "Support / Creator kód"
+             mezőjében megadható kódok (ld. SolarBackend src/creatorCodes.js).
+             Ugyanaz a CRUD-minta, mint a Kuponok fent, plusz egy aktivál/
+             inaktivál gyorsgomb és egy "kik regisztráltak" részletező modál. -->
+        <section class="view" data-view="creatorCodes">
+          <h1 class="page-title">Creator kódok</h1>
+          <p class="page-note">A regisztrációs űrlap "Support / Creator kód" mezőjében megadható kódok - a jutalom (ha van) az ÚJ fiók regisztrációjakor egyszer íródik jóvá. Egy kikapcsolt kód elmentve marad, később bármikor újra aktiválható.</p>
+
+          <div class="card">
+            <div class="card-title" id="creatorCodeFormTitle">Új creator kód</div>
+            <label class="gift-modal-label" style="margin-top:0;">Kód</label>
+            <input type="text" id="creatorCodeCodeInput" class="gift-modal-input" placeholder="Pl. PEWDIEPIE" maxlength="32" style="text-transform:uppercase;" />
+            <label class="gift-modal-label">Creator neve (nem kötelező, csak megjelenítéshez)</label>
+            <input type="text" id="creatorCodeLabelInput" class="gift-modal-input" placeholder="Pl. a creator csatorna neve" maxlength="64" />
+            <label class="gift-modal-label">Jutalom típusa</label>
+            <select id="creatorCodeRewardTypeSelect" class="gift-modal-input">
+              <option value="none">Nincs jutalom</option>
+              <option value="pp">PrémiumPont</option>
+              <option value="wallet">Egyenleg (Ft)</option>
+              <option value="rank">Rang</option>
+            </select>
+            <div id="creatorCodeAmountRow">
+              <label class="gift-modal-label">Jutalom mennyisége</label>
+              <input type="number" id="creatorCodeRewardAmountInput" class="gift-modal-input" placeholder="Pl. 500" min="1" step="1" />
+            </div>
+            <div id="creatorCodeRankRow" class="hidden">
+              <label class="gift-modal-label">Rang</label>
+              <select id="creatorCodeRewardRankSelect" class="gift-modal-input"></select>
+              <label class="gift-modal-label">Időtartam napokban (nem kötelező, üres = végleges)</label>
+              <input type="number" id="creatorCodeDurationInput" class="gift-modal-input" placeholder="Pl. 30" min="1" step="1" />
+            </div>
+            <label class="gift-modal-label">A kód érvényes ettől (nem kötelező)</label>
+            <input type="date" id="creatorCodeValidFromInput" class="gift-modal-input" />
+            <label class="gift-modal-label">A kód érvényes eddig (nem kötelező)</label>
+            <input type="date" id="creatorCodeValidUntilInput" class="gift-modal-input" />
+            <label class="check-row" style="margin-top:10px;">
+              <input type="checkbox" id="creatorCodeActiveCheckbox" checked />
+              Aktív (a kikapcsolt kód mentve marad, de nem alkalmazódik regisztrációkor)
+            </label>
+            <p class="redeem-result" id="creatorCodeFormResult"></p>
+            <div class="modal-actions" style="margin-top:14px;">
+              <button type="button" class="btn-outline" id="creatorCodeDiscardBtn">Elvetés</button>
+              <button type="button" class="btn-glow" id="creatorCodeSaveBtn" style="margin-top:0;">Mentés</button>
+            </div>
+          </div>
+
+          <div class="admin-subsection-title">Meglévő creator kódok</div>
+          <div id="creatorCodesAdminList"></div>
         </section>
 
         <!-- JOGOK - kizárólag a valódi tulajdonosnak (ld. app.js
@@ -1553,6 +1647,20 @@
       </div>
       <div class="modal-actions">
         <button type="button" class="btn-outline" id="accountModalClose">Bezárás</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ÚJ: egy creator kód beváltóinak ("kik regisztráltak ezzel a kóddal")
+       listája, ld. app.js openCreatorCodeRedemptions - a felhasználó
+       kifejezett kérésére ("lássuk hogy hány felhasználó regisztrált azzal
+       a kóddal, hogy kik azok"). -->
+  <div class="modal-overlay hidden" id="creatorCodeRedemptionsModal">
+    <div class="modal-card account-modal-card">
+      <h3 id="creatorCodeRedemptionsTitle">Regisztráltak</h3>
+      <div id="creatorCodeRedemptionsList"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn-outline" id="creatorCodeRedemptionsClose">Bezárás</button>
       </div>
     </div>
   </div>
