@@ -487,6 +487,7 @@ const STAT_ICONS = {
   rank: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l2.4 6.6L21 9l-5 4.6L17.4 21 12 17.3 6.6 21 8 13.6 3 9l6.6-.4z"/></svg>',
   coin: '<img src="assets/pp-coin.png" alt="PP" />',
   time: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 5v5.4l4 2.3-.8 1.3L11 13V7z"/></svg>',
+  wallet: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M20 6H4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2zm-1.5 8.5A1.5 1.5 0 1 1 20 13a1.5 1.5 0 0 1-1.5 1.5zM20 9H4V8h16z"/></svg>',
   spin: '<svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M4 12a8 8 0 0 1 14.6-4.5M20 12a8 8 0 0 1-14.6 4.5M18.6 7.5V4m0 3.5H15M5.4 16.5V20m0-3.5H9"/></svg>'
 };
 
@@ -494,16 +495,20 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-// JAVÍTVA: "opts.hideBalance" - a más játékos profilját megnyitó hívás (ld.
-// openPlayerProfile) ezzel elrejti a PrémiumPont-jelvényt, mert az egyenleg
-// senki másra nem tartozik (a backend GET /api/profile/:username sem küldi
-// már el - ld. ottani megjegyzést). A saját profil (GET /api/me) hívása
-// nem ad opts-ot, ott továbbra is megjelenik.
+// ÚJ: "opts.showWallet" - a más játékos profilját megnyitó hívás (ld.
+// openPlayerProfile) ezzel egy 4. "Egyenleg" (valós pénzes, ld.
+// GET /api/profile/:username "walletBalanceHuf" mezőjét) jelvényt is
+// megjelenít - a felhasználó kifejezett kérésére ez a kereséssel megnyitott
+// profilon LÁTHATÓ mindenki számára, a PrémiumPont-tal ("coin") együtt. A
+// saját profil (GET /api/me) hívása nem ad opts-ot - ott az egyenleget a már
+// meglévő, külön topbar-/főoldal-jelvény (ld. renderWalletBadge) mutatja,
+// itt nem duplikáljuk.
 function renderStatBadges(container, values, opts) {
-  const hideBalance = !!(opts && opts.hideBalance);
+  const showWallet = !!(opts && opts.showWallet);
   const items = [
     { icon: 'rank', label: 'Rang', html: escapeHtml(values.rank) },
-    ...(hideBalance ? [] : [{ icon: 'coin', label: 'PrémiumPont', html: escapeHtml(values.coin) }]),
+    { icon: 'coin', label: 'PrémiumPont', html: escapeHtml(values.coin) },
+    ...(showWallet ? [{ icon: 'wallet', label: 'Egyenleg', html: escapeHtml(values.wallet) }] : []),
     { icon: 'time', label: 'Online töltött idő', html: escapeHtml(values.time) }
   ];
   container.innerHTML = items.map((it) => `
@@ -521,7 +526,7 @@ function renderStatBadges(container, values, opts) {
 // sosem lépett még a szerverre), a megfelelő mező null/hiányzik a backendtől -
 // ilyenkor esik vissza helykitöltőre ("—"/"0"/"0 óra").
 function emptyStats() {
-  return { rank: '—', coin: '0', time: '0 óra' };
+  return { rank: '—', coin: '0', wallet: '0 Ft', time: '0 óra' };
 }
 
 function formatPlaytime(seconds) {
@@ -547,6 +552,11 @@ function formatStats(data) {
   return {
     rank: data.rank ? capitalizeFirst(data.rank) : '—',
     coin: typeof data.scBalance === 'number' ? data.scBalance.toLocaleString('hu-HU') : '0',
+    // ÚJ: valós pénzes egyenleg (ld. GET /api/profile/:username
+    // "walletBalanceHuf" mezője) - jelenleg csak a más játékos profilját
+    // megnyitó renderStatBadges(..., { showWallet: true }) hívás jeleníti
+    // meg ténylegesen (ld. openPlayerProfile).
+    wallet: typeof data.walletBalanceHuf === 'number' ? formatHuf(data.walletBalanceHuf) : '0 Ft',
     time: formatPlaytime(data.playtimeSeconds)
   };
 }
@@ -1815,11 +1825,11 @@ async function openPlayerProfile(username) {
   switchView('playerProfile');
   $('#playerProfileTitle').textContent = username;
   $('#playerProfileName').textContent = username;
-  renderStatBadges($('#playerProfileStats'), emptyStats(), { hideBalance: true });
+  renderStatBadges($('#playerProfileStats'), emptyStats(), { showWallet: true });
   renderSanctionStatus($('#playerProfileSanctionStatus'), null);
   renderNameBadges($('#playerProfileNameBadges'), null);
   apiGetProfile(username).then((profile) => {
-    renderStatBadges($('#playerProfileStats'), profile.ok ? formatStats(profile) : emptyStats(), { hideBalance: true });
+    renderStatBadges($('#playerProfileStats'), profile.ok ? formatStats(profile) : emptyStats(), { showWallet: true });
     // ÚJ: a felhasználó kérésére a némítás-/kitiltás-állapot a játékos-
     // keresőben (bárki profilját megnézve) is megjelenik, nem csak a saját
     // fooldalon - ld. SolarBackend GET /api/profile/:username kiterjesztését.
