@@ -494,10 +494,16 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-function renderStatBadges(container, values) {
+// JAVÍTVA: "opts.hideBalance" - a más játékos profilját megnyitó hívás (ld.
+// openPlayerProfile) ezzel elrejti a PrémiumPont-jelvényt, mert az egyenleg
+// senki másra nem tartozik (a backend GET /api/profile/:username sem küldi
+// már el - ld. ottani megjegyzést). A saját profil (GET /api/me) hívása
+// nem ad opts-ot, ott továbbra is megjelenik.
+function renderStatBadges(container, values, opts) {
+  const hideBalance = !!(opts && opts.hideBalance);
   const items = [
     { icon: 'rank', label: 'Rang', html: escapeHtml(values.rank) },
-    { icon: 'coin', label: 'PrémiumPont', html: escapeHtml(values.coin) },
+    ...(hideBalance ? [] : [{ icon: 'coin', label: 'PrémiumPont', html: escapeHtml(values.coin) }]),
     { icon: 'time', label: 'Online töltött idő', html: escapeHtml(values.time) }
   ];
   container.innerHTML = items.map((it) => `
@@ -625,16 +631,26 @@ document.addEventListener('click', (e) => {
 // mikor, mennyi van hátra, indoklás).
 function renderSanctionStatus(container, data) {
   if (!container) return;
+  // ÚJ: a fiók-zárolás ténye (indok NÉLKÜL - az senki másra nem tartozik,
+  // ld. GET /api/profile/:username "locked" mezőjét) külön, egyszerű
+  // kártyaként jelenik meg, a némítás/kitiltás-kártyák "info" (by/since/
+  // until/reason) szerkezete nélkül, mivel a zárolásnak nincs ilyen adata.
+  const lockedHtml = data?.locked ? `
+    <div class="sanction-status-card">
+      <div class="sanction-status-card-title">🔒 A fiók zárolva van</div>
+    </div>
+  ` : '';
+
   const cards = [];
   if (data?.activeMute) cards.push({ label: '🔇 Aktív némítás', info: data.activeMute });
   if (data?.activeBan) cards.push({ label: '⛔ Aktív kitiltás', info: data.activeBan });
   if (data?.activeCban) cards.push({ label: '🖥 Aktív kliens-tiltás', info: data.activeCban });
 
-  if (!cards.length) {
+  if (!lockedHtml && !cards.length) {
     container.innerHTML = '';
     return;
   }
-  container.innerHTML = cards.map((c) => `
+  container.innerHTML = lockedHtml + cards.map((c) => `
     <div class="sanction-status-card">
       <div class="sanction-status-card-title">${c.label}</div>
       ${c.info.by ? `<div class="sanction-status-card-row"><span>Kiadta:</span> ${escapeHtml(c.info.by)}</div>` : ''}
@@ -1222,7 +1238,16 @@ $('#btnDoAddAccount').addEventListener('click', async () => {
   session = { username: res.username, token: res.token };
   saveSession();
   closeAccountModal();
-  enterApp();
+  // JAVÍTVA: korábban itt enterApp()-t hívtunk újratöltés nélkül - az oldal
+  // az imént elhagyott nézeten/állapoton maradt, csak az adatok mögötte
+  // váltottak az újonnan hozzáadott fiókra (a felhasználó szerint "nem
+  // frissül az oldal, ott maradok ahol voltam csak a másik fiókon"). Ugyanaz
+  // a hiba osztály, amit switchAccount() location.reload()-ja fentebb már
+  // elkerül fiókváltáskor - itt is egy teljes újratöltés a legegyszerűbb
+  // módja annak, hogy MINDEN nézet/állapot az új, aktív fiókhoz tartozó
+  // legyen; tryAutoLogin() a betöltéskor úgyis a most mentett aktív fiókkal
+  // jelentkezik be.
+  location.reload();
 });
 
 // ── Biztonság (2FA/TOTP) - ld. SolarBackend src/totp.js ──
@@ -1790,11 +1815,11 @@ async function openPlayerProfile(username) {
   switchView('playerProfile');
   $('#playerProfileTitle').textContent = username;
   $('#playerProfileName').textContent = username;
-  renderStatBadges($('#playerProfileStats'), emptyStats());
+  renderStatBadges($('#playerProfileStats'), emptyStats(), { hideBalance: true });
   renderSanctionStatus($('#playerProfileSanctionStatus'), null);
   renderNameBadges($('#playerProfileNameBadges'), null);
   apiGetProfile(username).then((profile) => {
-    renderStatBadges($('#playerProfileStats'), profile.ok ? formatStats(profile) : emptyStats());
+    renderStatBadges($('#playerProfileStats'), profile.ok ? formatStats(profile) : emptyStats(), { hideBalance: true });
     // ÚJ: a felhasználó kérésére a némítás-/kitiltás-állapot a játékos-
     // keresőben (bárki profilját megnézve) is megjelenik, nem csak a saját
     // fooldalon - ld. SolarBackend GET /api/profile/:username kiterjesztését.
@@ -3195,7 +3220,8 @@ const ADMIN_ACTION_LABELS = {
   'creatorCode.delete': 'Creator kód törlése', 'creatorCode.activate': 'Creator kód aktiválása',
   'creatorCode.deactivate': 'Creator kód inaktiválása', 'creatorCode.redeem': 'Creator kód beváltva regisztrációkor',
   'creatorCode.rankExpired': 'Creator kód rang-jutalma lejárt',
-  'news.create': 'Felhívás létrehozása', 'news.edit': 'Felhívás szerkesztése', 'news.delete': 'Felhívás törlése'
+  'news.create': 'Felhívás létrehozása', 'news.edit': 'Felhívás szerkesztése', 'news.delete': 'Felhívás törlése',
+  'discord.boost': 'Discord boost jóváírás'
 };
 
 let staffActionLogsEntries = [];
@@ -3675,7 +3701,7 @@ $('#newsSaveBtn').addEventListener('click', async () => {
 });
 
 document.addEventListener('click', (e) => {
-  const editBtn = e.target.closest('.news-edit-btn');
+  const editBtn = e.target.closest('.news-edit-btn[data-news-id]');
   if (editBtn) {
     const item = newsAdminItems.find((n) => String(n.id) === editBtn.dataset.newsId);
     if (!item) return;
@@ -3702,7 +3728,7 @@ document.addEventListener('click', (e) => {
     }
     return;
   }
-  const deleteBtn = e.target.closest('.news-delete-btn');
+  const deleteBtn = e.target.closest('.news-delete-btn[data-news-id]');
   if (deleteBtn) {
     const id = deleteBtn.dataset.newsId;
     confirmModal('Felhívás törlése', 'Biztosan törlöd ezt a felhívást? Ez nem vonható vissza.', 'Igen, törlés').then((confirmed) => {
