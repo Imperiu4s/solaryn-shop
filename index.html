@@ -729,11 +729,20 @@
           <div id="playerResult" class="player-result-grid"></div>
         </section>
 
-        <!-- ÚJ: BIZTONSÁG - 2FA (TOTP) be/kikapcsolása a SAJÁT fiókhoz, ld.
-             app.js loadSecurityStatus/start2faSetup. -->
+        <!-- ÚJ: BIZTONSÁG - 2FA (TOTP) ÉS a biztonsági kód (PIN) be/kikapcsolása
+             a SAJÁT fiókhoz, ld. app.js loadSecurityStatus/start2faSetup és
+             loadSecurityPinStatus. A kettő EGYMÁSTÓL FÜGGETLENÜL kapcsolható -
+             mindkettő, csak az egyik, vagy egyik se lehet aktív; ha egyik se
+             aktív, az alábbi figyelmeztető sáv jelzi ezt (ld.
+             refreshSecurityWarning). -->
         <section class="view" data-view="security">
           <h1 class="page-title">Biztonság</h1>
-          <p class="page-note">Kétlépcsős azonosítás (2FA) - bejelentkezéskor a jelszó mellett egy hitelesítő alkalmazásban (pl. Google Authenticator, Authy) megjelenő kódot is be kell majd írnod.</p>
+          <p class="page-note">Kétlépcsős azonosítás (2FA) - bejelentkezéskor a jelszó mellett egy hitelesítő alkalmazásban (pl. Google Authenticator, Authy) megjelenő kódot is be kell majd írnod. A biztonsági kód egy ettől független, általad választott 4 vagy 6 jegyű PIN, amit szintén minden bejelentkezéskor be kell majd írnod - a kettő egyszerre, külön-külön, vagy egyik se is bekapcsolható.</p>
+
+          <div class="card redeem-result error hidden" id="securityWeakWarning" style="display:flex; align-items:center; gap:10px;">
+            <span style="font-size:1.4em; line-height:1;">⚠️</span>
+            <span>A fiókod jelenleg NINCS extra védelemmel ellátva - se a kétlépcsős azonosítás, se a biztonsági kód nincs bekapcsolva. Ha valaki megszerzi a jelszavadat, azonnal hozzáférhet a fiókodhoz. Javasoljuk, hogy kapcsold be legalább az egyiket lentebb.</span>
+          </div>
 
           <div class="card">
             <div class="card-title">Kétlépcsős azonosítás</div>
@@ -771,6 +780,42 @@
               <p class="redeem-result error" id="securityTotpActionError"></p>
               <button type="button" class="btn-outline" id="btnRegenerateRecoveryCodes">Új helyreállítási kódok generálása</button>
               <button type="button" class="btn-glow admin-delete-btn" id="btnDisable2fa" style="margin-top:8px;">2FA kikapcsolása</button>
+            </div>
+          </div>
+
+          <!-- ÚJ: BIZTONSÁGI KÓD (4/6 jegyű PIN) - a fenti 2FA-tól FÜGGETLEN
+               be/kikapcsolás, ld. app.js loadSecurityPinStatus. -->
+          <div class="card">
+            <div class="card-title">Biztonsági kód</div>
+            <p class="redeem-result" id="securityPinStatus">Betöltés...</p>
+
+            <!-- Kikapcsolt állapot VAGY meglévő kód módosítása - ugyanaz az
+                 űrlap mindkettőhöz (ld. app.js openSecurityPinSetup). -->
+            <div id="securityPinSetupPanel" class="hidden">
+              <label class="gift-modal-label">A kód hossza</label>
+              <div style="display:flex; gap:16px; margin-bottom:10px;">
+                <label style="display:flex; align-items:center; gap:6px; font-weight:400;"><input type="radio" name="securityPinLength" id="securityPinLength4" value="4" /> 4 számjegy</label>
+                <label style="display:flex; align-items:center; gap:6px; font-weight:400;"><input type="radio" name="securityPinLength" id="securityPinLength6" value="6" checked /> 6 számjegy</label>
+              </div>
+              <label class="gift-modal-label">Új biztonsági kód</label>
+              <input type="password" id="securityPinSetupInput" class="gift-modal-input" inputmode="numeric" autocomplete="off" maxlength="6" placeholder="000000" />
+              <label class="gift-modal-label">Új biztonsági kód még egyszer</label>
+              <input type="password" id="securityPinSetupConfirmInput" class="gift-modal-input" inputmode="numeric" autocomplete="off" maxlength="6" placeholder="000000" />
+              <label class="gift-modal-label">Jelszó (a művelet megerősítéséhez)</label>
+              <input type="password" id="securityPinSetupPasswordInput" class="gift-modal-input" autocomplete="current-password" placeholder="••••••••" />
+              <p class="redeem-result error" id="securityPinSetupError"></p>
+              <button type="button" class="btn-glow" id="btnConfirmSecurityPin" style="margin-top:10px;">Bekapcsolás</button>
+              <button type="button" class="btn-outline hidden" id="btnCancelSecurityPinSetup" style="margin-top:8px;">Mégse</button>
+            </div>
+
+            <!-- Bekapcsolt állapot: "Módosítás" (a fenti űrlapot nyitja meg) +
+                 kikapcsolás. -->
+            <div id="securityPinEnabledPanel" class="hidden">
+              <button type="button" class="btn-outline" id="btnChangeSecurityPin">Kód módosítása</button>
+              <label class="gift-modal-label" style="margin-top:14px;">Jelszó (a kikapcsolás megerősítéséhez)</label>
+              <input type="password" id="securityPinDisablePasswordInput" class="gift-modal-input" autocomplete="current-password" placeholder="••••••••" />
+              <p class="redeem-result error" id="securityPinActionError"></p>
+              <button type="button" class="btn-glow admin-delete-btn" id="btnDisableSecurityPin" style="margin-top:8px;">Biztonsági kód kikapcsolása</button>
             </div>
           </div>
         </section>
@@ -1680,6 +1725,23 @@
       <div class="modal-actions">
         <button type="button" class="btn-outline" id="totpPromptCancel">Mégse</button>
         <button type="button" class="btn-glow" id="totpPromptSubmit" style="margin-top:0;">Megerősítés</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ÚJ: biztonsági kód (PIN) bekérése bejelentkezéskor (ld. app.js
+       promptPinModal) - ugyanaz a minta, mint a fenti #totpPromptModal, a
+       jegyek száma (4 vagy 6) futásidőben, a maxlength/placeholder
+       átírásával áll be (ld. promptPinModal). -->
+  <div class="modal-overlay hidden" id="pinPromptModal">
+    <div class="modal-card">
+      <h3>Biztonsági kód</h3>
+      <p id="pinPromptText">Add meg a fiókodhoz beállított biztonsági kódot.</p>
+      <input type="password" id="pinPromptInput" class="gift-modal-input" inputmode="numeric" autocomplete="off" placeholder="0000" />
+      <div id="pinPromptError" class="redeem-result error"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn-outline" id="pinPromptCancel">Mégse</button>
+        <button type="button" class="btn-glow" id="pinPromptSubmit" style="margin-top:0;">Megerősítés</button>
       </div>
     </div>
   </div>

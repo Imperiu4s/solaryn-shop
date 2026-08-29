@@ -180,19 +180,73 @@ $('#switchToLogin').addEventListener('click', () => setAuthMode('login'));
 // ne töltődjön újra az oldal.
 $('#loginForm').addEventListener('submit', (e) => { e.preventDefault(); doLogin(); });
 
-// ÚJ: 2FA-tudatos bejelentkezés - a POST /api/login VAGY egy azonnali
-// {ok,username,token} választ ad, VAGY (ha a fióknak be van kapcsolva a
-// 2FA-ja) egy {requiresTotp:true, pendingToken}-et, amit a
-// promptTotpModal()-lal bekért kóddal kell beváltani a POST /api/login/totp
-// végponton. Ugyanezt a függvényt hívja a fő bejelentkezési űrlap ÉS a
-// fiókváltó-modál "Fiók hozzáadása" mini-űrlapja is (ld. lentebb) - így a
-// 2FA-lépés UI-ja egyetlen helyen él, nem duplikálódik.
+// ÚJ: 2FA/biztonsági-kód-tudatos bejelentkezés - a POST /api/login VAGY egy
+// azonnali {ok,username,token} választ ad, VAGY (ha a fióknak be van
+// kapcsolva a 2FA-ja és/vagy a biztonsági kódja) egy {requiresTotp,
+// requiresPin, pendingToken}-et. A kettő EGYMÁSTÓL FÜGGETLENÜL lehet igaz -
+// ha mindkettő az, EGYMÁS UTÁN kérjük be őket (előbb a 2FA-t, utána a
+// biztonsági kódot), ugyanazzal a pendingToken-nel - a backend
+// (finalizePendingLogin, ld. server.js) csak akkor ad ki valódi tokent, ha
+// MINDKETTŐ teljesült. Ugyanezt a függvényt hívja a fő bejelentkezési űrlap
+// ÉS a fiókváltó-modál "Fiók hozzáadása" mini-űrlapja is (ld. lentebb) - így
+// ez a lépés UI-ja egyetlen helyen él, nem duplikálódik.
 async function performLogin(username, password, rememberMe) {
-  const res = await apiPost('/api/login', { username, password, rememberMe: rememberMe === true });
-  if (!res.ok || !res.requiresTotp) return res;
-  const totpInput = await promptTotpModal();
-  if (!totpInput) return { ok: false, message: 'Megszakítva.' };
-  return apiPost('/api/login/totp', { pendingToken: res.pendingToken, ...totpInput });
+  let res = await apiPost('/api/login', { username, password, rememberMe: rememberMe === true });
+  if (!res.ok) return res;
+  if (res.requiresTotp) {
+    const totpInput = await promptTotpModal();
+    if (!totpInput) return { ok: false, message: 'Megszakítva.' };
+    res = await apiPost('/api/login/totp', { pendingToken: res.pendingToken, ...totpInput });
+    if (!res.ok) return res;
+  }
+  if (res.requiresPin) {
+    const pin = await promptPinModal(res.pinLength || 6);
+    if (!pin) return { ok: false, message: 'Megszakítva.' };
+    res = await apiPost('/api/login/pin', { pendingToken: res.pendingToken, pin });
+  }
+  return res;
+}
+
+// Promise-alapú biztonsági-kód bekérő modal bejelentkezéskor - ugyanaz a
+// minta, mint promptTotpModal(), de egyetlen, dinamikus hosszúságú (4 vagy
+// 6 jegyű) mezővel.
+function promptPinModal(pinLength) {
+  return new Promise((resolve) => {
+    const overlay = $('#pinPromptModal');
+    const input = $('#pinPromptInput');
+    const errEl = $('#pinPromptError');
+    input.value = '';
+    input.maxLength = pinLength;
+    input.placeholder = '0'.repeat(pinLength);
+    errEl.textContent = '';
+
+    overlay.classList.remove('hidden');
+    input.focus();
+
+    function cleanup() {
+      overlay.classList.add('hidden');
+      cancelBtn.removeEventListener('click', onCancel);
+      submitBtn.removeEventListener('click', onSubmit);
+      overlay.removeEventListener('click', onOverlayClick);
+    }
+    function onSubmit() {
+      const pin = input.value.trim();
+      if (!new RegExp(`^\\d{${pinLength}}$`).test(pin)) {
+        errEl.textContent = `A kód ${pinLength} számjegyből áll.`;
+        return;
+      }
+      cleanup();
+      resolve(pin);
+    }
+    function onCancel() { cleanup(); resolve(null); }
+    function onOverlayClick(e) { if (e.target === overlay) onCancel(); }
+
+    const cancelBtn = $('#pinPromptCancel');
+    const submitBtn = $('#pinPromptSubmit');
+    cancelBtn.addEventListener('click', onCancel);
+    submitBtn.addEventListener('click', onSubmit);
+    overlay.addEventListener('click', onOverlayClick);
+  });
 }
 
 // Promise-alapú 2FA-kód bekérő modal - a confirmModal() mintáját követi,
@@ -1260,8 +1314,21 @@ $('#btnDoAddAccount').addEventListener('click', async () => {
   location.reload();
 });
 
-// ── Biztonság (2FA/TOTP) - ld. SolarBackend src/totp.js ──
+// ── Biztonság (2FA/TOTP + biztonsági kód) - ld. SolarBackend src/totp.js és
+// src/securityPin.js. A két funkció EGYMÁSTÓL FÜGGETLEN, de a "biztonságod
+// veszélyben van" figyelmeztető sáv (ld. index.html #securityWeakWarning)
+// mindkettő állapotát ismernie kell - securityFactorState tárolja mindkét
+// betöltés eredményét, refreshSecurityWarning() dönt a sáv láthatóságáról. ──
 let lastGeneratedRecoveryCodes = null;
+const securityFactorState = { totp: null, pin: null };
+
+function refreshSecurityWarning() {
+  // Amíg valamelyik állapot még nem töltődött be (null), nem döntünk - egy
+  // BE állapotú tényezőt sose jelentsünk hibásan "nincs védelem"-nek egy
+  // lassabban betöltő másik kérés miatt.
+  if (securityFactorState.totp === null || securityFactorState.pin === null) return;
+  $('#securityWeakWarning').classList.toggle('hidden', securityFactorState.totp || securityFactorState.pin);
+}
 
 function showSecurityPanel(panelId) {
   ['securityTotpDisabledPanel', 'securityTotpSetupPanel', 'securityRecoveryCodesPanel', 'securityTotpEnabledPanel']
@@ -1276,6 +1343,8 @@ async function loadSecurityStatus() {
     const res = await fetch(BACKEND_URL + '/api/2fa/status', { headers: { Authorization: 'Bearer ' + session.token } });
     const data = await res.json();
     if (!data.ok) { statusEl.textContent = 'Nem sikerült lekérdezni az állapotot.'; return; }
+    securityFactorState.totp = data.enabled;
+    refreshSecurityWarning();
     if (data.enabled) {
       statusEl.textContent = 'A kétlépcsős azonosítás BE van kapcsolva a fiókodon.';
       $('#securityTotpPasswordInput').value = '';
@@ -1391,6 +1460,120 @@ $('#btnRegenerateRecoveryCodes').addEventListener('click', async () => {
   }
 });
 
+// ── Biztonsági kód (PIN) - ld. SolarBackend src/securityPin.js ──
+function showSecurityPinPanel(panelId) {
+  ['securityPinSetupPanel', 'securityPinEnabledPanel']
+    .forEach((id) => $('#' + id).classList.toggle('hidden', id !== panelId));
+}
+
+// A hossz-választó rádiógombok szerint tartja szinkronban a PIN-mezők
+// maxlength/placeholder-jét, hogy ne lehessen a választottnál több/kevesebb
+// számjegyet beírni.
+function currentSecurityPinLength() {
+  return $('#securityPinLength4').checked ? 4 : 6;
+}
+function syncSecurityPinInputLengths() {
+  const len = currentSecurityPinLength();
+  [$('#securityPinSetupInput'), $('#securityPinSetupConfirmInput')].forEach((input) => {
+    input.maxLength = len;
+    input.placeholder = '0'.repeat(len);
+  });
+}
+$('#securityPinLength4').addEventListener('change', syncSecurityPinInputLengths);
+$('#securityPinLength6').addEventListener('change', syncSecurityPinInputLengths);
+
+// Megnyitja a beállító űrlapot - "isChange" esetén (már bekapcsolt kód
+// módosítása) a jelenlegi hosszra állítja a rádiógombot, és megjeleníti a
+// "Mégse" gombot (első bekapcsoláskor nincs mihez visszalépni, ld. lentebb).
+function openSecurityPinSetup(isChange, currentLength) {
+  $('#securityPinLength4').checked = currentLength === 4;
+  $('#securityPinLength6').checked = currentLength !== 4;
+  syncSecurityPinInputLengths();
+  $('#securityPinSetupInput').value = '';
+  $('#securityPinSetupConfirmInput').value = '';
+  $('#securityPinSetupPasswordInput').value = '';
+  $('#securityPinSetupError').textContent = '';
+  $('#btnConfirmSecurityPin').textContent = isChange ? 'Mentés' : 'Bekapcsolás';
+  $('#btnCancelSecurityPinSetup').classList.toggle('hidden', !isChange);
+  showSecurityPinPanel('securityPinSetupPanel');
+}
+
+async function loadSecurityPinStatus() {
+  if (!session || !session.token) return;
+  const statusEl = $('#securityPinStatus');
+  statusEl.textContent = 'Betöltés...';
+  try {
+    const res = await fetch(BACKEND_URL + '/api/security-pin/status', { headers: { Authorization: 'Bearer ' + session.token } });
+    const data = await res.json();
+    if (!data.ok) { statusEl.textContent = 'Nem sikerült lekérdezni az állapotot.'; return; }
+    securityFactorState.pin = data.enabled;
+    refreshSecurityWarning();
+    if (data.enabled) {
+      statusEl.textContent = `A biztonsági kód BE van kapcsolva a fiókodon (${data.length} jegyű).`;
+      $('#securityPinDisablePasswordInput').value = '';
+      $('#securityPinActionError').textContent = '';
+      showSecurityPinPanel('securityPinEnabledPanel');
+      $('#btnChangeSecurityPin').dataset.currentLength = data.length;
+    } else {
+      statusEl.textContent = 'A biztonsági kód jelenleg NINCS bekapcsolva.';
+      openSecurityPinSetup(false, 6);
+    }
+  } catch {
+    statusEl.textContent = 'Nem sikerült elérni a szervert.';
+  }
+}
+
+$('#btnChangeSecurityPin').addEventListener('click', () => {
+  openSecurityPinSetup(true, Number($('#btnChangeSecurityPin').dataset.currentLength) || 6);
+});
+
+$('#btnCancelSecurityPinSetup').addEventListener('click', () => showSecurityPinPanel('securityPinEnabledPanel'));
+
+$('#btnConfirmSecurityPin').addEventListener('click', async () => {
+  const len = currentSecurityPinLength();
+  const pin = $('#securityPinSetupInput').value.trim();
+  const confirmPin = $('#securityPinSetupConfirmInput').value.trim();
+  const password = $('#securityPinSetupPasswordInput').value;
+  const errEl = $('#securityPinSetupError');
+  if (!new RegExp(`^\\d{${len}}$`).test(pin)) { errEl.textContent = `A kód ${len} számjegyből álljon.`; return; }
+  if (pin !== confirmPin) { errEl.textContent = 'A két kód nem egyezik.'; return; }
+  if (!password) { errEl.textContent = 'Add meg a jelszavad.'; return; }
+  try {
+    const res = await fetch(BACKEND_URL + '/api/security-pin/enable', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ pin, confirmPin, password })
+    });
+    const data = await res.json();
+    if (!data.ok) { errEl.textContent = data.message || 'Nem sikerült bekapcsolni.'; return; }
+    showToast('Biztonsági kód beállítva.');
+    loadSecurityPinStatus();
+  } catch {
+    errEl.textContent = 'Nem sikerült elérni a szervert.';
+  }
+});
+
+$('#btnDisableSecurityPin').addEventListener('click', async () => {
+  const password = $('#securityPinDisablePasswordInput').value;
+  const errEl = $('#securityPinActionError');
+  if (!password) { errEl.textContent = 'Add meg a jelszavad.'; return; }
+  const confirmed = await confirmModal('Biztonsági kód kikapcsolása', 'Biztosan kikapcsolod a biztonsági kódot? A bejelentkezéshez ezután nem lesz szükség rá.', 'Igen, kikapcsolás');
+  if (!confirmed) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/security-pin/disable', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ password })
+    });
+    const data = await res.json();
+    if (!data.ok) { errEl.textContent = data.message || 'Nem sikerült kikapcsolni.'; return; }
+    showToast('A biztonsági kód kikapcsolva.');
+    loadSecurityPinStatus();
+  } catch {
+    errEl.textContent = 'Nem sikerült elérni a szervert.';
+  }
+});
+
 // ── Oldalsáv / nézetváltás ──
 function switchView(view) {
   $$('.app-nav-item[data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
@@ -1406,7 +1589,7 @@ function switchView(view) {
   if (view === 'wallet') refreshPpBalance();
   // A Biztonság fület minden megnyitáskor frissítjük - friss 2FA-állapotot
   // mutasson (ld. loadSecurityStatus).
-  if (view === 'security') loadSecurityStatus();
+  if (view === 'security') { loadSecurityStatus(); loadSecurityPinStatus(); }
   // A Napló fület minden megnyitáskor frissítjük - friss bejegyzéseket kér le
   // (a dátum-szűrők szerint), a keresés viszont kliens-oldalon szűr a már
   // letöltött listán, nem küld újabb kérést minden billentyűleütésre.
