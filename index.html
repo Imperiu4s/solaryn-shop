@@ -1689,7 +1689,77 @@
         <input type="password" id="addAcctPass" class="gift-modal-input" autocomplete="current-password" placeholder="••••••••" />
         <div id="addAcctError" class="redeem-result error"></div>
         <button type="button" class="btn-glow" id="btnDoAddAccount" style="margin-top:10px;">Hozzáadás és váltás</button>
+        <p class="auth-switch-hint">Nincs még fiókod? <span class="link-inline" id="accountAddSwitchToRegister">Regisztráció!</span></p>
       </div>
+
+      <!-- ÚJ: regisztráció közvetlenül a fiókváltó modálból - a
+           SolarLauncher #accountAddRegisterForm-jának webes megfelelője.
+           Sikeres regisztráció után ugyanazzal a záró-szekvenciával
+           fejeződik be, mint egy meglévő fiók hozzáadása (btnDoAddAccount) -
+           ld. app.js doModalRegister. -->
+      <div class="hidden" id="accountAddRegisterForm">
+        <label class="gift-modal-label">Játékos név *</label>
+        <input id="modalRegUser" type="text" class="gift-modal-input" autocomplete="off" placeholder="Játékos név" />
+
+        <div class="form-row-2">
+          <div>
+            <label class="gift-modal-label">Email cím *</label>
+            <input id="modalRegEmail" type="email" class="gift-modal-input" autocomplete="off" placeholder="Valós email cím" />
+          </div>
+          <div>
+            <label class="gift-modal-label">Email cím újra *</label>
+            <input id="modalRegEmail2" type="email" class="gift-modal-input" autocomplete="off" placeholder="Valós email cím újra" />
+          </div>
+        </div>
+
+        <label class="gift-modal-label">Születési dátum *</label>
+        <div class="form-row-3">
+          <select id="modalRegYear"><option value="">- év -</option></select>
+          <select id="modalRegMonth"><option value="">- hónap -</option></select>
+          <select id="modalRegDay"><option value="">- nap -</option></select>
+        </div>
+
+        <div class="form-row-2">
+          <div>
+            <label class="gift-modal-label">Jelszó *</label>
+            <input id="modalRegPass" type="password" class="gift-modal-input" autocomplete="off" placeholder="Jelszó" />
+          </div>
+          <div>
+            <label class="gift-modal-label">Jelszó újra *</label>
+            <input id="modalRegPass2" type="password" class="gift-modal-input" autocomplete="off" placeholder="Jelszó újra" />
+          </div>
+        </div>
+
+        <label class="gift-modal-label">Support / Creator kód</label>
+        <input id="modalRegCreatorCode" type="text" class="gift-modal-input" autocomplete="off" placeholder="Nem kötelező" />
+
+        <div class="form-checks">
+          <label class="check-row">
+            <input type="checkbox" id="modalRegTerms" />
+            <span>Elfogadom az <span class="link-inline">ÁSZF</span>-et és az Adatvédelmi nyilatkozatot.</span>
+          </label>
+          <label class="check-row">
+            <input type="checkbox" id="modalRegMarketing" />
+            <span>Hozzájárulok a marketing célú
+              <select id="modalRegMarketingChannel" class="inline-select">
+                <option value="email_sms">Email és SMS</option>
+                <option value="email">Csak Email</option>
+                <option value="sms">Csak SMS</option>
+              </select>
+              megkeresésekhez.
+            </span>
+          </label>
+          <label class="check-row">
+            <input type="checkbox" id="modalRegAge" />
+            <span>Megerősítem, hogy betöltöttem a 14. életévemet, vagy szülőm/törvényes képviselőm hozzájárult.</span>
+          </label>
+        </div>
+
+        <div id="modalRegError" class="redeem-result error"></div>
+        <button type="button" class="btn-glow btn-glow-orange" id="modalRegSubmit" style="margin-top:10px;">Regisztráció</button>
+        <button type="button" class="btn-outline" id="modalRegCancel" style="margin-top:8px;">Mégse</button>
+      </div>
+
       <div class="modal-actions">
         <button type="button" class="btn-outline" id="accountModalClose">Bezárás</button>
       </div>

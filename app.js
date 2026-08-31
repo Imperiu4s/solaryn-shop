@@ -13,6 +13,34 @@ const BACKEND_URL = 'https://api.overclockgame.hu:8908';
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
+// ── Jelszó megjelenítése (szem-ikon) minden jelszómezőn - ld. ugyanez a
+// mintázat a SolarLauncher renderer.js-ében (initPasswordToggles). ──
+const PW_EYE_SVG = '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M1.5 12S5 5 12 5s10.5 7 10.5 7-3.5 7-10.5 7S1.5 12 1.5 12Z"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
+const PW_EYE_OFF_SVG = '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M3 3l18 18M10.6 10.6a3 3 0 0 0 4.24 4.24M9.4 5.3A10.8 10.8 0 0 1 12 5c7 0 10.5 7 10.5 7a13.4 13.4 0 0 1-3.15 4.05M6.5 6.5C3.6 8.3 1.5 12 1.5 12s2.2 4.4 6.1 6.2"/></svg>';
+function initPasswordToggles(root) {
+  (root || document).querySelectorAll('input[type="password"]').forEach((input) => {
+    if (input.dataset.pwInit) return;
+    input.dataset.pwInit = '1';
+    const wrap = document.createElement('div');
+    wrap.className = 'pw-field-wrap';
+    input.parentNode.insertBefore(wrap, input);
+    wrap.appendChild(input);
+    input.classList.add('pw-field-input');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'pw-toggle-btn';
+    btn.setAttribute('aria-label', 'Jelszó megjelenítése');
+    btn.innerHTML = PW_EYE_SVG;
+    btn.addEventListener('click', () => {
+      const nowShowing = input.type === 'password';
+      input.type = nowShowing ? 'text' : 'password';
+      btn.innerHTML = nowShowing ? PW_EYE_OFF_SVG : PW_EYE_SVG;
+    });
+    wrap.appendChild(btn);
+  });
+}
+initPasswordToggles();
+
 // ── Hulló parázs-szemcse háttéranimáció (ugyanaz, mint a SolarLauncherben) ──
 (function initParticles() {
   const canvas = $('#particleCanvas');
@@ -132,6 +160,19 @@ function saveSession() {
     activeUsername = accounts[0]?.username || '';
     syncSessionFromAccounts();
   }
+  persistAccounts();
+}
+
+// ÚJ: TELJES kijelentkezés - a "Kijelentkezés" gomb (ellentétben a
+// saveSession() fenti "session=null" ágával, ami csak az AKTÍV fiókot veszi
+// ki, a többi mentett fiókot érintetlenül hagyva) MINDEN mentett fiókot
+// töröl egyszerre, ugyanúgy mint a launcher removeAllAccounts()-ja - a
+// felhasználó kérése, hogy egy kattintással biztosan egyik mentett fiók se
+// maradjon bejelentkezve ezen a böngészőn.
+function logoutAllAccounts() {
+  accounts = [];
+  activeUsername = '';
+  session = null;
   persistAccounts();
 }
 
@@ -431,62 +472,64 @@ function showLockedScreen(reason) {
   $('#lockedScreen').classList.remove('hidden');
 }
 $('#btnLogoutLocked').addEventListener('click', () => {
-  session = null;
-  saveSession();
+  logoutAllAccounts();
   $('#lockedScreen').classList.add('hidden');
   $('#authScreen').classList.remove('hidden');
 });
 
-// ── Regisztráció: születési dátum legördülők feltöltése ──
+// ── Regisztráció: születési dátum legördülők feltöltése ── (ÚJ: kiemelve
+// egy újrahasznosítható függvénybe, mert a fiókváltó modál beágyazott
+// regisztrációs formja - #accountAddRegisterForm - saját, külön select-eket
+// használ ugyanezzel a listával, ld. lentebb - a SolarLauncher renderer.js
+// ugyanezt a mintát követi.)
 const HU_MONTHS = ['Január', 'Február', 'Március', 'Április', 'Május', 'Június', 'Július', 'Augusztus', 'Szeptember', 'Október', 'November', 'December'];
-(function populateBirthDate() {
-  const yearSel = $('#regYear');
+function populateBirthDateSelects(yearSel, monthSel, daySel) {
   const nowYear = new Date().getFullYear();
   for (let y = nowYear - 14; y >= nowYear - 100; y--) {
     const opt = document.createElement('option');
     opt.value = String(y); opt.textContent = String(y);
     yearSel.appendChild(opt);
   }
-  const monthSel = $('#regMonth');
   HU_MONTHS.forEach((name, i) => {
     const opt = document.createElement('option');
     opt.value = String(i + 1).padStart(2, '0'); opt.textContent = name;
     monthSel.appendChild(opt);
   });
-  const daySel = $('#regDay');
   for (let d = 1; d <= 31; d++) {
     const opt = document.createElement('option');
     opt.value = String(d).padStart(2, '0'); opt.textContent = String(d);
     daySel.appendChild(opt);
   }
-})();
+}
+populateBirthDateSelects($('#regYear'), $('#regMonth'), $('#regDay'));
+populateBirthDateSelects($('#modalRegYear'), $('#modalRegMonth'), $('#modalRegDay'));
 
-// ── Regisztráció: beküldés ──
-$('#registerSubmit').addEventListener('click', doRegister);
-
-async function doRegister() {
-  const errEl = $('#registerError');
+// ── Regisztráció: validáció + beküldés, KIEMELVE egy megosztott függvénybe
+// (ÚJ) - mind a teljes képernyős regisztrációs form, mind a fiókváltó modál
+// beágyazott #accountAddRegisterForm-ja ugyanezt hívja, csak a saját mező-
+// ID-jaikkal. ──
+async function submitRegistration(ids, errEl) {
   errEl.textContent = '';
 
-  const username = $('#regUser').value.trim();
-  const email = $('#regEmail').value.trim();
-  const email2 = $('#regEmail2').value.trim();
-  const pass = $('#regPass').value;
-  const pass2 = $('#regPass2').value;
-  const year = $('#regYear').value, month = $('#regMonth').value, day = $('#regDay').value;
-  const creatorCode = $('#regCreatorCode').value.trim();
-  const termsOk = $('#regTerms').checked;
-  const ageOk = $('#regAge').checked;
-  const marketingOk = $('#regMarketing').checked;
-  const marketingChannel = $('#regMarketingChannel').value;
+  const username = $(ids.user).value.trim();
+  const email = $(ids.email).value.trim();
+  const email2 = $(ids.email2).value.trim();
+  const pass = $(ids.pass).value;
+  const pass2 = $(ids.pass2).value;
+  const year = $(ids.year).value, month = $(ids.month).value, day = $(ids.day).value;
+  const creatorCode = $(ids.creatorCode).value.trim();
+  const termsOk = $(ids.terms).checked;
+  const ageOk = $(ids.age).checked;
+  const marketingOk = $(ids.marketing).checked;
+  const marketingChannel = $(ids.marketingChannel).value;
 
-  if (!username) { errEl.textContent = 'Adj meg egy játékos nevet.'; return; }
-  if (!email || email !== email2) { errEl.textContent = 'A két email cím nem egyezik.'; return; }
-  if (!pass || pass !== pass2) { errEl.textContent = 'A két jelszó nem egyezik.'; return; }
-  if (pass.length < 6) { errEl.textContent = 'A jelszó min. 6 karakter.'; return; }
-  if (!year || !month || !day) { errEl.textContent = 'Add meg a születési dátumodat.'; return; }
-  if (!termsOk) { errEl.textContent = 'Az ÁSZF és az Adatvédelmi nyilatkozat elfogadása kötelező.'; return; }
-  if (!ageOk) { errEl.textContent = 'Erősítsd meg, hogy betöltötted a 14. életévedet.'; return; }
+  if (!username) { errEl.textContent = 'Adj meg egy játékos nevet.'; return null; }
+  if (!email || email !== email2) { errEl.textContent = 'A két email cím nem egyezik.'; return null; }
+  if (!pass || pass !== pass2) { errEl.textContent = 'A két jelszó nem egyezik.'; return null; }
+  if (pass.length < 6) { errEl.textContent = 'A jelszó min. 6 karakter.'; return null; }
+  if (!year || !month || !day) { errEl.textContent = 'Add meg a születési dátumodat.'; return null; }
+  if (!termsOk) { errEl.textContent = 'Az ÁSZF és az Adatvédelmi nyilatkozat elfogadása kötelező.'; return null; }
+  if (!ageOk) { errEl.textContent = 'Erősítsd meg, hogy betöltötted a 14. életévedet.'; return null; }
 
   const res = await apiPost('/api/register', {
     username,
@@ -498,7 +541,27 @@ async function doRegister() {
     creatorCode: creatorCode || null,
     termsAccepted: termsOk
   });
-  if (!res.ok) { errEl.textContent = res.message || 'Sikertelen regisztráció.'; return; }
+  if (!res.ok) { errEl.textContent = res.message || 'Sikertelen regisztráció.'; return null; }
+  return res;
+}
+
+const REGISTER_FORM_IDS = {
+  user: '#regUser', email: '#regEmail', email2: '#regEmail2', pass: '#regPass', pass2: '#regPass2',
+  year: '#regYear', month: '#regMonth', day: '#regDay', creatorCode: '#regCreatorCode',
+  terms: '#regTerms', age: '#regAge', marketing: '#regMarketing', marketingChannel: '#regMarketingChannel'
+};
+const MODAL_REGISTER_FORM_IDS = {
+  user: '#modalRegUser', email: '#modalRegEmail', email2: '#modalRegEmail2', pass: '#modalRegPass', pass2: '#modalRegPass2',
+  year: '#modalRegYear', month: '#modalRegMonth', day: '#modalRegDay', creatorCode: '#modalRegCreatorCode',
+  terms: '#modalRegTerms', age: '#modalRegAge', marketing: '#modalRegMarketing', marketingChannel: '#modalRegMarketingChannel'
+};
+
+// ── Regisztráció: beküldés ──
+$('#registerSubmit').addEventListener('click', doRegister);
+
+async function doRegister() {
+  const res = await submitRegistration(REGISTER_FORM_IDS, $('#registerError'));
+  if (!res) return;
   session = { username: res.username, token: res.token };
   saveSession();
   enterApp();
@@ -1183,8 +1246,7 @@ document.addEventListener('click', () => {
 });
 $('#btnLogout').addEventListener('click', (e) => {
   e.stopPropagation();
-  session = null;
-  saveSession();
+  logoutAllAccounts();
   location.reload();
 });
 
@@ -1193,6 +1255,7 @@ $('#btnLogout').addEventListener('click', (e) => {
 const accountModal = $('#accountModal');
 function openAccountModal() {
   $('#addAccountForm').classList.add('hidden');
+  $('#accountAddRegisterForm').classList.add('hidden');
   $('#addAcctUser').value = '';
   $('#addAcctPass').value = '';
   $('#addAcctError').textContent = '';
@@ -1321,6 +1384,33 @@ $('#btnDoAddAccount').addEventListener('click', async () => {
   // jelentkezik be.
   location.reload();
 });
+
+// ── ÚJ: regisztráció közvetlenül a fiókváltó modálból - a "Nincs még
+// fiókod? Regisztráció!" linkre kattintva a beágyazott bejelentkező-form
+// (#addAccountForm) helyett a beágyazott regisztrációs form
+// (#accountAddRegisterForm) jelenik meg, ugyanabban a modálban. Sikeres
+// regisztráció után PONTOSAN ugyanaz a záró-szekvencia fut, mint egy
+// meglévő fiók hozzáadásánál (btnDoAddAccount fent) - ld. renderer.js
+// doModalRegister ugyanez a mintázat a launcherben. ──
+$('#accountAddSwitchToRegister').addEventListener('click', () => {
+  $('#addAccountForm').classList.add('hidden');
+  $('#modalRegError').textContent = '';
+  $('#accountAddRegisterForm').classList.remove('hidden');
+});
+$('#modalRegCancel').addEventListener('click', () => {
+  $('#accountAddRegisterForm').classList.add('hidden');
+  $('#addAccountForm').classList.remove('hidden');
+});
+$('#modalRegSubmit').addEventListener('click', doModalRegister);
+
+async function doModalRegister() {
+  const res = await submitRegistration(MODAL_REGISTER_FORM_IDS, $('#modalRegError'));
+  if (!res) return;
+  session = { username: res.username, token: res.token };
+  saveSession();
+  closeAccountModal();
+  location.reload();
+}
 
 // ── Biztonság (2FA/TOTP + biztonsági kód) - ld. SolarBackend src/totp.js és
 // src/securityPin.js. A két funkció EGYMÁSTÓL FÜGGETLEN, de a "biztonságod
@@ -2920,6 +3010,21 @@ function formatPp(n) {
 }
 
 let shopRanks = [];
+// ÚJ: automatikus PP-előfizetéses rangrendszer (a felhasználó kifejezett
+// kérésére, ld. SolarBackend src/subscriptions.js) - a bejelentkezett
+// felhasználó SAJÁT aktív/lemondott előfizetéseinek listája, hogy minden
+// rang-kártyán el tudjuk dönteni: "Előfizetés" gombot mutassunk-e, vagy már
+// van rá aktív előfizetés (akkor "Lemondás" + a következő terhelés dátuma).
+let mySubscriptions = [];
+
+function formatSubscriptionDate(iso) {
+  if (!iso) return '';
+  // A backend "YYYY-MM-DD HH:MM:SS" (UTC, SQLite datetime()) formátumban adja
+  // vissza - a Date natívan is fel tudja dolgozni "T"-re cserélve a szóközt.
+  const d = new Date(iso.replace(' ', 'T') + 'Z');
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('hu-HU');
+}
 
 function renderRankCard(rank) {
   // A "priceCoins" itt MÁR a kedvezménnyel csökkentett ár (ld. GET /ranks) -
@@ -2930,6 +3035,26 @@ function renderRankCard(rank) {
   const priceInner = rank.discountPercent > 0
     ? `<span class="price-original">${formatPp(rank.originalPriceCoins)}</span>${formatPp(rank.priceCoins)}`
     : formatPp(rank.priceCoins);
+
+  const mySub = mySubscriptions.find((s) => s.rankId === rank.id && s.active);
+  let subscriptionBlock = '';
+  if (rank.subscribable) {
+    if (mySub) {
+      const statusNote = mySub.lastChargeStatus === 'failed'
+        ? '<div class="subscription-status subscription-status-failed">Az utolsó terhelés sikertelen volt - pótold az egyenleged, a következő próbálkozás automatikus.</div>'
+        : '';
+      subscriptionBlock = `
+        <div class="subscription-info">Előfizetve - következő terhelés: ${formatSubscriptionDate(mySub.nextBillingAt)}</div>
+        ${statusNote}
+        <button type="button" class="btn-outline btn-cancel-subscription" data-cancel-sub-rank-id="${rank.id}">Előfizetés lemondása</button>
+      `;
+    } else {
+      subscriptionBlock = `
+        <button type="button" class="btn-outline btn-subscribe" data-subscribe-rank-id="${rank.id}"${affordable ? '' : ' disabled'}>Előfizetés (havonta ${formatPp(rank.priceCoins)})</button>
+      `;
+    }
+  }
+
   return `
     <div class="rank-card${rank.id === 'solaryn' ? ' featured' : ''}${affordable ? '' : ' insufficient'}">
       ${discountBadge}
@@ -2942,12 +3067,24 @@ function renderRankCard(rank) {
       <ul class="info-list rank-perm-list">${rank.perms.map((p) => `<li>${p}</li>`).join('')}</ul>
       <button type="button" class="btn-buy" data-rank-id="${rank.id}"${affordable ? '' : ' disabled'}>${affordable ? 'Vásárlás' : 'Nincs elég PP'}</button>
       <button type="button" class="btn-outline btn-gift" data-gift-rank-id="${rank.id}"${affordable ? '' : ' disabled'}>🎁 Ajándékozás</button>
+      ${subscriptionBlock}
     </div>
   `;
 }
 
 function renderRankGrid() {
   $('#rankGrid').innerHTML = shopRanks.map(renderRankCard).join('');
+}
+
+async function loadMySubscriptions() {
+  if (!session || !session.token) { mySubscriptions = []; return; }
+  try {
+    const res = await fetch(BACKEND_URL + '/api/subscriptions/mine', { headers: { Authorization: 'Bearer ' + session.token } });
+    const data = await res.json();
+    mySubscriptions = data.ok && Array.isArray(data.subscriptions) ? data.subscriptions : [];
+  } catch {
+    mySubscriptions = [];
+  }
 }
 
 async function loadRanks() {
@@ -2960,6 +3097,7 @@ async function loadRanks() {
   } catch {
     shopRanks = [];
   }
+  await loadMySubscriptions();
   renderRankGrid();
   $('#rankGrid').dataset.loaded = '1';
 }
@@ -2968,7 +3106,78 @@ loadRanks();
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('.btn-buy[data-rank-id]');
   if (btn && !btn.disabled) buyRank(btn.dataset.rankId, btn);
+  const subBtn = e.target.closest('.btn-subscribe[data-subscribe-rank-id]');
+  if (subBtn && !subBtn.disabled) subscribeRank(subBtn.dataset.subscribeRankId, subBtn);
+  const cancelBtn = e.target.closest('.btn-cancel-subscription[data-cancel-sub-rank-id]');
+  if (cancelBtn) cancelSubscription(cancelBtn.dataset.cancelSubRankId, cancelBtn);
 });
+
+// ÚJ: havonta automatikusan megújuló előfizetés indítása - az ELSŐ terhelés
+// azonnal elindul (ugyanaz az async pending/claim mechanizmus, mint egy sima
+// rang-vásárlásnál, ld. buyRank), utána a SolarBackend saját maga terheli
+// havonta, amíg a játékos le nem mondja.
+async function subscribeRank(rankId, buttonEl) {
+  if (!session || !session.token) {
+    showToast('Az előfizetéshez jelentkezz be.', true);
+    return;
+  }
+  const rank = shopRanks.find((r) => r.id === rankId);
+  const confirmed = await confirmModal(
+    'Előfizetés indítása',
+    rank ? `A(z) <b>${rank.label}</b> rangra fizetsz elő, havonta <b>${formatPp(rank.priceCoins)}</b> kerül levonásra az egyenlegedből automatikusan, amíg le nem mondod.` : 'Biztosan elindítod ezt az előfizetést?',
+    'Igen, előfizetek'
+  );
+  if (!confirmed) return;
+
+  const originalText = buttonEl.textContent;
+  buttonEl.disabled = true;
+  buttonEl.textContent = 'Előfizetés indítása...';
+  try {
+    const res = await fetch(BACKEND_URL + '/api/subscriptions/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ rankId })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      showToast(data.message || 'Nem sikerült elindítani az előfizetést.', true);
+    } else {
+      showToast('Előfizetés elindítva - az első terhelés kb. 1 percen belül lezajlik.');
+      await loadMySubscriptions();
+      renderRankGrid();
+    }
+  } catch {
+    showToast('Nem sikerült elérni a szervert.', true);
+  } finally {
+    buttonEl.disabled = false;
+    buttonEl.textContent = originalText;
+  }
+}
+
+async function cancelSubscription(rankId, buttonEl) {
+  const confirmed = await confirmModal('Előfizetés lemondása', 'Biztosan lemondod ezt az előfizetést? A következő hónaptól már nem terhelünk automatikusan.', 'Igen, lemondom');
+  if (!confirmed) return;
+  buttonEl.disabled = true;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/subscriptions/cancel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ rankId })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      showToast(data.message || 'Nem sikerült lemondani az előfizetést.', true);
+      buttonEl.disabled = false;
+    } else {
+      showToast('Előfizetés lemondva.');
+      await loadMySubscriptions();
+      renderRankGrid();
+    }
+  } catch {
+    showToast('Nem sikerült elérni a szervert.', true);
+    buttonEl.disabled = false;
+  }
+}
 
 // Egyszerű, a site stílusát követő Igen/Mégse megerősítő modál (a natív
 // confirm() helyett) - Promise<boolean>-t ad vissza.
