@@ -628,8 +628,16 @@ function formatStats(data) {
 function renderDiscordLinkBadge(container, data, opts) {
   if (!container) return;
   if (data && data.discordUsername) {
+    // JAVÍTVA (XSS): a Discord-profil megjelenítendő neve/avatar-URL-je a
+    // felhasználó OAuth-profiljából jön (Discord oldalán szabadon
+    // állítható, NEM esik át a SolarCenter saját USERNAME_RE-jén) - a
+    // korábbi, nyers interpolálás egy célzottan összeállított Discord
+    // megjelenítési névvel (vagy avatar-URL-lel, ami megszakíthatta volna
+    // az src="..." attribútumot) tárolt XSS-t tett volna lehetővé, ami a
+    // fiókot linkelő játékosnak ÉS minden adminnak lefutott volna, aki
+    // megnyitja a profilját.
     const avatarHtml = data.discordAvatar
-      ? `<img class="discord-link-avatar" src="${data.discordAvatar}" alt="" />`
+      ? `<img class="discord-link-avatar" src="${escapeHtml(data.discordAvatar)}" alt="" />`
       : '';
     const unlinkBtn = opts
       ? `<button type="button" class="link-btn discord-unlink-btn" data-mode="${opts.mode}"${opts.mode === 'admin' ? ' data-perm="player.action.discordUnlink"' : ''}>Leválasztás</button>`
@@ -637,7 +645,7 @@ function renderDiscordLinkBadge(container, data, opts) {
     container.innerHTML = `
       <div class="discord-link-badge discord-link-badge-connected">
         ${avatarHtml}
-        <span>Összekötve ezzel: <b>${data.discordUsername}</b></span>
+        <span>Összekötve ezzel: <b>${escapeHtml(data.discordUsername)}</b></span>
         ${unlinkBtn}
       </div>
     `;
@@ -1949,11 +1957,11 @@ async function doPlayerSearch() {
   }
 
   resultEl.innerHTML = data.players.map((p, i) => `
-    <div class="player-card" data-username="${p.username}">
+    <div class="player-card" data-username="${escapeHtml(p.username)}">
       <canvas class="player-card-canvas" data-idx="${i}" width="40" height="40"></canvas>
       <div class="player-card-info">
         <div class="player-card-label">Név</div>
-        <div class="player-card-name">${p.username}</div>
+        <div class="player-card-name">${escapeHtml(p.username)}</div>
       </div>
     </div>
   `).join('');
@@ -2674,10 +2682,10 @@ async function openDeviceDetail(deviceId) {
     currentDeviceBan = data.ban;
     renderDeviceBanStatus();
     $('#deviceLoginsBody').innerHTML = data.logins.map((l) => `
-      <tr><td>${formatLedgerDate(l.created_at)}</td><td>${l.username}</td></tr>
+      <tr><td>${formatLedgerDate(l.created_at)}</td><td>${escapeHtml(l.username)}</td></tr>
     `).join('') || '<tr><td colspan="2">Nincs rögzített belépés.</td></tr>';
     $('#deviceUsersBody').innerHTML = data.users.map((u) => `
-      <tr><td>${formatLedgerDate(u.last_seen)}</td><td>${u.username}</td><td>${u.login_count}</td></tr>
+      <tr><td>${formatLedgerDate(u.last_seen)}</td><td>${escapeHtml(u.username)}</td><td>${u.login_count}</td></tr>
     `).join('') || '<tr><td colspan="3">Nincs rögzített felhasználó.</td></tr>';
   } catch {
     $('#deviceDetailBanStatus').textContent = 'Nem sikerült elérni a szervert.';
@@ -3336,10 +3344,10 @@ function renderPurchaseLogRow(entry) {
   return `
     <tr>
       <td>${formatLedgerDate(entry.created_at)}</td>
-      <td>${entry.username}</td>
-      <td>${entry.counterparty || '-'}</td>
+      <td>${escapeHtml(entry.username)}</td>
+      <td>${entry.counterparty ? escapeHtml(entry.counterparty) : '-'}</td>
       <td>${typeLabel}</td>
-      <td>${entry.detail || '-'}</td>
+      <td>${entry.detail ? escapeHtml(entry.detail) : '-'}</td>
       <td class="${amountClass}">${amountText}</td>
       <td class="ledger-balance">${formatPp(entry.balance_after)}</td>
     </tr>
@@ -4784,11 +4792,11 @@ async function doPermsSearch() {
     return;
   }
   resultEl.innerHTML = data.players.map((p, i) => `
-    <div class="player-card" data-username="${p.username}">
+    <div class="player-card" data-username="${escapeHtml(p.username)}">
       <canvas class="player-card-canvas" data-idx="${i}" width="40" height="40"></canvas>
       <div class="player-card-info">
         <div class="player-card-label">Név</div>
-        <div class="player-card-name">${p.username}</div>
+        <div class="player-card-name">${escapeHtml(p.username)}</div>
       </div>
     </div>
   `).join('');
@@ -4949,11 +4957,11 @@ async function loadHomeFriends() {
     }
     emptyNote.classList.add('hidden');
     grid.innerHTML = friendsList.map((f, i) => `
-      <div class="player-card" data-username="${f.username}">
+      <div class="player-card" data-username="${escapeHtml(f.username)}">
         <canvas class="player-card-canvas" data-idx="${i}" width="40" height="40"></canvas>
         <div class="player-card-info">
           <div class="player-card-label">Név</div>
-          <div class="player-card-name friend-card-name ${f.online ? 'online' : ''}">${f.username}</div>
+          <div class="player-card-name friend-card-name ${f.online ? 'online' : ''}">${escapeHtml(f.username)}</div>
         </div>
       </div>
     `).join('');
@@ -5187,8 +5195,8 @@ function showNextGiftModal(queue) {
     <div class="modal-card purchase-success-card">
       <div class="purchase-success-icon" style="font-size:28px;border-color:var(--gold);color:var(--gold);box-shadow:0 0 24px var(--gold-glow);">🎁</div>
       <h3>Ajándékot kaptál!</h3>
-      <p><b>${gift.from}</b> ajándékozott neked ${giftItemLabel(gift)}.</p>
-      ${gift.gift_message ? `<p class="gift-message">„${gift.gift_message}”</p>` : ''}
+      <p><b>${escapeHtml(gift.from)}</b> ajándékozott neked ${giftItemLabel(gift)}.</p>
+      ${gift.gift_message ? `<p class="gift-message">„${escapeHtml(gift.gift_message)}”</p>` : ''}
       <div class="modal-actions">
         <button type="button" class="btn-outline" id="giftAckBtn" style="flex:0 1 160px;margin:0 auto;">Rendben</button>
       </div>
