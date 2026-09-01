@@ -218,6 +218,14 @@
           <svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-4 0-8 2-8 5v1h16v-1c0-3-4-5-8-5z"/></svg>
           <span>Skin</span>
         </button>
+        <button class="app-nav-item" data-view="cosmetics">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 4c-3 0-5 2.6-5 5v1h10V9c0-2.4-2-5-5-5z" stroke-linejoin="round"/><path d="M4 13h16a1 1 0 0 1 0 3H4a1 1 0 0 1 0-3z" stroke-linejoin="round"/><path d="M8 16v2M16 16v2" stroke-linecap="round"/></svg>
+          <span>Kiegészítők</span>
+        </button>
+        <button class="app-nav-item" data-view="market">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 8h16l-1 3H5z" stroke-linejoin="round"/><path d="M5 11v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8" stroke-linejoin="round"/><path d="M6 8l1.5-4h9L18 8" stroke-linejoin="round"/><path d="M10 20v-5h4v5" stroke-linejoin="round"/></svg>
+          <span>Piac</span>
+        </button>
         <button class="app-nav-item" data-view="sanction">
           <svg viewBox="0 0 24 24"><path d="M12 2l8 3.5v6c0 5-3.4 8.6-8 10.5-4.6-1.9-8-5.5-8-10.5v-6z"/></svg>
           <span>Kitiltáscsökkentés</span>
@@ -261,6 +269,10 @@
         <button class="app-nav-item admin-nav-item hidden" data-view="badges" data-permission="global.badgesManage">
           <svg viewBox="0 0 24 24"><path d="M12 2l2.6 5.8 6.2.6-4.7 4.2 1.4 6.2L12 15.8 6.5 18.8l1.4-6.2-4.7-4.2 6.2-.6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
           <span>Jelvények</span>
+        </button>
+        <button class="app-nav-item admin-nav-item hidden" data-view="cosmeticsAdmin" data-permission="global.cosmeticsManage,global.cosmeticsMarketManage">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 4c-3 0-5 2.6-5 5v1h10V9c0-2.4-2-5-5-5z" stroke-linejoin="round"/><path d="M4 13h16a1 1 0 0 1 0 3H4a1 1 0 0 1 0-3z" stroke-linejoin="round"/><circle cx="18.5" cy="18.5" r="3.6" fill="var(--bg,#0d0d12)" stroke="currentColor" stroke-width="1.4"/><path d="M18.5 17v3M17 18.5h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          <span>Kiegészítők</span>
         </button>
         <button class="app-nav-item admin-nav-item hidden" data-view="discounts" data-permission="global.discountsManage">
           <svg viewBox="0 0 24 24"><path d="M20 12l-8 8-9-9V4h7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>
@@ -648,6 +660,54 @@
               </div>
             </div>
           </div>
+        </section>
+
+        <!-- KIEGÉSZÍTŐK (ld. SolarBackend src/cosmetics.js) - a játékos SAJÁT
+             kiegészítői, slotonként fel/levéve. A megjelenítés kliens-oldali:
+             a SolarClient a /api/cosmetics/loadout/:username végpontról olvas,
+             a Minecraft szervernek semmit nem kell tudnia róla. -->
+        <section class="view" data-view="cosmetics">
+          <h1 class="page-title">Kiegészítők</h1>
+          <p class="page-note">A kiegészítőid a SolarClientben jelennek meg a karaktereden - nem kell hozzá texture pack, és a szervernek sem kell semmit letöltenie. Helyenként (fej / hát / test) egyet-egyet viselhetsz egyszerre.</p>
+
+          <div class="cosmetic-slot-bar" id="cosmeticSlotBar"></div>
+
+          <div class="content-grid">
+            <div>
+              <div id="cosmeticsOwnedWrap"></div>
+            </div>
+            <div class="side-rail" data-side-rail="cosmetics"></div>
+          </div>
+
+          <div class="admin-subsection-title">Megvásárolható kiegészítők</div>
+          <p class="page-note">Ezeket közvetlenül SolarynCoinért veheted meg - a levonás a következő szerverre lépésedkor történik meg, utána azonnal megjelenik a kiegészítőid között.</p>
+          <div id="cosmeticsShopWrap"></div>
+        </section>
+
+        <!-- PIAC - játékosok közti kiegészítő-adásvétel SC-ért. A 10% adó az
+             ELADÓT terheli az eladás pillanatában (a vevő a listaárat fizeti,
+             az eladó annak 90%-át kapja) - ld. SolarBackend src/cosmetics.js
+             MARKET_TAX_PERCENT. -->
+        <section class="view" data-view="market">
+          <h1 class="page-title">Piac</h1>
+          <p class="page-note">Add el a felesleges kiegészítőidet más játékosoknak SolarynCoinért, vagy vedd meg, ami neked kell. Eladáskor <strong id="marketTaxNote">10%</strong> adó vonódik le az árból - a vevő a teljes listaárat fizeti, te a 90%-át kapod meg.</p>
+
+          <div class="card">
+            <div class="card-title">Hirdetés feladása</div>
+            <label class="gift-modal-label" style="margin-top:0;">Kiegészítő</label>
+            <select id="marketListCosmeticSelect" class="gift-modal-input"></select>
+            <label class="gift-modal-label">Ár (SolarynCoin)</label>
+            <input type="number" id="marketListPriceInput" class="gift-modal-input" placeholder="Pl. 1000" min="1" step="1" />
+            <div class="market-payout-preview" id="marketPayoutPreview"></div>
+            <p class="redeem-result" id="marketListResult"></p>
+            <button type="button" class="btn-glow" id="marketListBtn">Hirdetés feladása</button>
+          </div>
+
+          <div class="admin-subsection-title">Saját hirdetéseim</div>
+          <div id="marketMineWrap"></div>
+
+          <div class="admin-subsection-title">Piaci kínálat</div>
+          <div id="marketListingsWrap"></div>
         </section>
 
         <!-- KITILTÁSCSÖKKENTÉS -->
@@ -1061,6 +1121,100 @@
           <div id="badgesAdminList"></div>
         </section>
 
+        <!-- KIEGÉSZÍTŐK (admin, ld. SolarBackend src/cosmetics.js) - katalógus-
+             kezelés (modell/textúra feltöltés, ár, érvényesség, piacra
+             tehetőség) + piac-moderálás. A kiosztás/elvétel EGY KONKRÉT
+             játékosnak a játékos-profil admin paneljén történik, ugyanúgy,
+             mint a jelvényeknél. -->
+        <section class="view" data-view="cosmeticsAdmin">
+          <h1 class="page-title">Kiegészítők</h1>
+          <p class="page-note">A feltöltött modell a SolarClientbe töltődik le, resource pack nélkül - a Blockbench natív JSON exportját várjuk (<code>elements</code> tömbbel), a hozzá tartozó PNG textúrával. Egy kiegészítőt a játékos-profil admin paneljén tudsz kiosztani/elvenni.</p>
+
+          <div class="card" data-perm="global.cosmeticsManage">
+            <div class="card-title" id="cosmeticFormTitle">Új kiegészítő</div>
+
+            <label class="gift-modal-label" style="margin-top:0;">Név</label>
+            <input type="text" id="cosmeticNameInput" class="gift-modal-input" placeholder="Pl. Arany Szárnyak" maxlength="64" />
+
+            <label class="gift-modal-label">Azonosító (a kliens ezt használja - később nem módosítható)</label>
+            <input type="text" id="cosmeticSlugInput" class="gift-modal-input" placeholder="pl. arany_szarnyak" maxlength="48" />
+
+            <label class="gift-modal-label">Hely</label>
+            <select id="cosmeticSlotSelect" class="gift-modal-input"></select>
+
+            <label class="gift-modal-label">Ritkaság</label>
+            <select id="cosmeticRaritySelect" class="gift-modal-input">
+              <option value="common">Általános</option>
+              <option value="rare">Ritka</option>
+              <option value="epic">Epikus</option>
+              <option value="legendary">Legendás</option>
+            </select>
+
+            <label class="gift-modal-label">Leírás (nem kötelező)</label>
+            <input type="text" id="cosmeticDescInput" class="gift-modal-input" placeholder="Rövid leírás a játékosoknak" maxlength="512" />
+
+            <label class="gift-modal-label">Ár SolarynCoinban (üresen hagyva: nem megvásárolható, csak kiosztható)</label>
+            <input type="number" id="cosmeticPriceInput" class="gift-modal-input" placeholder="Pl. 2500" min="0" step="1" />
+
+            <label class="gift-modal-label">Meddig használható kiosztás után, napokban (üresen hagyva: örökre)</label>
+            <input type="number" id="cosmeticDurationInput" class="gift-modal-input" placeholder="Pl. 30" min="1" step="1" />
+
+            <label class="check-row" style="margin-top:10px;">
+              <input type="checkbox" id="cosmeticTradableCheckbox" checked />
+              Feltehető a piacra (a játékosok eladhatják egymásnak SC-ért)
+            </label>
+            <label class="check-row">
+              <input type="checkbox" id="cosmeticEnabledCheckbox" checked />
+              Aktív (kikapcsolva azonnal lekerül mindenkiről, de a tulajdonlás megmarad)
+            </label>
+
+            <!-- Illesztés: ld. SolarBackend src/db.js megjegyzését. A kliens a
+                 fej/test csont MODELL-terében rajzol, egy Blockbench item-modell
+                 viszont Y-felfelé, a (8,8,8) blokk-középpont körül készül -
+                 ezekkel a mezőkkel lehet a helyére igazítani ÚJRAFELTÖLTÉS NÉLKÜL
+                 (mentés után a kliensek ~1 percen belül átveszik). -->
+            <div class="cosmetic-transform-box">
+              <div class="cosmetic-transform-title">Illesztés a karakterhez</div>
+              <p class="cosmetic-file-note" style="margin-bottom:10px;">Ha a kiegészítő rossz helyen/méretben jelenik meg a játékban, itt hangold be - a modellt nem kell újra feltölteni.</p>
+              <div class="cosmetic-transform-grid">
+                <label>Eltolás X<input type="number" id="cosmeticOffsetXInput" step="0.5" value="0" /></label>
+                <label>Eltolás Y<input type="number" id="cosmeticOffsetYInput" step="0.5" value="0" /></label>
+                <label>Eltolás Z<input type="number" id="cosmeticOffsetZInput" step="0.5" value="0" /></label>
+                <label>Méret<input type="number" id="cosmeticScaleInput" step="0.05" value="1" /></label>
+              </div>
+              <label class="check-row" style="margin-top:10px;">
+                <input type="checkbox" id="cosmeticItemSpaceCheckbox" checked />
+                Item-modell térben készült (Blockbench alapértelmezés - a vásárolt csomagok ilyenek)
+              </label>
+            </div>
+
+            <label class="gift-modal-label">Modell (Blockbench .json)</label>
+            <input type="file" id="cosmeticModelInput" accept=".json,application/json" hidden />
+            <button type="button" class="btn-outline file-picker-btn" id="cosmeticModelPickBtn">Modell kiválasztása</button>
+            <p class="cosmetic-file-note" id="cosmeticModelNote"></p>
+
+            <label class="gift-modal-label">Textúra (.png)</label>
+            <input type="file" id="cosmeticTextureInput" accept=".png,image/png" hidden />
+            <button type="button" class="btn-outline file-picker-btn" id="cosmeticTexturePickBtn">Textúra kiválasztása</button>
+            <div class="news-image-preview-wrap" id="cosmeticTexturePreviewWrap" hidden>
+              <img id="cosmeticTexturePreview" class="news-image-preview cosmetic-texture-preview" alt="" />
+            </div>
+
+            <p class="redeem-result" id="cosmeticFormResult"></p>
+            <div class="modal-actions" style="margin-top:14px;">
+              <button type="button" class="btn-outline" id="cosmeticDiscardBtn">Elvetés</button>
+              <button type="button" class="btn-glow" id="cosmeticSaveBtn" style="margin-top:0;">Mentés</button>
+            </div>
+          </div>
+
+          <div class="admin-subsection-title" data-perm="global.cosmeticsManage">Meglévő kiegészítők</div>
+          <div id="cosmeticsAdminList" data-perm="global.cosmeticsManage"></div>
+
+          <div class="admin-subsection-title" data-perm="global.cosmeticsMarketManage">Piaci hirdetések</div>
+          <p class="page-note" data-perm="global.cosmeticsMarketManage">Egy hirdetés levételekor a kiegészítő MINDIG visszakerül az eladóhoz - ez moderálás, nem elkobzás. Ténylegesen elvenni a játékos-profil admin paneljén tudod.</p>
+          <div id="cosmeticsMarketAdminList" data-perm="global.cosmeticsMarketManage"></div>
+        </section>
+
         <!-- AKCIÓK (admin, ld. SolarBackend src/discounts.js) - ugyanaz a
              CRUD-minta, mint a Jelvények, csak a "Kedvezmény" mezőkkel
              (érvényességi kör + opcionális egy-csomagos szűkítés + aktív/
@@ -1376,6 +1530,26 @@
                     <button type="button" class="device-link" id="adminBadgeGrantBtn">Adás</button>
                   </div>
                   <div id="adminPlayerBadgesList" class="admin-player-badges-list" data-perm="player.view.badges"></div>
+                </div>
+              </div>
+
+              <!-- Kiegészítők - ugyanaz a minta, mint a Jelvények fent, egy
+                   extra "érvényesség" mezővel (a katalógus alapértelmezését
+                   felülírva adható pl. eseményre 7 napra valami, ami
+                   egyébként örök). -->
+              <div class="admin-card" data-perm="player.action.cosmeticGrant,player.action.cosmeticRevoke">
+                <div class="admin-subsection-title">Kiegészítők</div>
+                <div class="ban-panel admin-badges-panel">
+                  <p class="redeem-result" id="adminCosmeticGrantStatus"></p>
+                  <label data-perm="player.action.cosmeticGrant">Kiegészítő adása</label>
+                  <div class="admin-badge-grant-row" data-perm="player.action.cosmeticGrant">
+                    <select id="adminCosmeticSelect"></select>
+                    <button type="button" class="device-link" id="adminCosmeticGrantBtn">Adás</button>
+                  </div>
+                  <div class="admin-cosmetic-duration-row" data-perm="player.action.cosmeticGrant">
+                    <input type="number" id="adminCosmeticDurationInput" placeholder="Érvényesség napokban (üres = katalógus szerint, 0 = örök)" min="0" step="1" />
+                  </div>
+                  <div id="adminPlayerCosmeticsList" class="admin-player-badges-list"></div>
                 </div>
               </div>
 

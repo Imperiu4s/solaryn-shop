@@ -1461,3 +1461,146 @@ a { color: inherit; }
   0% { left: -60%; }
   22%, 100% { left: 140%; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   KIEGÉSZÍTŐK + PIAC (ld. SolarBackend src/cosmetics.js, index.html
+   data-view="cosmetics" / "market" / "cosmeticsAdmin")
+   Minden szín a fenti témabeli tokenekből jön - a ritkasági fokozatok is
+   csak a --gold/--orange/--discord/--text-dim tokenek árnyalatai, hogy egy
+   új téma hozzáadásakor itt se kelljen semmit módosítani.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Felső "mit viselsz most" sáv - a nézet elsődleges kérdésére válaszol,
+   ezért van a lista FÖLÖTT, nem alatta. */
+.cosmetic-slot-bar {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 14px; margin-bottom: 24px;
+}
+.cosmetic-slot {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+  padding: 16px 12px; text-align: center;
+}
+.cosmetic-slot.filled { border-color: color-mix(in srgb, var(--gold) 45%, var(--line)); }
+.cosmetic-slot-label {
+  font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--text-faint);
+}
+.cosmetic-slot-name { font-size: 13px; font-weight: 800; }
+.cosmetic-slot-empty { color: var(--text-faint); font-weight: 600; }
+
+.cosmetic-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 16px;
+}
+.cosmetic-card {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+  padding: 18px 14px; text-align: center;
+  transition: transform .12s, box-shadow .16s, border-color .16s;
+}
+.cosmetic-card:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(0,0,0,.35); }
+.cosmetic-card.equipped { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; }
+
+/* A ritkaság egy vékony felső sáv, nem a teljes keret - így az "épp viselem"
+   (arany keret) állapot nem versenyez vele. */
+.cosmetic-card { position: relative; overflow: hidden; }
+.cosmetic-card::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: var(--text-faint);
+}
+.cosmetic-card.rarity-rare::before { background: var(--discord); }
+.cosmetic-card.rarity-epic::before { background: var(--orange); }
+.cosmetic-card.rarity-legendary::before {
+  background: linear-gradient(90deg, var(--gold-2), var(--gold), var(--gold-2));
+}
+
+/* A bélyegkép a nyers textúra - pixelesen élesen kell megjelenjen, mert
+   jellemzően 64x64 körüli, felnagyítva. */
+.cosmetic-thumb {
+  width: 72px; height: 72px; border-radius: 12px; object-fit: contain;
+  background: var(--panel-2); image-rendering: pixelated; flex-shrink: 0;
+}
+.cosmetic-thumb-empty { border: 1px dashed var(--line); background: transparent; }
+.badges-admin-item > .cosmetic-thumb { width: 40px; height: 40px; border-radius: 10px; }
+
+.cosmetic-card-name { font-size: 14px; font-weight: 800; line-height: 1.3; }
+.cosmetic-card-tags { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.cosmetic-tag {
+  font-size: 10.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+  background: rgba(255,255,255,.05); border: 1px solid var(--line); border-radius: 999px;
+  padding: 3px 8px; color: var(--text-dim);
+}
+.cosmetic-tag.rarity { color: var(--gold); border-color: color-mix(in srgb, var(--gold) 35%, var(--line)); }
+.cosmetic-card-desc { font-size: 12px; color: var(--text-dim); line-height: 1.45; }
+.cosmetic-card-seller { font-size: 12px; color: var(--text-faint); }
+.cosmetic-card-meta { font-size: 11.5px; }
+.cosmetic-meta-perm { color: var(--text-faint); }
+.cosmetic-meta-temp { color: var(--orange); font-weight: 700; }
+.cosmetic-card-price {
+  font-size: 17px; font-weight: 900; color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+.cosmetic-action { width: 100%; margin-top: auto; }
+
+/* Piac: az adó-bontás a hirdetés feladása előtt. A "mennyit kapok kézhez"
+   a legfontosabb szám, ezért az kap kiemelést, nem a listaár. */
+.market-payout-preview { margin-top: 12px; display: grid; gap: 6px; }
+.market-payout-preview:empty { display: none; }
+.market-payout-row {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  font-size: 13px; color: var(--text-dim); font-variant-numeric: tabular-nums;
+}
+.market-payout-tax strong { color: var(--danger); }
+.market-payout-total {
+  border-top: 1px solid var(--line); padding-top: 6px; margin-top: 2px;
+  font-size: 15px; color: var(--text);
+}
+.market-payout-total strong { color: var(--gold); font-weight: 900; }
+.market-status-reserved { color: var(--orange); font-weight: 700; }
+
+/* Admin: állapotjelző címkék a katalógus-listában */
+.cosmetic-badge-off, .cosmetic-badge-warn {
+  font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+  border-radius: 999px; padding: 2px 7px; margin-left: 8px; vertical-align: middle;
+}
+.cosmetic-badge-off { background: rgba(255,255,255,.06); color: var(--text-faint); }
+.cosmetic-badge-warn { background: color-mix(in srgb, var(--danger) 18%, transparent); color: var(--danger); }
+.cosmetic-file-note { font-size: 12px; color: var(--text-dim); margin: 6px 0 0; }
+.cosmetic-texture-preview { image-rendering: pixelated; }
+.admin-cosmetic-duration-row { margin-top: 8px; }
+.admin-cosmetic-duration-row input {
+  width: 100%; background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: 10px; padding: 9px 12px; color: var(--text); font-size: 12.5px;
+}
+.admin-cosmetic-chip-meta { color: var(--text-faint); font-weight: 600; }
+
+/* A tiltott gomb VIZUÁLISAN is tiltottnak látsszon - a .btn-glow-nak nem volt
+   :disabled állapota, így egy "nincs eladható kiegészítőd" esetén a piac
+   feladás-gombja teljesen aktívnak látszott, holott nem csinált semmit
+   (a .btn-buy/.btn-subscribe mintáját követve, ld. fentebb). */
+#marketListBtn:disabled, .cosmetic-action:disabled {
+  cursor: default; opacity: .45; filter: none; box-shadow: none;
+}
+
+/* Illesztési finomhangolás az admin kiegészítő-űrlapon */
+.cosmetic-transform-box {
+  margin-top: 18px; padding: 14px 16px;
+  background: rgba(255,255,255,.02); border: 1px solid var(--line); border-radius: 12px;
+}
+.cosmetic-transform-title {
+  font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--text-dim); margin-bottom: 6px;
+}
+.cosmetic-transform-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px;
+}
+.cosmetic-transform-grid label {
+  display: flex; flex-direction: column; gap: 5px;
+  font-size: 11.5px; color: var(--text-dim);
+}
+.cosmetic-transform-grid input {
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px;
+  padding: 8px 10px; color: var(--text); font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}

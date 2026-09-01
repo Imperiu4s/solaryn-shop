@@ -1068,7 +1068,8 @@ const PLAYER_PANEL_KEYS = [
   'player.action.emailChange', 'player.action.lock', 'player.action.unlock', 'player.action.ppAdjust',
   'player.action.walletAdjust',
   'player.action.casinoAdjust', 'player.action.delete', 'player.action.badgeGrant', 'player.action.badgeRevoke',
-  'player.action.discountSet', 'player.action.discountRemove', 'player.action.discordUnlink'
+  'player.action.discountSet', 'player.action.discountRemove', 'player.action.discordUnlink',
+  'player.action.cosmeticGrant', 'player.action.cosmeticRevoke'
 ];
 // Bármely elemet, aminek van "data-perm" attribútuma, a megfelelő jog
 // szerint mutat/rejt - egyetlen közös helyen, hogy a player-admin-panel és
@@ -1167,7 +1168,14 @@ async function enterApp(meData) {
   // data-permission attribútuma) kivétel, az kizárólag tulajdonosnak
   // látszik, mert a jog-adás maga nem delegálható (ld. #navPermissionsBtn
   // markup indoklását index.html-ben).
-  $$('.admin-nav-item[data-permission]').forEach((el) => el.classList.toggle('hidden', !hasPerm(el.dataset.permission)));
+  // Vesszővel felsorolt több kulcs esetén VAGY-kapcsolattal (elég BÁRMELYIK
+  // jog) - ugyanaz a szemantika, mint az applyPermVisibility() data-perm
+  // kezelésénél. Kell pl. a "Kiegészítők" admin nézethez, amit a
+  // katalógus-kezelő ÉS a piac-moderátor jog is láthatóvá tesz.
+  $$('.admin-nav-item[data-permission]').forEach((el) => {
+    const keys = el.dataset.permission.split(',').map((k) => k.trim());
+    el.classList.toggle('hidden', !keys.some(hasPerm));
+  });
   $('#navPermissionsBtn')?.classList.toggle('hidden', !isOwner);
   $('.app-nav-divider.admin-nav-item')?.classList.toggle('hidden', !(isOwner || permSet.size > 0));
 
@@ -1706,6 +1714,13 @@ function switchView(view) {
   if (view === 'coupons') { resetCouponForm(); loadCouponsAdmin(); }
   if (view === 'creatorCodes') { resetCreatorCodeForm(); loadCreatorCodesAdmin(); }
   if (view === 'casino') loadCasino();
+  // ÚJ: kiegészítők (ld. SolarBackend src/cosmetics.js). A "Kiegészítők" és a
+  // "Piac" is minden megnyitáskor frissül - a piaci kínálat más játékosok
+  // műveleteitől is változik, egy elavult lista pedig "már nem elérhető"
+  // hibába futna vásárláskor.
+  if (view === 'cosmetics') loadMyCosmetics();
+  if (view === 'market') loadMarket();
+  if (view === 'cosmeticsAdmin') { resetCosmeticForm(); loadCosmeticsAdmin(); }
 }
 $$('.app-nav-item[data-view]').forEach((btn) => {
   btn.addEventListener('click', () => switchView(btn.dataset.view));
@@ -2232,6 +2247,13 @@ async function loadAdminPlayerPanel(username) {
   $('#adminDeleteBtn').disabled = true;
   $('#adminBadgeGrantStatus').textContent = '';
   $('#adminPlayerBadgesList').innerHTML = '';
+  // ÚJ: kiegészítők - a jelvényekkel ellentétben ez KÜLÖN végpontról jön
+  // (/api/admin/player/:username/cosmetics), mert a saját jogkulcsai
+  // (cosmeticGrant/cosmeticRevoke) függetlenek a jelvény-jogoktól.
+  $('#adminCosmeticGrantStatus').textContent = '';
+  $('#adminPlayerCosmeticsList').innerHTML = '';
+  $('#adminCosmeticDurationInput').value = '';
+  loadAdminPlayerCosmetics(username);
   $('#adminMediaStatus').textContent = '';
   renderAdminMediaState(false, false);
   setAdminEmailEditing(false);
@@ -5497,6 +5519,872 @@ $('#cookieRejectAll').addEventListener('click', () => {
   $('#cookieAnalytics').checked = false;
   localStorage.setItem('solarcenter_cookies', JSON.stringify({ analytics: false }));
   closeCookieModal();
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// KIEGÉSZÍTŐK + PIAC (ld. SolarBackend src/cosmetics.js)
+// ══════════════════════════════════════════════════════════════════════════
+// Három nézet: a saját kiegészítők (fel/levétel + katalógus-vásárlás), a
+// játékosok közti piac, és az admin katalógus-kezelés. A megjelenítés
+// in-game teljesen kliens-oldali (a SolarClient a /api/cosmetics/loadout/
+// :username végpontról olvas), ezért itt semmilyen Minecraft-szerver felé
+// menő szinkronra nincs szükség - amit itt elmentünk, azt a kliens a
+// következő gyorsítótár-frissítésekor látja.
+
+const RARITY_LABELS = { common: 'Általános', rare: 'Ritka', epic: 'Epikus', legendary: 'Legendás' };
+
+function cosmeticTextureUrl(id) {
+  return BACKEND_URL + '/api/cosmetics/texture/' + id;
+}
+
+// A kiegészítő "bélyegképe" a textúrája. SZÁNDÉKOSAN nincs 3D előnézet: a
+// tényleges kinézet a kockák + UV-k együttese, amit hűen csak a kliens tud
+// kirajzolni - egy pontatlan web-előnézet félrevezetőbb lenne, mint a nyers
+// textúra, ami legalább a színvilágot/mintát mutatja.
+function cosmeticThumbHtml(c) {
+  return c.hasTexture
+    ? `<img class="cosmetic-thumb" src="${cosmeticTextureUrl(c.id)}" alt="" loading="lazy" />`
+    : '<div class="cosmetic-thumb cosmetic-thumb-empty"></div>';
+}
+
+function cosmeticExpiryHtml(expiresAt) {
+  if (!expiresAt) return '<span class="cosmetic-meta-perm">Örökre a tiéd</span>';
+  const ms = new Date(expiresAt.replace(' ', 'T') + 'Z').getTime() - Date.now();
+  if (Number.isNaN(ms)) return '';
+  const days = Math.floor(ms / 86400000);
+  if (days >= 1) return `<span class="cosmetic-meta-temp">Még ${days} nap</span>`;
+  const hours = Math.max(0, Math.floor(ms / 3600000));
+  return `<span class="cosmetic-meta-temp">Még ${hours} óra</span>`;
+}
+
+// ── Saját kiegészítők ────────────────────────────────────────────────────
+let myCosmetics = { owned: [], loadout: {}, slots: [] };
+let cosmeticShopItems = [];
+
+async function loadMyCosmetics() {
+  if (!session || !session.token) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/cosmetics/mine', {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    myCosmetics = data.ok ? { owned: data.owned || [], loadout: data.loadout || {}, slots: data.slots || [] } : { owned: [], loadout: {}, slots: [] };
+  } catch {
+    myCosmetics = { owned: [], loadout: {}, slots: [] };
+  }
+  renderCosmeticSlotBar();
+  renderOwnedCosmetics();
+  loadCosmeticShop();
+}
+
+// A felső sáv slotonként mutatja, mit viselsz éppen - ez adja meg gyorsan a
+// választ arra, amit a nézet elsődlegesen megválaszol ("mi van rajtam most").
+function renderCosmeticSlotBar() {
+  const bar = $('#cosmeticSlotBar');
+  if (!bar) return;
+  bar.innerHTML = myCosmetics.slots.map((slot) => {
+    const equippedId = myCosmetics.loadout[slot.id];
+    const c = myCosmetics.owned.find((o) => o.id === equippedId);
+    return `
+      <div class="cosmetic-slot ${c ? 'filled' : ''}">
+        <div class="cosmetic-slot-label">${escapeHtml(slot.label)}</div>
+        ${c ? `
+          ${cosmeticThumbHtml(c)}
+          <div class="cosmetic-slot-name">${escapeHtml(c.name)}</div>
+          <button type="button" class="link-btn" data-cosmetic-unequip="${escapeHtml(slot.id)}">Levétel</button>
+        ` : `
+          <div class="cosmetic-thumb cosmetic-thumb-empty"></div>
+          <div class="cosmetic-slot-name cosmetic-slot-empty">Nincs kiegészítő</div>
+        `}
+      </div>
+    `;
+  }).join('');
+}
+
+function renderOwnedCosmetics() {
+  const wrap = $('#cosmeticsOwnedWrap');
+  if (!wrap) return;
+  if (!myCosmetics.owned.length) {
+    wrap.innerHTML = '<div class="card"><p class="redeem-result">Még nincs egyetlen kiegészítőd sem. Vásárolj a lenti kínálatból, vagy nézd meg a Piacot.</p></div>';
+    return;
+  }
+  wrap.innerHTML = `<div class="cosmetic-grid">${myCosmetics.owned.map((c) => `
+    <div class="cosmetic-card ${c.equipped ? 'equipped' : ''} rarity-${escapeHtml(c.rarity)}">
+      ${cosmeticThumbHtml(c)}
+      <div class="cosmetic-card-name">${escapeHtml(c.name)}</div>
+      <div class="cosmetic-card-tags">
+        <span class="cosmetic-tag">${escapeHtml(c.slotLabel)}</span>
+        <span class="cosmetic-tag rarity">${escapeHtml(RARITY_LABELS[c.rarity] || c.rarity)}</span>
+      </div>
+      <div class="cosmetic-card-meta">${cosmeticExpiryHtml(c.expiresAt)}</div>
+      ${c.equipped
+        ? `<button type="button" class="btn-outline cosmetic-action" data-cosmetic-unequip="${escapeHtml(c.slot)}">Levétel</button>`
+        : `<button type="button" class="btn-glow cosmetic-action" data-cosmetic-equip="${c.id}">Felvétel</button>`}
+    </div>
+  `).join('')}</div>`;
+}
+
+// A megvásárolható kínálat: a publikus katalógus mínusz amink már megvan.
+async function loadCosmeticShop() {
+  const wrap = $('#cosmeticsShopWrap');
+  if (!wrap) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/cosmetics/catalog');
+    const data = await res.json();
+    cosmeticShopItems = data.ok ? (data.cosmetics || []) : [];
+  } catch {
+    cosmeticShopItems = [];
+  }
+  const ownedIds = new Set(myCosmetics.owned.map((c) => c.id));
+  const buyable = cosmeticShopItems.filter((c) => c.priceSc !== null && c.priceSc !== undefined && !ownedIds.has(c.id) && c.hasModel);
+  if (!buyable.length) {
+    wrap.innerHTML = '<div class="card"><p class="redeem-result">Jelenleg nincs megvásárolható kiegészítő - nézd meg a Piacot, ott a játékosoktól is vehetsz.</p></div>';
+    return;
+  }
+  wrap.innerHTML = `<div class="cosmetic-grid">${buyable.map((c) => `
+    <div class="cosmetic-card rarity-${escapeHtml(c.rarity)}">
+      ${cosmeticThumbHtml(c)}
+      <div class="cosmetic-card-name">${escapeHtml(c.name)}</div>
+      <div class="cosmetic-card-tags">
+        <span class="cosmetic-tag">${escapeHtml(c.slotLabel)}</span>
+        <span class="cosmetic-tag rarity">${escapeHtml(RARITY_LABELS[c.rarity] || c.rarity)}</span>
+      </div>
+      ${c.description ? `<div class="cosmetic-card-desc">${escapeHtml(c.description)}</div>` : ''}
+      <div class="cosmetic-card-meta">${c.defaultDurationDays ? `<span class="cosmetic-meta-temp">${c.defaultDurationDays} napig</span>` : '<span class="cosmetic-meta-perm">Örökre</span>'}</div>
+      <div class="cosmetic-card-price">${c.priceSc.toLocaleString('hu-HU')} SC</div>
+      <button type="button" class="btn-glow cosmetic-action" data-cosmetic-buy="${c.id}">Megvásárlás</button>
+    </div>
+  `).join('')}</div>`;
+}
+
+document.addEventListener('click', async (e) => {
+  const equipBtn = e.target.closest('[data-cosmetic-equip]');
+  if (equipBtn) {
+    equipBtn.disabled = true;
+    try {
+      const res = await fetch(BACKEND_URL + '/api/cosmetics/equip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+        body: JSON.stringify({ cosmeticId: Number(equipBtn.dataset.cosmeticEquip) })
+      });
+      const data = await res.json();
+      if (!data.ok) { showToast(data.message || 'Nem sikerült felvenni.', true); equipBtn.disabled = false; return; }
+      showToast('Kiegészítő felvéve.');
+      myCosmetics = { owned: data.owned || [], loadout: data.loadout || {}, slots: data.slots || [] };
+      renderCosmeticSlotBar();
+      renderOwnedCosmetics();
+      loadCosmeticShop();
+    } catch {
+      showToast('Nem sikerült elérni a szervert.', true);
+      equipBtn.disabled = false;
+    }
+    return;
+  }
+
+  const unequipBtn = e.target.closest('[data-cosmetic-unequip]');
+  if (unequipBtn) {
+    unequipBtn.disabled = true;
+    try {
+      const res = await fetch(BACKEND_URL + '/api/cosmetics/unequip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+        body: JSON.stringify({ slot: unequipBtn.dataset.cosmeticUnequip })
+      });
+      const data = await res.json();
+      if (!data.ok) { showToast(data.message || 'Nem sikerült levenni.', true); unequipBtn.disabled = false; return; }
+      showToast('Kiegészítő levéve.');
+      myCosmetics = { owned: data.owned || [], loadout: data.loadout || {}, slots: data.slots || [] };
+      renderCosmeticSlotBar();
+      renderOwnedCosmetics();
+    } catch {
+      showToast('Nem sikerült elérni a szervert.', true);
+      unequipBtn.disabled = false;
+    }
+    return;
+  }
+
+  const buyBtn = e.target.closest('[data-cosmetic-buy]');
+  if (buyBtn) {
+    const item = cosmeticShopItems.find((c) => String(c.id) === buyBtn.dataset.cosmeticBuy);
+    if (!item) return;
+    // A tényleges SC-levonás a Minecraft-szerveren történik (ld. SolarBackend
+    // src/cosmetics.js fejlécét) - ezt a késleltetést a megerősítő szövegben
+    // is kimondjuk, hogy ne tűnjön hibának, ha nem jelenik meg azonnal.
+    const confirmed = await confirmModal(
+      'Kiegészítő megvásárlása',
+      `Megveszed a(z) "${item.name}" kiegészítőt ${item.priceSc.toLocaleString('hu-HU')} SolarynCoinért? A levonás a következő szerverre lépésedkor történik meg, utána jelenik meg a kiegészítőid között.`,
+      'Igen, megveszem'
+    );
+    if (!confirmed) return;
+    try {
+      const res = await fetch(BACKEND_URL + '/api/cosmetics/purchase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+        body: JSON.stringify({ cosmeticId: item.id })
+      });
+      const data = await res.json();
+      if (!data.ok) { showToast(data.message || 'Nem sikerült megvásárolni.', true); return; }
+      showToast(data.message || 'A vásárlás rögzítve.');
+    } catch {
+      showToast('Nem sikerült elérni a szervert.', true);
+    }
+  }
+});
+
+// ── Piac ─────────────────────────────────────────────────────────────────
+let marketTaxPercent = 10;
+
+async function loadMarket() {
+  if (!session || !session.token) return;
+  // A hirdetés-feladó legördülőhöz kell a saját, ELADHATÓ készletünk - ezért
+  // a piac megnyitásakor a saját kiegészítőket is frissítjük.
+  try {
+    const res = await fetch(BACKEND_URL + '/api/cosmetics/mine', {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    if (data.ok) myCosmetics = { owned: data.owned || [], loadout: data.loadout || {}, slots: data.slots || [] };
+  } catch {}
+
+  renderMarketListForm();
+  await Promise.all([loadMarketListings(), loadMyMarketListings()]);
+}
+
+function renderMarketListForm() {
+  const select = $('#marketListCosmeticSelect');
+  if (!select) return;
+  const sellable = myCosmetics.owned.filter((c) => c.tradable);
+  if (!sellable.length) {
+    select.innerHTML = '<option value="">Nincs eladható kiegészítőd</option>';
+    $('#marketListBtn').disabled = true;
+  } else {
+    select.innerHTML = sellable.map((c) => `<option value="${c.id}">${escapeHtml(c.name)} (${escapeHtml(c.slotLabel)})</option>`).join('');
+    $('#marketListBtn').disabled = false;
+  }
+  updateMarketPayoutPreview();
+}
+
+// A 10% adó élő kiírása: az eladó pontosan lássa, mennyi jön be neki, MIELŐTT
+// felteszi - ez a leggyakoribb félreértés-forrás egy jutalékos piacon.
+function updateMarketPayoutPreview() {
+  const el = $('#marketPayoutPreview');
+  if (!el) return;
+  const price = Number($('#marketListPriceInput').value);
+  if (!Number.isInteger(price) || price < 1) { el.innerHTML = ''; return; }
+  const payout = Math.floor(price * (100 - marketTaxPercent) / 100);
+  el.innerHTML = `
+    <div class="market-payout-row"><span>A vevő fizet</span><strong>${price.toLocaleString('hu-HU')} SC</strong></div>
+    <div class="market-payout-row market-payout-tax"><span>Adó (${marketTaxPercent}%)</span><strong>-${(price - payout).toLocaleString('hu-HU')} SC</strong></div>
+    <div class="market-payout-row market-payout-total"><span>Te kapsz</span><strong>${payout.toLocaleString('hu-HU')} SC</strong></div>
+  `;
+}
+$('#marketListPriceInput')?.addEventListener('input', updateMarketPayoutPreview);
+
+async function loadMarketListings() {
+  const wrap = $('#marketListingsWrap');
+  if (!wrap) return;
+  let listings = [];
+  try {
+    const res = await fetch(BACKEND_URL + '/api/cosmetics/market', {
+      headers: session?.token ? { Authorization: 'Bearer ' + session.token } : {}
+    });
+    const data = await res.json();
+    if (data.ok) {
+      listings = data.listings || [];
+      if (typeof data.taxPercent === 'number') {
+        marketTaxPercent = data.taxPercent;
+        const note = $('#marketTaxNote');
+        if (note) note.textContent = marketTaxPercent + '%';
+      }
+    }
+  } catch {}
+
+  // A saját hirdetéseink a fenti külön szekcióban vannak - itt csak a
+  // ténylegesen megvehető kínálat látszik, hogy ne kelljen köztük keresgélni.
+  const buyable = listings.filter((l) => !l.isMine);
+  if (!buyable.length) {
+    wrap.innerHTML = '<div class="card"><p class="redeem-result">Jelenleg nincs eladó kiegészítő a piacon.</p></div>';
+    return;
+  }
+  const ownedIds = new Set(myCosmetics.owned.map((c) => c.id));
+  wrap.innerHTML = `<div class="cosmetic-grid">${buyable.map((l) => {
+    const alreadyOwned = ownedIds.has(l.cosmetic.id);
+    return `
+    <div class="cosmetic-card rarity-${escapeHtml(l.cosmetic.rarity)}">
+      ${cosmeticThumbHtml(l.cosmetic)}
+      <div class="cosmetic-card-name">${escapeHtml(l.cosmetic.name)}</div>
+      <div class="cosmetic-card-tags">
+        <span class="cosmetic-tag">${escapeHtml(l.cosmetic.slotLabel)}</span>
+        <span class="cosmetic-tag rarity">${escapeHtml(RARITY_LABELS[l.cosmetic.rarity] || l.cosmetic.rarity)}</span>
+      </div>
+      <div class="cosmetic-card-seller">Eladó: ${escapeHtml(l.seller)}</div>
+      <div class="cosmetic-card-meta">${cosmeticExpiryHtml(l.expiresAt)}</div>
+      <div class="cosmetic-card-price">${l.priceSc.toLocaleString('hu-HU')} SC</div>
+      ${alreadyOwned
+        ? '<button type="button" class="btn-outline cosmetic-action" disabled>Már megvan</button>'
+        : `<button type="button" class="btn-glow cosmetic-action" data-market-buy="${l.id}">Megvásárlás</button>`}
+    </div>`;
+  }).join('')}</div>`;
+}
+
+async function loadMyMarketListings() {
+  const wrap = $('#marketMineWrap');
+  if (!wrap) return;
+  let listings = [];
+  try {
+    const res = await fetch(BACKEND_URL + '/api/cosmetics/market/mine', {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    if (data.ok) listings = data.listings || [];
+  } catch {}
+
+  if (!listings.length) {
+    wrap.innerHTML = '<div class="card"><p class="redeem-result">Jelenleg nincs aktív hirdetésed.</p></div>';
+    return;
+  }
+  wrap.innerHTML = listings.map((l) => `
+    <div class="badges-admin-item">
+      ${l.cosmetic ? cosmeticThumbHtml(l.cosmetic) : '<div class="cosmetic-thumb cosmetic-thumb-empty"></div>'}
+      <div class="badges-admin-item-info">
+        <div class="badges-admin-item-name">${escapeHtml(l.cosmetic?.name || '-')}</div>
+        <div class="badges-admin-item-meta">
+          ${l.priceSc.toLocaleString('hu-HU')} SC · neked ${l.payoutSc.toLocaleString('hu-HU')} SC
+          ${l.status === 'reserved' ? ' · <span class="market-status-reserved">vásárlás folyamatban</span>' : ''}
+        </div>
+      </div>
+      <div class="badges-admin-item-actions">
+        ${l.status === 'reserved'
+          ? '<span class="redeem-result">Foglalt</span>'
+          : `<button type="button" class="news-delete-btn" data-market-cancel="${l.id}">Visszavonás</button>`}
+      </div>
+    </div>
+  `).join('');
+}
+
+$('#marketListBtn')?.addEventListener('click', async () => {
+  const resultEl = $('#marketListResult');
+  const cosmeticId = Number($('#marketListCosmeticSelect').value);
+  const priceSc = Number($('#marketListPriceInput').value);
+  if (!Number.isInteger(cosmeticId)) {
+    resultEl.textContent = 'Válassz egy kiegészítőt.';
+    resultEl.className = 'redeem-result error';
+    return;
+  }
+  if (!Number.isInteger(priceSc) || priceSc < 1) {
+    resultEl.textContent = 'Adj meg egy érvényes árat (legalább 1 SC).';
+    resultEl.className = 'redeem-result error';
+    return;
+  }
+  // A hirdetés feladása LETÉTBE teszi a kiegészítőt (lekerül róla, és amíg
+  // kint van, nem viselhető) - ezt előre kimondjuk, hogy ne érje meglepetés.
+  const confirmed = await confirmModal(
+    'Hirdetés feladása',
+    `Felteszed a piacra ${priceSc.toLocaleString('hu-HU')} SC-ért? Amíg kint van a hirdetés, nem tudod viselni a kiegészítőt. Eladáskor ${marketTaxPercent}% adó vonódik le, tehát ${Math.floor(priceSc * (100 - marketTaxPercent) / 100).toLocaleString('hu-HU')} SC lesz a tiéd.`,
+    'Igen, feladom'
+  );
+  if (!confirmed) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/cosmetics/market/list', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ cosmeticId, priceSc })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      resultEl.textContent = data.message || 'Nem sikerült feladni a hirdetést.';
+      resultEl.className = 'redeem-result error';
+      return;
+    }
+    resultEl.textContent = '';
+    $('#marketListPriceInput').value = '';
+    showToast('Hirdetés feladva.');
+    loadMarket();
+  } catch {
+    resultEl.textContent = 'Nem sikerült elérni a szervert.';
+    resultEl.className = 'redeem-result error';
+  }
+});
+
+document.addEventListener('click', async (e) => {
+  const buyBtn = e.target.closest('[data-market-buy]');
+  if (buyBtn) {
+    const confirmed = await confirmModal(
+      'Vásárlás a piacról',
+      'Megveszed ezt a kiegészítőt? Az SC levonása a következő szerverre lépésedkor történik meg - utána kerül át hozzád a kiegészítő. Ha nincs elég SolarynCoinod, a vásárlás visszavonódik.',
+      'Igen, megveszem'
+    );
+    if (!confirmed) return;
+    buyBtn.disabled = true;
+    try {
+      const res = await fetch(BACKEND_URL + '/api/cosmetics/market/buy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+        body: JSON.stringify({ listingId: Number(buyBtn.dataset.marketBuy) })
+      });
+      const data = await res.json();
+      if (!data.ok) { showToast(data.message || 'Nem sikerült megvásárolni.', true); buyBtn.disabled = false; return; }
+      showToast(data.message || 'A vásárlás rögzítve.');
+      loadMarket();
+    } catch {
+      showToast('Nem sikerült elérni a szervert.', true);
+      buyBtn.disabled = false;
+    }
+    return;
+  }
+
+  const cancelBtn = e.target.closest('[data-market-cancel]');
+  if (cancelBtn) {
+    const confirmed = await confirmModal('Hirdetés visszavonása', 'Leveszed a hirdetést a piacról? A kiegészítő visszakerül hozzád.', 'Igen, visszavonom');
+    if (!confirmed) return;
+    try {
+      const res = await fetch(BACKEND_URL + '/api/cosmetics/market/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+        body: JSON.stringify({ listingId: Number(cancelBtn.dataset.marketCancel) })
+      });
+      const data = await res.json();
+      if (!data.ok) { showToast(data.message || 'Nem sikerült visszavonni.', true); return; }
+      showToast('Hirdetés visszavonva.');
+      loadMarket();
+    } catch {
+      showToast('Nem sikerült elérni a szervert.', true);
+    }
+  }
+});
+
+// ── Admin: katalógus ─────────────────────────────────────────────────────
+let cosmeticsAdminItems = [];
+let cosmeticEditingId = null;
+let cosmeticSelectedModelFile = null;
+let cosmeticSelectedTextureFile = null;
+// A játékos-profil admin paneljének kiegészítő-választója ebből olvas -
+// ugyanaz a minta, mint az allBadgesCache-nél (ld. ott a megjegyzést).
+let allCosmeticsCache = [];
+
+function resetCosmeticForm() {
+  cosmeticEditingId = null;
+  cosmeticSelectedModelFile = null;
+  cosmeticSelectedTextureFile = null;
+  const t = $('#cosmeticFormTitle');
+  if (!t) return;
+  t.textContent = 'Új kiegészítő';
+  $('#cosmeticNameInput').value = '';
+  $('#cosmeticSlugInput').value = '';
+  $('#cosmeticSlugInput').disabled = false;
+  $('#cosmeticDescInput').value = '';
+  $('#cosmeticPriceInput').value = '';
+  $('#cosmeticDurationInput').value = '';
+  $('#cosmeticTradableCheckbox').checked = true;
+  $('#cosmeticEnabledCheckbox').checked = true;
+  $('#cosmeticOffsetXInput').value = '0';
+  $('#cosmeticOffsetYInput').value = '0';
+  $('#cosmeticOffsetZInput').value = '0';
+  $('#cosmeticScaleInput').value = '1';
+  $('#cosmeticItemSpaceCheckbox').checked = true;
+  $('#cosmeticModelInput').value = '';
+  $('#cosmeticTextureInput').value = '';
+  $('#cosmeticModelNote').textContent = '';
+  $('#cosmeticTexturePreviewWrap').hidden = true;
+  $('#cosmeticTexturePreview').src = '';
+  $('#cosmeticFormResult').textContent = '';
+  $('#cosmeticFormResult').className = 'redeem-result';
+  $('#cosmeticSaveBtn').textContent = 'Mentés';
+}
+
+$('#cosmeticModelPickBtn')?.addEventListener('click', () => $('#cosmeticModelInput').click());
+$('#cosmeticTexturePickBtn')?.addEventListener('click', () => $('#cosmeticTextureInput').click());
+
+// A kockaszám azonnali kiírása: a backend max. 48-at fogad el, és sokkal
+// jobb ezt a fájl kiválasztásakor látni, mint mentéskor hibaüzenetként.
+$('#cosmeticModelInput')?.addEventListener('change', (e) => {
+  const file = e.target.files && e.target.files[0];
+  cosmeticSelectedModelFile = file || null;
+  const note = $('#cosmeticModelNote');
+  if (!file) { note.textContent = ''; return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const parsed = JSON.parse(reader.result);
+      const count = Array.isArray(parsed.elements) ? parsed.elements.length : 0;
+      note.textContent = count
+        ? `${escapeHtml(file.name)} - ${count} kocka`
+        : `${escapeHtml(file.name)} - FIGYELEM: nem találtam "elements" tömböt benne.`;
+    } catch {
+      note.textContent = `${escapeHtml(file.name)} - FIGYELEM: nem érvényes JSON.`;
+    }
+  };
+  reader.readAsText(file);
+});
+
+$('#cosmeticTextureInput')?.addEventListener('change', (e) => {
+  const file = e.target.files && e.target.files[0];
+  cosmeticSelectedTextureFile = file || null;
+  if (!file) { $('#cosmeticTexturePreviewWrap').hidden = true; return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    $('#cosmeticTexturePreview').src = reader.result;
+    $('#cosmeticTexturePreviewWrap').hidden = false;
+  };
+  reader.readAsDataURL(file);
+});
+
+async function loadCosmeticsAdmin() {
+  if (!session || !session.token) return;
+  if (hasPerm('global.cosmeticsManage')) {
+    try {
+      const res = await fetch(BACKEND_URL + '/api/admin/cosmetics', {
+        headers: { Authorization: 'Bearer ' + session.token }
+      });
+      const data = await res.json();
+      cosmeticsAdminItems = data.ok ? (data.cosmetics || []) : [];
+      if (data.ok && Array.isArray(data.slots)) {
+        const sel = $('#cosmeticSlotSelect');
+        if (sel && !sel.options.length) {
+          sel.innerHTML = data.slots.map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.label)}</option>`).join('');
+        }
+      }
+    } catch {
+      cosmeticsAdminItems = [];
+    }
+    allCosmeticsCache = cosmeticsAdminItems;
+    renderCosmeticsAdminList();
+  }
+  if (hasPerm('global.cosmeticsMarketManage')) loadCosmeticsMarketAdmin();
+}
+
+function renderCosmeticsAdminList() {
+  const wrap = $('#cosmeticsAdminList');
+  if (!wrap) return;
+  wrap.innerHTML = cosmeticsAdminItems.map((c) => `
+    <div class="badges-admin-item">
+      ${cosmeticThumbHtml(c)}
+      <div class="badges-admin-item-info">
+        <div class="badges-admin-item-name">
+          ${escapeHtml(c.name)}
+          ${c.enabled ? '' : '<span class="cosmetic-badge-off">kikapcsolva</span>'}
+          ${c.hasModel ? '' : '<span class="cosmetic-badge-warn">nincs modell</span>'}
+        </div>
+        <div class="badges-admin-item-meta">
+          ${escapeHtml(c.slug)} · ${escapeHtml(c.slotLabel)} · ${escapeHtml(RARITY_LABELS[c.rarity] || c.rarity)}
+          · ${c.priceSc !== null && c.priceSc !== undefined ? c.priceSc.toLocaleString('hu-HU') + ' SC' : 'nem vásárolható'}
+          · ${c.defaultDurationDays ? c.defaultDurationDays + ' nap' : 'örök'}
+          · ${c.tradable ? 'piacozható' : 'nem piacozható'}
+          · ${c.ownerCount} tulajdonos${c.listingCount ? `, ${c.listingCount} hirdetés` : ''}
+        </div>
+      </div>
+      <div class="badges-admin-item-actions">
+        <button type="button" class="news-edit-btn" data-cosmetic-edit="${c.id}">Szerkesztés</button>
+        <button type="button" class="news-delete-btn" data-cosmetic-delete="${c.id}">Törlés</button>
+      </div>
+    </div>
+  `).join('') || '<p class="redeem-result">Még nincs egyetlen kiegészítő sem.</p>';
+}
+
+$('#cosmeticDiscardBtn')?.addEventListener('click', resetCosmeticForm);
+
+$('#cosmeticSaveBtn')?.addEventListener('click', async () => {
+  const resultEl = $('#cosmeticFormResult');
+  const name = $('#cosmeticNameInput').value.trim();
+  const slug = $('#cosmeticSlugInput').value.trim().toLowerCase();
+  if (!name) {
+    resultEl.textContent = 'Adj meg egy nevet.';
+    resultEl.className = 'redeem-result error';
+    return;
+  }
+  if (!cosmeticEditingId && !/^[a-z0-9_]{3,48}$/.test(slug)) {
+    resultEl.textContent = 'Az azonosító csak kisbetűt, számot és alulvonást tartalmazhat (3-48 karakter).';
+    resultEl.className = 'redeem-result error';
+    return;
+  }
+  // Modell nélkül a kiegészítő nem tud megjelenni in-game - létrehozáskor
+  // ezért itt is figyelmeztetünk, nem csak a listában jelezzük utólag.
+  if (!cosmeticEditingId && !cosmeticSelectedModelFile) {
+    resultEl.textContent = 'Modell nélkül a kiegészítő nem jelenik meg a játékban - tölts fel egy Blockbench .json fájlt.';
+    resultEl.className = 'redeem-result error';
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('name', name);
+  if (!cosmeticEditingId) formData.append('slug', slug);
+  formData.append('slot', $('#cosmeticSlotSelect').value);
+  formData.append('rarity', $('#cosmeticRaritySelect').value);
+  formData.append('description', $('#cosmeticDescInput').value.trim());
+  formData.append('priceSc', $('#cosmeticPriceInput').value.trim());
+  formData.append('defaultDurationDays', $('#cosmeticDurationInput').value.trim());
+  formData.append('tradable', $('#cosmeticTradableCheckbox').checked ? 'true' : 'false');
+  formData.append('enabled', $('#cosmeticEnabledCheckbox').checked ? 'true' : 'false');
+  formData.append('offsetX', $('#cosmeticOffsetXInput').value.trim());
+  formData.append('offsetY', $('#cosmeticOffsetYInput').value.trim());
+  formData.append('offsetZ', $('#cosmeticOffsetZInput').value.trim());
+  formData.append('scale', $('#cosmeticScaleInput').value.trim());
+  formData.append('itemModelSpace', $('#cosmeticItemSpaceCheckbox').checked ? 'true' : 'false');
+  if (cosmeticSelectedModelFile) formData.append('model', cosmeticSelectedModelFile);
+  if (cosmeticSelectedTextureFile) formData.append('texture', cosmeticSelectedTextureFile);
+
+  try {
+    const url = cosmeticEditingId
+      ? BACKEND_URL + '/api/admin/cosmetics/' + cosmeticEditingId
+      : BACKEND_URL + '/api/admin/cosmetics';
+    const res = await fetch(url, {
+      method: cosmeticEditingId ? 'PUT' : 'POST',
+      headers: { Authorization: 'Bearer ' + session.token },
+      body: formData
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      resultEl.textContent = data.message || 'Nem sikerült menteni.';
+      resultEl.className = 'redeem-result error';
+      return;
+    }
+    showToast(cosmeticEditingId ? 'Kiegészítő frissítve.' : 'Kiegészítő létrehozva.');
+    resetCosmeticForm();
+    loadCosmeticsAdmin();
+  } catch {
+    resultEl.textContent = 'Nem sikerült elérni a szervert.';
+    resultEl.className = 'redeem-result error';
+  }
+});
+
+document.addEventListener('click', async (e) => {
+  const editBtn = e.target.closest('[data-cosmetic-edit]');
+  if (editBtn) {
+    const item = cosmeticsAdminItems.find((c) => String(c.id) === editBtn.dataset.cosmeticEdit);
+    if (!item) return;
+    cosmeticEditingId = item.id;
+    cosmeticSelectedModelFile = null;
+    cosmeticSelectedTextureFile = null;
+    $('#cosmeticFormTitle').textContent = 'Kiegészítő szerkesztése';
+    $('#cosmeticNameInput').value = item.name;
+    // Az azonosítót a kliens gyorsítótárazza, ezért nem módosítható (ld.
+    // SolarBackend src/cosmetics.js PUT végpontjának megjegyzését).
+    $('#cosmeticSlugInput').value = item.slug;
+    $('#cosmeticSlugInput').disabled = true;
+    $('#cosmeticSlotSelect').value = item.slot;
+    $('#cosmeticRaritySelect').value = item.rarity;
+    $('#cosmeticDescInput').value = item.description || '';
+    $('#cosmeticPriceInput').value = item.priceSc !== null && item.priceSc !== undefined ? item.priceSc : '';
+    $('#cosmeticDurationInput').value = item.defaultDurationDays || '';
+    $('#cosmeticTradableCheckbox').checked = !!item.tradable;
+    $('#cosmeticEnabledCheckbox').checked = !!item.enabled;
+    $('#cosmeticOffsetXInput').value = item.offsetX ?? 0;
+    $('#cosmeticOffsetYInput').value = item.offsetY ?? 0;
+    $('#cosmeticOffsetZInput').value = item.offsetZ ?? 0;
+    $('#cosmeticScaleInput').value = item.scale ?? 1;
+    $('#cosmeticItemSpaceCheckbox').checked = item.itemModelSpace !== false;
+    $('#cosmeticModelInput').value = '';
+    $('#cosmeticTextureInput').value = '';
+    $('#cosmeticModelNote').textContent = item.hasModel
+      ? 'Van feltöltött modell - csak akkor válassz újat, ha cserélni akarod.'
+      : 'Nincs feltöltött modell.';
+    if (item.hasTexture) {
+      $('#cosmeticTexturePreview').src = cosmeticTextureUrl(item.id);
+      $('#cosmeticTexturePreviewWrap').hidden = false;
+    } else {
+      $('#cosmeticTexturePreview').src = '';
+      $('#cosmeticTexturePreviewWrap').hidden = true;
+    }
+    $('#cosmeticFormResult').textContent = '';
+    $('#cosmeticSaveBtn').textContent = 'Frissítés';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    return;
+  }
+
+  const deleteBtn = e.target.closest('[data-cosmetic-delete]');
+  if (deleteBtn) {
+    const item = cosmeticsAdminItems.find((c) => String(c.id) === deleteBtn.dataset.cosmeticDelete);
+    if (!item) return;
+    const confirmed = await confirmModal(
+      'Kiegészítő végleges törlése',
+      `Biztosan törlöd a(z) "${item.name}" kiegészítőt? Elvonja mind a ${item.ownerCount} tulajdonosától, és törli a hozzá tartozó piaci hirdetéseket is. Ez nem vonható vissza.`,
+      'Igen, törlés'
+    );
+    if (!confirmed) return;
+    try {
+      const res = await fetch(BACKEND_URL + '/api/admin/cosmetics/' + item.id, {
+        method: 'DELETE',
+        headers: { Authorization: 'Bearer ' + session.token }
+      });
+      const data = await res.json();
+      if (!data.ok) { showToast(data.message || 'Nem sikerült törölni.', true); return; }
+      showToast('Kiegészítő törölve.');
+      if (String(cosmeticEditingId) === String(item.id)) resetCosmeticForm();
+      loadCosmeticsAdmin();
+    } catch {
+      showToast('Nem sikerült elérni a szervert.', true);
+    }
+  }
+});
+
+// ── Admin: piac moderálása ───────────────────────────────────────────────
+let cosmeticsMarketAdminItems = [];
+
+async function loadCosmeticsMarketAdmin() {
+  const wrap = $('#cosmeticsMarketAdminList');
+  if (!wrap) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/cosmetics/market', {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    cosmeticsMarketAdminItems = data.ok ? (data.listings || []) : [];
+  } catch {
+    cosmeticsMarketAdminItems = [];
+  }
+  const STATUS_LABELS = { active: 'aktív', reserved: 'foglalt', sold: 'eladva', cancelled: 'visszavonva' };
+  wrap.innerHTML = cosmeticsMarketAdminItems.map((l) => `
+    <div class="badges-admin-item">
+      ${l.cosmetic ? cosmeticThumbHtml(l.cosmetic) : '<div class="cosmetic-thumb cosmetic-thumb-empty"></div>'}
+      <div class="badges-admin-item-info">
+        <div class="badges-admin-item-name">${escapeHtml(l.cosmetic?.name || '(törölt kiegészítő)')}</div>
+        <div class="badges-admin-item-meta">
+          #${l.id} · ${escapeHtml(l.seller)} · ${l.priceSc.toLocaleString('hu-HU')} SC
+          (eladónak ${l.payoutSc.toLocaleString('hu-HU')} SC) · ${escapeHtml(STATUS_LABELS[l.status] || l.status)}
+          · ${formatLedgerDate(l.createdAt)}
+        </div>
+      </div>
+      <div class="badges-admin-item-actions">
+        ${l.status === 'active'
+          ? `<button type="button" class="news-delete-btn" data-market-admin-remove="${l.id}">Levétel</button>`
+          : ''}
+      </div>
+    </div>
+  `).join('') || '<p class="redeem-result">Nincs egyetlen piaci hirdetés sem.</p>';
+}
+
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-market-admin-remove]');
+  if (!btn) return;
+  const confirmed = await confirmModal(
+    'Hirdetés levétele',
+    'Leveszed ezt a hirdetést a piacról? A kiegészítő visszakerül az eladóhoz - ez nem elkobzás.',
+    'Igen, leveszem'
+  );
+  if (!confirmed) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/cosmetics/market/' + btn.dataset.marketAdminRemove, {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    if (!data.ok) { showToast(data.message || 'Nem sikerült levenni.', true); return; }
+    showToast('Hirdetés levéve.');
+    loadCosmeticsMarketAdmin();
+  } catch {
+    showToast('Nem sikerült elérni a szervert.', true);
+  }
+});
+
+// ── Admin: kiegészítő adása/elvétele egy játékostól ──────────────────────
+let currentAdminPlayerCosmetics = [];
+
+// A választó a katalógus TELJES listájából épül (a kikapcsoltakat is
+// beleértve - egy admin adhat olyat is, ami épp nincs élesítve), ezért kell
+// hozzá a cosmeticsManage/cosmeticGrant bármelyikével elérhető admin
+// katalógus-végpont, nem a publikus /catalog.
+async function ensureAllCosmeticsLoaded() {
+  if (allCosmeticsCache.length) return allCosmeticsCache;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/cosmetics', {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    allCosmeticsCache = data.ok ? (data.cosmetics || []) : [];
+  } catch {
+    allCosmeticsCache = [];
+  }
+  return allCosmeticsCache;
+}
+
+async function loadAdminPlayerCosmetics(username) {
+  if (!hasPerm('player.action.cosmeticGrant') && !hasPerm('player.action.cosmeticRevoke')) return;
+
+  const all = await ensureAllCosmeticsLoaded();
+  const select = $('#adminCosmeticSelect');
+  if (select) {
+    select.innerHTML = all.length
+      ? all.map((c) => `<option value="${c.id}">${escapeHtml(c.name)} (${escapeHtml(c.slotLabel)})</option>`).join('')
+      : '<option value="">Nincs létrehozott kiegészítő</option>';
+  }
+
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/player/' + encodeURIComponent(username) + '/cosmetics', {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    renderAdminPlayerCosmeticsList(data.ok ? data.owned : []);
+  } catch {
+    renderAdminPlayerCosmeticsList([]);
+  }
+}
+
+function renderAdminPlayerCosmeticsList(owned) {
+  currentAdminPlayerCosmetics = Array.isArray(owned) ? owned : [];
+  const canRevoke = hasPerm('player.action.cosmeticRevoke');
+  const el = $('#adminPlayerCosmeticsList');
+  if (!el) return;
+  el.innerHTML = currentAdminPlayerCosmetics.map((c) => `
+    <span class="admin-player-badge-chip">
+      ${escapeHtml(c.name)}
+      <span class="admin-cosmetic-chip-meta">${c.expiresAt ? formatLedgerDate(c.expiresAt) + '-ig' : 'örök'}</span>
+      ${canRevoke ? `<button type="button" data-revoke-cosmetic-id="${c.id}" title="Elvétel">×</button>` : ''}
+    </span>
+  `).join('') || '<p class="redeem-result">Ennek a játékosnak még nincs egyetlen kiegészítője sem.</p>';
+}
+
+$('#adminCosmeticGrantBtn')?.addEventListener('click', async () => {
+  const statusEl = $('#adminCosmeticGrantStatus');
+  const cosmeticId = Number($('#adminCosmeticSelect').value);
+  if (!Number.isInteger(cosmeticId)) {
+    statusEl.textContent = 'Nincs kiválasztható kiegészítő.';
+    statusEl.className = 'redeem-result error';
+    return;
+  }
+  const durationRaw = $('#adminCosmeticDurationInput').value.trim();
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/player/' + encodeURIComponent(lastAdminPlayerUsername) + '/cosmetics', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ cosmeticId, durationDays: durationRaw === '' ? undefined : Number(durationRaw) })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      statusEl.textContent = data.message || 'Nem sikerült kiosztani.';
+      statusEl.className = 'redeem-result error';
+      return;
+    }
+    statusEl.textContent = 'Kiegészítő kiosztva.';
+    statusEl.className = 'redeem-result success';
+    $('#adminCosmeticDurationInput').value = '';
+    renderAdminPlayerCosmeticsList(data.owned);
+  } catch {
+    statusEl.textContent = 'Nem sikerült elérni a szervert.';
+    statusEl.className = 'redeem-result error';
+  }
+});
+
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-revoke-cosmetic-id]');
+  if (!btn) return;
+  const confirmed = await confirmModal(
+    'Kiegészítő elvétele',
+    'Biztosan elveszed ezt a kiegészítőt a játékostól? Ha épp viseli, azonnal lekerül róla.',
+    'Igen, elveszem'
+  );
+  if (!confirmed) return;
+  try {
+    const res = await fetch(
+      BACKEND_URL + '/api/admin/player/' + encodeURIComponent(lastAdminPlayerUsername) + '/cosmetics/' + btn.dataset.revokeCosmeticId,
+      { method: 'DELETE', headers: { Authorization: 'Bearer ' + session.token } }
+    );
+    const data = await res.json();
+    if (!data.ok) { showToast(data.message || 'Nem sikerült elvenni.', true); return; }
+    showToast('Kiegészítő elvéve.');
+    renderAdminPlayerCosmeticsList(data.owned);
+  } catch {
+    showToast('Nem sikerült elérni a szervert.', true);
+  }
 });
 
 // ── Vizsgálat elleni alapvédelem ──
