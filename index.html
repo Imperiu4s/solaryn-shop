@@ -676,7 +676,13 @@
             <div>
               <div id="cosmeticsOwnedWrap"></div>
             </div>
-            <div class="side-rail" data-side-rail="cosmetics"></div>
+            <div>
+              <div class="card cosmetic-char-card">
+                <div class="card-title">Így nézel ki</div>
+                <canvas id="cosmeticCharPreview" width="260" height="340"></canvas>
+                <p class="skin-preview-hint" id="cosmeticCharPreviewHint">Húzással forgatható</p>
+              </div>
+            </div>
           </div>
 
           <div class="admin-subsection-title">Megvásárolható kiegészítők</div>
@@ -1175,17 +1181,28 @@
                  (mentés után a kliensek ~1 percen belül átveszik). -->
             <div class="cosmetic-transform-box">
               <div class="cosmetic-transform-title">Illesztés a karakterhez</div>
-              <p class="cosmetic-file-note" style="margin-bottom:10px;">Ha a kiegészítő rossz helyen/méretben jelenik meg a játékban, itt hangold be - a modellt nem kell újra feltölteni.</p>
-              <div class="cosmetic-transform-grid">
-                <label>Eltolás X<input type="number" id="cosmeticOffsetXInput" step="0.5" value="0" /></label>
-                <label>Eltolás Y<input type="number" id="cosmeticOffsetYInput" step="0.5" value="0" /></label>
-                <label>Eltolás Z<input type="number" id="cosmeticOffsetZInput" step="0.5" value="0" /></label>
-                <label>Méret<input type="number" id="cosmeticScaleInput" step="0.05" value="1" /></label>
+              <p class="cosmetic-file-note" style="margin-bottom:12px;">Húzd a kiegészítőt a helyére a karakteren - a számok maguktól követik. <strong>Bal gomb:</strong> mozgatás · <strong>Shift + húzás</strong> vagy <strong>jobb gomb:</strong> forgatás · <strong>görgő:</strong> előre/hátra (Z).</p>
+
+              <div class="cosmetic-editor">
+                <div class="cosmetic-editor-stage">
+                  <canvas id="cosmeticEditorPreview" width="240" height="320"></canvas>
+                  <p class="cosmetic-editor-empty" id="cosmeticEditorEmpty">Válassz modellt és textúrát a szerkesztéshez</p>
+                </div>
+                <div class="cosmetic-editor-controls">
+                  <div class="cosmetic-transform-grid">
+                    <label>Eltolás X<input type="number" id="cosmeticOffsetXInput" step="0.5" value="0" /></label>
+                    <label>Eltolás Y<input type="number" id="cosmeticOffsetYInput" step="0.5" value="0" /></label>
+                    <label>Eltolás Z<input type="number" id="cosmeticOffsetZInput" step="0.5" value="0" /></label>
+                    <label>Méret<input type="number" id="cosmeticScaleInput" step="0.05" value="1" /></label>
+                  </div>
+                  <label class="check-row" style="margin-top:10px;">
+                    <input type="checkbox" id="cosmeticItemSpaceCheckbox" checked />
+                    Item-modell térben készült (Blockbench alapértelmezés)
+                  </label>
+                  <button type="button" class="btn-outline" id="cosmeticAutoFitBtn">Automatikus beillesztés</button>
+                  <button type="button" class="btn-outline" id="cosmeticEditorResetBtn">Illesztés nullázása</button>
+                </div>
               </div>
-              <label class="check-row" style="margin-top:10px;">
-                <input type="checkbox" id="cosmeticItemSpaceCheckbox" checked />
-                Item-modell térben készült (Blockbench alapértelmezés - a vásárolt csomagok ilyenek)
-              </label>
             </div>
 
             <label class="gift-modal-label">Modell (Blockbench .json)</label>

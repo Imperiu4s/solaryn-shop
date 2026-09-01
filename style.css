@@ -1604,3 +1604,27 @@ a { color: inherit; }
   padding: 8px 10px; color: var(--text); font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
+
+/* Karakter-előnézet a Kiegészítők nézetben + admin illesztő-szerkesztő */
+.cosmetic-char-card { display: flex; flex-direction: column; align-items: center; }
+.cosmetic-char-card canvas { max-width: 100%; touch-action: none; }
+
+.cosmetic-editor { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; }
+.cosmetic-editor-stage {
+  position: relative; flex: 0 0 auto;
+  background: rgba(0,0,0,.18); border: 1px solid var(--line); border-radius: 12px;
+  min-width: 240px; min-height: 320px;
+  display: flex; align-items: center; justify-content: center;
+}
+/* A vászon a húzáshoz "megfogható" kell legyen - enélkül a böngésző
+   szövegkijelölésnek értelmezné a mozdulatot, és a modell nem követné. */
+.cosmetic-editor-stage canvas { cursor: grab; touch-action: none; user-select: none; }
+.cosmetic-editor-stage canvas:active { cursor: grabbing; }
+.cosmetic-editor-empty {
+  position: absolute; inset: 0; margin: 0;
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  padding: 20px; font-size: 12.5px; color: var(--text-faint); pointer-events: none;
+}
+.cosmetic-editor-empty[hidden] { display: none; }
+.cosmetic-editor-controls { flex: 1 1 240px; min-width: 240px; }
+.cosmetic-editor-controls .btn-outline { width: 100%; margin-top: 12px; }

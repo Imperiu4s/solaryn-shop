@@ -5537,14 +5537,78 @@ function cosmeticTextureUrl(id) {
   return BACKEND_URL + '/api/cosmetics/texture/' + id;
 }
 
-// A kiegészítő "bélyegképe" a textúrája. SZÁNDÉKOSAN nincs 3D előnézet: a
-// tényleges kinézet a kockák + UV-k együttese, amit hűen csak a kliens tud
-// kirajzolni - egy pontatlan web-előnézet félrevezetőbb lenne, mint a nyers
-// textúra, ami legalább a színvilágot/mintát mutatja.
+function cosmeticModelUrl(id) {
+  return BACKEND_URL + '/api/cosmetics/model/' + id;
+}
+
+// ── 3D bélyegképek ───────────────────────────────────────────────────────
+// A kiegészítő bélyegképe a TÉNYLEGES 3D modell, a saját textúrájával
+// kirenderelve - nem a nyers textúra-atlasz (abból egy szárny/sapka alakja
+// nem olvasható ki). A renderelés egyetlen, megosztott WebGL-kontextusban
+// történik (ld. skin3d.js renderCosmeticThumbnail megjegyzését arról, miért
+// nem kártyánként élő vászon), és az eredmény ITT is gyorsítótárazódik, hogy
+// egy nézet-váltás ne rajzoltassa újra ugyanazt.
+const cosmeticThumbCache = new Map();
+
 function cosmeticThumbHtml(c) {
-  return c.hasTexture
-    ? `<img class="cosmetic-thumb" src="${cosmeticTextureUrl(c.id)}" alt="" loading="lazy" />`
-    : '<div class="cosmetic-thumb cosmetic-thumb-empty"></div>';
+  const cached = cosmeticThumbCache.get(c.id);
+  if (cached) return `<img class="cosmetic-thumb" src="${cached}" alt="" />`;
+  // Amíg elkészül, a helyőrző marad - a hydrateCosmeticThumbs() tölti fel.
+  return `<div class="cosmetic-thumb cosmetic-thumb-empty" data-cosmetic-thumb="${c.id}"></div>`;
+}
+
+function loadImage(src) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
+const cosmeticModelCache = new Map();
+async function fetchCosmeticModel(id) {
+  if (cosmeticModelCache.has(id)) return cosmeticModelCache.get(id);
+  try {
+    const res = await fetch(cosmeticModelUrl(id));
+    if (!res.ok) return null;
+    const model = await res.json();
+    cosmeticModelCache.set(id, model);
+    return model;
+  } catch {
+    return null;
+  }
+}
+
+// A még üres bélyegkép-helyőrzők feltöltése. SOROSAN fut (nem párhuzamosan):
+// a megosztott WebGL-kontextus egyszerre egy modellt tud rajzolni, és így a
+// kártyák szép sorban, felülről lefelé jelennek meg.
+async function hydrateCosmeticThumbs(root) {
+  const slots = [...(root || document).querySelectorAll('[data-cosmetic-thumb]')];
+  for (const el of slots) {
+    const id = Number(el.dataset.cosmeticThumb);
+    if (!Number.isInteger(id)) continue;
+    if (cosmeticThumbCache.has(id)) {
+      replaceThumb(el, cosmeticThumbCache.get(id));
+      continue;
+    }
+    const [model, img] = await Promise.all([fetchCosmeticModel(id), loadImage(cosmeticTextureUrl(id))]);
+    if (!model || !img) continue;
+    const url = SkinPreview.renderCosmeticThumbnail(model, img, 160);
+    if (!url) continue;
+    cosmeticThumbCache.set(id, url);
+    replaceThumb(el, url);
+  }
+}
+
+function replaceThumb(el, url) {
+  if (!el.parentNode) return;
+  const img = document.createElement('img');
+  img.className = 'cosmetic-thumb';
+  img.src = url;
+  img.alt = '';
+  el.parentNode.replaceChild(img, el);
 }
 
 function cosmeticExpiryHtml(expiresAt) {
@@ -5575,6 +5639,62 @@ async function loadMyCosmetics() {
   renderCosmeticSlotBar();
   renderOwnedCosmetics();
   loadCosmeticShop();
+  renderCosmeticCharacterPreview();
+}
+
+// ── "Így nézel ki" előnézet ──────────────────────────────────────────────
+// A ténylegesen VISELT kiegészítők a karakteren, ugyanazzal a
+// transzformáció-lánccal, amit a SolarClient is használ (ld. skin3d.js
+// buildCosmeticGeometry levezetését). A saját skined jelenik meg rajta, ha
+// van feltöltve - ha nincs, egy alapértelmezett "Steve" karakter.
+let stopCosmeticCharPreview = null;
+
+async function renderCosmeticCharacterPreview() {
+  const canvas = $('#cosmeticCharPreview');
+  if (!canvas) return;
+
+  if (stopCosmeticCharPreview) { stopCosmeticCharPreview(); stopCosmeticCharPreview = null; }
+
+  const equippedIds = Object.values(myCosmetics.loadout || {});
+  const hint = $('#cosmeticCharPreviewHint');
+  if (hint) {
+    hint.textContent = equippedIds.length
+      ? 'Húzással forgatható'
+      : 'Vegyél fel egy kiegészítőt, és itt látod, hogy néz ki rajtad.';
+  }
+
+  const skinImg = await loadSkinImage(session.username) || await SkinPreview.getSteveImage();
+  if (!skinImg) return;
+
+  const capeImg = await loadCapeImageOrNull();
+
+  const cosmetics = [];
+  for (const [slot, id] of Object.entries(myCosmetics.loadout || {})) {
+    const [model, img] = await Promise.all([fetchCosmeticModel(id), loadImage(cosmeticTextureUrl(id))]);
+    if (model && img) cosmetics.push({ model, slot, img });
+  }
+
+  const slim = myCosmeticsSkinSlim();
+  stopCosmeticCharPreview = SkinPreview.start(canvas, skinImg, slim, capeImg, cosmetics);
+}
+
+// A köpeny (ha van) - a 3D előnézet ezt is kirajzolja, hogy a kiegészítő és a
+// köpeny együttes hatása is látszódjon.
+function loadCapeImageOrNull() {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = BACKEND_URL + '/api/cape/' + encodeURIComponent(session.username) + '?t=' + Date.now();
+  });
+}
+
+function myCosmeticsSkinSlim() {
+  // A skin-nézet már ismeri a modell-választást; ha még nem töltött be,
+  // a klasszikus (széles kar) az alapértelmezés - ugyanaz, mint a szerveren.
+  const activePill = document.querySelector('.skin-model-toggle .pill.active');
+  return !!(activePill && activePill.dataset.model === 'slim');
 }
 
 // A felső sáv slotonként mutatja, mit viselsz éppen - ez adja meg gyorsan a
@@ -5599,6 +5719,7 @@ function renderCosmeticSlotBar() {
       </div>
     `;
   }).join('');
+  hydrateCosmeticThumbs(bar);
 }
 
 function renderOwnedCosmetics() {
@@ -5622,6 +5743,7 @@ function renderOwnedCosmetics() {
         : `<button type="button" class="btn-glow cosmetic-action" data-cosmetic-equip="${c.id}">Felvétel</button>`}
     </div>
   `).join('')}</div>`;
+  hydrateCosmeticThumbs(wrap);
 }
 
 // A megvásárolható kínálat: a publikus katalógus mínusz amink már megvan.
@@ -5655,6 +5777,7 @@ async function loadCosmeticShop() {
       <button type="button" class="btn-glow cosmetic-action" data-cosmetic-buy="${c.id}">Megvásárlás</button>
     </div>
   `).join('')}</div>`;
+  hydrateCosmeticThumbs(wrap);
 }
 
 document.addEventListener('click', async (e) => {
@@ -5674,6 +5797,7 @@ document.addEventListener('click', async (e) => {
       renderCosmeticSlotBar();
       renderOwnedCosmetics();
       loadCosmeticShop();
+      renderCosmeticCharacterPreview();
     } catch {
       showToast('Nem sikerült elérni a szervert.', true);
       equipBtn.disabled = false;
@@ -5696,6 +5820,7 @@ document.addEventListener('click', async (e) => {
       myCosmetics = { owned: data.owned || [], loadout: data.loadout || {}, slots: data.slots || [] };
       renderCosmeticSlotBar();
       renderOwnedCosmetics();
+      renderCosmeticCharacterPreview();
     } catch {
       showToast('Nem sikerült elérni a szervert.', true);
       unequipBtn.disabled = false;
@@ -5825,6 +5950,7 @@ async function loadMarketListings() {
         : `<button type="button" class="btn-glow cosmetic-action" data-market-buy="${l.id}">Megvásárlás</button>`}
     </div>`;
   }).join('')}</div>`;
+  hydrateCosmeticThumbs(wrap);
 }
 
 async function loadMyMarketListings() {
@@ -5860,6 +5986,7 @@ async function loadMyMarketListings() {
       </div>
     </div>
   `).join('');
+  hydrateCosmeticThumbs(wrap);
 }
 
 $('#marketListBtn')?.addEventListener('click', async () => {
@@ -5990,6 +6117,9 @@ function resetCosmeticForm() {
   $('#cosmeticFormResult').textContent = '';
   $('#cosmeticFormResult').className = 'redeem-result';
   $('#cosmeticSaveBtn').textContent = 'Mentés';
+  cosmeticEditorModel = null;
+  cosmeticEditorTexture = null;
+  queueEditorRefresh();
 }
 
 $('#cosmeticModelPickBtn')?.addEventListener('click', () => $('#cosmeticModelInput').click());
@@ -6010,8 +6140,18 @@ $('#cosmeticModelInput')?.addEventListener('change', (e) => {
       note.textContent = count
         ? `${escapeHtml(file.name)} - ${count} kocka`
         : `${escapeHtml(file.name)} - FIGYELEM: nem találtam "elements" tömböt benne.`;
+      // A frissen kiválasztott modell azonnal megjelenik a szerkesztőben,
+      // még mentés előtt - így a beillesztés a feltöltéssel EGY menetben
+      // elvégezhető. Új kiegészítőnél rögtön a helyére is igazítjuk (ld.
+      // autoFitCosmetic indoklását) - szerkesztésnél NEM, mert ott a meglévő,
+      // már bevált értékeket nem szabad felülírni.
+      cosmeticEditorModel = count ? parsed : null;
+      if (cosmeticEditorModel && !cosmeticEditingId) autoFitCosmetic();
+      restartCosmeticEditor();
     } catch {
       note.textContent = `${escapeHtml(file.name)} - FIGYELEM: nem érvényes JSON.`;
+      cosmeticEditorModel = null;
+      restartCosmeticEditor();
     }
   };
   reader.readAsText(file);
@@ -6025,6 +6165,10 @@ $('#cosmeticTextureInput')?.addEventListener('change', (e) => {
   reader.onload = () => {
     $('#cosmeticTexturePreview').src = reader.result;
     $('#cosmeticTexturePreviewWrap').hidden = false;
+    loadImage(reader.result).then((img) => {
+      cosmeticEditorTexture = img;
+      restartCosmeticEditor();
+    });
   };
   reader.readAsDataURL(file);
 });
@@ -6079,7 +6223,220 @@ function renderCosmeticsAdminList() {
       </div>
     </div>
   `).join('') || '<p class="redeem-result">Még nincs egyetlen kiegészítő sem.</p>';
+  hydrateCosmeticThumbs(wrap);
 }
+
+// ── Admin illesztő-szerkesztő ────────────────────────────────────────────
+// A húzás a TÉNYLEGES eltolás-mezőket állítja, és a karakteren azonnal
+// látszik az eredmény - ugyanazzal a transzformáció-lánccal, amit a
+// SolarClient is használ (ld. skin3d.js buildCosmeticGeometry levezetését).
+// Ez a funkció LÉNYEGE: ha az előnézet és az in-game render eltérne, a
+// húzogatással beállított értékek használhatatlanok lennének.
+let stopCosmeticEditor = null;
+let cosmeticEditorModel = null;    // a szerkesztett modell (elements + texture_size)
+let cosmeticEditorTexture = null;  // Image objektum
+let cosmeticEditorRefreshQueued = false;
+
+function currentEditorTransform() {
+  return {
+    offset: [
+      Number($('#cosmeticOffsetXInput').value) || 0,
+      Number($('#cosmeticOffsetYInput').value) || 0,
+      Number($('#cosmeticOffsetZInput').value) || 0
+    ],
+    scale: Number($('#cosmeticScaleInput').value) || 1,
+    itemModelSpace: $('#cosmeticItemSpaceCheckbox').checked
+  };
+}
+
+// A vászon 46 egység távolságból, PI/5 látószöggel néz a modellre - ennyi
+// világ-egység esik egy képpontra. Enélkül a húzás sebessége a vászon
+// méretétől függne, és nagy/kicsi panelen máshogy viselkedne.
+function editorUnitsPerPixel(canvas) {
+  const visibleHeight = 2 * 46 * Math.tan(Math.PI / 10);
+  return visibleHeight / (canvas.height || 320);
+}
+
+function round2(n) { return Math.round(n * 100) / 100; }
+
+// ── Automatikus beillesztés ──────────────────────────────────────────────
+// MIÉRT KELL: egy Blockbench ITEM-modell (minden vásárolt csomag ilyen) a
+// (8,8,8) blokk-középpont körül van megrajzolva, nem a (0,0,0) csont-pivot
+// körül. Nulla eltolással ezért a modell jellemzően a fej fölé és oldalra
+// csúszik - mérve: a példacsomagok szárnyai x-ben 8 egységgel, y-ban 6-13
+// egységgel el voltak tolva. Ez nem hiba, hanem a két konvenció különbsége.
+//
+// Ahelyett, hogy ezt az adminra hagynánk, feltöltéskor kiszámoljuk azt az
+// eltolást, amitől a modell a csontra KÖZÉPRE kerül - onnan már csak
+// finomhangolás a húzogatás. A Z-t SZÁNDÉKOSAN nem nyúljuk: a mélység
+// (szárny hátul, sapka fölül) a modell szerzői szándéka.
+function autoFitCosmetic() {
+  if (!cosmeticEditorModel) return false;
+  const slot = $('#cosmeticSlotSelect').value || 'head';
+  const pivot = SkinPreview.COSMETIC_PIVOTS[slot] || [0, 0, 0];
+
+  // Nulla eltolással felépítjük a geometriát, és megnézzük, hol landol.
+  const probe = {
+    ...cosmeticEditorModel,
+    transform: { offset: [0, 0, 0], scale: Number($('#cosmeticScaleInput').value) || 1, itemModelSpace: $('#cosmeticItemSpaceCheckbox').checked }
+  };
+  let g;
+  try { g = SkinPreview.buildCosmeticGeometry(probe, slot); } catch { return false; }
+  if (!g.positions.length) return false;
+
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (let i = 0; i < g.positions.length; i += 3) {
+    minX = Math.min(minX, g.positions[i]); maxX = Math.max(maxX, g.positions[i]);
+    minY = Math.min(minY, g.positions[i + 1]); maxY = Math.max(maxY, g.positions[i + 1]);
+  }
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+
+  // A csont horgonypontja az előnézeti térben (ld. skin3d.js levezetését):
+  //   (pivotX, 6 - pivotY, -pivotZ)
+  // Az eltolás előjelei ugyanonnan jönnek.
+  $('#cosmeticOffsetXInput').value = round2(cx - pivot[0]);
+  $('#cosmeticOffsetYInput').value = round2((6 - pivot[1]) - cy);
+  return true;
+}
+
+// Az újraindítás EGYSZERRE csak egyszer futhat: két aszinkron betöltés
+// (modell FileReader + textúra Image) versenyezhet érte, és ha közben egy
+// második hívás is elindulna, a régi példány leállítása után a másik
+// beragadhatna egy félkész állapotban. Az "újra kell futni" jelzést itt is
+// elraktározzuk, nem eldobjuk.
+let cosmeticEditorStarting = false;
+let cosmeticEditorRestartAgain = false;
+
+async function restartCosmeticEditor() {
+  if (cosmeticEditorStarting) { cosmeticEditorRestartAgain = true; return; }
+  cosmeticEditorStarting = true;
+  try {
+    await doRestartCosmeticEditor();
+  } finally {
+    cosmeticEditorStarting = false;
+    if (cosmeticEditorRestartAgain) {
+      cosmeticEditorRestartAgain = false;
+      await restartCosmeticEditor();
+    }
+  }
+}
+
+async function doRestartCosmeticEditor() {
+  const canvas = $('#cosmeticEditorPreview');
+  const empty = $('#cosmeticEditorEmpty');
+  if (!canvas) return;
+
+  if (stopCosmeticEditor) { stopCosmeticEditor(); stopCosmeticEditor = null; }
+
+  if (!cosmeticEditorModel || !cosmeticEditorTexture) {
+    if (empty) empty.hidden = false;
+    canvas.style.visibility = 'hidden';
+    return;
+  }
+  if (empty) empty.hidden = true;
+  canvas.style.visibility = '';
+
+  const skinImg = await SkinPreview.getSteveImage();
+  if (!skinImg) return;
+
+  const slot = $('#cosmeticSlotSelect').value || 'head';
+  const model = { ...cosmeticEditorModel, transform: currentEditorTransform() };
+  const upp = editorUnitsPerPixel(canvas);
+
+  stopCosmeticEditor = SkinPreview.start(
+    canvas, skinImg, false, null,
+    [{ model, slot, img: cosmeticEditorTexture }],
+    (dx, dy, angle) => {
+      // A képernyőn látott vízszintes irány a modell terében a kamera
+      // Y-forgásától függ - ezért bontjuk X és Z komponensre, hogy a
+      // kiegészítő akkor is a húzás irányába menjen, ha a karaktert
+      // közben eloldalaztuk.
+      const c = Math.cos(angle), s = Math.sin(angle);
+      const worldDX = dx * upp * c;
+      const worldDZ = dx * upp * s;
+
+      // Az előjelek a transzformáció-láncból következnek (ld. skin3d.js):
+      //   preview_x = pivotX - offX + ...   -> jobbra húzás = offX csökken
+      //   preview_y = 6 - (pivotY - offY)   -> felfelé      = offY nő
+      //   preview_z = -(pivotZ + offZ)      -> előrébb      = offZ csökken
+      const inX = $('#cosmeticOffsetXInput');
+      const inY = $('#cosmeticOffsetYInput');
+      const inZ = $('#cosmeticOffsetZInput');
+      inX.value = round2(Number(inX.value || 0) - worldDX);
+      inY.value = round2(Number(inY.value || 0) - dy * upp);
+      inZ.value = round2(Number(inZ.value || 0) - worldDZ);
+
+      queueEditorRefresh();
+    }
+  );
+}
+
+// A geometriát minden mozdulatnál újra kell építeni (az eltolás bele van
+// sütve a csúcsokba) - de CSAK a geometriát: a teljes előnézet újraindítása
+// elvágná a folyamatban lévő húzást (ld. skin3d.js updateCosmetics
+// megjegyzését). Ezért ha már fut a szerkesztő, csak a puffereket cseréljük.
+// A "dirty" jelző NEM elhagyható: a modell és a textúra KÜLÖN, aszinkron
+// úton töltődik be (FileReader + Image). Ha a második közülük épp akkor
+// készül el, amikor már ütemezve van egy frissítés, egy sima
+// "ha ütemezve van, lépj ki" őrfeltétel ELDOBNÁ a kérést - és a szerkesztő
+// örökre az "előbb válassz modellt" állapotban ragadna, holott minden
+// betöltődött. Élesben pontosan ez történt.
+let cosmeticEditorRefreshDirty = false;
+
+function queueEditorRefresh() {
+  if (cosmeticEditorRefreshQueued) { cosmeticEditorRefreshDirty = true; return; }
+  cosmeticEditorRefreshQueued = true;
+  requestAnimationFrame(async () => {
+    cosmeticEditorRefreshQueued = false;
+    if (stopCosmeticEditor && stopCosmeticEditor.updateCosmetics
+        && cosmeticEditorModel && cosmeticEditorTexture) {
+      stopCosmeticEditor.updateCosmetics([{
+        model: { ...cosmeticEditorModel, transform: currentEditorTransform() },
+        slot: $('#cosmeticSlotSelect').value || 'head',
+        img: cosmeticEditorTexture
+      }]);
+    } else {
+      await restartCosmeticEditor();
+    }
+    if (cosmeticEditorRefreshDirty) {
+      cosmeticEditorRefreshDirty = false;
+      queueEditorRefresh();
+    }
+  });
+}
+
+['#cosmeticOffsetXInput', '#cosmeticOffsetYInput', '#cosmeticOffsetZInput',
+ '#cosmeticScaleInput', '#cosmeticItemSpaceCheckbox', '#cosmeticSlotSelect'].forEach((sel) => {
+  $(sel)?.addEventListener('input', queueEditorRefresh);
+  $(sel)?.addEventListener('change', queueEditorRefresh);
+});
+
+// Görgő: a Z-tengely (előre/hátra). Húzással ezt nem lehetne egyértelműen
+// megadni, mert a képernyőn a mélység nem különböztethető meg a
+// vízszintes mozgástól.
+$('#cosmeticEditorPreview')?.addEventListener('wheel', (e) => {
+  if (!cosmeticEditorModel) return;
+  e.preventDefault();
+  const inZ = $('#cosmeticOffsetZInput');
+  inZ.value = round2(Number(inZ.value || 0) + (e.deltaY > 0 ? 0.5 : -0.5));
+  queueEditorRefresh();
+}, { passive: false });
+
+$('#cosmeticAutoFitBtn')?.addEventListener('click', () => {
+  if (!autoFitCosmetic()) {
+    showToast('Előbb válassz egy modellt.', true);
+    return;
+  }
+  queueEditorRefresh();
+});
+
+$('#cosmeticEditorResetBtn')?.addEventListener('click', () => {
+  $('#cosmeticOffsetXInput').value = '0';
+  $('#cosmeticOffsetYInput').value = '0';
+  $('#cosmeticOffsetZInput').value = '0';
+  $('#cosmeticScaleInput').value = '1';
+  queueEditorRefresh();
+});
 
 $('#cosmeticDiscardBtn')?.addEventListener('click', resetCosmeticForm);
 
@@ -6187,6 +6544,22 @@ document.addEventListener('click', async (e) => {
     }
     $('#cosmeticFormResult').textContent = '';
     $('#cosmeticSaveBtn').textContent = 'Frissítés';
+
+    // A MÁR FELTÖLTÖTT modellt/textúrát is betöltjük a szerkesztőbe, hogy egy
+    // meglévő kiegészítő illesztése is húzogatással hangolható legyen - nem
+    // csak létrehozáskor.
+    cosmeticEditorModel = null;
+    cosmeticEditorTexture = null;
+    queueEditorRefresh();
+    if (item.hasModel && item.hasTexture) {
+      Promise.all([fetchCosmeticModel(item.id), loadImage(cosmeticTextureUrl(item.id))])
+        .then(([model, img]) => {
+          cosmeticEditorModel = model;
+          cosmeticEditorTexture = img;
+          restartCosmeticEditor();
+        });
+    }
+
     window.scrollTo({ top: 0, behavior: 'smooth' });
     return;
   }
@@ -6251,6 +6624,7 @@ async function loadCosmeticsMarketAdmin() {
       </div>
     </div>
   `).join('') || '<p class="redeem-result">Nincs egyetlen piaci hirdetés sem.</p>';
+  hydrateCosmeticThumbs(wrap);
 }
 
 document.addEventListener('click', async (e) => {

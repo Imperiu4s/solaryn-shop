@@ -195,6 +195,160 @@ const SkinPreview = (() => {
     return { positions, uvs, indices };
   }
 
+  // ══════════════════════════════════════════════════════════════════════
+  // KOZMETIKAI KIEGÉSZÍTŐK (ld. SolarBackend src/cosmetics.js)
+  // ══════════════════════════════════════════════════════════════════════
+  // A kiegészítő - a testrészekkel ELLENTÉTBEN - nem a szabványos skin-doboz-
+  // kicsomagolást használja, hanem LAPONKÉNTI, tetszőleges UV-t (Blockbench-
+  // export), ezért nem az addBox()-szal épül, hanem saját úton.
+  //
+  // A TRANSZFORMÁCIÓ PONTOSAN ugyanaz, mint amit a SolarClient végez
+  // (ld. CosmeticRenderer.java) - ez nem véletlen, hanem a funkció LÉNYEGE:
+  // az admin ezen az előnézeten húzogatva állítja be azokat az eltolás-
+  // értékeket, amik in-game érvényesülnek. Ha a kettő eltérne, az eszköz
+  // használhatatlan lenne.
+  //
+  // A levezetés (a vanilla modell-tér és ez az előnézeti tér között):
+  //   preview = (model_x, 6 - model_y, -model_z)
+  // Ellenőrizve a fejjel (vanilla doboz y -8..0 -> előnézet 6..14, ahol a fej
+  // középpontja 10) és a törzzsel (vanilla y 0..12 -> előnézet 6..-6, közép 0).
+  //
+  // A csont-pivotok a vanilla BipedEntityModel-ből (ModelTransform.pivot):
+  const COSMETIC_PIVOTS = {
+    head:      [0, 0, 0],
+    body:      [0, 0, 0],
+    back:      [0, 0, 0],
+    tail:      [0, 0, 0],
+    left_arm:  [5, 2, 0],
+    right_arm: [-5, 2, 0]
+  };
+
+  // Egy pont elforgatása a megadott tengely körül, az ADOTT (szerzői) térben.
+  // Azért itt, a flip ELŐTT forgatunk az EREDETI szöggel, mert ez matematikailag
+  // azonos azzal, amit a kliens csinál (ott a flip miatt konjugált szöggel
+  // forgat: S·R·S), viszont sokkal egyszerűbb és kevésbé hibázható.
+  function rotatePoint(p, origin, axis, angleDeg) {
+    const rad = angleDeg * Math.PI / 180;
+    const c = Math.cos(rad), s = Math.sin(rad);
+    const x = p[0] - origin[0], y = p[1] - origin[1], z = p[2] - origin[2];
+    let rx, ry, rz;
+    if (axis === 'x') { rx = x; ry = y * c - z * s; rz = y * s + z * c; }
+    else if (axis === 'y') { rx = x * c + z * s; ry = y; rz = -x * s + z * c; }
+    else { rx = x * c - y * s; ry = x * s + y * c; rz = z; }
+    return [rx + origin[0], ry + origin[1], rz + origin[2]];
+  }
+
+  /**
+   * Geometria egy kiegészítő-modellből.
+   * @param model a backend /api/cosmetics/model/:slug válasza
+   * @param slot  melyik csonthoz kötődik (a pivotot ez adja)
+   * @param opts  { standalone: true } esetén a csont-pivot és az eltolás
+   *              KIMARAD, és a modell a saját közepére kerül - ez a kártyákon
+   *              látható, önálló "így néz ki a kiegészítő" előnézethez kell.
+   */
+  function buildCosmeticGeometry(model, slot, opts) {
+    const positions = [], uvs = [], indices = [];
+    const standalone = !!(opts && opts.standalone);
+
+    const texSize = Array.isArray(model.texture_size) && model.texture_size.length === 2
+      ? model.texture_size : [64, 64];
+    const texW = texSize[0] > 0 ? texSize[0] : 64;
+    const texH = texSize[1] > 0 ? texSize[1] : 64;
+
+    const t = model.transform || {};
+    const off = Array.isArray(t.offset) && t.offset.length === 3 ? t.offset : [0, 0, 0];
+    const mScale = typeof t.scale === 'number' && t.scale > 0 ? t.scale : 1;
+    const itemSpace = t.itemModelSpace !== false;
+    const pivot = COSMETIC_PIVOTS[slot] || [0, 0, 0];
+
+    const f = itemSpace ? -1 : 1;
+
+    // Szerzői térből az előnézeti térbe - ld. a fenti levezetést.
+    function toPreview(v) {
+      const sx = v[0] * mScale * f;
+      const sy = v[1] * mScale * f;
+      const sz = v[2] * mScale;
+      if (standalone) return [sx, -sy, -sz];
+      return [
+        pivot[0] - off[0] + sx,
+        6 - (pivot[1] - off[1] + sy),
+        -(pivot[2] + off[2] + sz)
+      ];
+    }
+
+    const FACE_DIRS = ['north', 'south', 'east', 'west', 'up', 'down'];
+
+    for (const el of (model.elements || [])) {
+      if (!Array.isArray(el.from) || !Array.isArray(el.to)) continue;
+      const inf = typeof el.inflate === 'number' ? el.inflate : 0;
+      const x1 = Math.min(el.from[0], el.to[0]) - inf, x2 = Math.max(el.from[0], el.to[0]) + inf;
+      const y1 = Math.min(el.from[1], el.to[1]) - inf, y2 = Math.max(el.from[1], el.to[1]) + inf;
+      const z1 = Math.min(el.from[2], el.to[2]) - inf, z2 = Math.max(el.from[2], el.to[2]) + inf;
+
+      // A 8 sarok a SZERZŐI térben, majd (ha kell) elforgatva.
+      function corner(x, y, z) {
+        let p = [x, y, z];
+        if (el.rotation && typeof el.rotation.angle === 'number' && el.rotation.angle !== 0
+            && Array.isArray(el.rotation.origin)) {
+          p = rotatePoint(p, el.rotation.origin, el.rotation.axis, el.rotation.angle);
+        }
+        return toPreview(p);
+      }
+
+      // A lapok sarkai a SZERZŐI tér irányai szerint (a "north" a -Z felé néz).
+      const quads = {
+        north: [corner(x2, y2, z1), corner(x1, y2, z1), corner(x1, y1, z1), corner(x2, y1, z1)],
+        south: [corner(x1, y2, z2), corner(x2, y2, z2), corner(x2, y1, z2), corner(x1, y1, z2)],
+        east:  [corner(x2, y2, z2), corner(x2, y2, z1), corner(x2, y1, z1), corner(x2, y1, z2)],
+        west:  [corner(x1, y2, z1), corner(x1, y2, z2), corner(x1, y1, z2), corner(x1, y1, z1)],
+        up:    [corner(x1, y2, z1), corner(x2, y2, z1), corner(x2, y2, z2), corner(x1, y2, z2)],
+        down:  [corner(x1, y1, z2), corner(x2, y1, z2), corner(x2, y1, z1), corner(x1, y1, z1)]
+      };
+
+      for (const dir of FACE_DIRS) {
+        const face = el.faces && el.faces[dir];
+        if (!face || !Array.isArray(face.uv) || face.uv.length !== 4) continue;
+        const [u1, v1, u2, v2] = face.uv;
+        const base = positions.length / 3;
+        const pts = quads[dir];
+        // A UV-sarkok sorrendje a fenti sarok-sorrendhez igazodik.
+        const uvC = [
+          [u1 / texW, v1 / texH],
+          [u2 / texW, v1 / texH],
+          [u2 / texW, v2 / texH],
+          [u1 / texW, v2 / texH]
+        ];
+        for (let i = 0; i < 4; i++) {
+          positions.push(pts[i][0], pts[i][1], pts[i][2]);
+          uvs.push(uvC[i][0], uvC[i][1]);
+        }
+        indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+      }
+    }
+
+    return { positions, uvs, indices };
+  }
+
+  // Egy önálló geometria befoglaló dobozának közepe + mérete - a kártyákon
+  // látható, önálló kiegészítő-előnézet ebből számolja ki, mekkorára kell
+  // nagyítani, hogy kitöltse a vásznat (egy pici gyűrű és egy hatalmas szárny
+  // különben ugyanakkora vásznon egyaránt használhatatlan lenne).
+  function geometryBounds(geometry) {
+    const p = geometry.positions;
+    if (!p.length) return { center: [0, 0, 0], size: 1 };
+    let minX = Infinity, minY = Infinity, minZ = Infinity;
+    let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+    for (let i = 0; i < p.length; i += 3) {
+      minX = Math.min(minX, p[i]); maxX = Math.max(maxX, p[i]);
+      minY = Math.min(minY, p[i + 1]); maxY = Math.max(maxY, p[i + 1]);
+      minZ = Math.min(minZ, p[i + 2]); maxZ = Math.max(maxZ, p[i + 2]);
+    }
+    return {
+      center: [(minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2],
+      size: Math.max(maxX - minX, maxY - minY, maxZ - minZ, 0.001)
+    };
+  }
+
   // ── Minimális 4x4 mátrix segédek (perspektíva + forgatás) ──
   function perspective(fovy, aspect, near, far) {
     const f = 1 / Math.tan(fovy / 2);
@@ -225,6 +379,9 @@ const SkinPreview = (() => {
   }
   function translate(x, y, z) {
     return new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, x, y, z, 1]);
+  }
+  function scaleMat(s) {
+    return new Float32Array([s, 0, 0, 0, 0, s, 0, 0, 0, 0, s, 0, 0, 0, 0, 1]);
   }
 
   // Egy geometria (positions/uvs/indices) feltöltése GL-pufferekbe + egy
@@ -258,7 +415,18 @@ const SkinPreview = (() => {
   // megadott kép (skin texture) alapján - ÚJ: opcionálisan egy KÜLÖN köpeny-
   // képpel is (capeImg), ami a testtel EGYÜTT, ugyanazzal a forgó mátrixszal
   // rajzolódik ki egy második draw call-lal. Visszaad egy leállító függvényt.
-  function start(canvas, img, slim, capeImg) {
+  /**
+   * @param cosmetics (nem kötelező) [{ model, slot, img }] - kozmetikai
+   *        kiegészítők, amiket a testtel EGYÜTT, ugyanazzal a forgó
+   *        mátrixszal rajzolunk ki, mindegyiket a SAJÁT textúrájával
+   *        (külön draw call-lal, ugyanaz a minta, mint a köpenynél).
+   * @param onCosmeticDrag (nem kötelező) az admin illesztő-szerkesztőhöz:
+   *        ha meg van adva, a vásznon való húzás NEM a kamerát forgatja,
+   *        hanem ezt hívja (dx, dy) képpont-eltéréssel - a hívó ebből
+   *        számol eltolás-értéket. A kamerát ilyenkor a jobb gomb/Shift
+   *        forgatja.
+   */
+  function start(canvas, img, slim, capeImg, cosmetics, onCosmeticDrag) {
     const gl = canvas.getContext('webgl', { alpha: true, antialias: false });
     if (!gl) return () => {};
 
@@ -285,6 +453,33 @@ const SkinPreview = (() => {
       cape = createDrawable(gl, capeGeometry, capeImg);
     }
 
+    // A kiegészítők - mindegyik SAJÁT geometriával és SAJÁT textúrával
+    // (ellentétben a testrészekkel, amik egyetlen skin-képet osztanak).
+    let cosmeticDrawables = [];
+
+    function buildCosmetics(list) {
+      // A régi puffereket/textúrákat KÖTELEZŐ felszabadítani: a szerkesztőben
+      // ez másodpercenként sokszor lefut (minden húzás-mozdulatnál), és
+      // enélkül percek alatt elfogyna a GPU-memória.
+      for (const d of cosmeticDrawables) {
+        gl.deleteBuffer(d.posBuf); gl.deleteBuffer(d.uvBuf); gl.deleteBuffer(d.idxBuf);
+        gl.deleteTexture(d.tex);
+      }
+      cosmeticDrawables = [];
+      for (const c of (list || [])) {
+        if (!c || !c.model || !c.img) continue;
+        try {
+          const g = buildCosmeticGeometry(c.model, c.slot);
+          if (g.indices.length) cosmeticDrawables.push(createDrawable(gl, g, c.img));
+        } catch (e) {
+          // Egy hibás modell ne akassza meg a teljes előnézetet - a többi
+          // (és maga a karakter) így is megjelenik.
+          console.warn('[SkinPreview] Kiegészítő-geometria hiba:', e);
+        }
+      }
+    }
+    buildCosmetics(cosmetics);
+
     function drawDrawable(d) {
       gl.bindBuffer(gl.ARRAY_BUFFER, d.posBuf);
       gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
@@ -301,23 +496,49 @@ const SkinPreview = (() => {
     gl.clearColor(0, 0, 0, 0);
 
     let angle = 0.6;
-    let dragging = false, lastX = 0, pitch = -0.15;
+    let dragging = false, lastX = 0, lastY = 0, pitch = -0.15;
+    // Ha van illesztő-visszahívás, a BAL gombos húzás a kiegészítőt mozgatja,
+    // és csak a jobb gomb / Shift forgatja a kamerát - különben a szerkesztés
+    // közben minden mozdulat elforgatná a nézetet, és lehetetlen lenne
+    // pontosan pozicionálni.
+    let mode = 'rotate';
 
-    function onDown(e) { dragging = true; lastX = e.clientX; }
+    function onDown(e) {
+      dragging = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      mode = (onCosmeticDrag && e.button === 0 && !e.shiftKey) ? 'move' : 'rotate';
+      if (mode === 'move') e.preventDefault();
+    }
     function onMove(e) {
       if (!dragging) return;
-      angle += (e.clientX - lastX) * 0.01;
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
       lastX = e.clientX;
+      lastY = e.clientY;
+      if (mode === 'move') {
+        // A kamera aktuális Y-forgása is átadódik, hogy a hívó a KÉPERNYŐN
+        // látott irányba tudja mozgatni a modellt akkor is, ha a karakter
+        // épp oldalra/hátra fordulva áll.
+        onCosmeticDrag(dx, dy, angle);
+      } else {
+        angle += dx * 0.01;
+      }
     }
     function onUp() { dragging = false; }
     canvas.addEventListener('mousedown', onDown);
+    canvas.addEventListener('contextmenu', (e) => { if (onCosmeticDrag) e.preventDefault(); });
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
 
     let stopped = false;
+    // Az illesztő-szerkesztőben a magától forgás zavaró lenne (a felhasználó
+    // épp pozicionál) - ott csak kézzel forog.
+    const autoSpin = !onCosmeticDrag;
+
     function frame() {
       if (stopped) return;
-      if (!dragging) angle += 0.006;
+      if (!dragging && autoSpin) angle += 0.006;
 
       const w = canvas.width, h = canvas.height;
       gl.viewport(0, 0, w, h);
@@ -330,11 +551,22 @@ const SkinPreview = (() => {
       gl.uniformMatrix4fv(uMVP, false, mvp);
       drawDrawable(body);
       if (cape) drawDrawable(cape);
+      for (const c of cosmeticDrawables) drawDrawable(c);
       requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
 
-    return () => {
+    // A visszatérési érték egy LEÁLLÍTÓ FÜGGVÉNY (visszafelé kompatibilis a
+    // korábbi hívókkal), amire rá van akasztva egy updateCosmetics() metódus.
+    //
+    // MIÉRT KELL EZ: az illesztő-szerkesztőben a húzás minden mozdulatánál
+    // változik a geometria. Ha ilyenkor az EGÉSZ előnézetet újraindítanánk,
+    // a start() közben eltávolított/újra felrakott egér-figyelők elvágnák a
+    // folyamatban lévő húzást (a "dragging" állapot az elhagyott példány
+    // closure-jében maradna) - ez élesben ki is derült: az első mozdulat után
+    // a modell nem követte tovább az egeret. Ezért csak a KIEGÉSZÍTŐK
+    // pufferei épülnek újra, a GL-kontextus és a figyelők érintetlenek.
+    const stop = () => {
       stopped = true;
       canvas.removeEventListener('mousedown', onDown);
       window.removeEventListener('mousemove', onMove);
@@ -349,7 +581,261 @@ const SkinPreview = (() => {
       // sosem ragadhat ott a régi skin képe.
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     };
+
+    stop.updateCosmetics = (list) => {
+      if (stopped) return;
+      buildCosmetics(list);
+    };
+
+    return stop;
   }
 
-  return { start };
+  /**
+   * ÖNÁLLÓ kiegészítő-előnézet - csak maga a modell, a karakter nélkül,
+   * automatikusan a vászonhoz méretezve és a saját közepe körül forogva.
+   * Ez a kiegészítő-kártyák "bélyegképe": a nyers textúra helyett a
+   * TÉNYLEGES 3D alak látszik, a saját textúrájával.
+   */
+  function startCosmetic(canvas, model, img) {
+    const gl = canvas.getContext('webgl', { alpha: true, antialias: false });
+    if (!gl) return () => {};
+
+    let geometry;
+    try {
+      geometry = buildCosmeticGeometry(model, 'head', { standalone: true });
+    } catch (e) {
+      return () => {};
+    }
+    if (!geometry.indices.length) return () => {};
+
+    const program = gl.createProgram();
+    gl.attachShader(program, compile(gl, gl.VERTEX_SHADER, VERT_SRC));
+    gl.attachShader(program, compile(gl, gl.FRAGMENT_SHADER, FRAG_SRC));
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return () => {};
+    gl.useProgram(program);
+
+    const aPos = gl.getAttribLocation(program, 'aPos');
+    const aUV = gl.getAttribLocation(program, 'aUV');
+    gl.enableVertexAttribArray(aPos);
+    gl.enableVertexAttribArray(aUV);
+
+    const drawable = createDrawable(gl, geometry, img);
+    const bounds = geometryBounds(geometry);
+    // 22 egység a "referencia" méret (nagyjából egy teljes karakter magassága
+    // ebben a térben) - ehhez arányosítjuk a modellt, hogy kicsi és nagy
+    // kiegészítő is kitöltse a vásznat.
+    const fit = 22 / bounds.size;
+
+    const uMVP = gl.getUniformLocation(program, 'uMVP');
+    gl.enable(gl.DEPTH_TEST);
+    gl.disable(gl.CULL_FACE);
+    gl.clearColor(0, 0, 0, 0);
+
+    let angle = 0.5;
+    let dragging = false, lastX = 0;
+    function onDown(e) { dragging = true; lastX = e.clientX; }
+    function onMove(e) { if (dragging) { angle += (e.clientX - lastX) * 0.01; lastX = e.clientX; } }
+    function onUp() { dragging = false; }
+    canvas.addEventListener('mousedown', onDown);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+
+    let stopped = false;
+    function frame() {
+      if (stopped) return;
+      if (!dragging) angle += 0.01;
+      const w = canvas.width, h = canvas.height;
+      gl.viewport(0, 0, w, h);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+      const proj = perspective(Math.PI / 5, w / h, 1, 200);
+      const view = translate(0, 0, -60);
+      // Középre igazítás -> méretezés -> forgatás (jobbról balra olvasva).
+      const centering = translate(-bounds.center[0], -bounds.center[1], -bounds.center[2]);
+      const modelMat = multiply(rotateY(angle), multiply(scaleMat(fit), centering));
+      gl.uniformMatrix4fv(uMVP, false, multiply(proj, multiply(view, modelMat)));
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, drawable.posBuf);
+      gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
+      gl.bindBuffer(gl.ARRAY_BUFFER, drawable.uvBuf);
+      gl.vertexAttribPointer(aUV, 2, gl.FLOAT, false, 0, 0);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, drawable.idxBuf);
+      gl.bindTexture(gl.TEXTURE_2D, drawable.tex);
+      gl.drawElements(gl.TRIANGLES, drawable.indexCount, gl.UNSIGNED_SHORT, 0);
+
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+
+    return () => {
+      stopped = true;
+      canvas.removeEventListener('mousedown', onDown);
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    };
+  }
+
+  // ── Bélyegkép-renderelő (kártyákhoz) ──────────────────────────────────
+  // MIÉRT EGY MEGOSZTOTT KONTEXTUS, ÉS NEM KÁRTYÁNKÉNT EGY ÉLŐ VÁSZON:
+  // a böngészők durván 16 egyidejű WebGL-kontextusnál elkezdik a legrégebbieket
+  // eldobni - egy 20 kiegészítőt tartalmazó katalógusnál a kártyák egy része
+  // egyszerűen üresen maradna, ráadásul 20 párhuzamos animációs hurok
+  // feleslegesen pörgetné a GPU-t. Ehelyett EGY, rejtett kontextusban
+  // rajzolunk ki minden modellt egyszer, és a kész képet tesszük ki
+  // <img>-ként - tetszőleges számú kártyánál működik, és nem fogyaszt semmit,
+  // miután elkészült.
+  let sharedGl = null, sharedCanvas = null, sharedProgram = null, sharedAttribs = null;
+
+  function ensureSharedContext(size) {
+    if (!sharedCanvas) {
+      sharedCanvas = document.createElement('canvas');
+    }
+    if (sharedCanvas.width !== size) {
+      sharedCanvas.width = size;
+      sharedCanvas.height = size;
+      sharedGl = null;
+    }
+    if (!sharedGl) {
+      sharedGl = sharedCanvas.getContext('webgl', { alpha: true, antialias: true, preserveDrawingBuffer: true });
+      if (!sharedGl) return null;
+      sharedProgram = sharedGl.createProgram();
+      sharedGl.attachShader(sharedProgram, compile(sharedGl, sharedGl.VERTEX_SHADER, VERT_SRC));
+      sharedGl.attachShader(sharedProgram, compile(sharedGl, sharedGl.FRAGMENT_SHADER, FRAG_SRC));
+      sharedGl.linkProgram(sharedProgram);
+      sharedGl.useProgram(sharedProgram);
+      sharedAttribs = {
+        pos: sharedGl.getAttribLocation(sharedProgram, 'aPos'),
+        uv: sharedGl.getAttribLocation(sharedProgram, 'aUV'),
+        mvp: sharedGl.getUniformLocation(sharedProgram, 'uMVP')
+      };
+      sharedGl.enableVertexAttribArray(sharedAttribs.pos);
+      sharedGl.enableVertexAttribArray(sharedAttribs.uv);
+      sharedGl.enable(sharedGl.DEPTH_TEST);
+      sharedGl.disable(sharedGl.CULL_FACE);
+      sharedGl.clearColor(0, 0, 0, 0);
+    }
+    return sharedGl;
+  }
+
+  /**
+   * Egy kiegészítő 3D bélyegképe PNG data URL-ként (vagy null, ha nem megy).
+   * Enyhén elforgatott, "termékfotó" nézet - így a lapos (sík) modellek is
+   * térbelinek látszanak, nem egyetlen vonalnak.
+   */
+  function renderCosmeticThumbnail(model, img, size) {
+    size = size || 160;
+    const gl = ensureSharedContext(size);
+    if (!gl) return null;
+
+    let geometry;
+    try {
+      geometry = buildCosmeticGeometry(model, 'head', { standalone: true });
+    } catch (e) {
+      return null;
+    }
+    if (!geometry.indices.length) return null;
+
+    const d = createDrawable(gl, geometry, img);
+    const bounds = geometryBounds(geometry);
+    const fit = 22 / bounds.size;
+
+    gl.viewport(0, 0, size, size);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    const proj = perspective(Math.PI / 5, 1, 1, 200);
+    const view = multiply(translate(0, 0, -60), rotateX(-0.18));
+    const centering = translate(-bounds.center[0], -bounds.center[1], -bounds.center[2]);
+    const modelMat = multiply(rotateY(0.55), multiply(scaleMat(fit), centering));
+    gl.uniformMatrix4fv(sharedAttribs.mvp, false, multiply(proj, multiply(view, modelMat)));
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, d.posBuf);
+    gl.vertexAttribPointer(sharedAttribs.pos, 3, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, d.uvBuf);
+    gl.vertexAttribPointer(sharedAttribs.uv, 2, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, d.idxBuf);
+    gl.bindTexture(gl.TEXTURE_2D, d.tex);
+    gl.drawElements(gl.TRIANGLES, d.indexCount, gl.UNSIGNED_SHORT, 0);
+
+    const url = sharedCanvas.toDataURL('image/png');
+
+    // A GL-erőforrások azonnali felszabadítása - egy nagy katalógusnál
+    // különben minden bélyegkép után ott maradna 3 puffer és egy textúra.
+    gl.deleteBuffer(d.posBuf); gl.deleteBuffer(d.uvBuf); gl.deleteBuffer(d.idxBuf);
+    gl.deleteTexture(d.tex);
+
+    return url;
+  }
+
+  // ── Alapértelmezett ("Steve") skin ────────────────────────────────────
+  // Rajzolva, nem beágyazott base64: egy 64x64-es skin-kép kézzel kitöltve
+  // sokkal kisebb, mint a képfájl, és a CSP-vel sincs dolga. Nem pixelre
+  // pontos Mojang-Steve, de a célnak (referencia-karakter, amin a kiegészítő
+  // elhelyezését meg lehet ítélni) pontosan megfelel.
+  let steveImagePromise = null;
+  function getSteveImage() {
+    if (steveImagePromise) return steveImagePromise;
+    steveImagePromise = new Promise((resolve) => {
+      const c = document.createElement('canvas');
+      c.width = 64; c.height = 64;
+      const g = c.getContext('2d');
+      g.clearRect(0, 0, 64, 64);
+
+      const SKIN = '#b0805a', SKIN_D = '#a0714e', HAIR = '#3f2a19', HAIR_D = '#33200f';
+      const EYE_W = '#ffffff', EYE_B = '#3b5dc9', MOUTH = '#7b4f36';
+      const SHIRT = '#3aa0a8', SHIRT_D = '#2c8189', PANTS = '#3b3f8f', SHOE = '#4a3a2a';
+
+      function r(x, y, w, h, col) { g.fillStyle = col; g.fillRect(x, y, w, h); }
+
+      // Fej (8,8) arc, körülötte a többi lap
+      r(0, 8, 32, 8, SKIN_D);          // fej oldalai/hátulja alapszín
+      r(8, 8, 8, 8, SKIN);             // arc
+      r(0, 0, 32, 8, HAIR_D);          // fejtető sáv
+      r(8, 0, 8, 8, HAIR);             // tető
+      r(8, 8, 8, 3, HAIR);             // haj-frufru az arcon
+      r(0, 8, 8, 3, HAIR_D); r(16, 8, 8, 3, HAIR_D); r(24, 8, 8, 3, HAIR_D);
+      r(9, 12, 2, 2, EYE_W); r(10, 12, 1, 2, EYE_B);
+      r(13, 12, 2, 2, EYE_W); r(13, 12, 1, 2, EYE_B);
+      r(11, 15, 2, 1, MOUTH);
+
+      // Törzs
+      r(16, 20, 24, 12, SHIRT_D);
+      r(20, 20, 8, 12, SHIRT);         // mellkas
+      r(20, 16, 8, 4, SHIRT_D);        // váll (felső lap)
+
+      // Jobb kar
+      r(40, 20, 16, 12, SKIN_D);
+      r(44, 20, 4, 12, SKIN);
+      r(44, 16, 4, 4, SHIRT_D);
+      r(40, 20, 16, 4, SHIRT_D);       // rövid ujj
+
+      // Bal kar
+      r(32, 52, 16, 12, SKIN_D);
+      r(36, 52, 4, 12, SKIN);
+      r(36, 48, 4, 4, SHIRT_D);
+      r(32, 52, 16, 4, SHIRT_D);
+
+      // Jobb láb
+      r(0, 20, 16, 12, PANTS);
+      r(0, 28, 16, 4, SHOE);
+      // Bal láb
+      r(16, 52, 16, 12, PANTS);
+      r(16, 60, 16, 4, SHOE);
+
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.src = c.toDataURL('image/png');
+    });
+    return steveImagePromise;
+  }
+
+  return {
+    start,
+    startCosmetic,
+    buildCosmeticGeometry,
+    renderCosmeticThumbnail,
+    getSteveImage,
+    COSMETIC_PIVOTS
+  };
 })();
