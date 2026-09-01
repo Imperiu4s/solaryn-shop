@@ -1635,3 +1635,11 @@ a { color: inherit; }
 .cosmetic-editor-empty[hidden] { display: none; }
 .cosmetic-editor-controls { flex: 1 1 240px; min-width: 240px; }
 .cosmetic-editor-controls .btn-outline { width: 100%; margin-top: 12px; }
+
+/* Verzió-jelző az oldalsáv alján - szándékosan halvány és apró: a mindennapi
+   használatban ne vonja el a figyelmet, de egy 'nálam nem frissült' kérdésnél
+   azonnal megmondja, melyik app.js fut valójában. */
+.app-nav-version {
+  padding: 8px 16px 2px; font-size: 10.5px; letter-spacing: .06em;
+  color: var(--text-faint); font-variant-numeric: tabular-nums;
+}

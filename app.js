@@ -8,6 +8,12 @@
 // ezt kell itt is használni. A domain neve ("api.overclockgame.hu") egy másik
 // projekthez lett eredetileg bejegyezve, de mivel ugyanaz a HTTPS-szerver
 // szolgálja ki most már a TELJES Solaryn-backendet is, működik erre is.
+// A kiadás azonosítója. Az oldalsáv alján jelenik meg - ha ott régi
+// számot látsz, a böngésző MÉG A RÉGI app.js-t futtatja (a webtárhely
+// cache-e miatt egy feltöltés nem feltétlenül ér ki azonnal). MINDEN
+// kiadásnál emelni kell, az index.html ?v= paramétereivel EGYÜTT.
+const CENTER_VERSION = '20260901c';
+
 const BACKEND_URL = 'https://api.overclockgame.hu:8908';
 
 const $ = (sel) => document.querySelector(sel);
@@ -6789,5 +6795,8 @@ document.addEventListener('keydown', (e) => {
     (e.ctrlKey && ['U', 'u'].includes(key));
   if (blocked) e.preventDefault();
 });
+
+const versionEl = document.querySelector('#centerVersion');
+if (versionEl) versionEl.textContent = 'v' + CENTER_VERSION;
 
 tryAutoLogin();
