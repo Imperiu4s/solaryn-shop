@@ -250,15 +250,27 @@ const SkinPreview = (() => {
     const positions = [], uvs = [], indices = [];
     const standalone = !!(opts && opts.standalone);
 
-    const texSize = Array.isArray(model.texture_size) && model.texture_size.length === 2
-      ? model.texture_size : [64, 64];
-    const texW = texSize[0] > 0 ? texSize[0] : 64;
-    const texH = texSize[1] > 0 ? texSize[1] : 64;
-
     const t = model.transform || {};
     const off = Array.isArray(t.offset) && t.offset.length === 3 ? t.offset : [0, 0, 0];
     const mScale = typeof t.scale === 'number' && t.scale > 0 ? t.scale : 1;
     const itemSpace = t.itemModelSpace !== false;
+
+    // AZ UV-TÉR MÉRETE - ld. a kliens CosmeticModel.parse() azonos, részletes
+    // megjegyzését. Röviden: a vanilla blokk-/item-modellekben a lap-UV-k
+    // MINDIG 0..16 térben vannak, a textúra felbontásától függetlenül; a
+    // "texture_size" csak entitás-modelleknél jelent tényleges UV-teret.
+    // A vásárolt csomagokban ez a mező elavultan marad benne, és ha elhisszük,
+    // a textúrának csak egy töredékét mintázzuk (mérve: a Volt Wingsnél 49%,
+    // a Butterfly Wingsnél 19%) - ettől tűnt "hiányosnak" a textúra.
+    let texW, texH;
+    if (itemSpace) {
+      texW = 16; texH = 16;
+    } else {
+      const texSize = Array.isArray(model.texture_size) && model.texture_size.length === 2
+        ? model.texture_size : [64, 64];
+      texW = texSize[0] > 0 ? texSize[0] : 64;
+      texH = texSize[1] > 0 ? texSize[1] : 64;
+    }
     const pivot = COSMETIC_PIVOTS[slot] || [0, 0, 0];
 
     const f = itemSpace ? -1 : 1;
@@ -505,20 +517,20 @@ const SkinPreview = (() => {
 
     let angle = 0.6;
     let dragging = false, lastX = 0, lastY = 0, pitch = -0.15;
-    // A kamera távolsága - a szerkesztőben görgővel állítható (nagyítás),
-    // hogy egy apró gyűrűt és egy hatalmas szárnyat is meg lehessen nézni.
     let camDistance = 46;
-    // Ha van illesztő-visszahívás, a BAL gombos húzás a kiegészítőt mozgatja,
-    // és csak a jobb gomb / Shift forgatja a kamerát - különben a szerkesztés
-    // közben minden mozdulat elforgatná a nézetet, és lehetetlen lenne
-    // pontosan pozicionálni.
+
+    // Az ILLESZTŐ-SZERKESZTŐ módban (onCosmeticDrag megadva) a vezérlés
+    // Blockbench-szerű: a BAL gombos húzás FORGAT, mert egy 3D nézetben
+    // mindenki ezt várja. A kiegészítő mozgatása a Shift (vagy a jobb gomb)
+    // alatt van - szándékosan a ritkábban használt gesztuson, hiszen
+    // forgatni sokkal többször kell, mint pozicionálni.
     let mode = 'rotate';
 
     function onDown(e) {
       dragging = true;
       lastX = e.clientX;
       lastY = e.clientY;
-      mode = (onCosmeticDrag && e.button === 0 && !e.shiftKey) ? 'move' : 'rotate';
+      mode = (onCosmeticDrag && (e.shiftKey || e.button === 2)) ? 'move' : 'rotate';
       if (mode === 'move') e.preventDefault();
     }
     function onMove(e) {
@@ -528,32 +540,36 @@ const SkinPreview = (() => {
       lastX = e.clientX;
       lastY = e.clientY;
       if (mode === 'move') {
-        // A kamera aktuális Y-forgása is átadódik, hogy a hívó a KÉPERNYŐN
-        // látott irányba tudja mozgatni a modellt akkor is, ha a karakter
-        // épp oldalra/hátra fordulva áll.
+        // A kamera aktuális Y-forgása és távolsága is átadódik, hogy a hívó a
+        // KÉPERNYŐN látott irányba, a nagyításhoz igazított léptékkel tudja
+        // mozgatni a modellt.
         onCosmeticDrag(dx, dy, angle, camDistance);
       } else {
         angle += dx * 0.01;
-        // Blockbench-szerű pálya-forgatás: a függőleges húzás is forgat
-        // (fentről/lentről is meg lehessen nézni a modellt), a szélső
-        // értékeknél megállítva, hogy ne fordulhasson át fejre.
+        // Pálya-forgatás függőlegesen is (fentről/lentről is meg lehessen
+        // nézni), a pólusoknál megállítva, hogy ne fordulhasson át fejre.
         pitch = Math.max(-1.3, Math.min(1.3, pitch + dy * 0.01));
       }
     }
     function onUp() { dragging = false; }
 
-    // Görgő = nagyítás. A szerkesztőben a hívó felülírhatja (ott a görgő a
-    // Z-eltolást állítja), ezért csak akkor kötjük be, ha nincs saját kezelő.
+    // Görgő = nagyítás. SZÁNDÉKOSAN CSAK a szerkesztőben: a főoldal és a
+    // játékos-kereső skin-előnézetén a görgőnek az OLDALT kell görgetnie,
+    // ott egy nagyítás csak zavaró, nem kért viselkedés lenne.
     function onWheel(e) {
       e.preventDefault();
       const factor = e.deltaY > 0 ? 1.12 : 1 / 1.12;
       camDistance = Math.max(12, Math.min(160, camDistance * factor));
     }
     canvas.addEventListener('mousedown', onDown);
-    canvas.addEventListener('contextmenu', (e) => { if (onCosmeticDrag) e.preventDefault(); });
-    canvas.addEventListener('wheel', onWheel, { passive: false });
+    if (onCosmeticDrag) {
+      canvas.addEventListener('contextmenu', preventCtx);
+      canvas.addEventListener('wheel', onWheel, { passive: false });
+    }
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
+
+    function preventCtx(e) { e.preventDefault(); }
 
     let stopped = false;
     // Az illesztő-szerkesztőben a magától forgás zavaró lenne (a felhasználó
@@ -593,7 +609,10 @@ const SkinPreview = (() => {
     const stop = () => {
       stopped = true;
       canvas.removeEventListener('mousedown', onDown);
-      canvas.removeEventListener('wheel', onWheel);
+      if (onCosmeticDrag) {
+        canvas.removeEventListener('wheel', onWheel);
+        canvas.removeEventListener('contextmenu', preventCtx);
+      }
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
       // JAVÍTVA: a frame() leállítása (stopped=true) MEGÁLLÍTJA az újrarajzolást,
