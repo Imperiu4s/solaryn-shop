@@ -312,12 +312,20 @@ const SkinPreview = (() => {
         const base = positions.length / 3;
         const pts = quads[dir];
         // A UV-sarkok sorrendje a fenti sarok-sorrendhez igazodik.
-        const uvC = [
-          [u1 / texW, v1 / texH],
-          [u2 / texW, v1 / texH],
-          [u2 / texW, v2 / texH],
-          [u1 / texW, v2 / texH]
-        ];
+        // A LAP-FORGATÁS (Blockbench "rotation" a face-en, 90/180/270) itt
+        // ugyanúgy alkalmazódik, mint a kliensben (ld. CosmeticModel.Face):
+        // a vanilla ELLENTÉTES körüljárással indexel és ott a forgatás
+        // hozzáadódik, ezért a mi körüljárásunkban kivonni kell. Enélkül a
+        // vásárolt csomagok lapjainak jó része (a Volt Wingsnél 39%-a)
+        // elfordult mintával jelenne meg.
+        const baseU = [u1, u2, u2, u1];
+        const baseV = [v1, v1, v2, v2];
+        const steps = ((((face.rotation | 0) / 90) % 4) + 4) % 4;
+        const uvC = [];
+        for (let i = 0; i < 4; i++) {
+          const src = ((i - steps) % 4 + 4) % 4;
+          uvC.push([baseU[src] / texW, baseV[src] / texH]);
+        }
         for (let i = 0; i < 4; i++) {
           positions.push(pts[i][0], pts[i][1], pts[i][2]);
           uvs.push(uvC[i][0], uvC[i][1]);
@@ -497,6 +505,9 @@ const SkinPreview = (() => {
 
     let angle = 0.6;
     let dragging = false, lastX = 0, lastY = 0, pitch = -0.15;
+    // A kamera távolsága - a szerkesztőben görgővel állítható (nagyítás),
+    // hogy egy apró gyűrűt és egy hatalmas szárnyat is meg lehessen nézni.
+    let camDistance = 46;
     // Ha van illesztő-visszahívás, a BAL gombos húzás a kiegészítőt mozgatja,
     // és csak a jobb gomb / Shift forgatja a kamerát - különben a szerkesztés
     // közben minden mozdulat elforgatná a nézetet, és lehetetlen lenne
@@ -520,14 +531,27 @@ const SkinPreview = (() => {
         // A kamera aktuális Y-forgása is átadódik, hogy a hívó a KÉPERNYŐN
         // látott irányba tudja mozgatni a modellt akkor is, ha a karakter
         // épp oldalra/hátra fordulva áll.
-        onCosmeticDrag(dx, dy, angle);
+        onCosmeticDrag(dx, dy, angle, camDistance);
       } else {
         angle += dx * 0.01;
+        // Blockbench-szerű pálya-forgatás: a függőleges húzás is forgat
+        // (fentről/lentről is meg lehessen nézni a modellt), a szélső
+        // értékeknél megállítva, hogy ne fordulhasson át fejre.
+        pitch = Math.max(-1.3, Math.min(1.3, pitch + dy * 0.01));
       }
     }
     function onUp() { dragging = false; }
+
+    // Görgő = nagyítás. A szerkesztőben a hívó felülírhatja (ott a görgő a
+    // Z-eltolást állítja), ezért csak akkor kötjük be, ha nincs saját kezelő.
+    function onWheel(e) {
+      e.preventDefault();
+      const factor = e.deltaY > 0 ? 1.12 : 1 / 1.12;
+      camDistance = Math.max(12, Math.min(160, camDistance * factor));
+    }
     canvas.addEventListener('mousedown', onDown);
     canvas.addEventListener('contextmenu', (e) => { if (onCosmeticDrag) e.preventDefault(); });
+    canvas.addEventListener('wheel', onWheel, { passive: false });
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
 
@@ -544,8 +568,8 @@ const SkinPreview = (() => {
       gl.viewport(0, 0, w, h);
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-      const proj = perspective(Math.PI / 5, w / h, 1, 100);
-      const view = multiply(translate(0, -2, -46), rotateX(pitch));
+      const proj = perspective(Math.PI / 5, w / h, 1, 400);
+      const view = multiply(translate(0, -2, -camDistance), rotateX(pitch));
       const model = rotateY(angle);
       const mvp = multiply(proj, multiply(view, model));
       gl.uniformMatrix4fv(uMVP, false, mvp);
@@ -569,6 +593,7 @@ const SkinPreview = (() => {
     const stop = () => {
       stopped = true;
       canvas.removeEventListener('mousedown', onDown);
+      canvas.removeEventListener('wheel', onWheel);
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
       // JAVÍTVA: a frame() leállítása (stopped=true) MEGÁLLÍTJA az újrarajzolást,

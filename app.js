@@ -595,7 +595,7 @@ async function tryAutoLogin() {
 // Szint NE szerepeljen a főoldalon (ahogy a Guild sem, ld. az eredeti kérést:
 // "szint, guild, zseton nem kell") - ez a lista most már tényleg csak azt a
 // hármat tartalmazza, amit kért: Rang, PrémiumPont, Online töltött idő. A
-// SolarBungee (playtime) és SolarLobby (SC/rang) szerver-oldali pluginok
+// SolarBungee (playtime) és SolarLobby (PP/rang) szerver-oldali pluginok
 // töltik fel ezeket a /api/game/report végponton keresztül - innentől valódi
 // adatok, nem helykitöltő 0/"-" érték.
 // JAVÍTVA: a PrémiumPont-jelvény mostantól a felhasználó saját PP-érme
@@ -641,9 +641,9 @@ function renderStatBadges(container, values, opts) {
 
 // Amíg egy adott statisztikát még sosem jelentett be plugin (pl. a játékos
 // sosem lépett még a szerverre), a megfelelő mező null/hiányzik a backendtől -
-// ilyenkor esik vissza helykitöltőre ("—"/"0"/"0 óra").
+// ilyenkor esik vissza helykitöltőre ("-"/"0"/"0 óra").
 function emptyStats() {
-  return { rank: '—', coin: '0', wallet: '0 Ft', time: '0 óra' };
+  return { rank: '-', coin: '0', wallet: '0 Ft', time: '0 óra' };
 }
 
 function formatPlaytime(seconds) {
@@ -667,7 +667,7 @@ function formatStats(data) {
   // isOwner-döntés (enterApp) EZZEL SZEMBEN továbbra is mindig a nyers
   // "data.rank"-ot nézi, sosem ezt a formázott változatot.
   return {
-    rank: data.rank ? capitalizeFirst(data.rank) : '—',
+    rank: data.rank ? capitalizeFirst(data.rank) : '-',
     coin: typeof data.scBalance === 'number' ? data.scBalance.toLocaleString('hu-HU') : '0',
     // ÚJ: valós pénzes egyenleg (ld. GET /api/profile/:username
     // "walletBalanceHuf" mezője) - jelenleg csak a más játékos profilját
@@ -797,9 +797,9 @@ function renderSanctionStatus(container, data) {
 }
 
 function formatSanctionUntil(iso) {
-  if (!iso) return '—';
+  if (!iso) return '-';
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
+  if (Number.isNaN(d.getTime())) return '-';
   return d.toLocaleString('hu-HU');
 }
 
@@ -807,9 +807,9 @@ function formatSanctionUntil(iso) {
 // zárójelben a pontos dátummal - egy puszta dátum-időbélyeg kevésbé
 // szemléletes annál, mint amennyi idő ténylegesen hátravan.
 function formatRemaining(untilIso) {
-  if (!untilIso) return '—';
+  if (!untilIso) return '-';
   const untilMs = new Date(untilIso).getTime();
-  if (Number.isNaN(untilMs)) return '—';
+  if (Number.isNaN(untilMs)) return '-';
   const diffMs = untilMs - Date.now();
   const exact = formatSanctionUntil(untilIso);
   if (diffMs <= 0) return `lejárt (${exact})`;
@@ -3836,7 +3836,7 @@ function buildRevenueCalendarHtml(months) {
       return `
         <div class="revenue-month-card ${stateClass}" data-revenue-month="${monthKey}">
           <div class="revenue-month-name">${name}</div>
-          <div class="revenue-month-amount">${hasData ? formatHuf(entry.totalHuf) : (isFuture ? '—' : '0 Ft')}</div>
+          <div class="revenue-month-amount">${hasData ? formatHuf(entry.totalHuf) : (isFuture ? '-' : '0 Ft')}</div>
           <div class="revenue-month-count">${hasData ? entry.purchaseCount + ' vásárlás' : (isFuture ? '' : 'Nincs adat')}</div>
         </div>
       `;
@@ -4559,7 +4559,7 @@ function resetCouponForm() {
 function populateCouponRequiredRankSelect(selectedId) {
   const sel = $('#couponRequiredRankSelect');
   const rankOptions = shopRanks.map((r) => `<option value="${r.id}">${escapeHtml(r.label)}</option>`).join('');
-  sel.innerHTML = `<option value="">— Bárki beválthatja —</option>${rankOptions}`;
+  sel.innerHTML = `<option value="">- Bárki beválthatja -</option>${rankOptions}`;
   sel.value = selectedId || '';
 }
 
@@ -5773,7 +5773,7 @@ async function loadCosmeticShop() {
       </div>
       ${c.description ? `<div class="cosmetic-card-desc">${escapeHtml(c.description)}</div>` : ''}
       <div class="cosmetic-card-meta">${c.defaultDurationDays ? `<span class="cosmetic-meta-temp">${c.defaultDurationDays} napig</span>` : '<span class="cosmetic-meta-perm">Örökre</span>'}</div>
-      <div class="cosmetic-card-price">${c.priceSc.toLocaleString('hu-HU')} SC</div>
+      <div class="cosmetic-card-price">${c.priceSc.toLocaleString('hu-HU')} PP</div>
       <button type="button" class="btn-glow cosmetic-action" data-cosmetic-buy="${c.id}">Megvásárlás</button>
     </div>
   `).join('')}</div>`;
@@ -5832,12 +5832,12 @@ document.addEventListener('click', async (e) => {
   if (buyBtn) {
     const item = cosmeticShopItems.find((c) => String(c.id) === buyBtn.dataset.cosmeticBuy);
     if (!item) return;
-    // A tényleges SC-levonás a Minecraft-szerveren történik (ld. SolarBackend
+    // A tényleges PP-levonás a Minecraft-szerveren történik (ld. SolarBackend
     // src/cosmetics.js fejlécét) - ezt a késleltetést a megerősítő szövegben
     // is kimondjuk, hogy ne tűnjön hibának, ha nem jelenik meg azonnal.
     const confirmed = await confirmModal(
       'Kiegészítő megvásárlása',
-      `Megveszed a(z) "${item.name}" kiegészítőt ${item.priceSc.toLocaleString('hu-HU')} SolarynCoinért? A levonás a következő szerverre lépésedkor történik meg, utána jelenik meg a kiegészítőid között.`,
+      `Megveszed a(z) "${item.name}" kiegészítőt ${item.priceSc.toLocaleString('hu-HU')} PrémiumPontért? A levonás a következő szerverre lépésedkor történik meg, utána jelenik meg a kiegészítőid között.`,
       'Igen, megveszem'
     );
     if (!confirmed) return;
@@ -5898,9 +5898,9 @@ function updateMarketPayoutPreview() {
   if (!Number.isInteger(price) || price < 1) { el.innerHTML = ''; return; }
   const payout = Math.floor(price * (100 - marketTaxPercent) / 100);
   el.innerHTML = `
-    <div class="market-payout-row"><span>A vevő fizet</span><strong>${price.toLocaleString('hu-HU')} SC</strong></div>
-    <div class="market-payout-row market-payout-tax"><span>Adó (${marketTaxPercent}%)</span><strong>-${(price - payout).toLocaleString('hu-HU')} SC</strong></div>
-    <div class="market-payout-row market-payout-total"><span>Te kapsz</span><strong>${payout.toLocaleString('hu-HU')} SC</strong></div>
+    <div class="market-payout-row"><span>A vevő fizet</span><strong>${price.toLocaleString('hu-HU')} PP</strong></div>
+    <div class="market-payout-row market-payout-tax"><span>Adó (${marketTaxPercent}%)</span><strong>-${(price - payout).toLocaleString('hu-HU')} PP</strong></div>
+    <div class="market-payout-row market-payout-total"><span>Te kapsz</span><strong>${payout.toLocaleString('hu-HU')} PP</strong></div>
   `;
 }
 $('#marketListPriceInput')?.addEventListener('input', updateMarketPayoutPreview);
@@ -5944,7 +5944,7 @@ async function loadMarketListings() {
       </div>
       <div class="cosmetic-card-seller">Eladó: ${escapeHtml(l.seller)}</div>
       <div class="cosmetic-card-meta">${cosmeticExpiryHtml(l.expiresAt)}</div>
-      <div class="cosmetic-card-price">${l.priceSc.toLocaleString('hu-HU')} SC</div>
+      <div class="cosmetic-card-price">${l.priceSc.toLocaleString('hu-HU')} PP</div>
       ${alreadyOwned
         ? '<button type="button" class="btn-outline cosmetic-action" disabled>Már megvan</button>'
         : `<button type="button" class="btn-glow cosmetic-action" data-market-buy="${l.id}">Megvásárlás</button>`}
@@ -5975,7 +5975,7 @@ async function loadMyMarketListings() {
       <div class="badges-admin-item-info">
         <div class="badges-admin-item-name">${escapeHtml(l.cosmetic?.name || '-')}</div>
         <div class="badges-admin-item-meta">
-          ${l.priceSc.toLocaleString('hu-HU')} SC · neked ${l.payoutSc.toLocaleString('hu-HU')} SC
+          ${l.priceSc.toLocaleString('hu-HU')} PP · neked ${l.payoutSc.toLocaleString('hu-HU')} PP
           ${l.status === 'reserved' ? ' · <span class="market-status-reserved">vásárlás folyamatban</span>' : ''}
         </div>
       </div>
@@ -5999,7 +5999,7 @@ $('#marketListBtn')?.addEventListener('click', async () => {
     return;
   }
   if (!Number.isInteger(priceSc) || priceSc < 1) {
-    resultEl.textContent = 'Adj meg egy érvényes árat (legalább 1 SC).';
+    resultEl.textContent = 'Adj meg egy érvényes árat (legalább 1 PP).';
     resultEl.className = 'redeem-result error';
     return;
   }
@@ -6007,7 +6007,7 @@ $('#marketListBtn')?.addEventListener('click', async () => {
   // kint van, nem viselhető) - ezt előre kimondjuk, hogy ne érje meglepetés.
   const confirmed = await confirmModal(
     'Hirdetés feladása',
-    `Felteszed a piacra ${priceSc.toLocaleString('hu-HU')} SC-ért? Amíg kint van a hirdetés, nem tudod viselni a kiegészítőt. Eladáskor ${marketTaxPercent}% adó vonódik le, tehát ${Math.floor(priceSc * (100 - marketTaxPercent) / 100).toLocaleString('hu-HU')} SC lesz a tiéd.`,
+    `Felteszed a piacra ${priceSc.toLocaleString('hu-HU')} PP-ért? Amíg kint van a hirdetés, nem tudod viselni a kiegészítőt. Eladáskor ${marketTaxPercent}% adó vonódik le, tehát ${Math.floor(priceSc * (100 - marketTaxPercent) / 100).toLocaleString('hu-HU')} PP lesz a tiéd.`,
     'Igen, feladom'
   );
   if (!confirmed) return;
@@ -6038,7 +6038,7 @@ document.addEventListener('click', async (e) => {
   if (buyBtn) {
     const confirmed = await confirmModal(
       'Vásárlás a piacról',
-      'Megveszed ezt a kiegészítőt? Az SC levonása a következő szerverre lépésedkor történik meg - utána kerül át hozzád a kiegészítő. Ha nincs elég SolarynCoinod, a vásárlás visszavonódik.',
+      'Megveszed ezt a kiegészítőt? A PrémiumPont levonása a következő szerverre lépésedkor történik meg - utána kerül át hozzád a kiegészítő. Ha nincs elég PrémiumPontod, a vásárlás visszavonódik.',
       'Igen, megveszem'
     );
     if (!confirmed) return;
@@ -6211,7 +6211,7 @@ function renderCosmeticsAdminList() {
         </div>
         <div class="badges-admin-item-meta">
           ${escapeHtml(c.slug)} · ${escapeHtml(c.slotLabel)} · ${escapeHtml(RARITY_LABELS[c.rarity] || c.rarity)}
-          · ${c.priceSc !== null && c.priceSc !== undefined ? c.priceSc.toLocaleString('hu-HU') + ' SC' : 'nem vásárolható'}
+          · ${c.priceSc !== null && c.priceSc !== undefined ? c.priceSc.toLocaleString('hu-HU') + ' PP' : 'nem vásárolható'}
           · ${c.defaultDurationDays ? c.defaultDurationDays + ' nap' : 'örök'}
           · ${c.tradable ? 'piacozható' : 'nem piacozható'}
           · ${c.ownerCount} tulajdonos${c.listingCount ? `, ${c.listingCount} hirdetés` : ''}
@@ -6249,11 +6249,13 @@ function currentEditorTransform() {
   };
 }
 
-// A vászon 46 egység távolságból, PI/5 látószöggel néz a modellre - ennyi
-// világ-egység esik egy képpontra. Enélkül a húzás sebessége a vászon
-// méretétől függne, és nagy/kicsi panelen máshogy viselkedne.
-function editorUnitsPerPixel(canvas) {
-  const visibleHeight = 2 * 46 * Math.tan(Math.PI / 10);
+// Ennyi világ-egység esik egy képpontra a megadott kamera-távolságnál
+// (PI/5 látószög). Enélkül a húzás sebessége a vászon méretétől ÉS a
+// nagyítástól függetlenül fix lenne, ami ránagyítva használhatatlanul
+// durva lépéseket adna.
+function editorUnitsPerPixel(canvas, camDistance) {
+  const dist = typeof camDistance === 'number' && camDistance > 0 ? camDistance : 46;
+  const visibleHeight = 2 * dist * Math.tan(Math.PI / 10);
   return visibleHeight / (canvas.height || 320);
 }
 
@@ -6336,17 +6338,25 @@ async function doRestartCosmeticEditor() {
   if (empty) empty.hidden = true;
   canvas.style.visibility = '';
 
-  const skinImg = await SkinPreview.getSteveImage();
+  // A SAJÁT skined jelenik meg a szerkesztőben, nem egy általános alak - így
+  // rögtön a valódi karaktereden látod az illesztést. Ha nincs feltöltött
+  // skined, a generált alapkarakter a tartalék.
+  const skinImg = await loadSkinImage(session.username) || await SkinPreview.getSteveImage();
   if (!skinImg) return;
 
   const slot = $('#cosmeticSlotSelect').value || 'head';
   const model = { ...cosmeticEditorModel, transform: currentEditorTransform() };
-  const upp = editorUnitsPerPixel(canvas);
 
   stopCosmeticEditor = SkinPreview.start(
-    canvas, skinImg, false, null,
+    canvas, skinImg, myCosmeticsSkinSlim(), null,
     [{ model, slot, img: cosmeticEditorTexture }],
-    (dx, dy, angle) => {
+    (dx, dy, angle, camDistance) => {
+      // A húzás sebességét a KAMERA AKTUÁLIS TÁVOLSÁGÁHOZ igazítjuk -
+      // nagyításkor finomabb, kizoomolva durvább lépés. Enélkül a
+      // ránagyított nézetben egyetlen pixelnyi mozdulat is átdobná a
+      // modellt a karakter másik oldalára.
+      const upp = editorUnitsPerPixel(canvas, camDistance);
+
       // A képernyőn látott vízszintes irány a modell terében a kamera
       // Y-forgásától függ - ezért bontjuk X és Z komponensre, hogy a
       // kiegészítő akkor is a húzás irányába menjen, ha a karaktert
@@ -6411,16 +6421,19 @@ function queueEditorRefresh() {
   $(sel)?.addEventListener('change', queueEditorRefresh);
 });
 
-// Görgő: a Z-tengely (előre/hátra). Húzással ezt nem lehetne egyértelműen
-// megadni, mert a képernyőn a mélység nem különböztethető meg a
-// vízszintes mozgástól.
+// SHIFT + görgő: a Z-tengely (előre/hátra). Húzással ezt nem lehetne
+// egyértelműen megadni, mert a képernyőn a mélység nem különböztethető meg a
+// vízszintes mozgástól. A CSUPASZ görgő SZÁNDÉKOSAN nem ide tartozik: azt a
+// nagyítás kapja (ld. skin3d.js), mert egy 3D szerkesztőben a görgőtől azt
+// várja az ember.
 $('#cosmeticEditorPreview')?.addEventListener('wheel', (e) => {
-  if (!cosmeticEditorModel) return;
+  if (!cosmeticEditorModel || !e.shiftKey) return;
   e.preventDefault();
+  e.stopPropagation();
   const inZ = $('#cosmeticOffsetZInput');
   inZ.value = round2(Number(inZ.value || 0) + (e.deltaY > 0 ? 0.5 : -0.5));
   queueEditorRefresh();
-}, { passive: false });
+}, { passive: false, capture: true });
 
 $('#cosmeticAutoFitBtn')?.addEventListener('click', () => {
   if (!autoFitCosmetic()) {
@@ -6612,8 +6625,8 @@ async function loadCosmeticsMarketAdmin() {
       <div class="badges-admin-item-info">
         <div class="badges-admin-item-name">${escapeHtml(l.cosmetic?.name || '(törölt kiegészítő)')}</div>
         <div class="badges-admin-item-meta">
-          #${l.id} · ${escapeHtml(l.seller)} · ${l.priceSc.toLocaleString('hu-HU')} SC
-          (eladónak ${l.payoutSc.toLocaleString('hu-HU')} SC) · ${escapeHtml(STATUS_LABELS[l.status] || l.status)}
+          #${l.id} · ${escapeHtml(l.seller)} · ${l.priceSc.toLocaleString('hu-HU')} PP
+          (eladónak ${l.payoutSc.toLocaleString('hu-HU')} PP) · ${escapeHtml(STATUS_LABELS[l.status] || l.status)}
           · ${formatLedgerDate(l.createdAt)}
         </div>
       </div>

@@ -135,7 +135,7 @@
 
 html, body {
   min-height: 100%;
-  font-family: "Segoe UI", Inter, system-ui, sans-serif;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
   color: var(--text);
   /* JAVÍTVA: a háttér ambiens fénylése korábban nyers narancs rgba()-kkal volt
      beégetve, ezért minden témán (pl. Jégkék, Türkiz) ugyanaz a meleg narancs
@@ -337,10 +337,17 @@ a { color: inherit; }
   background: linear-gradient(90deg, color-mix(in srgb, var(--gold) 14%, transparent) 0%, color-mix(in srgb, var(--gold) 0%, transparent) 100%);
   color: var(--gold); box-shadow: inset 3px 0 0 var(--gold);
 }
+/* Kategória-fejléc az oldalsávban. A vékony felső vonal a csoportokat
+   VIZUÁLISAN is elválasztja - a puszta térköz egy 25 elemes menüben nem elég
+   ahhoz, hogy szkennelve is összeálljon a csoport. Az első fejléc előtt
+   nincs vonal (a Főoldal amúgy is önálló). */
 .app-nav-divider {
-  padding: 14px 16px 4px; font-size: 11px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 1px; color: var(--text-faint);
+  padding: 18px 16px 6px; margin-top: 6px;
+  font-size: 10.5px; font-weight: 800; text-transform: uppercase;
+  letter-spacing: .12em; color: var(--text-faint);
+  border-top: 1px solid var(--line);
 }
+.app-nav-divider:first-of-type { border-top: none; margin-top: 2px; }
 .app-nav-spacer { flex: 1; }
 .app-nav-bottom { display: flex; flex-direction: column; gap: 3px; padding-top: 12px; border-top: 1px solid var(--line); }
 
@@ -722,7 +729,7 @@ a { color: inherit; }
    tűnt "más betűtípusúnak"/hibásnak pont az utolsó betű. A "Segoe UI
    Historic" a Windows saját, kifejezetten ezekhez a blokkokhoz csomagolt
    betűtípusa - előre véve a láncban egységesen fedi az egész prefixet. */
-.stat-badge-value { font-size: 22px; font-weight: 800; color: var(--text); font-family: "Segoe UI Historic", "Segoe UI", Inter, system-ui, sans-serif; }
+.stat-badge-value { font-size: 22px; font-weight: 800; color: var(--text); font-family: "Segoe UI Historic", "Segoe UI", system-ui, -apple-system, sans-serif; }
 .stat-note {
   color: var(--text-faint); font-size: 12px; margin: -10px 0 22px;
 }
