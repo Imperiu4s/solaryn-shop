@@ -253,6 +253,13 @@ const SkinPreview = (() => {
     const t = model.transform || {};
     const off = Array.isArray(t.offset) && t.offset.length === 3 ? t.offset : [0, 0, 0];
     const mScale = typeof t.scale === 'number' && t.scale > 0 ? t.scale : 1;
+    // A TELJES modell forgatása fokban (X, Y, Z sorrendben), a modell
+    // befoglaló dobozának középpontja körül - PONTOSAN úgy, ahogy a kliens
+    // CosmeticRenderer-e csinálja. Az eltoláshoz hasonlóan ez sem lehet
+    // "körülbelül ugyanaz": a szerkesztőben beállított érték in-game
+    // érvényesül, tehát a két számításnak egyeznie KELL.
+    const rot = Array.isArray(t.rotation) && t.rotation.length === 3 ? t.rotation : [0, 0, 0];
+    const hasModelRot = !!(rot[0] || rot[1] || rot[2]);
     const itemSpace = t.itemModelSpace !== false;
 
     // AZ UV-TÉR MÉRETE - ld. a kliens CosmeticModel.parse() azonos, részletes
@@ -273,10 +280,35 @@ const SkinPreview = (() => {
     }
     const pivot = COSMETIC_PIVOTS[slot] || [0, 0, 0];
 
+    // A forgatás PIVOTJA: a modell befoglaló dobozának középpontja a szerzői
+    // térben, a NYERS from/to értékekből (inflate és kocka-forgatás nélkül) -
+    // a kliens CosmeticModel.parse() ugyanezt számolja.
+    let modelCenter = [0, 0, 0];
+    if (hasModelRot) {
+      let nx = Infinity, xx = -Infinity, ny = Infinity, xy = -Infinity, nz = Infinity, xz = -Infinity;
+      for (const el of (model.elements || [])) {
+        if (!Array.isArray(el.from) || !Array.isArray(el.to)) continue;
+        nx = Math.min(nx, el.from[0], el.to[0]); xx = Math.max(xx, el.from[0], el.to[0]);
+        ny = Math.min(ny, el.from[1], el.to[1]); xy = Math.max(xy, el.from[1], el.to[1]);
+        nz = Math.min(nz, el.from[2], el.to[2]); xz = Math.max(xz, el.from[2], el.to[2]);
+      }
+      if (Number.isFinite(nx)) modelCenter = [(nx + xx) / 2, (ny + xy) / 2, (nz + xz) / 2];
+    }
+
     const f = itemSpace ? -1 : 1;
 
     // Szerzői térből az előnézeti térbe - ld. a fenti levezetést.
+    // A modell-forgatás ITT, a tükrözés/skálázás ELŐTT történik, mert a mező
+    // értelmezése a SZERZŐI tér (ugyanaz az elv, mint a kocka-forgatásnál):
+    // a kliens a tükrözött térben, konjugált (X/Y-ban negált) szöggel forgat,
+    // ami matematikailag ezzel azonos, viszont itt sokkal kevésbé hibázható.
     function toPreview(v) {
+      if (hasModelRot) {
+        // A sorrend KÖTÖTT: X, majd Y, majd Z.
+        v = rotatePoint(v, modelCenter, 'x', rot[0]);
+        v = rotatePoint(v, modelCenter, 'y', rot[1]);
+        v = rotatePoint(v, modelCenter, 'z', rot[2]);
+      }
       const sx = v[0] * mScale * f;
       const sy = v[1] * mScale * f;
       const sz = v[2] * mScale;
@@ -530,8 +562,15 @@ const SkinPreview = (() => {
       dragging = true;
       lastX = e.clientX;
       lastY = e.clientY;
-      mode = (onCosmeticDrag && (e.shiftKey || e.button === 2)) ? 'move' : 'rotate';
-      if (mode === 'move') e.preventDefault();
+      // A szerkesztő három gesztusa. A Ctrl SZÁNDÉKOSAN a forgatásé: az
+      // eltolás (Shift/jobb gomb) a régebbi, megszokott gesztus, azt nem
+      // mozgatjuk el a felhasználó alól.
+      mode = 'rotate';
+      if (onCosmeticDrag) {
+        if (e.ctrlKey || e.metaKey) mode = 'modelRotate';
+        else if (e.shiftKey || e.button === 2) mode = 'move';
+      }
+      if (mode !== 'rotate') e.preventDefault();
     }
     function onMove(e) {
       if (!dragging) return;
@@ -539,11 +578,14 @@ const SkinPreview = (() => {
       const dy = e.clientY - lastY;
       lastX = e.clientX;
       lastY = e.clientY;
-      if (mode === 'move') {
+      if (mode === 'move' || mode === 'modelRotate') {
         // A kamera aktuális Y-forgása és távolsága is átadódik, hogy a hívó a
         // KÉPERNYŐN látott irányba, a nagyításhoz igazított léptékkel tudja
-        // mozgatni a modellt.
-        onCosmeticDrag(dx, dy, angle, camDistance);
+        // mozgatni a modellt. Az 5. paraméter mondja meg, MELYIK gesztus ez
+        // ('move' = eltolás, 'rotate' = a kiegészítő forgatása) - új
+        // paraméterként, hogy a régi hívók (akik csak 4-et vesznek át)
+        // változtatás nélkül működjenek tovább.
+        onCosmeticDrag(dx, dy, angle, camDistance, mode === 'move' ? 'move' : 'rotate');
       } else {
         angle += dx * 0.01;
         // Pálya-forgatás függőlegesen is (fentről/lentről is meg lehessen

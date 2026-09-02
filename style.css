@@ -1522,6 +1522,23 @@ a { color: inherit; }
   background: linear-gradient(90deg, var(--gold-2), var(--gold), var(--gold-2));
 }
 
+/* Mítikus: a legendás FÖLÖTT álló, legritkább fokozat. A megkülönböztetést
+   nem egy újabb szín adja (az arany az oldal saját identitása), hanem egy
+   lassan végigfutó izzás - így a legendás mellett is azonnal kiugrik, de nem
+   lóg ki a paletta hangulatából. */
+.cosmetic-card.rarity-mythic::before {
+  background: linear-gradient(90deg, var(--danger), var(--gold), var(--orange-2), var(--danger));
+  background-size: 250% 100%;
+  animation: cosmetic-mythic-sheen 4s linear infinite;
+}
+@keyframes cosmetic-mythic-sheen {
+  from { background-position: 0% 0; }
+  to   { background-position: 250% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cosmetic-card.rarity-mythic::before { animation: none; }
+}
+
 /* A bélyegkép a nyers textúra - pixelesen élesen kell megjelenjen, mert
    jellemzően 64x64 körüli, felnagyítva. */
 .cosmetic-thumb {

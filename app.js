@@ -12,7 +12,7 @@
 // számot látsz, a böngésző MÉG A RÉGI app.js-t futtatja (a webtárhely
 // cache-e miatt egy feltöltés nem feltétlenül ér ki azonnal). MINDEN
 // kiadásnál emelni kell, az index.html ?v= paramétereivel EGYÜTT.
-const CENTER_VERSION = '20260901d';
+const CENTER_VERSION = '20260902a';
 
 const BACKEND_URL = 'https://api.overclockgame.hu:8908';
 
@@ -5537,7 +5537,7 @@ $('#cookieRejectAll').addEventListener('click', () => {
 // menő szinkronra nincs szükség - amit itt elmentünk, azt a kliens a
 // következő gyorsítótár-frissítésekor látja.
 
-const RARITY_LABELS = { common: 'Általános', rare: 'Ritka', epic: 'Epikus', legendary: 'Legendás' };
+const RARITY_LABELS = { common: 'Általános', rare: 'Ritka', epic: 'Epikus', legendary: 'Legendás', mythic: 'Mítikus' };
 
 function cosmeticTextureUrl(id) {
   return BACKEND_URL + '/api/cosmetics/texture/' + id;
@@ -6113,6 +6113,9 @@ function resetCosmeticForm() {
   $('#cosmeticOffsetXInput').value = '0';
   $('#cosmeticOffsetYInput').value = '0';
   $('#cosmeticOffsetZInput').value = '0';
+  $('#cosmeticRotXInput').value = '0';
+  $('#cosmeticRotYInput').value = '0';
+  $('#cosmeticRotZInput').value = '0';
   $('#cosmeticScaleInput').value = '1';
   $('#cosmeticItemSpaceCheckbox').checked = true;
   $('#cosmeticModelInput').value = '';
@@ -6250,6 +6253,12 @@ function currentEditorTransform() {
       Number($('#cosmeticOffsetYInput').value) || 0,
       Number($('#cosmeticOffsetZInput').value) || 0
     ],
+    // Fokban, X-Y-Z sorrendben - ld. skin3d.js buildCosmeticGeometry.
+    rotation: [
+      Number($('#cosmeticRotXInput').value) || 0,
+      Number($('#cosmeticRotYInput').value) || 0,
+      Number($('#cosmeticRotZInput').value) || 0
+    ],
     scale: Number($('#cosmeticScaleInput').value) || 1,
     itemModelSpace: $('#cosmeticItemSpaceCheckbox').checked
   };
@@ -6266,6 +6275,16 @@ function editorUnitsPerPixel(canvas, camDistance) {
 }
 
 function round2(n) { return Math.round(n * 100) / 100; }
+
+// A forgatás-mezők -180..180 közé csavarva. MIÉRT KELL: a húzás
+// mozdulatonként ad hozzá, tehát korlátozás nélkül percek alatt ezres
+// értékek jönnének ki - amiket a backend (-360..360) már el sem fogadna,
+// és a mezőben sem lehetne értelmezni.
+function wrapDegrees(n) {
+  let d = ((Number(n) || 0) % 360 + 360) % 360;
+  if (d > 180) d -= 360;
+  return round2(d);
+}
 
 // ── Automatikus beillesztés ──────────────────────────────────────────────
 // MIÉRT KELL: egy Blockbench ITEM-modell (minden vásárolt csomag ilyen) a
@@ -6284,9 +6303,13 @@ function autoFitCosmetic() {
   const pivot = SkinPreview.COSMETIC_PIVOTS[slot] || [0, 0, 0];
 
   // Nulla eltolással felépítjük a geometriát, és megnézzük, hol landol.
+  // A szonda az AKTUÁLIS forgatással készül (csak az eltolás nulla): egy
+  // elforgatott modell befoglaló doboza más, tehát forgatás után újra
+  // beillesztve mást kell kapni - különben a gomb egy elfordított kardot
+  // a forgatás ELŐTTI helyzete szerint középre igazítana.
   const probe = {
     ...cosmeticEditorModel,
-    transform: { offset: [0, 0, 0], scale: Number($('#cosmeticScaleInput').value) || 1, itemModelSpace: $('#cosmeticItemSpaceCheckbox').checked }
+    transform: { ...currentEditorTransform(), offset: [0, 0, 0] }
   };
   let g;
   try { g = SkinPreview.buildCosmeticGeometry(probe, slot); } catch { return false; }
@@ -6356,7 +6379,26 @@ async function doRestartCosmeticEditor() {
   stopCosmeticEditor = SkinPreview.start(
     canvas, skinImg, myCosmeticsSkinSlim(), null,
     [{ model, slot, img: cosmeticEditorTexture }],
-    (dx, dy, angle, camDistance) => {
+    (dx, dy, angle, camDistance, dragMode) => {
+      if (dragMode === 'rotate') {
+        // A KIEGÉSZÍTŐ forgatása (Ctrl + húzás) - nem a kameráé.
+        // Vízszintes mozdulat = Y (függőleges) tengely, függőleges = X.
+        //
+        // AZ ELŐJELEK LEVEZETVE, nem próbálgatva (a skin3d.js
+        // transzformáció-láncából, alap-kameraállásnál):
+        //  - a kiegészítő kamera felé néző pontja szerzői (0,0,-1); Y körül
+        //    theta-val forgatva az előnézeti x-e sin(theta) lesz, tehát a
+        //    JOBBRA húzás (dx>0) NÖVELI az Y-szöget;
+        //  - a teteje szerzői (0,1,0); X körül forgatva az előnézeti z-je
+        //    -sin(theta), és a LEFELÉ húzás (dy>0) a tetejét a néző felé
+        //    (pozitív előnézeti z) dönti, ami CSÖKKENTI az X-szöget.
+        const inRX = $('#cosmeticRotXInput');
+        const inRY = $('#cosmeticRotYInput');
+        inRY.value = wrapDegrees(Number(inRY.value || 0) + dx * 0.5);
+        inRX.value = wrapDegrees(Number(inRX.value || 0) - dy * 0.5);
+        queueEditorRefresh();
+        return;
+      }
       // A húzás sebességét a KAMERA AKTUÁLIS TÁVOLSÁGÁHOZ igazítjuk -
       // nagyításkor finomabb, kizoomolva durvább lépés. Enélkül a
       // ránagyított nézetben egyetlen pixelnyi mozdulat is átdobná a
@@ -6422,6 +6464,7 @@ function queueEditorRefresh() {
 }
 
 ['#cosmeticOffsetXInput', '#cosmeticOffsetYInput', '#cosmeticOffsetZInput',
+ '#cosmeticRotXInput', '#cosmeticRotYInput', '#cosmeticRotZInput',
  '#cosmeticScaleInput', '#cosmeticItemSpaceCheckbox', '#cosmeticSlotSelect'].forEach((sel) => {
   $(sel)?.addEventListener('input', queueEditorRefresh);
   $(sel)?.addEventListener('change', queueEditorRefresh);
@@ -6433,9 +6476,21 @@ function queueEditorRefresh() {
 // nagyítás kapja (ld. skin3d.js), mert egy 3D szerkesztőben a görgőtől azt
 // várja az ember.
 $('#cosmeticEditorPreview')?.addEventListener('wheel', (e) => {
-  if (!cosmeticEditorModel || !e.shiftKey) return;
+  if (!cosmeticEditorModel) return;
+  if (e.ctrlKey || e.metaKey) {
+    // CTRL + görgő: a Z tengely körüli forgatás ("roll"). Húzással ezt sem
+    // lehetne megadni: a képernyőn a két húzás-irány már a másik két
+    // tengelyt vezérli.
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    const inRZ = $('#cosmeticRotZInput');
+    inRZ.value = wrapDegrees(Number(inRZ.value || 0) + (e.deltaY > 0 ? 5 : -5));
+    queueEditorRefresh();
+    return;
+  }
+  if (!e.shiftKey) return;
   e.preventDefault();
-  e.stopPropagation();
+  e.stopImmediatePropagation();
   const inZ = $('#cosmeticOffsetZInput');
   inZ.value = round2(Number(inZ.value || 0) + (e.deltaY > 0 ? 0.5 : -0.5));
   queueEditorRefresh();
@@ -6453,6 +6508,9 @@ $('#cosmeticEditorResetBtn')?.addEventListener('click', () => {
   $('#cosmeticOffsetXInput').value = '0';
   $('#cosmeticOffsetYInput').value = '0';
   $('#cosmeticOffsetZInput').value = '0';
+  $('#cosmeticRotXInput').value = '0';
+  $('#cosmeticRotYInput').value = '0';
+  $('#cosmeticRotZInput').value = '0';
   $('#cosmeticScaleInput').value = '1';
   queueEditorRefresh();
 });
@@ -6494,6 +6552,9 @@ $('#cosmeticSaveBtn')?.addEventListener('click', async () => {
   formData.append('offsetX', $('#cosmeticOffsetXInput').value.trim());
   formData.append('offsetY', $('#cosmeticOffsetYInput').value.trim());
   formData.append('offsetZ', $('#cosmeticOffsetZInput').value.trim());
+  formData.append('rotationX', $('#cosmeticRotXInput').value.trim());
+  formData.append('rotationY', $('#cosmeticRotYInput').value.trim());
+  formData.append('rotationZ', $('#cosmeticRotZInput').value.trim());
   formData.append('scale', $('#cosmeticScaleInput').value.trim());
   formData.append('itemModelSpace', $('#cosmeticItemSpaceCheckbox').checked ? 'true' : 'false');
   if (cosmeticSelectedModelFile) formData.append('model', cosmeticSelectedModelFile);
@@ -6547,6 +6608,9 @@ document.addEventListener('click', async (e) => {
     $('#cosmeticOffsetXInput').value = item.offsetX ?? 0;
     $('#cosmeticOffsetYInput').value = item.offsetY ?? 0;
     $('#cosmeticOffsetZInput').value = item.offsetZ ?? 0;
+    $('#cosmeticRotXInput').value = item.rotationX ?? 0;
+    $('#cosmeticRotYInput').value = item.rotationY ?? 0;
+    $('#cosmeticRotZInput').value = item.rotationZ ?? 0;
     $('#cosmeticScaleInput').value = item.scale ?? 1;
     $('#cosmeticItemSpaceCheckbox').checked = item.itemModelSpace !== false;
     $('#cosmeticModelInput').value = '';

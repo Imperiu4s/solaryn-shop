@@ -8,8 +8,8 @@
   <!-- ÚJ: a téma minél korábban, a stíluslap ELŐTT alkalmazódjon (ld.
        theme.js), hogy az első kirajzolás már a mentett témával történjen,
        ne legyen látható "villanás" az alap témáról. -->
-  <script src="theme.js?v=20260901d"></script>
-  <link rel="stylesheet" href="style.css?v=20260901d" />
+  <script src="theme.js?v=20260902a"></script>
+  <link rel="stylesheet" href="style.css?v=20260902a" />
 </head>
 <body>
   <!-- Hulló parázs-szemcse animáció háttere - ugyanaz, mint a SolarLauncherben. -->
@@ -1165,6 +1165,7 @@
               <option value="rare">Ritka</option>
               <option value="epic">Epikus</option>
               <option value="legendary">Legendás</option>
+              <option value="mythic">Mítikus</option>
             </select>
 
             <label class="gift-modal-label">Leírás (nem kötelező)</label>
@@ -1192,7 +1193,7 @@
                  (mentés után a kliensek ~1 percen belül átveszik). -->
             <div class="cosmetic-transform-box">
               <div class="cosmetic-transform-title">Illesztés a karakterhez</div>
-              <p class="cosmetic-file-note" style="margin-bottom:12px;">A saját karaktereden állíthatod be a kiegészítő helyét.<br /><strong>Bal gomb:</strong> forgatás minden irányba · <strong>görgő:</strong> nagyítás · <strong>Shift + húzás</strong> vagy <strong>jobb gomb:</strong> a kiegészítő mozgatása · <strong>Shift + görgő:</strong> előre/hátra (Z)</p>
+              <p class="cosmetic-file-note" style="margin-bottom:12px;">A saját karaktereden állíthatod be a kiegészítő helyét és állását.<br /><strong>Bal gomb:</strong> a nézet forgatása · <strong>görgő:</strong> nagyítás · <strong>Shift + húzás</strong> vagy <strong>jobb gomb:</strong> a kiegészítő mozgatása · <strong>Shift + görgő:</strong> előre/hátra (Z) · <strong>Ctrl + húzás:</strong> a kiegészítő forgatása · <strong>Ctrl + görgő:</strong> döntés (Z tengely)</p>
 
               <div class="cosmetic-editor">
                 <div class="cosmetic-editor-stage">
@@ -1205,6 +1206,9 @@
                     <label>Eltolás Y<input type="number" id="cosmeticOffsetYInput" step="0.5" value="0" /></label>
                     <label>Eltolás Z<input type="number" id="cosmeticOffsetZInput" step="0.5" value="0" /></label>
                     <label>Méret<input type="number" id="cosmeticScaleInput" step="0.05" value="1" /></label>
+                    <label>Forgatás X<input type="number" id="cosmeticRotXInput" step="5" min="-360" max="360" value="0" /></label>
+                    <label>Forgatás Y<input type="number" id="cosmeticRotYInput" step="5" min="-360" max="360" value="0" /></label>
+                    <label>Forgatás Z<input type="number" id="cosmeticRotZInput" step="5" min="-360" max="360" value="0" /></label>
                   </div>
                   <label class="check-row" style="margin-top:10px;">
                     <input type="checkbox" id="cosmeticItemSpaceCheckbox" checked />
@@ -2034,7 +2038,7 @@
     </div>
   </div>
 
-  <script src="skin3d.js?v=20260901d"></script>
-  <script src="app.js?v=20260901d"></script>
+  <script src="skin3d.js?v=20260902a"></script>
+  <script src="app.js?v=20260902a"></script>
 </body>
 </html>
