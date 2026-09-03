@@ -155,58 +155,6 @@
       revealObserver.observe(el);
     });
   }
-
-  /* ── 7. Számláló-animáció ───────────────────────────────────────────────
-     Az app.js sok helyen egyszerűen textContent-tel ír ki egy összeget. Itt
-     egy MutationObserver figyeli a kiemelt értékmezőket, és ha a szám
-     változik, "felpörgeti" az új értékre + megvillantja. A formátumot
-     (ezres tagolás, "Ft"/"PP" utótag) az EREDETI szövegből olvassuk ki,
-     tehát nem kell duplikálni a formázó logikát. */
-  const COUNTUP_TARGETS = ['#homeWalletBalance', '#topbarPpValue', '#topbarWalletValue'];
-  function initCountUp() {
-    COUNTUP_TARGETS.forEach((sel) => {
-      const el = $(sel);
-      if (!el) return;
-      let last = parseNum(el.textContent);
-      new MutationObserver(() => {
-        if (el.dataset.animating) return;
-        const next = parseNum(el.textContent);
-        if (next === null || next === last) { last = next; return; }
-        const from = last === null ? 0 : last;
-        last = next;
-        el.classList.remove('value-bump');
-        void el.offsetWidth;
-        el.classList.add('value-bump');
-        if (reduced() || Math.abs(next - from) < 2) return;
-        animateNumber(el, from, next);
-      }).observe(el, { childList: true, characterData: true, subtree: true });
-    });
-  }
-  function parseNum(text) {
-    const m = String(text || '').replace(/ /g, ' ').match(/-?[\d\s.,]*\d/);
-    if (!m) return null;
-    const n = parseInt(m[0].replace(/[^\d-]/g, ''), 10);
-    return Number.isFinite(n) ? n : null;
-  }
-  function animateNumber(el, from, to) {
-    const raw = el.textContent;
-    const m = raw.match(/-?[\d\s.,]*\d/);
-    if (!m) return;
-    const prefix = raw.slice(0, m.index);
-    const suffix = raw.slice(m.index + m[0].length);
-    const dur = 650;
-    const t0 = performance.now();
-    el.dataset.animating = '1';
-    (function step(now) {
-      const p = Math.min(1, (now - t0) / dur);
-      // easeOutCubic - gyorsan indul, lágyan áll meg
-      const v = Math.round(from + (to - from) * (1 - Math.pow(1 - p, 3)));
-      el.textContent = prefix + v.toLocaleString('hu-HU') + suffix;
-      if (p < 1) requestAnimationFrame(step);
-      else { el.textContent = prefix + to.toLocaleString('hu-HU') + suffix; delete el.dataset.animating; }
-    })(t0);
-  }
-
   /* ── 8. Mobil oldalsáv-fiók ─────────────────────────────────────────── */
   let closeDrawer = () => {};
   function initMobileDrawer() {
@@ -325,33 +273,20 @@
     };
   }
 
-  /* ── 11. Nézetváltás: cím, görgetés, hash-mélylink ──────────────────────
-     A böngésző címsora és a <title> eddig minden alfülön ugyanaz volt
-     ("SolarCenter"), és a vissza gomb kilépett az oldalról. Innentől minden
-     nézetnek saját címe és saját #hash-e van - így megoszthatóvá és
-     könyvjelzőzhetővé válik, a vissza gomb pedig a fülek közt lépked. */
-  const VIEW_TITLES = {
-    legal: 'Jogi dokumentumok',
-    faq: 'GYIK',
-    playerProfile: 'Játékos profil',
-    deviceDetail: 'Gép részletei',
-    revenueDetail: 'Bevétel részletei'
-  };
+  /* ── 11. Nézetváltás: görgetés, hash-mélylink ────────────────────────────
+     A böngésző fül-címét SZÁNDÉKOSAN nem írjuk át fülváltáskor - a
+     felhasználó kérésére a fülre húzott kurzor fölötti buboréknak
+     egyszerűen "SolarCenter"-t kell mutatnia, mindegy, melyik nézetben
+     jár (ld. index.html <title>, ez itt már csak a hash/görgetés). A
+     #hash viszont megmarad: megoszthatóvá/könyvjelzőzhetővé teszi az
+     egyes füleket, és a vissza gomb is a fülek közt lépked vele. */
   let applyingHash = false;
-
-  function viewTitle(view) {
-    if (VIEW_TITLES[view]) return VIEW_TITLES[view];
-    const btn = $('.app-nav-item[data-view="' + view + '"] span');
-    return btn ? btn.textContent.trim() : '';
-  }
 
   function initViewWrapper() {
     if (typeof window.switchView !== 'function') return;
     const original = window.switchView;
     window.switchView = function (view) {
       original(view);
-      const t = viewTitle(view);
-      document.title = (t && view !== 'home' ? t + ' - ' : '') + 'SolarCenter | Solaryn Network';
       closeDrawer();
       // A tartalom tetejére ugrunk - a hosszabb füleken (Napló, Piac) e
       // nélkül a felhasználó a régi görgetési pozíción, egy nézet közepén
@@ -732,7 +667,6 @@
     initRipples();
     initTopbarScroll();
     initReveal();
-    initCountUp();
     initMobileDrawer();
     initTopProgress();
     initToast();

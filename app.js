@@ -1170,10 +1170,30 @@ let currentSanctionStatus = { activeMute: null, activeBan: null, activeCban: nul
 // leggyakrabban, legszembetűnőbben frissülő érték (minden vásárlás/
 // átutalás/rangvásárlás után), a többi statisztika-doboz ritkábban változik.
 let lastRenderedPpBalance = null;
+// JAVÍTVA: a felhasználó gyors nézetváltásainál (pl. Rangok <-> Egyenleg
+// pattogtatása) a refreshPpBalance() több, egymást átfedő hívása egymás
+// UTÁN, de egymást MEGELŐZVE futhatott le - mindegyik a SAJÁT célértékéhez
+// indított egy 650ms-es animációt UGYANAZON az elemen, cancelálás nélkül.
+// Két párhuzamos rAF-hurok emiatt felváltva írta a textContent-et két
+// KÜLÖNBÖZŐ interpolációból, ami néha a topbaron egészen más (akár
+// negatívnak látszó) számot eredményezett, mint amit a főoldal mutatott. A
+// WeakMap elemenként tárolja a "legutolsó indított animáció" generációját -
+// egy korábbi hurok az első lépésekor észreveszi, hogy felülírták, és
+// azonnal leáll, mielőtt bármit írna.
+const numberAnimGen = new WeakMap();
 function animateNumberTo(el, from, to, formatFn, duration = 650) {
-  if (from === to) { el.textContent = formatFn(to); return; }
+  if (from === to) { el.textContent = formatFn(to); numberAnimGen.set(el, (numberAnimGen.get(el) || 0) + 1); return; }
+  const myGen = (numberAnimGen.get(el) || 0) + 1;
+  numberAnimGen.set(el, myGen);
+  // ÚJ: rövid megvillanás a szám mellett, hogy a változás akkor is
+  // észrevehető legyen, ha valaki épp nem a számlálást nézi (ld. ui.css
+  // .value-bump).
+  el.classList.remove('value-bump');
+  void el.offsetWidth;
+  el.classList.add('value-bump');
   const start = performance.now();
   function tick(now) {
+    if (numberAnimGen.get(el) !== myGen) return; // felülírta egy újabb hívás - ez a hurok leáll
     const t = Math.min(1, (now - start) / duration);
     const eased = 1 - Math.pow(1 - t, 3); // ease-out kockás görbe - gyors indulás, lágy megállás
     el.textContent = formatFn(Math.round(from + (to - from) * eased));
