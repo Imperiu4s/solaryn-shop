@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>A keresett oldal nem található - SolarCenter</title>
+  <meta name="description" content="A keresett oldal nem található a SolarCenteren. Térj vissza a főoldalra, vagy nézd meg a gyakori kérdéseket." />
+  <!-- Hibalapot soha nem indexelünk. -->
+  <meta name="robots" content="noindex, follow" />
+  <meta name="theme-color" content="#0a0a0d" />
+  <link rel="icon" type="image/png" href="/assets/solaryn-icon.png" />
+  <link rel="apple-touch-icon" href="/assets/solaryn-icon.png" />
+
+  <!-- A téma a stíluslap ELŐTT, hogy ne legyen "villanás" (ld. theme.js). -->
+  <script src="/theme.js?v=20260903a"></script>
+  <link rel="stylesheet" href="/style.css?v=20260903a" />
+  <link rel="stylesheet" href="/ui.css?v=20260903a" />
+  <style>
+    /* A hibalap SZÁNDÉKOSAN önálló, nem az index.html app-héját használja:
+       így akkor is megjelenik teljes értékűen, ha a nagy app.js egyáltalán
+       nem tölt be. Csak a közös tokeneket (style.css) és a mozgás-réteget
+       (ui.css) veszi át, hogy vizuálisan mégis ugyanaz a felület legyen. */
+    body { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 40px 20px; }
+    .err-wrap { position: relative; z-index: 1; text-align: center; max-width: 520px; width: 100%; }
+    .err-brand { display: inline-flex; align-items: center; gap: 11px; margin-bottom: 34px; }
+    .err-brand img { width: 38px; height: 38px; filter: drop-shadow(0 0 12px var(--gold-glow)); }
+    .err-code {
+      font-size: clamp(84px, 22vw, 138px); font-weight: 900; line-height: .9; letter-spacing: -.04em;
+      background: linear-gradient(120deg, var(--gold) 10%, var(--orange) 50%, var(--gold-2) 90%);
+      background-size: 220% auto;
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent; color: transparent;
+      animation: errSheen 5s linear infinite;
+      filter: drop-shadow(0 10px 40px var(--gold-glow));
+    }
+    @keyframes errSheen { to { background-position: 220% center; } }
+    .err-title { font-size: 22px; font-weight: 800; margin: 14px 0 10px; }
+    .err-text { color: var(--text-dim); font-size: 14px; line-height: 1.7; margin-bottom: 30px; }
+    .err-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .err-actions a {
+      text-decoration: none; display: inline-flex; align-items: center; justify-content: center;
+      padding: 12px 26px; border-radius: 11px; font-weight: 700; font-size: 14px; margin-top: 0;
+      width: auto; min-width: 160px;
+    }
+    .err-actions .btn-outline { background: transparent; border: 1px solid var(--line); color: var(--text-dim); }
+    .err-path {
+      margin-top: 28px; font-size: 12px; color: var(--text-faint); word-break: break-all;
+      font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="particleCanvas" class="particle-canvas" aria-hidden="true"></canvas>
+
+  <main class="err-wrap">
+    <a class="err-brand" href="/" aria-label="Vissza a SolarCenter főoldalára">
+      <img src="/assets/solaryn-icon.png" alt="" width="38" height="38" />
+      <span class="auth-brand-name">SOLARCENTER<small>Solaryn Network</small></span>
+    </a>
+
+    <div class="err-code" aria-hidden="true">404</div>
+    <h1 class="err-title">Ez az oldal eltűnt a térképről</h1>
+    <p class="err-text">
+      A keresett cím nem létezik, vagy időközben megváltozott. Ha egy régi
+      linkről érkeztél, valószínűleg a főoldalról már egy kattintással
+      megtalálod, amit keresel.
+    </p>
+
+    <div class="err-actions">
+      <a class="btn-glow" href="/">Vissza a főoldalra</a>
+      <a class="btn-outline" href="/#faq">Gyakori kérdések</a>
+    </div>
+
+    <p class="err-path">Kért cím: <span id="errPath"></span></p>
+  </main>
+
+  <script>
+    // A kért cím kiírása segít a hibabejelentésnél. textContent-tel írjuk
+    // ki (nem innerHTML), így a címben lévő karakterek nem értelmeződnek
+    // markupként - ez a klasszikus, "visszavert" XSS a hibalapokon.
+    document.getElementById('errPath').textContent = location.pathname + location.search;
+
+    // Ugyanaz a parázs-animáció, mint az index.html-en - itt beágyazva,
+    // mert a hibalap nem tölti be a nagy app.js-t.
+    (function () {
+      var c = document.getElementById('particleCanvas');
+      if (!c || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      var ctx = c.getContext('2d'), ps = [];
+      function resize() { c.width = window.innerWidth; c.height = window.innerHeight; }
+      window.addEventListener('resize', resize); resize();
+      function spawn() {
+        return {
+          x: Math.random() * c.width, y: -10, r: 1 + Math.random() * 2.2,
+          speed: 0.4 + Math.random() * 0.9, drift: (Math.random() - 0.5) * 0.4,
+          alpha: 0.15 + Math.random() * 0.35,
+          hue: Math.random() < 0.5 ? '255,196,46' : '255,157,23'
+        };
+      }
+      for (var i = 0; i < 55; i++) { var p = spawn(); p.y = Math.random() * c.height; ps.push(p); }
+      (function tick() {
+        ctx.clearRect(0, 0, c.width, c.height);
+        for (var i = 0; i < ps.length; i++) {
+          var p = ps[i];
+          p.y += p.speed; p.x += p.drift;
+          if (p.y > c.height + 10) ps[i] = spawn();
+          ctx.beginPath();
+          ctx.fillStyle = 'rgba(' + p.hue + ',' + p.alpha + ')';
+          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        requestAnimationFrame(tick);
+      })();
+    })();
+  </script>
+</body>
+</html>

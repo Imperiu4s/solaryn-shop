@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SolarCenter oldaltérkép.
+
+  A portál egyoldalas alkalmazás: a fülek #hash-ekkel érhetők el (pl.
+  https://center.solaryn.hu/#faq), amit a robotok NEM külön URL-ként
+  kezelnek - ezért itt szándékosan csak azok a címek szerepelnek, amelyek
+  a szerver felől is önálló válasznak számítanak. Így az oldaltérkép nem
+  ígér olyat, amit a kiszolgáló nem tud teljesíteni ("soft 404").
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://center.solaryn.hu/</loc>
+    <lastmod>2026-09-03</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>

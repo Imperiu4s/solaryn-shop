@@ -1,0 +1,38 @@
+# SolarCenter - center.solaryn.hu
+# A portál egyoldalas alkalmazás (SPA): minden fül ugyanazt az index.html-t
+# tölti be, és a tartalom nagy része bejelentkezéshez kötött. A robotok
+# számára tehát csak a nyitólapnak van értelme - a #hash-es mélylinkeket
+# (pl. #wallet) a robotok amúgy sem kérik le külön a szervertől.
+
+User-agent: *
+Allow: /$
+Allow: /assets/
+Disallow: /*?
+
+# A keresés szempontjából értéktelen, viszont a forrás mindenki számára
+# elérhető marad - ezek tiltása csak a felesleges indexelést előzi meg.
+Disallow: /app.js
+Disallow: /ui.js
+Disallow: /skin3d.js
+Disallow: /theme.js
+Disallow: /style.css
+Disallow: /ui.css
+
+# Mesterséges intelligencia célú, tömeges tartalomgyűjtés - a portál
+# tartalma a játékosainké, ezért ezt nem engedjük.
+User-agent: GPTBot
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+Sitemap: https://center.solaryn.hu/sitemap.xml

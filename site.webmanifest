@@ -1,0 +1,26 @@
+{
+  "name": "SolarCenter | Solaryn Network",
+  "short_name": "SolarCenter",
+  "description": "A SolarynNetwork hivatalos játékosportálja: skin, kiegészítők, PrémiumPont, rangok és fiókbiztonság egy helyen.",
+  "lang": "hu",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0a0a0d",
+  "theme_color": "#0a0a0d",
+  "icons": [
+    {
+      "src": "/assets/solaryn-icon.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/solaryn-icon.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

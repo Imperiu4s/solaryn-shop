@@ -12,7 +12,7 @@
 // számot látsz, a böngésző MÉG A RÉGI app.js-t futtatja (a webtárhely
 // cache-e miatt egy feltöltés nem feltétlenül ér ki azonnal). MINDEN
 // kiadásnál emelni kell, az index.html ?v= paramétereivel EGYÜTT.
-const CENTER_VERSION = '20260902a';
+const CENTER_VERSION = '20260903a';
 
 const BACKEND_URL = 'https://api.overclockgame.hu:8908';
 
@@ -50,6 +50,14 @@ initPasswordToggles();
 // ── Hulló parázs-szemcse háttéranimáció (ugyanaz, mint a SolarLauncherben) ──
 (function initParticles() {
   const canvas = $('#particleCanvas');
+  // ÚJ: aki a rendszerében kikapcsolta az animációkat (mozgásérzékenység,
+  // vestibuláris panasz - WCAG 2.3.3), annál el sem indítjuk a hurkot. Ez
+  // egyben a leggyengébb gépeken/akkumulátoron is spórolás: így nincs
+  // másodpercenként 60 teljes képernyős újrarajzolás.
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    canvas.style.display = 'none';
+    return;
+  }
   const ctx = canvas.getContext('2d');
   let particles = [];
 
@@ -57,7 +65,17 @@ initPasswordToggles();
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
   }
-  window.addEventListener('resize', resize);
+  // ÚJ: az átméretezés fojtása (throttle). A canvas.width írása minden
+  // alkalommal ÚJRAFOGLALJA a teljes rajzfelületet - egy ablak-húzás alatt
+  // ez másodpercenként több tucatszor futott le, ami az egész felületet
+  // megakasztotta. Egy képkockányi késleltetés érzékelhetetlen, viszont
+  // húzás közben egyetlen újrafoglalásra csökkenti.
+  let resizePending = false;
+  window.addEventListener('resize', () => {
+    if (resizePending) return;
+    resizePending = true;
+    requestAnimationFrame(() => { resizePending = false; resize(); });
+  });
   resize();
 
   function spawn() {
@@ -359,11 +377,37 @@ function promptTotpModal() {
 }
 
 async function doLogin() {
-  const user = $('#authUser').value.trim();
-  const pass = $('#authPass').value;
+  const userEl = $('#authUser');
+  const passEl = $('#authPass');
+  const user = userEl.value.trim();
+  const pass = passEl.value;
   const rememberMe = $('#authRememberMe').checked;
   $('#authError').textContent = '';
-  const res = await performLogin(user, pass, rememberMe);
+
+  // ÚJ: kliens-oldali kötelező-mező ellenőrzés. Enélkül egy ÜRES űrlap
+  // elküldése is elment a backendig, és onnan a félrevezető "Hibás
+  // felhasználónév vagy jelszó" jött vissza - miközben a felhasználó nem
+  // rontott el semmit, csak még nem írt be semmit. Ráadásul minden ilyen
+  // üres próbálkozás beleszámított a bejelentkezési kísérlet-korlátba.
+  // A markFieldInvalid()/setButtonLoading() a ui.js-ben él; ha az valamiért
+  // nem töltött be, a ?.-mentes hívás helyett itt egy őrfeltétel áll, hogy
+  // a bejelentkezés attól még működjön.
+  const invalid = (el, msg) => { if (typeof window.markFieldInvalid === 'function') window.markFieldInvalid(el, msg); };
+  if (!user || !pass) {
+    if (!user) invalid(userEl, 'Add meg a játékosnevedet.');
+    if (!pass) invalid(passEl, 'Add meg a jelszavadat.');
+    (user ? passEl : userEl).focus();
+    return;
+  }
+
+  const btn = $('#authSubmit');
+  if (typeof window.setButtonLoading === 'function') window.setButtonLoading(btn, true);
+  let res;
+  try {
+    res = await performLogin(user, pass, rememberMe);
+  } finally {
+    if (typeof window.setButtonLoading === 'function') window.setButtonLoading(btn, false);
+  }
   if (!res.ok) {
     if (res.locked) { showLockedScreen(res.reason); return; }
     $('#authError').textContent = res.message || 'Sikertelen bejelentkezés.';
@@ -529,13 +573,34 @@ async function submitRegistration(ids, errEl) {
   const marketingOk = $(ids.marketing).checked;
   const marketingChannel = $(ids.marketingChannel).value;
 
-  if (!username) { errEl.textContent = 'Adj meg egy játékos nevet.'; return null; }
-  if (!email || email !== email2) { errEl.textContent = 'A két email cím nem egyezik.'; return null; }
-  if (!pass || pass !== pass2) { errEl.textContent = 'A két jelszó nem egyezik.'; return null; }
-  if (pass.length < 6) { errEl.textContent = 'A jelszó min. 6 karakter.'; return null; }
-  if (!year || !month || !day) { errEl.textContent = 'Add meg a születési dátumodat.'; return null; }
-  if (!termsOk) { errEl.textContent = 'Az ÁSZF és az Adatvédelmi nyilatkozat elfogadása kötelező.'; return null; }
-  if (!ageOk) { errEl.textContent = 'Erősítsd meg, hogy betöltötted a 14. életévedet.'; return null; }
+  // A hibát mostantól nemcsak az űrlap alján, egyetlen közös sorban írjuk
+  // ki, hanem MEGJELÖLJÜK a hibás mezőt is (piros keret + rövid rázás), és
+  // oda is ugrunk. Egy 10 mezős regisztrációs űrlapnál a "A két jelszó nem
+  // egyezik" önmagában, az űrlap alján gyakran nem is látszott a képernyőn.
+  const fail = (msg, fieldSel) => {
+    errEl.textContent = msg;
+    const el = fieldSel ? $(fieldSel) : null;
+    if (el) {
+      if (typeof window.markFieldInvalid === 'function') window.markFieldInvalid(el, msg);
+      el.focus();
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+    return null;
+  };
+
+  if (!username) return fail('Adj meg egy játékos nevet.', ids.user);
+  if (!email) return fail('Add meg az email címedet.', ids.email);
+  // ÚJ: formai ellenőrzés. Eddig csak a KÉT mező egyezését néztük, tehát egy
+  // elgépelt cím (pl. hiányzó @) is elment a backendig - és mivel a
+  // visszaigazoló levél oda ment volna, a hiba csak sokkal később derült ki.
+  if (!/^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/.test(email)) return fail('Ez nem tűnik érvényes email címnek.', ids.email);
+  if (email !== email2) return fail('A két email cím nem egyezik.', ids.email2);
+  if (!pass) return fail('Adj meg egy jelszót.', ids.pass);
+  if (pass.length < 6) return fail('A jelszó min. 6 karakter.', ids.pass);
+  if (pass !== pass2) return fail('A két jelszó nem egyezik.', ids.pass2);
+  if (!year || !month || !day) return fail('Add meg a születési dátumodat.', !year ? ids.year : (!month ? ids.month : ids.day));
+  if (!termsOk) return fail('Az ÁSZF és az Adatvédelmi nyilatkozat elfogadása kötelező.', ids.terms);
+  if (!ageOk) return fail('Erősítsd meg, hogy betöltötted a 14. életévedet.', ids.age);
 
   const res = await apiPost('/api/register', {
     username,
@@ -1713,6 +1778,7 @@ function switchView(view) {
   if (view === 'purchaseLogs') loadPurchaseLogsGlobal();
   if (view === 'staffActionLogs') loadStaffActionLogsGlobal();
   if (view === 'staffStats') loadStaffStats();
+  if (view === 'analytics') loadAnalytics();
   if (view === 'revenue') loadRevenue();
   if (view === 'newsAdmin') { resetNewsForm(); loadNewsAdmin(); }
   if (view === 'badges') { resetBadgeForm(); loadBadgesAdmin(); }
@@ -5152,6 +5218,12 @@ async function loadHomeNews() {
     const imageEl = $('#homeNewsImage');
     if (news.image_ext) {
       imageEl.src = newsImageUrl(news.id);
+      // A felhívás képe TARTALOM, nem dekoráció - ezért leíró alt-ot kap (a
+      // hír címéből), nem üres stringet. Az üres alt ott a helyes megoldás,
+      // ahol az ikon KÖZVETLENÜL a saját, látszó felirata mellett áll (pl.
+      // jelvény-chipek, rang-ikonok): ott egy leíró alt kétszer olvastatná
+      // fel ugyanazt a képernyőolvasóval.
+      imageEl.alt = 'A(z) „' + String(news.title || 'legfrissebb hír').replace(/<[^>]*>/g, '') + '” felhíváshoz csatolt kép';
       imageEl.classList.remove('hidden');
     } else {
       imageEl.classList.add('hidden');
@@ -5505,27 +5577,126 @@ $$('[data-legal-link]').forEach((a) => {
 $('#linkTerms').addEventListener('click', () => openLegal('aszf'));
 $('#btnBackFromLegal').addEventListener('click', () => switchView(lastViewBeforeLegal));
 
-// ── Süti beállítások modál ──
-const cookieModal = $('#cookieModal');
-function openCookieModal() {
+// ══════════════════════════════════════════════════════════════════════════
+// LÁTOGATOTTSÁG (admin) - ld. SolarBackend src/analytics.js
+// ══════════════════════════════════════════════════════════════════════════
+// A SAJÁT, névtelen mérésünk összesítője. Nincs benne IP, felhasználónév,
+// sem ujjlenyomat: a látogató-azonosító a szerveren naponta forgó kulccsal
+// hashelt, ezért NAPOK KÖZÖTT szándékosan nem fűzhető össze. Emiatt az
+// "egyedi látogató" csak NAPON BELÜL értelmes szám - az időszakra vetített
+// összeg nem egyedi látogatók száma, hanem "látogatónapok" (aki két napon
+// járt itt, kétszer számít); a felület is így nevezi meg, hogy ne lehessen
+// félreolvasni.
+let analyticsDays = 7;
+
+async function loadAnalytics() {
+  const chart = $('#analyticsChart');
+  const empty = $('#analyticsEmpty');
+  if (!session || !session.token) return;
+
+  // Csontváz-betöltés: a lekérés a szerveren összesít, ami néhány száz
+  // ezer sornál is gyors, de a hálózat lassú lehet - ne ugráljon az
+  // elrendezés, amíg megjön az adat (ld. ui.css .skeleton).
+  chart.innerHTML = '<div class="skeleton" style="width:100%;height:100%;border-radius:10px;"></div>';
+
+  let data = null;
   try {
-    const saved = JSON.parse(localStorage.getItem('solarcenter_cookies') || '{}');
-    $('#cookieAnalytics').checked = !!saved.analytics;
-  } catch { /* nincs elmentett beállítás */ }
-  cookieModal.classList.remove('hidden');
+    const res = await fetch(BACKEND_URL + '/api/admin/analytics/summary?days=' + analyticsDays, {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    data = await res.json();
+  } catch {
+    data = null;
+  }
+  if (!data || !data.ok) {
+    chart.innerHTML = '';
+    empty.textContent = 'Nem sikerült lekérni a látogatottsági adatokat.';
+    empty.classList.remove('hidden');
+    return;
+  }
+
+  // ── Összesítő csempék ──
+  $('#analyticsSummary').innerHTML = [
+    ['Oldalmegtekintés', formatHuNumber(data.totals.views)],
+    ['Látogatónap', formatHuNumber(data.totals.visitorDays)],
+    ['Átlagos időtöltés', formatAnalyticsDuration(data.totals.avgSeconds)]
+  ].map(([label, value]) => `
+    <div class="stat-badge">
+      <div>
+        <div class="stat-badge-label">${label}</div>
+        <div class="stat-badge-value">${escapeHtml(String(value))}</div>
+      </div>
+    </div>
+  `).join('');
+
+  // ── Napi oszlopdiagram ──
+  const daily = Array.isArray(data.daily) ? data.daily : [];
+  empty.classList.toggle('hidden', daily.length > 0);
+  empty.textContent = 'Erre az időszakra még nincs adat.';
+  const max = daily.reduce((m, d) => Math.max(m, d.visitors), 0) || 1;
+  // Legfeljebb ~10 dátumfelirat fér ki olvashatóan, akármilyen hosszú az
+  // időszak - ezért csak minden n-edik oszlop alá írunk ki dátumot.
+  const step = Math.max(1, Math.ceil(daily.length / 10));
+  chart.innerHTML = daily.map((d, i) => {
+    const pct = Math.max(2, Math.round((d.visitors / max) * 100));
+    const label = i % step === 0 ? `<small>${escapeHtml(d.day.slice(5))}</small>` : '';
+    // A "title" adja a rátét-buborékot: itt jelenik meg a megtekintés-szám
+    // is, amit szándékosan nem külön oszlopsorként rajzolunk ki.
+    const tip = `${d.day}: ${d.visitors} látogató, ${d.views} megtekintés`;
+    return `<div class="analytics-bar" title="${escapeHtml(tip)}"><i style="height:${pct}%"></i>${label}</div>`;
+  }).join('');
+
+  // ── Rangsorolt listák ──
+  renderAnalyticsRows('#analyticsPaths', data.topPaths, (r) => r.path === '/egyeb' ? 'egyéb / ismeretlen' : r.path, (r) => r.views, 'megtekintés');
+  renderAnalyticsRows('#analyticsDevices', data.devices, (r) => r.device, (r) => r.visitors, '');
+  renderAnalyticsRows('#analyticsRefs', data.referrers, (r) => r.ref.replace(/^https?:\/\//, ''), (r) => r.visitors, '');
 }
-function closeCookieModal() { cookieModal.classList.add('hidden'); }
-$('#btnCookieSettings').addEventListener('click', (e) => { e.preventDefault(); openCookieModal(); });
-cookieModal.addEventListener('click', (e) => { if (e.target === cookieModal) closeCookieModal(); });
-$('#cookieSaveBtn').addEventListener('click', () => {
-  localStorage.setItem('solarcenter_cookies', JSON.stringify({ analytics: $('#cookieAnalytics').checked }));
-  closeCookieModal();
+
+// Egy rangsorolt lista: a sáv szélessége a legnagyobb elemhez viszonyít
+// (nem az összeghez) - így a második-harmadik helyezett is látható marad,
+// nem lapul észrevehetetlenné egy domináns első mellett.
+function renderAnalyticsRows(sel, rows, labelOf, valueOf, unit) {
+  const el = $(sel);
+  if (!el) return;
+  const list = Array.isArray(rows) ? rows : [];
+  if (!list.length) { el.innerHTML = '<p class="analytics-row-empty">Még nincs adat.</p>'; return; }
+  const max = list.reduce((m, r) => Math.max(m, valueOf(r)), 0) || 1;
+  el.innerHTML = list.map((r) => {
+    const v = valueOf(r);
+    return `<div class="analytics-row" style="--pct:${Math.round((v / max) * 100)}%">
+      <span title="${escapeHtml(String(labelOf(r)))}">${escapeHtml(String(labelOf(r)))}</span>
+      <b>${formatHuNumber(v)}${unit ? ' ' + unit : ''}</b>
+    </div>`;
+  }).join('');
+}
+
+function formatHuNumber(n) {
+  return Number(n || 0).toLocaleString('hu-HU');
+}
+function formatAnalyticsDuration(sec) {
+  const s = Math.max(0, Math.round(Number(sec) || 0));
+  if (s < 60) return s + ' mp';
+  const m = Math.floor(s / 60);
+  return m + ' p ' + (s % 60) + ' mp';
+}
+
+$$('[data-analytics-days]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    $$('[data-analytics-days]').forEach((b) => b.classList.toggle('active', b === btn));
+    analyticsDays = parseInt(btn.dataset.analyticsDays, 10) || 7;
+    loadAnalytics();
+  });
 });
-$('#cookieRejectAll').addEventListener('click', () => {
-  $('#cookieAnalytics').checked = false;
-  localStorage.setItem('solarcenter_cookies', JSON.stringify({ analytics: false }));
-  closeCookieModal();
-});
+
+// ── Süti beállítások ──
+// ÁTKÖLTÖZTETVE (2026-09-03): a korábbi, egyetlen "analytics" jelölőnégyzetet
+// mentő blokk innen a ui.js initCookies()-ába került. Ok: a süti-kezelés
+// mostantól nem egyetlen elmentett érték, hanem teljes hozzájárulás-lánc -
+// első látogatáskori sáv, három kategória, verziózott tárolás, és ami a
+// lényeg: VALÓDI következmény (a Discord-widget iframe-je be sem töltődik,
+// amíg nincs rá engedély, ld. ui.js loadEmbed). Mivel ennek nincs egyetlen
+// backend-hívása sem, a megjelenítési réteg (ui.js) a helye. Itt csak ez a
+// jelzés maradt, hogy ne induljon fölösleges keresés a régi kód után.
 
 // ══════════════════════════════════════════════════════════════════════════
 // KIEGÉSZÍTŐK + PIAC (ld. SolarBackend src/cosmetics.js)
@@ -5558,9 +5729,12 @@ const cosmeticThumbCache = new Map();
 
 function cosmeticThumbHtml(c) {
   const cached = cosmeticThumbCache.get(c.id);
-  if (cached) return `<img class="cosmetic-thumb" src="${cached}" alt="" />`;
+  // A bélyegkép nem mindig áll a neve mellett (pl. napló-sorokban önmagában
+  // szerepel), ezért leíró alt-ot kap - ld. a loadHomeNews-nál írt indoklást
+  // arról, mikor helyes az üres alt és mikor nem.
+  if (cached) return `<img class="cosmetic-thumb" src="${cached}" alt="${escapeHtml(c.name || 'Kiegészítő')} előnézeti képe" />`;
   // Amíg elkészül, a helyőrző marad - a hydrateCosmeticThumbs() tölti fel.
-  return `<div class="cosmetic-thumb cosmetic-thumb-empty" data-cosmetic-thumb="${c.id}"></div>`;
+  return `<div class="cosmetic-thumb cosmetic-thumb-empty" data-cosmetic-thumb="${c.id}" data-cosmetic-name="${escapeHtml(c.name || '')}"></div>`;
 }
 
 function loadImage(src) {
@@ -5613,7 +5787,10 @@ function replaceThumb(el, url) {
   const img = document.createElement('img');
   img.className = 'cosmetic-thumb';
   img.src = url;
-  img.alt = '';
+  // A nevet a helyőrző data-attribútuma őrizte meg (ld. cosmeticThumbHtml),
+  // így a később kirajzolt kép is ugyanazt a leíró alt szöveget kapja, mint
+  // a gyorsítótárból azonnal visszaadott változat.
+  img.alt = (el.dataset.cosmeticName || 'Kiegészítő') + ' előnézeti képe';
   el.parentNode.replaceChild(img, el);
 }
 

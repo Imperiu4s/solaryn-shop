@@ -1,0 +1,821 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   ★ SOLARCENTER VIZUÁLIS RÉTEG (2026-09-03)
+   ───────────────────────────────────────────────────────────────────────
+   SZÁNDÉKOSAN külön fájl, és az index.html-ben a style.css UTÁN töltődik
+   be: kizárólag a style.css-ben már definiált osztályokra épít rá (nagyobb
+   glow, mozgás, üveg-hatás), így a CSS-kaszkád miatt felülír ott, ahol
+   kell - a meglévő, működő szabályokhoz nem kellett hozzányúlni, és egy
+   esetleges visszavonás is egyetlen <link> sor törlése.
+
+   Minden szín tokenből (var(--gold) stb.) jön, amit a style.css teteje
+   definiál - így mind a 6 téma (ld. theme.js) automatikusan öröklődik ide.
+
+   MOZGÁS-ALAPELV: minden animáció opacity/transform/filter alapú (a
+   compositor szálon fut, nem okoz újra-elrendezést), és a fájl legvégén
+   EGYETLEN prefers-reduced-motion blokk kikapcsolja őket azoknak, akik ezt
+   a rendszerükben kérték.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --ease-out: cubic-bezier(.22, 1, .36, 1);
+  --ease-spring: cubic-bezier(.34, 1.56, .64, 1);
+  --ease-smooth: cubic-bezier(.4, 0, .2, 1);
+  --dur-fast: .16s;
+  --dur: .28s;
+  --dur-slow: .5s;
+  --glass: color-mix(in srgb, var(--panel) 72%, transparent);
+}
+
+/* ── 1. Ambiens háttér ──────────────────────────────────────────────────
+   Két-három lassan sodródó, erősen elmosott színfolt a parázs-szemcsék
+   MÖGÖTT. Egyetlen pszeudó-elemből, radial-gradientekkel - így nincs plusz
+   DOM-elem és nincs plusz festési réteg sem. */
+body::before {
+  content: '';
+  position: fixed; inset: -20vmax;
+  z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(38vmax 38vmax at 18% 12%, color-mix(in srgb, var(--gold) 13%, transparent), transparent 62%),
+    radial-gradient(42vmax 42vmax at 82% 78%, color-mix(in srgb, var(--orange) 11%, transparent), transparent 64%),
+    radial-gradient(30vmax 30vmax at 55% 45%, color-mix(in srgb, var(--gold-2) 7%, transparent), transparent 60%);
+  filter: blur(28px) saturate(1.15);
+  animation: auroraDrift 34s var(--ease-smooth) infinite alternate;
+}
+@keyframes auroraDrift {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(2.5%, -2%, 0) scale(1.07); }
+  100% { transform: translate3d(-2%, 2.5%, 0) scale(1.03); }
+}
+/* Finom filmszemcse a nagy, lapos színfelületek "banding"-je ellen. */
+body::after {
+  content: '';
+  position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .022;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ── 1/b. Belépő-animációk kitöltési módja (FONTOS) ─────────────────────
+   A style.css belépő-animációi `animation: fadeSlideUp .4s ... both`-tal
+   futnak. A `both` kitöltési mód azt jelenti, hogy az animáció ZÁRÓ
+   képkockájának értékei (`transform: translateY(0)`) az animáció LEFUTÁSA
+   UTÁN IS érvényben maradnak - a CSS-kaszkádban pedig az animáció erősebb,
+   mint bármely sima szabály. Ezért minden `transform`-ot használó
+   hover-effekt (kártya-emelkedés, menüpont-elcsúszás) és a mobil oldalsáv
+   `translateX(-102%)` alaphelyzete is NÉMÁN hatástalan maradt volna.
+
+   A `backwards` ugyanúgy elrejti az elemet az animáció ELINDULÁSA ELŐTT
+   (tehát nincs "felvillanás"), de a lefutás után visszaadja az irányítást
+   a normál szabályoknak. Mivel az érintett animációk záró képkockája
+   pontosan az alapállapot (opacity: 1, transform: none), a váltás
+   vizuálisan semmit nem változtat - csak a hover/drawer újra működik. */
+.auth-split,
+.app-shell:not(.hidden) .app-sidebar,
+.app-shell:not(.hidden) .app-nav-item,
+.app-shell:not(.hidden) .app-nav-divider,
+.view, .view.active, .card, .stat-badge,
+.legal-panel.active, .modal-card,
+.topbar-dropdown, .topbar-theme-dropdown {
+  animation-fill-mode: backwards;
+}
+
+/* ── 2. Görgetősáv (globális) ───────────────────────────────────────── */
+* { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--gold) 45%, transparent) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--gold) 55%, transparent), color-mix(in srgb, var(--gold-2) 45%, transparent));
+  border-radius: 999px; border: 3px solid transparent; background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, var(--gold), var(--gold-2)); background-clip: content-box; }
+html { scroll-behavior: smooth; }
+::selection { background: color-mix(in srgb, var(--gold) 32%, transparent); color: var(--text); }
+
+/* ── 3. Fókusz-gyűrű (akadálymentesség) ─────────────────────────────────
+   A projektben több elem is `outline: none`-t kapott. Itt EGYSÉGES, csak
+   billentyűzetes fókusznál (:focus-visible) látszó gyűrűt adunk vissza -
+   egérrel kattintva nem zavar, TAB-bal viszont mindig pontosan látszik,
+   hol jár a fókusz (WCAG 2.4.7). */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+/* "Ugrás a tartalomra" link - csak fókuszban látszik, a TAB legelső eleme. */
+.skip-link {
+  position: fixed; top: -100px; left: 12px; z-index: 999;
+  background: linear-gradient(180deg, var(--gold), var(--gold-2)); color: var(--btn-ink);
+  padding: 11px 18px; border-radius: 0 0 12px 12px; font-weight: 800; font-size: 13px;
+  text-decoration: none; box-shadow: 0 8px 26px var(--gold-glow);
+  transition: top var(--dur) var(--ease-spring);
+}
+.skip-link:focus { top: 0; }
+/* Csak képernyőolvasónak szánt szöveg. */
+.sr-only {
+  position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}
+
+/* ── 4. Oldalsáv: üveg + kinyíló aktív-jelölő ───────────────────────── */
+.app-sidebar {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--panel) 78%, transparent),
+    color-mix(in srgb, var(--bg-2) 82%, transparent));
+  backdrop-filter: blur(18px) saturate(1.3);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  border-right: 1px solid color-mix(in srgb, var(--gold) 9%, var(--line));
+  z-index: 30;
+}
+.app-brand:hover .brand-logo-img { transform: rotate(-8deg) scale(1.08); }
+.brand-logo-img { transition: transform var(--dur) var(--ease-spring), filter var(--dur); }
+
+.app-nav-item {
+  position: relative; overflow: hidden;
+  transition: background var(--dur-fast) var(--ease-smooth),
+              color var(--dur-fast) var(--ease-smooth),
+              transform var(--dur-fast) var(--ease-out);
+}
+.app-nav-item svg { transition: transform var(--dur) var(--ease-spring); }
+.app-nav-item:hover { transform: translateX(3px); }
+.app-nav-item:hover svg { transform: scale(1.15) rotate(-4deg); }
+.app-nav-item.active {
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--gold) 18%, transparent) 0%,
+    color-mix(in srgb, var(--gold) 4%, transparent) 55%,
+    transparent 100%);
+  box-shadow: none;
+}
+/* A bal oldali aktív-csík magassága 0-ról nő fel, így "kinyílik". */
+.app-nav-item.active::before {
+  content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  width: 3px; height: 0; border-radius: 0 3px 3px 0;
+  background: linear-gradient(180deg, var(--gold), var(--gold-2));
+  box-shadow: 0 0 12px var(--gold-glow);
+  animation: navBarGrow .32s var(--ease-out) forwards;
+}
+@keyframes navBarGrow { to { height: 62%; } }
+.app-nav-item.active svg { filter: drop-shadow(0 0 6px var(--gold-glow)); }
+
+/* Kattintás-hullám. A ::after eddig is létezett a style.css-ben - itt
+   simábbra és a kattintás pontjához igazítottra hangoljuk. */
+.app-nav-item::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit;
+  background: radial-gradient(circle at var(--rx, 50%) var(--ry, 50%),
+    color-mix(in srgb, var(--gold) 30%, transparent), transparent 55%);
+  opacity: 0; transform: scale(.4); pointer-events: none;
+  transition: opacity .45s var(--ease-out), transform .45s var(--ease-out);
+}
+.app-nav-item:active::after { opacity: .9; transform: scale(1); transition: 0s; }
+
+.app-nav-divider { position: relative; border-top: none; }
+.app-nav-divider::before {
+  content: ''; position: absolute; top: 0; left: 16px; right: 16px; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--line) 20%, var(--line) 80%, transparent);
+}
+.app-nav-divider:first-of-type::before { display: none; }
+
+/* Belépő-animáció: a menüpontok egymás után úsznak be (a --i indexet az
+   app.js osztja ki, ld. initStaggerIndexes). */
+.app-shell:not(.hidden) .app-nav-item,
+.app-shell:not(.hidden) .app-nav-divider {
+  animation: navSlideIn .42s var(--ease-out) backwards;
+  animation-delay: calc(var(--i, 0) * 22ms + 80ms);
+}
+@keyframes navSlideIn {
+  from { opacity: 0; transform: translateX(-14px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* ── 5. Felső sáv: ragadós üveg ─────────────────────────────────────── */
+.app-topbar {
+  position: sticky; top: 0; z-index: 25;
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  backdrop-filter: blur(16px) saturate(1.25);
+  -webkit-backdrop-filter: blur(16px) saturate(1.25);
+  border-bottom: 1px solid color-mix(in srgb, var(--gold) 8%, var(--line));
+  transition: box-shadow var(--dur) var(--ease-smooth), background var(--dur);
+}
+/* Görgetéskor árnyékot kap (az osztályt az app.js teszi rá). */
+.app-topbar.scrolled {
+  box-shadow: 0 8px 30px rgba(0,0,0,.35);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+}
+.topbar-user, .topbar-theme { transition: background var(--dur-fast), transform var(--dur-fast) var(--ease-out); }
+.topbar-user:hover, .topbar-theme:hover { transform: translateY(-1px); }
+.topbar-avatar { transition: transform var(--dur) var(--ease-spring), box-shadow var(--dur); }
+.topbar-user:hover .topbar-avatar {
+  transform: scale(1.06) rotate(2deg);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold) 40%, transparent), 0 6px 18px var(--gold-glow);
+}
+.topbar-pp-badge { transition: transform var(--dur) var(--ease-spring), filter var(--dur); }
+.topbar-user:hover .topbar-pp-badge { transform: translateX(2px); }
+/* Az érték változásakor az app.js ráteszi a .value-bump osztályt. */
+.value-bump { animation: valueBump .5s var(--ease-spring); }
+@keyframes valueBump {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.16); filter: brightness(1.25); }
+  100% { transform: scale(1); }
+}
+
+.topbar-dropdown, .topbar-theme-dropdown {
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  border-color: color-mix(in srgb, var(--gold) 14%, var(--line));
+  box-shadow: 0 20px 50px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.03) inset;
+  animation: dropdownPop .22s var(--ease-spring) backwards;
+}
+@keyframes dropdownPop {
+  from { opacity: 0; transform: translateY(-8px) scale(.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.topbar-dropdown button, .topbar-theme-option { transition: background var(--dur-fast), color var(--dur-fast), transform var(--dur-fast) var(--ease-out); }
+.topbar-dropdown button:hover, .topbar-theme-option:hover { transform: translateX(3px); }
+
+/* ── 6. Kártyák: fény-perem + emelkedés + egérkövető fényfolt ───────── */
+.card {
+  position: relative;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--panel) 94%, transparent),
+    color-mix(in srgb, var(--bg-2) 92%, transparent));
+  box-shadow: 0 12px 34px rgba(0,0,0,.28), 0 1px 0 rgba(255,255,255,.03) inset;
+  transition: transform var(--dur) var(--ease-out),
+              box-shadow var(--dur) var(--ease-out),
+              border-color var(--dur) var(--ease-out);
+  overflow: hidden;
+}
+/* Halvány arany "fénytörés" a kártya felső peremén. */
+.card::before {
+  content: ''; position: absolute; top: 0; left: 10%; right: 10%; height: 1px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--gold) 55%, transparent), transparent);
+  opacity: .55; pointer-events: none;
+}
+/* Egérkövető fényfolt - az app.js írja a --mx/--my/--spot változókat. */
+.card::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 0%),
+    color-mix(in srgb, var(--gold) 9%, transparent), transparent 42%);
+  opacity: var(--spot, 0);
+  transition: opacity .35s var(--ease-smooth);
+}
+.card:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--gold) 22%, var(--line));
+  box-shadow: 0 22px 50px rgba(0,0,0,.4), 0 0 26px -12px var(--gold-glow), 0 1px 0 rgba(255,255,255,.05) inset;
+}
+/* Nagy, űrlapos/táblázatos kártyákon az emelkedés gépelés közben zavarna. */
+.card.card-static:hover { transform: none; }
+.card.card-static::after { display: none; }
+
+/* ── 7. Statisztika-jelvények ────────────────────────────────────────── */
+.stat-badge {
+  position: relative; overflow: hidden;
+  transition: transform var(--dur) var(--ease-out), border-color var(--dur), box-shadow var(--dur);
+  animation: fadeSlideUp .5s var(--ease-out) backwards;
+  animation-delay: calc(var(--i, 0) * 55ms);
+}
+.stat-badge::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  background: linear-gradient(115deg, transparent 35%, color-mix(in srgb, var(--gold) 14%, transparent) 50%, transparent 65%);
+  transform: translateX(-120%);
+  transition: opacity .2s;
+}
+.stat-badge:hover { transform: translateY(-4px) scale(1.015); box-shadow: 0 18px 40px rgba(0,0,0,.35), 0 0 22px -10px var(--gold-glow); }
+.stat-badge:hover::after { opacity: 1; animation: shineSweep .8s var(--ease-smooth) forwards; }
+@keyframes shineSweep { to { transform: translateX(120%); } }
+.stat-badge-icon { transition: transform var(--dur) var(--ease-spring), box-shadow var(--dur); }
+.stat-badge:hover .stat-badge-icon { transform: scale(1.1) rotate(-6deg); }
+.stat-badge-value { font-variant-numeric: tabular-nums; }
+
+/* ── 8. Gombok: fénypászma, ripple, töltés ───────────────────────────── */
+.btn-glow, .btn-outline, .btn-buy, .btn-discord, .legal-tab, .perms-mode-tab {
+  position: relative; overflow: hidden; isolation: isolate;
+}
+.btn-glow { transition: transform .14s var(--ease-out), box-shadow var(--dur) var(--ease-out), filter var(--dur); }
+.btn-glow::before {
+  content: ''; position: absolute; inset: 0; z-index: -1;
+  background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,.42) 48%, transparent 66%);
+  transform: translateX(-130%);
+  transition: transform .7s var(--ease-smooth);
+}
+.btn-glow:hover::before { transform: translateX(130%); }
+.btn-glow:hover { transform: translateY(-2px); box-shadow: 0 14px 40px var(--gold-glow); }
+.btn-glow:active { transform: translateY(1px) scale(.985); }
+.btn-glow-orange:hover { box-shadow: 0 14px 40px var(--orange-glow); }
+
+.btn-outline { transition: border-color var(--dur), color var(--dur), background var(--dur), transform .14s var(--ease-out); }
+.btn-outline:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--gold) 45%, var(--line));
+  color: var(--text);
+  background: color-mix(in srgb, var(--gold) 7%, transparent);
+}
+.btn-outline:active { transform: translateY(0) scale(.99); }
+
+/* Kattintás-hullám: az app.js szúr be egy <span class="ripple"> elemet a
+   kattintás pontjára (ld. initRipples). */
+.ripple {
+  position: absolute; border-radius: 50%; pointer-events: none; z-index: 3;
+  background: radial-gradient(circle, rgba(255,255,255,.5), rgba(255,255,255,0) 70%);
+  transform: translate(-50%, -50%) scale(0); opacity: .9;
+  animation: rippleGrow .6s var(--ease-out) forwards;
+}
+@keyframes rippleGrow { to { transform: translate(-50%, -50%) scale(1); opacity: 0; } }
+
+/* Töltő állapot: a gomb felirata eltűnik, helyette pörgő gyűrű (ld.
+   app.js setButtonLoading). */
+.is-loading { color: transparent !important; pointer-events: none; position: relative; }
+.is-loading::after {
+  content: ''; position: absolute; top: 50%; left: 50%; width: 17px; height: 17px;
+  margin: -8.5px 0 0 -8.5px; border-radius: 50%; z-index: 4;
+  border: 2px solid rgba(0,0,0,.2); border-top-color: var(--btn-ink);
+  animation: spin .7s linear infinite;
+}
+.btn-outline.is-loading::after { border-color: color-mix(in srgb, var(--gold) 25%, transparent); border-top-color: var(--gold); }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── 9. Űrlapmezők ───────────────────────────────────────────────────── */
+.auth-form input:hover, .gift-modal-input:hover { border-color: color-mix(in srgb, var(--gold) 25%, var(--line)); }
+.auth-form input:focus, .auth-form select:focus, .gift-modal-input:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 14%, transparent), 0 0 24px -8px var(--gold-glow);
+}
+/* Hibás mező: piros perem + rövid rázás (ld. app.js markFieldInvalid). */
+.field-invalid {
+  border-color: var(--danger) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 16%, transparent) !important;
+  animation: shakeX .38s var(--ease-smooth);
+}
+@keyframes shakeX {
+  0%, 100% { transform: translateX(0); }
+  18% { transform: translateX(-6px); }
+  38% { transform: translateX(5px); }
+  58% { transform: translateX(-3px); }
+  78% { transform: translateX(2px); }
+}
+/* Mező alatti hibaüzenet (ld. app.js setFieldError). */
+.field-error-msg {
+  color: var(--danger); font-size: 11.5px; margin: 5px 2px 0; line-height: 1.4;
+  animation: fadeSlideUp .22s var(--ease-out) both;
+}
+.check-row input[type="checkbox"] { transition: transform .16s var(--ease-spring); }
+.check-row input[type="checkbox"]:checked { transform: scale(1.14); }
+.check-row:hover { color: var(--text); }
+
+/* ── 10. Nézetváltás + oldalcím ──────────────────────────────────────── */
+.view.active { animation: viewEnter .42s var(--ease-out) backwards; }
+@keyframes viewEnter {
+  from { opacity: 0; transform: translateY(14px); filter: blur(3px); }
+  to   { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+.page-title {
+  background: linear-gradient(100deg, var(--text) 20%, color-mix(in srgb, var(--gold) 75%, var(--text)) 55%, var(--text) 85%);
+  background-size: 200% auto;
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+  animation: titleSheen 7s linear infinite;
+}
+@keyframes titleSheen { to { background-position: 200% center; } }
+/* A .text-accent a címen belüli kiemelés - a gradiens miatt külön kell
+   visszaadni neki a saját színét. */
+.page-title .text-accent {
+  -webkit-text-fill-color: var(--gold); color: var(--gold);
+  text-shadow: 0 0 24px var(--gold-glow);
+}
+
+/* ── 11. Görgetésre megjelenő elemek (IntersectionObserver, app.js) ──── */
+.reveal { opacity: 0; transform: translateY(22px); }
+.reveal.revealed {
+  animation: fadeSlideUp .55s var(--ease-out) forwards;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+
+/* ── 12. Csontváz-betöltés (skeleton) ────────────────────────────────── */
+.skeleton {
+  position: relative; overflow: hidden; border-radius: 12px;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  min-height: 14px;
+}
+.skeleton::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--text) 9%, transparent), transparent);
+  transform: translateX(-100%);
+  animation: skeletonSweep 1.35s var(--ease-smooth) infinite;
+}
+@keyframes skeletonSweep { to { transform: translateX(100%); } }
+.skeleton-line { height: 13px; margin: 9px 0; }
+.skeleton-line.w-40 { width: 40%; }
+.skeleton-line.w-60 { width: 60%; }
+.skeleton-line.w-80 { width: 80%; }
+.skeleton-card { height: 96px; margin-top: 14px; border-radius: 16px; }
+
+/* ── 13. Felső betöltés-csík (globális hálózati jelző) ───────────────── */
+.top-progress {
+  position: fixed; top: 0; left: 0; height: 2.5px; width: 0; z-index: 999;
+  background: linear-gradient(90deg, var(--gold), var(--orange), var(--gold-2));
+  box-shadow: 0 0 14px var(--gold-glow);
+  opacity: 0; transition: width .3s var(--ease-smooth), opacity .3s;
+  pointer-events: none;
+}
+.top-progress.active { opacity: 1; }
+
+/* ── 14. Értesítés (toast) - átdolgozva ──────────────────────────────── */
+.shop-toast {
+  left: auto; right: 26px; bottom: 26px; transform: translate(0, 18px) scale(.96);
+  display: flex; align-items: center; gap: 11px; text-align: left;
+  padding: 14px 20px 14px 16px; border-radius: 14px;
+  background: color-mix(in srgb, var(--panel) 90%, transparent);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  border: 1px solid color-mix(in srgb, var(--gold) 32%, var(--line));
+  color: var(--text);
+  box-shadow: 0 18px 46px rgba(0,0,0,.5), 0 0 26px -14px var(--gold-glow);
+  transition: opacity .32s var(--ease-out), transform .32s var(--ease-spring);
+  overflow: hidden;
+}
+.shop-toast.visible { transform: translate(0, 0) scale(1); }
+/* A hátralévő időt mutató, lefutó csík. */
+.shop-toast::after {
+  content: ''; position: absolute; left: 0; bottom: 0; height: 2px; width: 100%;
+  background: linear-gradient(90deg, var(--gold), var(--gold-2));
+  transform-origin: left center;
+  animation: toastTimer 4.5s linear forwards;
+}
+@keyframes toastTimer { to { transform: scaleX(0); } }
+.shop-toast-icon {
+  flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--gold) 18%, transparent);
+  color: var(--gold);
+  animation: purchaseCheckPop .4s var(--ease-spring) both;
+}
+.shop-toast-error { border-color: color-mix(in srgb, var(--danger) 50%, var(--line)); }
+.shop-toast-error::after { background: linear-gradient(90deg, var(--danger), #c23a3a); }
+.shop-toast-error .shop-toast-icon { background: color-mix(in srgb, var(--danger) 18%, transparent); color: var(--danger); }
+@media (max-width: 560px) {
+  .shop-toast { left: 14px; right: 14px; bottom: 14px; max-width: none; }
+}
+
+/* ── 15. Modálok ─────────────────────────────────────────────────────── */
+.modal-overlay {
+  backdrop-filter: blur(7px) saturate(.9);
+  -webkit-backdrop-filter: blur(7px) saturate(.9);
+  animation: overlayIn .24s var(--ease-smooth) both;
+  /* JAVÍTVA: a hosszabb modálok (süti-beállítások, fiókkezelés) alacsony
+     ablakmagasságnál kilógtak a képernyő tetején ÉS alján is - a "flex
+     center" ilyenkor levágja a tetejét, és görgetni sem lehetett hozzá.
+     A megoldás: az átfedő réteg görgethető, a kártya pedig `margin: auto`
+     -val középre kerül, ha elfér, és felülre igazodik, ha nem. */
+  align-items: flex-start;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 20px 16px;
+  /* A süti-sáv (400) fölé, hogy a sávról nyitott beállítások ne kerüljenek
+     alá. Az értesítések (toast) ennél is feljebb vannak - ld. lentebb. */
+  z-index: 500;
+}
+.modal-overlay > .modal-card { margin: auto; }
+.shop-toast { z-index: 600; }
+@keyframes overlayIn { from { opacity: 0; } to { opacity: 1; } }
+.modal-card {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--panel) 96%, transparent),
+    color-mix(in srgb, var(--bg-2) 96%, transparent));
+  border: 1px solid color-mix(in srgb, var(--gold) 16%, var(--line));
+  box-shadow: 0 34px 90px rgba(0,0,0,.65), 0 0 0 1px rgba(255,255,255,.03) inset;
+  animation: modalPop .34s var(--ease-spring) backwards;
+}
+@keyframes modalPop {
+  from { opacity: 0; transform: translateY(22px) scale(.94); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+/* Bezáráskor az app.js ráteszi a .modal-closing osztályt az overlayre. */
+.modal-overlay.modal-closing { animation: overlayOut .2s var(--ease-smooth) both; }
+.modal-overlay.modal-closing .modal-card { animation: modalOut .2s var(--ease-smooth) both; }
+@keyframes overlayOut { to { opacity: 0; } }
+@keyframes modalOut { to { opacity: 0; transform: translateY(10px) scale(.97); } }
+
+/* ── 16. Vásárlás/rang/kozmetikum kártyák ────────────────────────────── */
+.pkg-card, .rank-card, .cosmetic-card, .market-card {
+  transition: transform var(--dur) var(--ease-out), border-color var(--dur), box-shadow var(--dur);
+}
+.pkg-card:hover, .rank-card:hover, .market-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 24px 54px rgba(0,0,0,.42), 0 0 30px -14px var(--gold-glow);
+  border-color: color-mix(in srgb, var(--gold) 32%, var(--line));
+}
+.cosmetic-card:hover { transform: translateY(-5px) scale(1.015); }
+
+/* ── 17. Jogi fülek + GYIK ───────────────────────────────────────────── */
+.legal-tab { transition: all var(--dur) var(--ease-out); }
+.legal-tab:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--gold) 40%, var(--line)); color: var(--text); }
+.legal-tab.active { box-shadow: 0 8px 22px var(--gold-glow); }
+.legal-panel.active { animation: fadeSlideUp .34s var(--ease-out) backwards; }
+
+/* GYIK (accordion) - ld. index.html data-view="faq" */
+.faq-list { display: flex; flex-direction: column; gap: 12px; }
+.faq-item {
+  border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+  background: color-mix(in srgb, var(--panel-2) 60%, transparent);
+  transition: border-color var(--dur), background var(--dur), box-shadow var(--dur);
+}
+.faq-item:hover { border-color: color-mix(in srgb, var(--gold) 28%, var(--line)); }
+.faq-item.open {
+  border-color: color-mix(in srgb, var(--gold) 38%, var(--line));
+  box-shadow: 0 10px 30px rgba(0,0,0,.25), 0 0 24px -14px var(--gold-glow);
+}
+.faq-q {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  width: 100%; padding: 17px 20px; border: none; background: transparent;
+  color: var(--text); font-size: 14.5px; font-weight: 700; text-align: left;
+  cursor: pointer; transition: color var(--dur-fast), background var(--dur-fast);
+}
+.faq-q:hover { color: var(--gold); background: color-mix(in srgb, var(--gold) 5%, transparent); }
+.faq-item.open .faq-q { color: var(--gold); }
+.faq-chevron { flex-shrink: 0; transition: transform var(--dur) var(--ease-spring); color: var(--text-faint); }
+.faq-item.open .faq-chevron { transform: rotate(180deg); color: var(--gold); }
+/* A magasság-animáció grid-template-rows 0fr -> 1fr - így nem kell JS-ből
+   pixelben mért magasság, és a tartalom szabadon nőhet. */
+.faq-a-wrap { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .34s var(--ease-out); }
+.faq-item.open .faq-a-wrap { grid-template-rows: 1fr; }
+.faq-a { overflow: hidden; }
+.faq-a > div { padding: 0 20px 18px; font-size: 13.5px; color: var(--text-dim); line-height: 1.75; }
+.faq-a a { color: var(--gold); }
+.faq-search-wrap { position: relative; margin-bottom: 20px; }
+.faq-empty { text-align: center; padding: 30px 16px; color: var(--text-faint); font-size: 13px; }
+
+/* ── 17/b. Látogatottság (admin) ────────────────────────────────────────
+   SZÁNDÉKOSAN EGY adatsor (napi látogatók) van a napi diagramon, nem kettő
+   (látogatók + megtekintések). Két sorozathoz két, egymástól színvakság
+   mellett is megkülönböztethető szín kellene - a SolarCenternek viszont 6
+   témája van, tehát nincs egyetlen fix párosítás, ami mind a hatban
+   működne. Az oszlopdiagram így egyetlen hue-ból (var(--gold)) épül fel,
+   a megtekintés-szám pedig ott jelenik meg, ahol tényleg kell: a felső
+   összesítő csempéken és az oszlop rátét-buborékjában (title). */
+.analytics-range { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 26px; }
+.analytics-chart {
+  display: flex; align-items: flex-end; gap: 3px;
+  height: 190px; margin-top: 8px;
+  padding-bottom: 26px; position: relative;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto; overflow-y: hidden;
+}
+.analytics-bar {
+  flex: 1 1 0; min-width: 5px; position: relative;
+  display: flex; align-items: flex-end; height: 100%;
+}
+/* A tényleges oszlop: az aljához tapad, a teteje lekerekített. */
+.analytics-bar > i {
+  display: block; width: 100%; border-radius: 4px 4px 0 0;
+  background: linear-gradient(180deg, var(--gold), var(--gold-2));
+  transition: filter var(--dur-fast), transform var(--dur-fast);
+  transform-origin: bottom center;
+  min-height: 2px;
+}
+.analytics-bar:hover > i { filter: brightness(1.25); }
+/* A dátum csak minden n-edik oszlop alatt jelenik meg (a --lbl változót a
+   app.js állítja), különben 90 napnál egymásra csúsznának a feliratok. */
+.analytics-bar > small {
+  position: absolute; bottom: -22px; left: 50%; transform: translateX(-50%);
+  font-size: 10px; color: var(--text-faint); white-space: nowrap;
+}
+.analytics-empty-note { margin-top: 12px; }
+
+/* Rangsorolt lista (legnézettebb oldalak / eszközök / hivatkozók): a sáv a
+   sor HÁTTERÉBEN fut, nem külön oszlopban - így a címke és az érték is
+   olvasható marad a legszűkebb kártyában is. */
+.analytics-row {
+  position: relative; display: flex; align-items: center; justify-content: space-between;
+  gap: 14px; padding: 10px 12px; border-radius: 9px; margin-top: 6px;
+  font-size: 13px; overflow: hidden;
+}
+.analytics-row::before {
+  content: ''; position: absolute; inset: 0 auto 0 0; width: var(--pct, 0%);
+  background: color-mix(in srgb, var(--gold) 16%, transparent);
+  border-radius: 9px;
+}
+.analytics-row > span, .analytics-row > b { position: relative; }
+.analytics-row > span {
+  color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.analytics-row > b { color: var(--gold); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.analytics-row-empty { color: var(--text-faint); font-size: 12.5px; padding: 10px 2px; }
+
+/* ── 18. Süti-sáv (cookie banner) ────────────────────────────────────── */
+.cookie-banner {
+  position: fixed; left: 50%; bottom: 22px; transform: translate(-50%, 140%);
+  width: min(94vw, 720px); z-index: 400;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--panel) 92%, transparent),
+    color-mix(in srgb, var(--bg-2) 94%, transparent));
+  backdrop-filter: blur(22px) saturate(1.4);
+  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+  border: 1px solid color-mix(in srgb, var(--gold) 22%, var(--line));
+  border-radius: 20px; padding: 22px 26px;
+  box-shadow: 0 30px 80px rgba(0,0,0,.6), 0 0 40px -22px var(--gold-glow);
+  transition: transform .55s var(--ease-spring), opacity .4s var(--ease-smooth);
+  opacity: 0;
+}
+.cookie-banner.visible { transform: translate(-50%, 0); opacity: 1; }
+.cookie-banner[hidden] { display: none; }
+.cookie-banner-head { display: flex; align-items: center; gap: 11px; margin-bottom: 10px; }
+.cookie-banner-icon {
+  width: 34px; height: 34px; flex-shrink: 0; border-radius: 11px;
+  display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--gold) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--gold) 28%, transparent);
+  color: var(--gold);
+  animation: cookieWiggle 4.5s var(--ease-smooth) infinite;
+}
+@keyframes cookieWiggle {
+  0%, 88%, 100% { transform: rotate(0); }
+  92% { transform: rotate(-11deg); }
+  96% { transform: rotate(9deg); }
+}
+.cookie-banner-title { font-size: 15.5px; font-weight: 800; }
+.cookie-banner-text { font-size: 13px; color: var(--text-dim); line-height: 1.65; margin-bottom: 16px; }
+.cookie-banner-text a { color: var(--gold); text-decoration: underline; text-underline-offset: 2px; }
+.cookie-banner-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.cookie-banner-actions button { margin-top: 0; width: auto; flex: 1 1 150px; padding: 11px 18px; font-size: 13.5px; }
+.cookie-banner-actions .btn-link {
+  flex: 0 0 auto; background: none; border: none; color: var(--text-faint);
+  font-size: 12.5px; font-weight: 600; cursor: pointer; text-decoration: underline;
+  text-underline-offset: 3px; padding: 11px 8px; transition: color var(--dur-fast);
+}
+.cookie-banner-actions .btn-link:hover { color: var(--gold); }
+@media (max-width: 560px) {
+  .cookie-banner { left: 10px; right: 10px; bottom: 10px; width: auto; transform: translate(0, 140%); padding: 18px; }
+  .cookie-banner.visible { transform: translate(0, 0); }
+  .cookie-banner-actions button { flex: 1 1 100%; }
+}
+
+/* Süti-modál: kategóriánként kapcsolóval (nem sima checkbox). */
+.cookie-cat {
+  display: flex; align-items: flex-start; gap: 14px;
+  padding: 15px 16px; border: 1px solid var(--line); border-radius: 14px;
+  background: color-mix(in srgb, var(--panel-2) 55%, transparent);
+  transition: border-color var(--dur), background var(--dur);
+}
+.cookie-cat:hover { border-color: color-mix(in srgb, var(--gold) 26%, var(--line)); }
+.cookie-cat-body { flex: 1; min-width: 0; }
+.cookie-cat-name { font-size: 13.5px; font-weight: 800; margin-bottom: 4px; }
+.cookie-cat-desc { font-size: 12px; color: var(--text-dim); line-height: 1.6; }
+.cookie-cat-req { font-size: 11px; color: var(--gold); font-weight: 700; }
+.cookie-modal-note { font-size: 11.5px; color: var(--text-faint); line-height: 1.6; margin-top: 14px; }
+/* Három gomb egy 420px-es modálban egy sorban túl szűk lenne (a feliratok
+   két sorba törnének), ezért itt törhet a sor. */
+.cookie-modal .modal-actions { flex-wrap: wrap; }
+.cookie-modal .modal-actions button { flex: 1 1 150px; }
+/* Kapcsoló (switch) */
+.switch { position: relative; flex-shrink: 0; width: 42px; height: 24px; cursor: pointer; }
+.switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.switch-track {
+  position: absolute; inset: 0; border-radius: 999px;
+  background: var(--panel-2); border: 1px solid var(--line);
+  transition: background var(--dur) var(--ease-smooth), border-color var(--dur);
+  pointer-events: none;
+}
+.switch-thumb {
+  position: absolute; top: 3px; left: 3px; width: 17px; height: 17px; border-radius: 50%;
+  background: var(--text-faint);
+  transition: transform var(--dur) var(--ease-spring), background var(--dur);
+  pointer-events: none;
+}
+.switch input:checked ~ .switch-track {
+  background: linear-gradient(180deg, var(--gold), var(--gold-2));
+  border-color: transparent; box-shadow: 0 0 16px -4px var(--gold-glow);
+}
+.switch input:checked ~ .switch-thumb { transform: translateX(18px); background: var(--btn-ink); }
+.switch input:disabled ~ .switch-track { opacity: .55; }
+.switch input:disabled { cursor: not-allowed; }
+.switch input:focus-visible ~ .switch-track { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+/* ── 19. Mobil: valódi oldalsáv-fiók (drawer) ─────────────────────────────
+   A korábbi megoldás vízszintesen görgethető sávvá lapította a 25 elemes
+   menüt - használhatatlan volt. Helyette balról becsúszó fiók + hamburger
+   gomb + elsötétítő háttér. */
+.mobile-menu-btn {
+  display: none; align-items: center; justify-content: center;
+  width: 40px; height: 40px; flex-shrink: 0; border-radius: 12px;
+  background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+  cursor: pointer; transition: background var(--dur-fast), color var(--dur-fast), transform var(--dur-fast);
+}
+.mobile-menu-btn:hover { color: var(--gold); transform: scale(1.05); }
+.sidebar-scrim {
+  position: fixed; inset: 0; z-index: 29; background: rgba(0,0,0,.6);
+  backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+  opacity: 0; pointer-events: none; transition: opacity var(--dur) var(--ease-smooth);
+}
+.sidebar-scrim.visible { opacity: 1; pointer-events: auto; }
+
+@media (max-width: 900px) {
+  .mobile-menu-btn { display: flex; }
+  .app-shell { flex-direction: row; }
+  .app-sidebar {
+    position: fixed; top: 0; left: 0; bottom: 0; height: 100dvh;
+    width: min(82vw, 300px); flex-direction: column; padding: 22px 16px;
+    overflow-y: auto; overflow-x: hidden;
+    transform: translateX(-102%);
+    transition: transform .38s var(--ease-out);
+    box-shadow: 24px 0 60px rgba(0,0,0,.5);
+  }
+  .app-sidebar.open { transform: translateX(0); }
+  /* A style.css belépő-animációja (fadeSlideUp) a lefutása ALATT felülírja
+     a fiók becsukott alaphelyzetét (translateX(-102%)) - mobilon ez azt
+     jelentené, hogy belépéskor fél másodpercre "felvillan" a nyitott menü.
+     A fióknak amúgy is saját becsúszó átmenete van, itt nem kell a másik. */
+  .app-shell:not(.hidden) .app-sidebar { animation: none; }
+  .app-brand { display: flex; }
+  .app-nav-spacer { display: block; }
+  .app-nav, .app-nav-bottom { flex-direction: column; }
+  .app-nav-bottom { border-top: 1px solid var(--line); border-left: none; padding-top: 12px; padding-left: 0; }
+  .app-topbar { padding: 14px 18px; }
+  .app-content { padding: 26px 18px; }
+  .app-footer { padding: 16px 18px; flex-direction: column; gap: 8px; text-align: center; }
+  .footer-links { justify-content: center; }
+  .page-title { font-size: 24px; }
+  .page-note { font-size: 13.5px; margin-bottom: 24px; }
+  .card { padding: 22px 18px; border-radius: 16px; }
+  .card + .card { margin-top: 16px; }
+  /* Érintésnél a hover-emelkedés csak "beragadna". */
+  .card:hover, .stat-badge:hover, .pkg-card:hover, .rank-card:hover,
+  .cosmetic-card:hover, .market-card:hover { transform: none; }
+  .card::after { display: none; }
+}
+@media (max-width: 560px) {
+  .app-content { padding: 20px 14px; }
+  .app-topbar { padding: 12px 14px; gap: 8px; }
+  .topbar-user { padding: 5px 8px 5px 5px; }
+  .form-row-2, .form-row-3 { grid-template-columns: 1fr; }
+  .auth-form-side, .auth-info-side { padding: 28px 22px; }
+  .auth-screen { padding: 20px 12px; }
+  .page-title { font-size: 21px; }
+  .modal-card { padding: 22px 18px; border-radius: 16px; }
+  /* Érintésre méretezett célfelületek (WCAG 2.5.5). */
+  .app-nav-item { padding: 14px 16px; }
+  .btn-glow, .btn-outline { min-height: 46px; }
+}
+@media (pointer: coarse) {
+  .pw-toggle-btn { width: 40px; height: 40px; }
+  .legal-tab, .faq-q { min-height: 44px; }
+}
+
+/* ── 20. Egyéb finomítás ─────────────────────────────────────────────── */
+.app-footer {
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  gap: 12px; flex-wrap: wrap;
+}
+.app-footer a { position: relative; }
+.app-footer a::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -3px; height: 1px;
+  background: var(--gold); transform: scaleX(0); transform-origin: right center;
+  transition: transform var(--dur) var(--ease-out);
+}
+.app-footer a:hover::after { transform: scaleX(1); transform-origin: left center; }
+.footer-links { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+/* A "Süti beállítások" <button>, mert műveletet indít - de a lábléc többi
+   linkjével azonosan kell festenie. */
+.footer-link-btn {
+  background: none; border: none; padding: 0; cursor: pointer;
+  font: inherit; font-size: 12.5px; color: var(--text-faint);
+  position: relative; transition: color var(--dur) var(--ease-smooth);
+}
+.footer-link-btn:hover { color: var(--gold); }
+.footer-link-btn::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -3px; height: 1px;
+  background: var(--gold); transform: scaleX(0); transform-origin: right center;
+  transition: transform var(--dur) var(--ease-out);
+}
+.footer-link-btn:hover::after { transform: scaleX(1); transform-origin: left center; }
+.btn-back { transition: transform var(--dur-fast) var(--ease-out), border-color var(--dur-fast), color var(--dur-fast); }
+.btn-back:hover { transform: translateX(-3px); border-color: color-mix(in srgb, var(--gold) 40%, var(--line)); color: var(--gold); }
+img { max-width: 100%; }
+.news-card-image { transition: transform var(--dur-slow) var(--ease-out); }
+.news-card:hover .news-card-image { transform: scale(1.03); }
+
+/* Beágyazott, külső iframe-ek helyőrzője: adatvédelmi okból csak akkor
+   töltjük be a Discord-widgetet, ha a felhasználó a "beágyazott tartalom"
+   süti-kategóriát elfogadta (ld. app.js applyCookieConsent). */
+.embed-placeholder {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px; text-align: center; padding: 34px 22px; min-height: 220px;
+  border: 1px dashed var(--line); border-radius: 14px; color: var(--text-dim);
+  font-size: 13px; line-height: 1.6;
+}
+.embed-placeholder .btn-outline { width: auto; }
+
+/* ── 21. Mozgáscsökkentés (WCAG 2.3.3 / prefers-reduced-motion) ─────────
+   Aki a rendszerében kikapcsolta az animációkat, MINDENT statikusan kap -
+   de az elemek láthatóak maradnak: a .reveal-nak külön vissza kell adni az
+   opacity/transform alapállapotát, különben animáció nélkül láthatatlan. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .reveal { opacity: 1; transform: none; }
+  body::before { animation: none; }
+  .card:hover, .stat-badge:hover, .pkg-card:hover, .rank-card:hover,
+  .cosmetic-card:hover, .market-card:hover, .btn-glow:hover, .btn-outline:hover { transform: none; }
+}

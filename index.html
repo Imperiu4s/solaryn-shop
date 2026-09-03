@@ -2,18 +2,85 @@
 <html lang="hu">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SolarCenter</title>
-  <link rel="icon" href="assets/solaryn-icon.png" />
-  <!-- ÚJ: a téma minél korábban, a stíluslap ELŐTT alkalmazódjon (ld.
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+
+  <!-- ── Oldalcím és leírás ──────────────────────────────────────────────
+       A cím mintája: "<Aloldal> - SolarCenter | Solaryn Network". Az
+       aloldal-részt fülváltáskor a ui.js írja át (ld. initViewWrapper) -
+       így a böngésző-fül, a könyvjelző és a megosztott link is elárulja,
+       melyik oldalon jár a felhasználó, nem csak annyit, hogy
+       "SolarCenter". -->
+  <title>SolarCenter | Solaryn Network</title>
+  <meta name="description" content="A SolarynNetwork hivatalos játékosportálja: skin és kiegészítők kezelése, PrémiumPont, rangok, egyenleg, szankciók feloldása és fiókbiztonság - egy helyen." />
+  <meta name="author" content="SolarynNetwork" />
+  <meta name="theme-color" content="#0a0a0d" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="robots" content="index, follow, max-image-preview:large" />
+  <link rel="canonical" href="https://center.solaryn.hu/" />
+
+  <!-- ── Ikonok ─────────────────────────────────────────────────────── -->
+  <link rel="icon" type="image/png" href="assets/solaryn-icon.png" />
+  <link rel="apple-touch-icon" href="assets/solaryn-icon.png" />
+  <link rel="manifest" href="site.webmanifest" />
+
+  <!-- ── Közösségi megosztás (Open Graph + X/Twitter) ─────────────────── -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="SolarynNetwork" />
+  <meta property="og:locale" content="hu_HU" />
+  <meta property="og:url" content="https://center.solaryn.hu/" />
+  <meta property="og:title" content="SolarCenter | Solaryn Network" />
+  <meta property="og:description" content="A SolarynNetwork hivatalos játékosportálja: skin és kiegészítők kezelése, PrémiumPont, rangok, egyenleg, szankciók feloldása és fiókbiztonság - egy helyen." />
+  <meta property="og:image" content="https://center.solaryn.hu/assets/solaryn-wordmark.png" />
+  <meta property="og:image:alt" content="SolarynNetwork logó" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="SolarCenter | Solaryn Network" />
+  <meta name="twitter:description" content="A SolarynNetwork hivatalos játékosportálja: skin, kiegészítők, PrémiumPont, rangok és fiókbiztonság egy helyen." />
+  <meta name="twitter:image" content="https://center.solaryn.hu/assets/solaryn-wordmark.png" />
+
+  <!-- ── Teljesítmény ───────────────────────────────────────────────────
+       A backend egy MÁSIK origón van (api.overclockgame.hu), és a legelső
+       hálózati kérés rögtön a bejelentkezés-ellenőrzés - a preconnect így
+       még a JS futása előtt elindítja a DNS+TLS kézfogást. Az azonnal
+       látható logót preloadoljuk, mert az a legelső kirajzolás része. -->
+  <link rel="preconnect" href="https://api.overclockgame.hu:8908" crossorigin />
+  <link rel="dns-prefetch" href="https://api.overclockgame.hu" />
+  <link rel="preload" as="image" href="assets/solaryn-icon.png" />
+
+  <!-- A téma minél korábban, a stíluslap ELŐTT alkalmazódjon (ld.
        theme.js), hogy az első kirajzolás már a mentett témával történjen,
        ne legyen látható "villanás" az alap témáról. -->
-  <script src="theme.js?v=20260902a"></script>
-  <link rel="stylesheet" href="style.css?v=20260902a" />
+  <script src="theme.js?v=20260903a"></script>
+  <link rel="stylesheet" href="style.css?v=20260903a" />
+  <!-- A vizuális réteg SZÁNDÉKOSAN a style.css UTÁN: csak ráépít az ottani
+       osztályokra, és a kaszkádban felülír, ahol kell (ld. ui.css eleje). -->
+  <link rel="stylesheet" href="ui.css?v=20260903a" />
+
+  <!-- Strukturált adat a keresőknek/megosztásoknak (schema.org). -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "SolarCenter",
+    "alternateName": "SolarynNetwork játékosportál",
+    "url": "https://center.solaryn.hu/",
+    "inLanguage": "hu",
+    "publisher": {
+      "@type": "Organization",
+      "name": "SolarynNetwork",
+      "url": "https://www.solaryn.hu",
+      "logo": "https://center.solaryn.hu/assets/solaryn-icon.png"
+    }
+  }
+  </script>
 </head>
 <body>
-  <!-- Hulló parázs-szemcse animáció háttere - ugyanaz, mint a SolarLauncherben. -->
-  <canvas id="particleCanvas" class="particle-canvas"></canvas>
+  <!-- Billentyűzettel navigálóknak: a TAB legelső eleme, csak fókuszban
+       látszik, és átugorja a 25 elemes oldalsávot (WCAG 2.4.1). -->
+  <a class="skip-link" href="#appMainContent">Ugrás a tartalomra</a>
+
+  <!-- Hulló parázs-szemcse animáció háttere - ugyanaz, mint a
+       SolarLauncherben. Dekoráció: a képernyőolvasók elől elrejtve. -->
+  <canvas id="particleCanvas" class="particle-canvas" aria-hidden="true"></canvas>
 
   <!-- ── BEJELENTKEZŐ / REGISZTRÁCIÓS KÉPERNYŐ ── -->
   <section id="authScreen" class="auth-screen">
@@ -178,10 +245,10 @@
   </section>
 
   <!-- ── APP HÉJ (bejelentkezés után) ── -->
-  <main id="appScreen" class="app-shell hidden">
-    <nav class="app-sidebar">
+  <div id="appScreen" class="app-shell hidden">
+    <nav class="app-sidebar" id="appSidebar" aria-label="Fő navigáció">
       <div class="app-brand">
-        <img class="brand-logo-img" src="assets/solaryn-icon.png" alt="Solaryn" />
+        <img class="brand-logo-img" src="assets/solaryn-icon.png" alt="" width="34" height="34" />
         <div class="auth-brand-name">SOLARCENTER<small>Solaryn Network</small></div>
       </div>
 
@@ -268,6 +335,10 @@
           <svg viewBox="0 0 24 24"><path d="M3 3v18h18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 15l4-5 3 3 5-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <span>Havi bevétel</span>
         </button>
+        <button class="app-nav-item admin-nav-item hidden" data-view="analytics" data-permission="global.analytics">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+          <span>Látogatottság</span>
+        </button>
         <button class="app-nav-item admin-nav-item hidden" data-view="newsAdmin" data-permission="global.newsManage">
           <svg viewBox="0 0 24 24"><path d="M4 5h13a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M7 9h8M7 12h8M7 15h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M19 8l2 1.2v9.8a1 1 0 0 1-1 1h-1" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <span>Felhívások</span>
@@ -304,7 +375,11 @@
       <div class="app-nav-spacer"></div>
 
       <div class="app-nav-bottom">
-        <a class="app-nav-item" href="https://dc.solaryn.hu" target="_blank" rel="noopener">
+        <button class="app-nav-item" data-view="faq">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="9"/><path d="M9.4 9.2a2.7 2.7 0 0 1 5.2.9c0 1.8-2.6 2.2-2.6 3.9" stroke-linecap="round"/><circle cx="12" cy="17.2" r="1" fill="currentColor" stroke="none"/></svg>
+          <span>GYIK</span>
+        </button>
+        <a class="app-nav-item" href="https://dc.solaryn.hu" target="_blank" rel="noopener noreferrer">
           <svg viewBox="0 0 24 24"><path d="M20 5.5A17 17 0 0 0 15.7 4l-.3.6a13 13 0 0 1 3.6 1.3A15 15 0 0 0 12 4a15 15 0 0 0-7 1.9A13 13 0 0 1 8.6 4.6L8.3 4A17 17 0 0 0 4 5.5C1.8 9 1.2 12.4 1.4 15.8a17 17 0 0 0 4.9 2.4l.8-1.3a10 10 0 0 1-1.6-.7l.4-.3a12 12 0 0 0 10.2 0l.4.3a10 10 0 0 1-1.6.7l.8 1.3a17 17 0 0 0 4.9-2.4c.3-4.2-.6-7.6-2.6-10.3zM8.9 14.3c-.8 0-1.5-.8-1.5-1.7s.6-1.7 1.5-1.7 1.5.8 1.5 1.7-.6 1.7-1.5 1.7zm6.2 0c-.8 0-1.5-.8-1.5-1.7s.6-1.7 1.5-1.7 1.5.8 1.5 1.7-.7 1.7-1.5 1.7z"/></svg>
           <span>Discord</span>
         </a>
@@ -354,7 +429,12 @@
         </div>
       </div>
 
-      <div class="app-content">
+      <!-- A <main> SZÁNDÉKOSAN ide került (és nem az app-héjra): a lapon
+           pontosan EGY fő tartalmi régió lehet, és a képernyőolvasók
+           "ugrás a fő tartalomra" parancsa is ide kell vigyen - nem az
+           oldalsávot is magában foglaló héjra. Ez a "Ugrás a tartalomra"
+           kihagyó-link célpontja is (ld. .skip-link). -->
+      <main class="app-content" id="appMainContent" tabindex="-1">
 
         <!-- FŐOLDAL -->
         <section class="view active" data-view="home">
@@ -399,7 +479,9 @@
                    csak akkor jelenik meg, ha már mentettek legalább egy hírt. -->
               <div class="card news-card hidden" id="homeNewsCard">
                 <div class="card-title">📰 Legfrissebb hír</div>
-                <img class="news-card-image hidden" id="homeNewsImage" alt="" />
+                <!-- Az alt-ot az app.js loadHomeNews() tölti ki a hír
+                     címéből (ott a TARTALOM része, nem dekoráció). -->
+                <img class="news-card-image hidden" id="homeNewsImage" alt="" loading="lazy" decoding="async" />
                 <div class="news-card-title" id="homeNewsTitle"></div>
                 <div class="news-card-meta" id="homeNewsMeta"></div>
                 <p class="news-card-content" id="homeNewsContent"></p>
@@ -424,8 +506,21 @@
                 <span>Discord közösség</span>
               </div>
               <div class="discord-card-body">
-                <iframe class="discord-widget-frame" src="https://discord.com/widget?id=1458836378493391046&theme=dark" width="100%" height="420" allowtransparency="true" frameborder="0" sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"></iframe>
-                <a href="https://dc.solaryn.hu" target="_blank" rel="noopener" class="btn-discord">Csatlakozás</a>
+                <!-- ADATVÉDELEM: a Discord-widget egy KÜLSŐ szolgáltató
+                     iframe-je - a puszta betöltésével a discord.com már
+                     látja a látogató IP-címét és sütit is tehet nála.
+                     Ezért itt csak egy helyőrző áll, és az iframe-et a
+                     ui.js (loadEmbed) építi fel, KIZÁRÓLAG ha a felhasználó
+                     a "Beágyazott tartalom" süti-kategóriát elfogadta. -->
+                <div class="embed-placeholder"
+                     data-embed-src="https://discord.com/widget?id=1458836378493391046&amp;theme=dark"
+                     data-embed-title="Solaryn Discord közösségi widget"
+                     data-embed-class="discord-widget-frame"
+                     data-embed-height="420">
+                  <span>A Discord-widget megjelenítéséhez a beágyazott tartalmak engedélyezése szükséges, mert a betöltéssel a Discord szervere adatot kap rólad.</span>
+                  <button type="button" class="btn-outline" id="btnEnableEmbeds">Beágyazott tartalom engedélyezése</button>
+                </div>
+                <a href="https://dc.solaryn.hu" target="_blank" rel="noopener noreferrer" class="btn-discord">Csatlakozás</a>
               </div>
             </div>
           </div>
@@ -1037,6 +1132,44 @@
         </section>
 
         <!-- FELHÍVÁSOK / HÍREK (admin) -->
+        <!-- ── LÁTOGATOTTSÁG (admin) ────────────────────────────────────
+             A SAJÁT, névtelen mérésünk összesítője (ld. SolarBackend
+             src/analytics.js). Nincs benne IP, felhasználónév, sem
+             ujjlenyomat - a látogató-azonosító naponta forgó kulccsal
+             hashelt, ezért a napok között szándékosan NEM összefűzhető. -->
+        <section class="view" data-view="analytics">
+          <h1 class="page-title">Látogatottság</h1>
+          <p class="page-note">Névtelen, saját mérésű forgalmi adatok a SolarCenterről. Csak azokról a látogatókról gyűjtünk adatot, akik a süti-sávban ehhez hozzájárultak - a tényleges forgalom tehát ennél magasabb.</p>
+
+          <div class="analytics-range" role="group" aria-label="Időszak választása">
+            <button type="button" class="legal-tab active" data-analytics-days="7">7 nap</button>
+            <button type="button" class="legal-tab" data-analytics-days="30">30 nap</button>
+            <button type="button" class="legal-tab" data-analytics-days="90">90 nap</button>
+            <button type="button" class="legal-tab" data-analytics-days="365">1 év</button>
+          </div>
+
+          <div id="analyticsSummary" class="stat-badge-grid"></div>
+
+          <div class="card card-static">
+            <div class="card-title">Napi bontás</div>
+            <div id="analyticsChart" class="analytics-chart"></div>
+            <p class="ledger-empty hidden" id="analyticsEmpty">Erre az időszakra még nincs adat.</p>
+          </div>
+
+          <div class="admin-tables-grid">
+            <div class="card card-static">
+              <div class="card-title">Legnézettebb oldalak</div>
+              <div id="analyticsPaths"></div>
+            </div>
+            <div class="card card-static">
+              <div class="card-title">Eszközök</div>
+              <div id="analyticsDevices"></div>
+              <div class="card-title" style="margin-top:22px;">Honnan érkeztek</div>
+              <div id="analyticsRefs"></div>
+            </div>
+          </div>
+        </section>
+
         <section class="view" data-view="newsAdmin">
           <h1 class="page-title">Felhívások</h1>
           <p class="page-note">A mentett felhívás a legfrissebbként jelenik meg mindenki főoldalán, a "Profilod" szekció alatt.</p>
@@ -1702,6 +1835,124 @@
         </section>
 
         <!-- JOGI DOKUMENTUMOK (lábléc linkjeiről nyílik) -->
+        <!-- ── GYIK ────────────────────────────────────────────────────
+             A leggyakoribb Discord-os kérdések, hogy ne kelljen minden
+             játékosnak ticketet nyitnia ugyanazért. Kereshető (ld. ui.js
+             initFaq), és a nyitható elemek billentyűzettel is kezelhetők,
+             mert valódi <button>-ök (nem <div onclick>). -->
+        <section class="view" data-view="faq">
+          <h1 class="page-title">Gyakori <span class="text-accent">kérdések</span></h1>
+          <p class="page-note">Itt találod a leggyakoribb kérdéseket a fiókodról, a vásárlásról és a szerverről. Ha nem találod a választ, keress minket a Discordon.</p>
+
+          <div class="faq-search-wrap">
+            <label class="sr-only" for="faqSearch">Keresés a kérdések közt</label>
+            <input type="search" id="faqSearch" class="gift-modal-input" placeholder="Keresés a kérdések közt..." autocomplete="off" />
+          </div>
+
+          <div class="faq-list" id="faqList">
+            <div class="faq-item">
+              <button type="button" class="faq-q" aria-expanded="false">
+                <span>Hogyan hozok létre SolarCenter fiókot?</span>
+                <svg class="faq-chevron" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/></svg>
+              </button>
+              <div class="faq-a-wrap"><div class="faq-a"><div>
+                A fiókod a játékon belül jön létre: lépj fel a <b>play.solaryn.hu</b> szerverre, és használd a <b>/reg &lt;jelszó&gt; &lt;jelszó&gt;</b> parancsot. Ezután ugyanazzal a névvel és jelszóval tudsz bejelentkezni ide és a SolarLauncherbe is - mindhárom helyen ugyanaz az egy fiók.
+              </div></div></div>
+            </div>
+
+            <div class="faq-item">
+              <button type="button" class="faq-q" aria-expanded="false">
+                <span>Elfelejtettem a jelszavam, mit tegyek?</span>
+                <svg class="faq-chevron" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/></svg>
+              </button>
+              <div class="faq-a-wrap"><div class="faq-a"><div>
+                A bejelentkező képernyőn kattints az <b>„Elfelejtett jelszó?”</b> linkre. Ha a fiókodhoz tartozik megerősített email cím, küldünk rá egy jelszó-visszaállító linket. Ha nem adtál meg emailt, a Discord szerverünkön nyiss ticketet.
+              </div></div></div>
+            </div>
+
+            <div class="faq-item">
+              <button type="button" class="faq-q" aria-expanded="false">
+                <span>Mi az a PrémiumPont (PP), és mire jó?</span>
+                <svg class="faq-chevron" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/></svg>
+              </button>
+              <div class="faq-a-wrap"><div class="faq-a"><div>
+                A PrémiumPont a szerver belső fizetőeszköze. Ebből tudsz rangot, kiegészítőt és egyéb digitális terméket venni, illetve szankció-csökkentést kérni. PrémiumPontot a <b>SolarynCoin</b> fülön vásárolhatsz bankkártyával, vagy a feltöltött <b>egyenlegedből</b> is fizethetsz.
+              </div></div></div>
+            </div>
+
+            <div class="faq-item">
+              <button type="button" class="faq-q" aria-expanded="false">
+                <span>Fizettem, de nem kaptam meg a terméket. Mit tegyek?</span>
+                <svg class="faq-chevron" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/></svg>
+              </button>
+              <div class="faq-a-wrap"><div class="faq-a"><div>
+                A teljesítés automatikus, jellemzően <b>2-5 percen belül</b> megérkezik. Ha ennél tovább tart, először nézd meg a <b>Napló</b> fület: ha a tranzakció ott szerepel, a jóváírás elindult. Ha 15 perc után sem érkezett meg, nyiss ticketet a Discordon, és add meg a vásárlás időpontját.
+              </div></div></div>
+            </div>
+
+            <div class="faq-item">
+              <button type="button" class="faq-q" aria-expanded="false">
+                <span>Vissza tudom kérni a vásárlásom árát?</span>
+                <svg class="faq-chevron" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/></svg>
+              </button>
+              <div class="faq-a-wrap"><div class="faq-a"><div>
+                A megvásárolt termékek digitális termékek, amelyek teljesítése azonnal megtörténik, ezért általános esetben nem visszatéríthetők - a részleteket az <a href="#legal" data-legal-link="aszf">ÁSZF 3. pontja</a> tartalmazza. Ha a termék a mi hibánkból nem került teljesítésre, természetesen rendezzük: vagy manuálisan kiadjuk, vagy visszatérítjük.
+              </div></div></div>
+            </div>
+
+            <div class="faq-item">
+              <button type="button" class="faq-q" aria-expanded="false">
+                <span>Hogyan cserélem le a skinemet?</span>
+                <svg class="faq-chevron" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/></svg>
+              </button>
+              <div class="faq-a-wrap"><div class="faq-a"><div>
+                A <b>Skin</b> fülön tölthetsz fel egy sztenderd (64×64 vagy 64×32 pixeles) PNG skint. A feltöltés után azonnal érvényes: mind a szerveren, mind a SolarLauncherben az új skined jelenik meg. Ha nem frissül a játékban, lépj ki és vissza a szerverre.
+              </div></div></div>
+            </div>
+
+            <div class="faq-item">
+              <button type="button" class="faq-q" aria-expanded="false">
+                <span>Kitiltottak. Fel tudom oldani?</span>
+                <svg class="faq-chevron" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/></svg>
+              </button>
+              <div class="faq-a-wrap"><div class="faq-a"><div>
+                A <b>Szankciók</b> fülön látod az aktív büntetéseidet, és PrémiumPontért csökkentheted vagy feloldhatod őket. Bizonyos súlyos szabálysértések (pl. fizetési visszaélés) esetén ez nem elérhető - ilyenkor a Discordon lehet fellebbezni.
+              </div></div></div>
+            </div>
+
+            <div class="faq-item">
+              <button type="button" class="faq-q" aria-expanded="false">
+                <span>Hogyan védem meg a fiókomat?</span>
+                <svg class="faq-chevron" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/></svg>
+              </button>
+              <div class="faq-a-wrap"><div class="faq-a"><div>
+                A <b>Biztonság</b> fülön kapcsold be a kétlépcsős azonosítást (2FA) egy hitelesítő alkalmazással, és állíts be egy külön <b>biztonsági kódot (PIN)</b> is. A helyreállítási kódokat mentsd el egy biztonságos helyre. A személyzet <b>soha</b> nem kéri el a jelszavadat.
+              </div></div></div>
+            </div>
+
+            <div class="faq-item">
+              <button type="button" class="faq-q" aria-expanded="false">
+                <span>Milyen adatokat kezeltek rólam?</span>
+                <svg class="faq-chevron" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/></svg>
+              </button>
+              <div class="faq-a-wrap"><div class="faq-a"><div>
+                A működéshez szükséges minimumot: felhasználónév, IP cím (biztonsági okból), és a vásárlásaid adatai. Bankkártyaadatot nem tárolunk - azt kizárólag a fizetési szolgáltató (Stripe, PayPal) kezeli. A részletekért lásd az <a href="#legal" data-legal-link="adatkezeles">Adatkezelési tájékoztatót</a>, a sütikről pedig a lábléc <b>Süti beállítások</b> pontja szól.
+              </div></div></div>
+            </div>
+
+            <div class="faq-item">
+              <button type="button" class="faq-q" aria-expanded="false">
+                <span>Hol kérhetek segítséget, ha itt nincs a válasz?</span>
+                <svg class="faq-chevron" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/></svg>
+              </button>
+              <div class="faq-a-wrap"><div class="faq-a"><div>
+                A <a href="https://dc.solaryn.hu" target="_blank" rel="noopener noreferrer">Discord szerverünkön</a> nyiss ticketet - ott a személyzet a leggyorsabban tud segíteni. Írd meg a felhasználóneved és azt, hogy pontosan mi történt.
+              </div></div></div>
+            </div>
+          </div>
+          <p class="faq-empty" id="faqEmpty" hidden>Erre a keresésre nincs találat. Próbálj más kifejezést, vagy keress minket a Discordon.</p>
+        </section>
+
         <section class="view" data-view="legal">
           <button class="btn-back" id="btnBackFromLegal">
             <svg viewBox="0 0 24 24" width="14" height="14"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M15 18l-6-6 6-6"/></svg>
@@ -1839,14 +2090,25 @@
           </div>
         </section>
 
-      </div>
+      </main>
 
       <footer class="app-footer">
-        <span>&copy; 2026 <a href="#" data-legal-link="impresszum">Impresszum</a> | <a href="#" data-legal-link="aszf">ÁSZF</a> | <a href="#" data-legal-link="adatkezeles">Adatvédelem</a></span>
-        <span class="app-footer-right"><a href="#" id="btnCookieSettings">Süti beállítások</a></span>
+        <span>&copy; 2026 SolarynNetwork</span>
+        <nav class="footer-links" aria-label="Jogi és súgó linkek">
+          <a href="#faq" data-view-link="faq">GYIK</a>
+          <a href="#legal" data-legal-link="aszf">ÁSZF</a>
+          <a href="#legal" data-legal-link="adatkezeles">Adatvédelem</a>
+          <a href="#legal" data-legal-link="impresszum">Impresszum</a>
+          <a href="https://dc.solaryn.hu" target="_blank" rel="noopener noreferrer">Támogatás</a>
+          <!-- SZÁNDÉKOSAN <button>, nem <a href="#">: ez műveletet indít
+               (modált nyit), nem navigál. A korábbi "#" cél a böngésző
+               előzményeit szemetelte, és a képernyőolvasó is linkként
+               jelentette be - ami félrevezető. -->
+          <button type="button" class="footer-link-btn" id="btnCookieSettings">Süti beállítások</button>
+        </nav>
       </footer>
     </div>
-  </main>
+  </div>
 
   <!-- Elfelejtett jelszó - email/felhasználónév bekérése (ld. app.js,
        SolarBackend src/passwordReset.js POST /api/password-reset/request) -->
@@ -2022,23 +2284,91 @@
     </div>
   </div>
 
-  <!-- Süti beállítások modál -->
-  <div class="modal-overlay hidden" id="cookieModal">
-    <div class="modal-card cookie-modal">
-      <h3>Süti beállítások</h3>
-      <p>A SolarCenter a bejelentkezésed megtartásához nélkülözhetetlen sütiket használ. Ezeken felül nem gyűjtünk követő vagy marketing célú adatokat.</p>
-      <div class="cookie-options">
-        <label class="check-row"><input type="checkbox" checked disabled /> Nélkülözhetetlen sütik (bejelentkezés) - mindig aktív</label>
-        <label class="check-row"><input type="checkbox" id="cookieAnalytics" /> Anonim, összesített használati statisztika</label>
+  <!-- ── SÜTI-HOZZÁJÁRULÁS ────────────────────────────────────────────────
+       Első látogatáskor felúszó sáv (a döntésig semmilyen nem-szükséges
+       adatkezelés nem indul el), utána a lábléc "Süti beállítások" pontján
+       bármikor újranyitható és MEGVÁLTOZTATHATÓ a döntés - a GDPR szerint
+       a visszavonásnak ugyanolyan könnyűnek kell lennie, mint a
+       megadásnak. A logikát a ui.js initCookies() tartalmazza. -->
+  <div class="cookie-banner" id="cookieBanner" role="dialog" aria-modal="false"
+       aria-labelledby="cookieBannerTitle" aria-describedby="cookieBannerText" hidden>
+    <div class="cookie-banner-head">
+      <div class="cookie-banner-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path fill="none" stroke="currentColor" stroke-width="1.8" d="M21 12.8A9 9 0 1 1 11.2 3a3.4 3.4 0 0 0 4.6 4.2A3.4 3.4 0 0 0 20 11.8a9 9 0 0 1 1 1z"/><circle cx="9" cy="10" r="1.1" fill="currentColor"/><circle cx="13.5" cy="15" r="1.1" fill="currentColor"/><circle cx="8" cy="15.5" r="1" fill="currentColor"/></svg>
       </div>
+      <div class="cookie-banner-title" id="cookieBannerTitle">Sütik és adatvédelem</div>
+    </div>
+    <p class="cookie-banner-text" id="cookieBannerText">
+      A bejelentkezésed fenntartásához nélkülözhetetlen tárolást használunk - ez nem kapcsolható ki.
+      Ezen felül csak a te engedélyeddel mérünk névtelen látogatottsági statisztikát, és csak akkor
+      töltjük be a beágyazott Discord-tartalmat. Követő vagy hirdetési sütit <b>egyáltalán nem</b> használunk.
+      Részletek az <a href="#legal" data-legal-link="adatkezeles">Adatkezelési tájékoztatóban</a>.
+    </p>
+    <div class="cookie-banner-actions">
+      <button type="button" class="btn-outline" id="cookieBannerReject">Csak a szükséges</button>
+      <button type="button" class="btn-glow" id="cookieBannerAccept">Mindet elfogadom</button>
+      <button type="button" class="btn-link" id="cookieBannerSettings">Beállítások</button>
+    </div>
+  </div>
+
+  <!-- Süti beállítások modál - kategóriánként külön kapcsolóval -->
+  <div class="modal-overlay hidden" id="cookieModal" role="dialog" aria-modal="true" aria-labelledby="cookieModalTitle">
+    <div class="modal-card cookie-modal">
+      <h3 id="cookieModalTitle">Süti beállítások</h3>
+      <p>Válaszd ki, mit engedélyezel. A döntésed bármikor módosíthatod a lábléc „Süti beállítások” pontjában.</p>
+
+      <div class="cookie-options">
+        <div class="cookie-cat">
+          <label class="switch">
+            <input type="checkbox" checked disabled aria-label="Nélkülözhetetlen tárolás - mindig aktív" />
+            <span class="switch-track"></span><span class="switch-thumb"></span>
+          </label>
+          <div class="cookie-cat-body">
+            <div class="cookie-cat-name">Nélkülözhetetlen <span class="cookie-cat-req">· mindig aktív</span></div>
+            <p class="cookie-cat-desc">A bejelentkezésed fenntartása, a biztonsági ellenőrzések és az általad kifejezetten beállított megjelenés (téma) megőrzése. Ezek nélkül a portál nem működik, és nem alkalmasak követésre.</p>
+          </div>
+        </div>
+
+        <div class="cookie-cat">
+          <label class="switch">
+            <input type="checkbox" id="cookieAnalytics" aria-label="Névtelen látogatottsági statisztika engedélyezése" />
+            <span class="switch-track"></span><span class="switch-thumb"></span>
+          </label>
+          <div class="cookie-cat-body">
+            <div class="cookie-cat-name">Névtelen statisztika</div>
+            <p class="cookie-cat-desc">Összesített látogatottsági adat arról, mely oldalak a leghasznosabbak. Az azonosító véletlenszerű, a lap bezárásáig él, és nem köthető a fiókodhoz. Harmadik félnek nem adjuk át.</p>
+          </div>
+        </div>
+
+        <div class="cookie-cat">
+          <label class="switch">
+            <input type="checkbox" id="cookieEmbeds" aria-label="Beágyazott külső tartalom engedélyezése" />
+            <span class="switch-track"></span><span class="switch-thumb"></span>
+          </label>
+          <div class="cookie-cat-body">
+            <div class="cookie-cat-name">Beágyazott tartalom</div>
+            <p class="cookie-cat-desc">A főoldali Discord-widget megjelenítése. Betöltéskor a Discord szervere megkapja az IP-címedet és sütit helyezhet el nálad, ezért alapból ki van kapcsolva.</p>
+          </div>
+        </div>
+      </div>
+
+      <p class="cookie-modal-note">Hirdetési, profilalkotó és közösségimédia-követő sütit a SolarCenter egyáltalán nem használ.</p>
+
       <div class="modal-actions">
-        <button class="btn-outline" id="cookieRejectAll">Csak a szükséges</button>
-        <button class="btn-glow" id="cookieSaveBtn">Mentés</button>
+        <button type="button" class="btn-outline" id="cookieRejectAll">Csak a szükséges</button>
+        <button type="button" class="btn-outline" id="cookieAcceptAll">Mindet elfogadom</button>
+        <button type="button" class="btn-glow" id="cookieSaveBtn">Választásom mentése</button>
       </div>
     </div>
   </div>
 
-  <script src="skin3d.js?v=20260902a"></script>
-  <script src="app.js?v=20260902a"></script>
+  <!-- `defer`: a böngésző párhuzamosan tölti le mindhármat, de a HTML
+       feldolgozása UTÁN, egymás után, a FORRÁSSORRENDBEN futtatja őket -
+       ez utóbbi itt lényeges, mert a ui.js az app.js globális
+       switchView()/showToast() függvényeit csomagolja be, tehát csak
+       azok létrejötte után futhat. -->
+  <script src="skin3d.js?v=20260903a" defer></script>
+  <script src="app.js?v=20260903a" defer></script>
+  <script src="ui.js?v=20260903a" defer></script>
 </body>
 </html>
