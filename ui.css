@@ -86,7 +86,17 @@ body::after {
   border-radius: 999px; border: 3px solid transparent; background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, var(--gold), var(--gold-2)); background-clip: content-box; }
-html { scroll-behavior: smooth; }
+/* JAVÍTVA: a korábbi globális `html { scroll-behavior: smooth }` minden
+   programozott görgetést (scrollIntoView, horgony-ugrás) elnyújtott -
+   beleértve azokat is, amikhez semmi közünk (pl. böngésző/kiterjesztés
+   saját scrollIntoView hívásai). Ha egy ilyen elnyújtott görgetés még
+   folyamatban volt, amikor a felhasználó rákattintott valamire, a kattintás
+   koordinátája és a cél tényleges, még mozgásban lévő pozíciója szétcsúszott
+   - a kattintás "a levegőbe" ment, látszólag történés nélkül. A SAJÁT
+   görgetéseink (ld. ui.js switchView-csomagolása, app.js markFieldInvalid
+   melletti scrollIntoView) ettől függetlenül is simák maradnak, mert ott
+   MAGA a hívás kéri a `behavior: 'smooth'`-ot - ez a CSS-tulajdonság csak
+   azokra a görgetésekre hatott, amik NEM adtak meg explicit behavior-t. */
 ::selection { background: color-mix(in srgb, var(--gold) 32%, transparent); color: var(--text); }
 
 /* ── 3. Fókusz-gyűrű (akadálymentesség) ─────────────────────────────────
