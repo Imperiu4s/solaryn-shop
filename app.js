@@ -12,7 +12,7 @@
 // számot látsz, a böngésző MÉG A RÉGI app.js-t futtatja (a webtárhely
 // cache-e miatt egy feltöltés nem feltétlenül ér ki azonnal). MINDEN
 // kiadásnál emelni kell, az index.html ?v= paramétereivel EGYÜTT.
-const CENTER_VERSION = '20260903a';
+const CENTER_VERSION = '20260908a';
 
 const BACKEND_URL = 'https://api.overclockgame.hu:8908';
 
@@ -5730,12 +5730,22 @@ $$('[data-analytics-days]').forEach((btn) => {
 
 const RARITY_LABELS = { common: 'Általános', rare: 'Ritka', epic: 'Epikus', legendary: 'Legendás', mythic: 'Mítikus' };
 
+// Mentés után növeljük: minden kiegészítő-modell/textúra hivatkozásra
+// rákerül, ezzel a BÖNGÉSZŐ gyorsítótárát is megkerüljük. Enélkül az admin a
+// mentés után percekig a régi képet/geometriát látná, és azt hinné, nem
+// mentődött el semmi (pontosan ez történt az élő próbán).
+let cosmeticAssetBust = 0;
+
+function cosmeticAssetSuffix() {
+  return cosmeticAssetBust ? '?b=' + cosmeticAssetBust : '';
+}
+
 function cosmeticTextureUrl(id) {
-  return BACKEND_URL + '/api/cosmetics/texture/' + id;
+  return BACKEND_URL + '/api/cosmetics/texture/' + id + cosmeticAssetSuffix();
 }
 
 function cosmeticModelUrl(id) {
-  return BACKEND_URL + '/api/cosmetics/model/' + id;
+  return BACKEND_URL + '/api/cosmetics/model/' + id + cosmeticAssetSuffix();
 }
 
 // ── 3D bélyegképek ───────────────────────────────────────────────────────
@@ -5768,10 +5778,11 @@ function loadImage(src) {
 }
 
 const cosmeticModelCache = new Map();
-async function fetchCosmeticModel(id) {
-  if (cosmeticModelCache.has(id)) return cosmeticModelCache.get(id);
+async function fetchCosmeticModel(id, opts) {
+  const fresh = !!(opts && opts.fresh);
+  if (!fresh && cosmeticModelCache.has(id)) return cosmeticModelCache.get(id);
   try {
-    const res = await fetch(cosmeticModelUrl(id));
+    const res = await fetch(cosmeticModelUrl(id), fresh ? { cache: 'no-store' } : undefined);
     if (!res.ok) return null;
     const model = await res.json();
     cosmeticModelCache.set(id, model);
@@ -5826,6 +5837,50 @@ function cosmeticExpiryHtml(expiresAt) {
 
 // ── Saját kiegészítők ────────────────────────────────────────────────────
 let myCosmetics = { owned: [], loadout: {}, slots: [] };
+
+// ── Szűrés (kliens-oldali) ─────────────────────────────────────────────
+// Ugyanaz a szűrő szolgálja ki a SAJÁT és a MEGVÁSÁROLHATÓ rácsot: két külön
+// szűrősáv ugyanazon a nézeten csak azt a kérdést szülné, hogy "melyikre
+// gépeltem be a keresést".
+const cosmeticFilter = { search: '', slot: '', rarity: '', animatedOnly: false };
+
+function cosmeticMatchesFilter(c) {
+  if (!c) return false;
+  if (cosmeticFilter.slot && c.slot !== cosmeticFilter.slot) return false;
+  if (cosmeticFilter.rarity && c.rarity !== cosmeticFilter.rarity) return false;
+  if (cosmeticFilter.animatedOnly && !c.animated) return false;
+  if (cosmeticFilter.search) {
+    const hay = ((c.name || '') + ' ' + (c.description || '')).toLowerCase();
+    if (!hay.includes(cosmeticFilter.search)) return false;
+  }
+  return true;
+}
+
+// Az "animált" címke. MIÉRT LÁTHATÓ A KÁRTYÁN: a bélyegkép egy ÁLLÓ kép (egy
+// megosztott WebGL-kontextusban készül, ld. skin3d.js) - a mozgás rajta nem
+// látszik, tehát a vásárló nem tudná meg, hogy ez a szárny csapkod-e.
+function cosmeticAnimatedTag(c) {
+  return c && c.animated ? '<span class="cosmetic-tag cosmetic-tag-animated" title="Ez a kiegészítő mozog a játékban">Animált</span>' : '';
+}
+
+function bindCosmeticFilterControls() {
+  const search = $('#cosmeticFilterSearch');
+  if (!search || search.dataset.bound) return;
+  search.dataset.bound = '1';
+  const apply = () => {
+    cosmeticFilter.search = ($('#cosmeticFilterSearch').value || '').trim().toLowerCase();
+    cosmeticFilter.slot = $('#cosmeticFilterSlot').value || '';
+    cosmeticFilter.rarity = $('#cosmeticFilterRarity').value || '';
+    cosmeticFilter.animatedOnly = $('#cosmeticFilterAnimated').checked;
+    renderOwnedCosmetics();
+    renderCosmeticShopGrid();
+  };
+  ['#cosmeticFilterSearch', '#cosmeticFilterSlot', '#cosmeticFilterRarity', '#cosmeticFilterAnimated']
+    .forEach((sel) => {
+      $(sel)?.addEventListener('input', apply);
+      $(sel)?.addEventListener('change', apply);
+    });
+}
 let cosmeticShopItems = [];
 
 async function loadMyCosmetics() {
@@ -5838,6 +5893,12 @@ async function loadMyCosmetics() {
     myCosmetics = data.ok ? { owned: data.owned || [], loadout: data.loadout || {}, slots: data.slots || [] } : { owned: [], loadout: {}, slots: [] };
   } catch {
     myCosmetics = { owned: [], loadout: {}, slots: [] };
+  }
+  bindCosmeticFilterControls();
+  const slotFilter = $('#cosmeticFilterSlot');
+  if (slotFilter && slotFilter.options.length <= 1 && myCosmetics.slots.length) {
+    slotFilter.insertAdjacentHTML('beforeend', myCosmetics.slots
+      .map((sl) => `<option value="${escapeHtml(sl.id)}">${escapeHtml(sl.label)}</option>`).join(''));
   }
   renderCosmeticSlotBar();
   renderOwnedCosmetics();
@@ -5927,18 +5988,24 @@ function renderCosmeticSlotBar() {
 
 function renderOwnedCosmetics() {
   const wrap = $('#cosmeticsOwnedWrap');
+  const visible = myCosmetics.owned.filter(cosmeticMatchesFilter);
   if (!wrap) return;
+  if (myCosmetics.owned.length && !visible.length) {
+    wrap.innerHTML = '<div class="card"><p class="page-note" style="margin:0;">Nincs a szűrésnek megfelelő kiegészítőd.</p></div>';
+    return;
+  }
   if (!myCosmetics.owned.length) {
     wrap.innerHTML = '<div class="card"><p class="redeem-result">Még nincs egyetlen kiegészítőd sem. Vásárolj a lenti kínálatból, vagy nézd meg a Piacot.</p></div>';
     return;
   }
-  wrap.innerHTML = `<div class="cosmetic-grid">${myCosmetics.owned.map((c) => `
+  wrap.innerHTML = `<div class="cosmetic-grid">${visible.map((c) => `
     <div class="cosmetic-card ${c.equipped ? 'equipped' : ''} rarity-${escapeHtml(c.rarity)}">
       ${cosmeticThumbHtml(c)}
       <div class="cosmetic-card-name">${escapeHtml(c.name)}</div>
       <div class="cosmetic-card-tags">
         <span class="cosmetic-tag">${escapeHtml(c.slotLabel)}</span>
         <span class="cosmetic-tag rarity">${escapeHtml(RARITY_LABELS[c.rarity] || c.rarity)}</span>
+        ${cosmeticAnimatedTag(c)}
       </div>
       <div class="cosmetic-card-meta">${cosmeticExpiryHtml(c.expiresAt)}</div>
       ${c.equipped
@@ -5960,10 +6027,24 @@ async function loadCosmeticShop() {
   } catch {
     cosmeticShopItems = [];
   }
+  renderCosmeticShopGrid();
+}
+
+/**
+ * A megvásárolható kiegészítők rácsa. SZÁNDÉKOSAN külön a letöltéstől: a
+ * szűrő minden billentyűleütésnél újrarajzolja, letölteni viszont egyszer
+ * elég.
+ */
+function renderCosmeticShopGrid() {
+  const wrap = $('#cosmeticsShopWrap');
+  if (!wrap) return;
   const ownedIds = new Set(myCosmetics.owned.map((c) => c.id));
-  const buyable = cosmeticShopItems.filter((c) => c.priceSc !== null && c.priceSc !== undefined && !ownedIds.has(c.id) && c.hasModel);
+  const all = cosmeticShopItems.filter((c) => c.priceSc !== null && c.priceSc !== undefined && !ownedIds.has(c.id) && c.hasModel);
+  const buyable = all.filter(cosmeticMatchesFilter);
   if (!buyable.length) {
-    wrap.innerHTML = '<div class="card"><p class="redeem-result">Jelenleg nincs megvásárolható kiegészítő - nézd meg a Piacot, ott a játékosoktól is vehetsz.</p></div>';
+    wrap.innerHTML = all.length
+      ? '<div class="card"><p class="page-note" style="margin:0;">Nincs a szűrésnek megfelelő megvásárolható kiegészítő.</p></div>'
+      : '<div class="card"><p class="redeem-result">Jelenleg nincs megvásárolható kiegészítő - nézd meg a Piacot, ott a játékosoktól is vehetsz.</p></div>';
     return;
   }
   wrap.innerHTML = `<div class="cosmetic-grid">${buyable.map((c) => `
@@ -5973,6 +6054,7 @@ async function loadCosmeticShop() {
       <div class="cosmetic-card-tags">
         <span class="cosmetic-tag">${escapeHtml(c.slotLabel)}</span>
         <span class="cosmetic-tag rarity">${escapeHtml(RARITY_LABELS[c.rarity] || c.rarity)}</span>
+        ${cosmeticAnimatedTag(c)}
       </div>
       ${c.description ? `<div class="cosmetic-card-desc">${escapeHtml(c.description)}</div>` : ''}
       <div class="cosmetic-card-meta">${c.defaultDurationDays ? `<span class="cosmetic-meta-temp">${c.defaultDurationDays} napig</span>` : '<span class="cosmetic-meta-perm">Örökre</span>'}</div>
@@ -6144,6 +6226,7 @@ async function loadMarketListings() {
       <div class="cosmetic-card-tags">
         <span class="cosmetic-tag">${escapeHtml(l.cosmetic.slotLabel)}</span>
         <span class="cosmetic-tag rarity">${escapeHtml(RARITY_LABELS[l.cosmetic.rarity] || l.cosmetic.rarity)}</span>
+        ${cosmeticAnimatedTag(l.cosmetic)}
       </div>
       <div class="cosmetic-card-seller">Eladó: ${escapeHtml(l.seller)}</div>
       <div class="cosmetic-card-meta">${cosmeticExpiryHtml(l.expiresAt)}</div>
@@ -6286,16 +6369,58 @@ document.addEventListener('click', async (e) => {
 // ── Admin: katalógus ─────────────────────────────────────────────────────
 let cosmeticsAdminItems = [];
 let cosmeticEditingId = null;
-let cosmeticSelectedModelFile = null;
 let cosmeticSelectedTextureFile = null;
+
+// ── A RÉSZ-ALAPÚ SZERKESZTŐ ÁLLAPOTA ────────────────────────────────────
+// Egy kiegészítő több modellből (RÉSZBŐL) állhat, amik EGY KÖZÖS textúrán
+// osztoznak - egy szárny jellemzően két félből. Az illesztés-mezők (eltolás/
+// forgatás/méret) MINDIG az ÉPPEN KIVÁLASZTOTT célt szerkesztik:
+//   cosmeticTarget === -1  ->  a teljes kiegészítő ("assembly")
+//   cosmeticTarget >=  0   ->  a cosmeticParts[cosmeticTarget] rész
+//
+// MIÉRT EGY MEZŐKÉSZLET, ÉS NEM RÉSZENKÉNT KÜLÖN: nyolc rész x hét mező
+// egyszerre a képernyőn áttekinthetetlen lenne, ráadásul a húzás-gesztusok
+// (amik ugyanezeket a mezőket írják) sem tudnák, melyikre vonatkoznak.
+let cosmeticParts = [];
+let cosmeticTarget = -1;
+let cosmeticAssembly = null;
+
+function emptyAssembly() {
+  return {
+    offsetX: 0, offsetY: 0, offsetZ: 0,
+    rotationX: 0, rotationY: 0, rotationZ: 0,
+    scale: 1, itemModelSpace: true, anim: null
+  };
+}
+
+function emptyPart(idx) {
+  return {
+    id: null, idx, name: null,
+    offsetX: 0, offsetY: 0, offsetZ: 0,
+    rotationX: 0, rotationY: 0, rotationZ: 0,
+    scale: 1, anim: null,
+    hasModel: false,
+    elements: null, textureSize: null,
+    file: null,      // frissen kiválasztott, még fel nem töltött modellfájl
+    dirty: false
+  };
+}
+
+/** Az éppen szerkesztett cél (teljes kiegészítő vagy egy rész). */
+function currentTargetRecord() {
+  if (cosmeticTarget < 0) return cosmeticAssembly;
+  return cosmeticParts[cosmeticTarget] || cosmeticAssembly;
+}
 // A játékos-profil admin paneljének kiegészítő-választója ebből olvas -
 // ugyanaz a minta, mint az allBadgesCache-nél (ld. ott a megjegyzést).
 let allCosmeticsCache = [];
 
 function resetCosmeticForm() {
   cosmeticEditingId = null;
-  cosmeticSelectedModelFile = null;
   cosmeticSelectedTextureFile = null;
+  cosmeticAssembly = emptyAssembly();
+  cosmeticParts = [emptyPart(0)];
+  cosmeticTarget = -1;
   const t = $('#cosmeticFormTitle');
   if (!t) return;
   t.textContent = 'Új kiegészítő';
@@ -6323,8 +6448,9 @@ function resetCosmeticForm() {
   $('#cosmeticFormResult').textContent = '';
   $('#cosmeticFormResult').className = 'redeem-result';
   $('#cosmeticSaveBtn').textContent = 'Mentés';
-  cosmeticEditorModel = null;
   cosmeticEditorTexture = null;
+  renderCosmeticPartsBar();
+  renderCosmeticAnimEditor();
   queueEditorRefresh();
 }
 
@@ -6333,32 +6459,66 @@ $('#cosmeticTexturePickBtn')?.addEventListener('click', () => $('#cosmeticTextur
 
 // A kockaszám azonnali kiírása: a backend max. 48-at fogad el, és sokkal
 // jobb ezt a fájl kiválasztásakor látni, mint mentéskor hibaüzenetként.
+// Melyik részbe töltjük a most választott modellt. Az "1. rész" gombja a 0-t
+// állítja be, a "Rész hozzáadása" egy újat fűz a végére - a fájlválasztó
+// ugyanaz az egy input mindkét esetben.
+let cosmeticModelTargetPart = 0;
+
 $('#cosmeticModelInput')?.addEventListener('change', (e) => {
   const file = e.target.files && e.target.files[0];
-  cosmeticSelectedModelFile = file || null;
   const note = $('#cosmeticModelNote');
-  if (!file) { note.textContent = ''; return; }
+  const isNewPart = cosmeticModelTargetPart >= cosmeticParts.length;
+  if (!file) {
+    if (!isNewPart) note.textContent = '';
+    return;
+  }
   const reader = new FileReader();
-  reader.onload = () => {
+  reader.onload = async () => {
+    let parsed = null;
+    let count = 0;
     try {
-      const parsed = JSON.parse(reader.result);
-      const count = Array.isArray(parsed.elements) ? parsed.elements.length : 0;
-      note.textContent = count
-        ? `${escapeHtml(file.name)} - ${count} kocka`
-        : `${escapeHtml(file.name)} - FIGYELEM: nem találtam "elements" tömböt benne.`;
-      // A frissen kiválasztott modell azonnal megjelenik a szerkesztőben,
-      // még mentés előtt - így a beillesztés a feltöltéssel EGY menetben
-      // elvégezhető. Új kiegészítőnél rögtön a helyére is igazítjuk (ld.
-      // autoFitCosmetic indoklását) - szerkesztésnél NEM, mert ott a meglévő,
-      // már bevált értékeket nem szabad felülírni.
-      cosmeticEditorModel = count ? parsed : null;
-      if (cosmeticEditorModel && !cosmeticEditingId) autoFitCosmetic();
-      restartCosmeticEditor();
+      parsed = JSON.parse(reader.result);
+      count = Array.isArray(parsed.elements) ? parsed.elements.length : 0;
     } catch {
-      note.textContent = `${escapeHtml(file.name)} - FIGYELEM: nem érvényes JSON.`;
-      cosmeticEditorModel = null;
-      restartCosmeticEditor();
+      parsed = null;
     }
+    if (!parsed || !count) {
+      const msg = parsed
+        ? `${file.name} - FIGYELEM: nem találtam "elements" tömböt benne.`
+        : `${file.name} - FIGYELEM: nem érvényes JSON.`;
+      if (isNewPart) { showToast(msg, true); return; }
+      note.textContent = msg;
+      cosmeticParts[cosmeticModelTargetPart].elements = null;
+      cosmeticParts[cosmeticModelTargetPart].file = null;
+      renderCosmeticPartsBar();
+      restartCosmeticEditor();
+      return;
+    }
+
+    if (isNewPart) {
+      // ÚJ RÉSZ: azonnal létre is hozzuk a backenden, mert a rész-végpontok
+      // rész-azonosítóra hivatkoznak - enélkül a mentésig nem lenne mihez
+      // kötni a beállításait.
+      await createCosmeticPart(file, parsed);
+      return;
+    }
+
+    const part = cosmeticParts[cosmeticModelTargetPart];
+    part.file = file;
+    part.elements = parsed.elements;
+    part.textureSize = Array.isArray(parsed.texture_size) ? parsed.texture_size : null;
+    part.hasModel = true;
+    part.dirty = true;
+    if (cosmeticModelTargetPart === 0) note.textContent = `${file.name} - ${count} kocka`;
+
+    // A frissen kiválasztott modell azonnal megjelenik a szerkesztőben, még
+    // mentés előtt - így a beillesztés a feltöltéssel EGY menetben
+    // elvégezhető. ÚJ kiegészítőnél rögtön a helyére is igazítjuk (ld.
+    // autoFitCosmetic indoklását) - szerkesztésnél NEM, mert ott a meglévő,
+    // már bevált értékeket nem szabad felülírni.
+    if (!cosmeticEditingId) autoFitCosmetic();
+    renderCosmeticPartsBar();
+    restartCosmeticEditor();
   };
   reader.readAsText(file);
 });
@@ -6432,33 +6592,304 @@ function renderCosmeticsAdminList() {
   hydrateCosmeticThumbs(wrap);
 }
 
-// ── Admin illesztő-szerkesztő ────────────────────────────────────────────
+// ── Admin illesztő- és animáció-szerkesztő ───────────────────────────────
 // A húzás a TÉNYLEGES eltolás-mezőket állítja, és a karakteren azonnal
 // látszik az eredmény - ugyanazzal a transzformáció-lánccal, amit a
-// SolarClient is használ (ld. skin3d.js buildCosmeticGeometry levezetését).
+// SolarClient is használ (ld. skin3d.js buildCosmeticParts levezetését).
 // Ez a funkció LÉNYEGE: ha az előnézet és az in-game render eltérne, a
 // húzogatással beállított értékek használhatatlanok lennének.
 let stopCosmeticEditor = null;
-let cosmeticEditorModel = null;    // a szerkesztett modell (elements + texture_size)
 let cosmeticEditorTexture = null;  // Image objektum
 let cosmeticEditorRefreshQueued = false;
 
-function currentEditorTransform() {
+// ── A cél (teljes kiegészítő / rész) és a mezők összekötése ─────────────
+function readTargetFromInputs() {
+  const rec = currentTargetRecord();
+  if (!rec || !$('#cosmeticOffsetXInput')) return;
+  rec.offsetX = Number($('#cosmeticOffsetXInput').value) || 0;
+  rec.offsetY = Number($('#cosmeticOffsetYInput').value) || 0;
+  rec.offsetZ = Number($('#cosmeticOffsetZInput').value) || 0;
+  rec.rotationX = Number($('#cosmeticRotXInput').value) || 0;
+  rec.rotationY = Number($('#cosmeticRotYInput').value) || 0;
+  rec.rotationZ = Number($('#cosmeticRotZInput').value) || 0;
+  rec.scale = Number($('#cosmeticScaleInput').value) || 1;
+  if (cosmeticTarget >= 0) rec.dirty = true;
+  // Az "item-modell tér" MINDIG a kiegészítő egészére vonatkozik: az egy
+  // koordináta-rendszer-konvenció, nem illesztési finomhangolás - a részek
+  // ugyanabban a térben készültek.
+  cosmeticAssembly.itemModelSpace = $('#cosmeticItemSpaceCheckbox').checked;
+}
+
+function writeTargetToInputs() {
+  const rec = currentTargetRecord();
+  if (!rec || !$('#cosmeticOffsetXInput')) return;
+  $('#cosmeticOffsetXInput').value = rec.offsetX;
+  $('#cosmeticOffsetYInput').value = rec.offsetY;
+  $('#cosmeticOffsetZInput').value = rec.offsetZ;
+  $('#cosmeticRotXInput').value = rec.rotationX;
+  $('#cosmeticRotYInput').value = rec.rotationY;
+  $('#cosmeticRotZInput').value = rec.rotationZ;
+  $('#cosmeticScaleInput').value = rec.scale;
+  $('#cosmeticItemSpaceCheckbox').checked = cosmeticAssembly.itemModelSpace !== false;
+
+  const label = cosmeticTarget < 0 ? 'teljes kiegészítő' : cosmeticPartLabel(cosmeticTarget);
+  const t1 = $('#cosmeticTargetLabel');
+  const t2 = $('#cosmeticAnimTargetLabel');
+  if (t1) t1.textContent = label;
+  if (t2) t2.textContent = label;
+}
+
+function cosmeticPartLabel(index) {
+  const part = cosmeticParts[index];
+  if (!part) return (index + 1) + '. rész';
+  return part.name ? `${index + 1}. rész - ${part.name}` : `${index + 1}. rész`;
+}
+
+function setCosmeticTarget(target) {
+  readTargetFromInputs();
+  cosmeticTarget = target;
+  writeTargetToInputs();
+  renderCosmeticPartsBar();
+  renderCosmeticAnimEditor();
+  queueEditorRefresh();
+}
+
+// ── Részek felülete ────────────────────────────────────────────────────
+function renderCosmeticPartsBar() {
+  const bar = $('#cosmeticPartsBar');
+  if (!bar) return;
+  const chips = [`<button type="button" class="cosmetic-part-chip${cosmeticTarget < 0 ? ' active' : ''}" data-cosmetic-target="-1">Teljes kiegészítő</button>`];
+  cosmeticParts.forEach((part, i) => {
+    const warn = part.hasModel || part.elements ? '' : ' <span class="cosmetic-part-chip-warn">nincs modell</span>';
+    const anim = (part.anim && part.anim.tracks && part.anim.tracks.length) ? ' <span class="cosmetic-part-chip-anim" title="Van animációja">~</span>' : '';
+    chips.push(`<button type="button" class="cosmetic-part-chip${cosmeticTarget === i ? ' active' : ''}" data-cosmetic-target="${i}">${escapeHtml(cosmeticPartLabel(i))}${anim}${warn}</button>`);
+  });
+  if (cosmeticParts.length < 8) {
+    chips.push('<button type="button" class="cosmetic-part-chip cosmetic-part-chip-add" data-cosmetic-add-part>+ Rész hozzáadása</button>');
+  }
+  bar.innerHTML = chips.join('');
+  renderCosmeticPartPanel();
+}
+
+function renderCosmeticPartPanel() {
+  const panel = $('#cosmeticPartPanel');
+  if (!panel) return;
+  if (cosmeticTarget < 0) {
+    panel.innerHTML = '<p class="cosmetic-file-note">A <strong>teljes kiegészítő</strong> van kiválasztva: az itt beállított illesztés és animáció MINDEN részre együtt hat. Egy rész külön mozgatásához válaszd ki a részt fent.</p>';
+    return;
+  }
+  const part = cosmeticParts[cosmeticTarget];
+  if (!part) { panel.innerHTML = ''; return; }
+  const cubes = part.elements ? part.elements.length : (part.hasModel ? null : 0);
+  const modelText = part.elements
+    ? `${cubes} kocka${part.file ? ' (új fájl, mentésre vár)' : ''}`
+    : (part.hasModel ? 'feltöltve (a geometria a mentett modellből jön)' : 'nincs modell');
+  panel.innerHTML = `
+    <div class="cosmetic-part-panel-row">
+      <label class="cosmetic-part-name">A rész neve
+        <input type="text" id="cosmeticPartNameInput" maxlength="48" placeholder="pl. Bal szárny" value="${escapeHtml(part.name || '')}" />
+      </label>
+      <div class="cosmetic-part-model">
+        <div class="cosmetic-part-model-label">Modell: <strong>${escapeHtml(modelText)}</strong></div>
+        <button type="button" class="btn-outline" data-cosmetic-replace-part-model>${part.hasModel ? 'Modell cseréje' : 'Modell kiválasztása'}</button>
+      </div>
+      ${cosmeticParts.length > 1
+        ? '<button type="button" class="news-delete-btn" data-cosmetic-delete-part>Rész törlése</button>'
+        : '<span class="cosmetic-file-note">Az utolsó rész nem törölhető.</span>'}
+    </div>`;
+}
+
+// ── Animáció-szerkesztő ────────────────────────────────────────────────
+// A sáv-mezők jelentése SZÓ SZERINT a kliens CosmeticAnim-jéé (Java) - ha itt
+// más lenne, a beállított mozgás in-game máshogy nézne ki.
+const ANIM_TYPE_LABELS = { rotate: 'Forgatás', translate: 'Eltolás', scale: 'Méret' };
+const ANIM_WAVE_LABELS = { sine: 'Lágy (szinusz)', tri: 'Egyenletes (háromszög)', saw: 'Körbe (fűrész)', pulse: 'Kapcsolgatás' };
+const ANIM_REACT_LABELS = {
+  none: 'Mindig', move: 'Mozgás közben', air: 'Levegőben', sneak: 'Lopakodva', ground: 'Földön'
+};
+
+// Kész mozgások. MIÉRT KELLENEK: sáv-szinten (típus/tengely/kitérés/sebesség/
+// fázis/hullám) gondolkodni tanulást igényel - a felhasználó viszont azt
+// akarja, hogy "csapkodjon a szárny". A gombok pontosan ezt a lépést hidalják
+// át, a beállított értékek utána szabadon hangolhatók.
+const ANIM_PRESETS = [
+  { label: 'Szárnycsapás (fel-le)', track: { type: 'rotate', axis: 'z', amp: 18, speed: 1.1, phase: 0, wave: 'sine', react: 'none' } },
+  { label: 'Szárnycsapás (fel-le, tükrözött)', track: { type: 'rotate', axis: 'z', amp: -18, speed: 1.1, phase: 0, wave: 'sine', react: 'none' } },
+  { label: 'Szárnynyitás (nyit-zár)', track: { type: 'rotate', axis: 'y', amp: 15, speed: 0.9, phase: 0, wave: 'sine', react: 'none' } },
+  { label: 'Szárnynyitás (tükrözött)', track: { type: 'rotate', axis: 'y', amp: -15, speed: 0.9, phase: 0, wave: 'sine', react: 'none' } },
+  { label: 'Lebegés', track: { type: 'translate', axis: 'y', amp: 0.8, speed: 0.35, phase: 0, wave: 'sine', react: 'none' } },
+  { label: 'Ringás', track: { type: 'rotate', axis: 'z', amp: 6, speed: 0.4, phase: 0, wave: 'sine', react: 'none' } },
+  { label: 'Folyamatos pörgés', track: { type: 'rotate', axis: 'y', amp: 180, speed: 0.35, phase: 0, wave: 'saw', react: 'none' } },
+  { label: 'Lüktetés', track: { type: 'scale', axis: 'x', amp: 0.06, speed: 0.8, phase: 0, wave: 'sine', react: 'none' } },
+  { label: 'Repülés közben csapkod', track: { type: 'rotate', axis: 'z', amp: 32, speed: 2.2, phase: 0, wave: 'sine', react: 'air' } },
+  { label: 'Futásra felgyorsul', track: { type: 'rotate', axis: 'z', amp: 20, speed: 1.6, phase: 0, wave: 'sine', react: 'move' } }
+];
+
+function currentAnim() {
+  const rec = currentTargetRecord();
+  if (!rec) return null;
+  return rec.anim;
+}
+
+function setCurrentAnim(anim) {
+  const rec = currentTargetRecord();
+  if (!rec) return;
+  rec.anim = anim;
+  if (cosmeticTarget >= 0) rec.dirty = true;
+}
+
+function ensureAnim() {
+  let anim = currentAnim();
+  if (!anim) {
+    anim = { tracks: [], pivot: null };
+    setCurrentAnim(anim);
+  }
+  if (!Array.isArray(anim.tracks)) anim.tracks = [];
+  return anim;
+}
+
+function renderCosmeticAnimEditor() {
+  const presetsWrap = $('#cosmeticAnimPresets');
+  const tracksWrap = $('#cosmeticAnimTracks');
+  if (!presetsWrap || !tracksWrap) return;
+
+  presetsWrap.innerHTML = ANIM_PRESETS
+    .map((preset, i) => `<button type="button" class="cosmetic-anim-preset" data-anim-preset="${i}">${escapeHtml(preset.label)}</button>`)
+    .join('');
+
+  const anim = currentAnim();
+  const tracks = anim && Array.isArray(anim.tracks) ? anim.tracks : [];
+  if (!tracks.length) {
+    tracksWrap.innerHTML = '<p class="cosmetic-file-note">Ehhez még nincs mozgás beállítva. Válassz egy kész mozgást fent, vagy vegyél fel egyet kézzel.</p>';
+  } else {
+    tracksWrap.innerHTML = `
+      <div class="cosmetic-anim-head">
+        <span>Mit</span><span>Tengely</span><span>Kitérés</span><span>Sebesség</span><span>Fázis°</span><span>Jelleg</span><span>Mikor</span><span></span>
+      </div>` + tracks.map((t, i) => `
+      <div class="cosmetic-anim-track" data-anim-index="${i}">
+        <select data-anim-field="type">${Object.entries(ANIM_TYPE_LABELS).map(([v, l]) => `<option value="${v}"${t.type === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
+        <select data-anim-field="axis"${t.type === 'scale' ? ' disabled' : ''}>${['x', 'y', 'z'].map((v) => `<option value="${v}"${t.axis === v ? ' selected' : ''}>${v.toUpperCase()}</option>`).join('')}</select>
+        <input type="number" data-anim-field="amp" step="${t.type === 'scale' ? '0.02' : (t.type === 'translate' ? '0.2' : '1')}" value="${Number(t.amp) || 0}" />
+        <input type="number" data-anim-field="speed" step="0.05" min="0" max="8" value="${Number(t.speed) || 0}" />
+        <input type="number" data-anim-field="phase" step="15" min="-360" max="360" value="${Number(t.phase) || 0}" />
+        <select data-anim-field="wave">${Object.entries(ANIM_WAVE_LABELS).map(([v, l]) => `<option value="${v}"${t.wave === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
+        <select data-anim-field="react">${Object.entries(ANIM_REACT_LABELS).map(([v, l]) => `<option value="${v}"${t.react === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
+        <button type="button" class="cosmetic-anim-remove" data-anim-remove="${i}" title="Sáv törlése">&times;</button>
+      </div>`).join('');
+  }
+
+  const pivot = anim && Array.isArray(anim.pivot) ? anim.pivot : null;
+  $('#cosmeticAnimPivotXInput').value = pivot ? pivot[0] : '';
+  $('#cosmeticAnimPivotYInput').value = pivot ? pivot[1] : '';
+  $('#cosmeticAnimPivotZInput').value = pivot ? pivot[2] : '';
+}
+
+function readAnimPivotFromInputs() {
+  const xs = $('#cosmeticAnimPivotXInput').value.trim();
+  const ys = $('#cosmeticAnimPivotYInput').value.trim();
+  const zs = $('#cosmeticAnimPivotZInput').value.trim();
+  // MIND A HÁROM mező kell: egy fél-megadott forgáspont (csak X) csendben
+  // rossz helyre tenné a tengelyt, ami "elrepül a szárny" tünetként jönne
+  // vissza - ezért ilyenkor inkább a modell közepe marad (üres = nincs).
+  if (!xs || !ys || !zs) return null;
+  const v = [Number(xs), Number(ys), Number(zs)];
+  return v.every(Number.isFinite) ? v : null;
+}
+
+// ── Rész létrehozása / törlése (azonnali backend-művelet) ──────────────
+async function createCosmeticPart(file, parsed) {
+  if (!cosmeticEditingId) {
+    showToast('Előbb mentsd el a kiegészítőt, utána adhatsz hozzá további részeket.', true);
+    return;
+  }
+  const fd = new FormData();
+  fd.append('name', '');
+  fd.append('scale', '1');
+  fd.append('model', file);
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/cosmetics/' + cosmeticEditingId + '/parts', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + session.token },
+      body: fd
+    });
+    const data = await res.json();
+    if (!data.ok) { showToast(data.message || 'Nem sikerült hozzáadni a részt.', true); return; }
+
+    const part = emptyPart(data.part.idx);
+    part.id = data.part.id;
+    part.hasModel = true;
+    part.elements = parsed.elements;
+    part.textureSize = Array.isArray(parsed.texture_size) ? parsed.texture_size : null;
+    cosmeticParts.push(part);
+    cosmeticAssetBust++;
+    cosmeticThumbCache.delete(cosmeticEditingId);
+    cosmeticModelCache.delete(cosmeticEditingId);
+    setCosmeticTarget(cosmeticParts.length - 1);
+    showToast('Rész hozzáadva. Állítsd be az illesztését és a mozgását, majd mentsd el.');
+  } catch {
+    showToast('Hálózati hiba a rész hozzáadásakor.', true);
+  }
+}
+
+async function deleteCosmeticPart(index) {
+  const part = cosmeticParts[index];
+  if (!part) return;
+  if (!confirm(`Biztosan törlöd ezt: ${cosmeticPartLabel(index)}? A geometriája véglegesen elvész.`)) return;
+
+  if (part.id && cosmeticEditingId) {
+    try {
+      const res = await fetch(BACKEND_URL + '/api/admin/cosmetics/' + cosmeticEditingId + '/parts/' + part.id, {
+        method: 'DELETE',
+        headers: { Authorization: 'Bearer ' + session.token }
+      });
+      const data = await res.json();
+      if (!data.ok) { showToast(data.message || 'Nem sikerült törölni a részt.', true); return; }
+    } catch {
+      showToast('Hálózati hiba a rész törlésekor.', true);
+      return;
+    }
+  }
+  cosmeticParts.splice(index, 1);
+  cosmeticParts.forEach((p, i) => { p.idx = i; });
+  cosmeticAssetBust++;
+  if (cosmeticEditingId) {
+    cosmeticThumbCache.delete(cosmeticEditingId);
+    cosmeticModelCache.delete(cosmeticEditingId);
+  }
+  setCosmeticTarget(-1);
+  showToast('Rész törölve.');
+}
+
+// ── Az előnézeti modell összeállítása a szerkesztő állapotából ──────────
+function buildEditorModel() {
+  readTargetFromInputs();
+  const parts = cosmeticParts
+    .filter((p) => Array.isArray(p.elements) && p.elements.length)
+    .map((p) => ({
+      texture_size: p.textureSize || [64, 64],
+      elements: p.elements,
+      transform: {
+        offset: [p.offsetX, p.offsetY, p.offsetZ],
+        rotation: [p.rotationX, p.rotationY, p.rotationZ],
+        scale: p.scale
+      },
+      anim: p.anim
+    }));
+  if (!parts.length) return null;
   return {
-    offset: [
-      Number($('#cosmeticOffsetXInput').value) || 0,
-      Number($('#cosmeticOffsetYInput').value) || 0,
-      Number($('#cosmeticOffsetZInput').value) || 0
-    ],
-    // Fokban, X-Y-Z sorrendben - ld. skin3d.js buildCosmeticGeometry.
-    rotation: [
-      Number($('#cosmeticRotXInput').value) || 0,
-      Number($('#cosmeticRotYInput').value) || 0,
-      Number($('#cosmeticRotZInput').value) || 0
-    ],
-    scale: Number($('#cosmeticScaleInput').value) || 1,
-    itemModelSpace: $('#cosmeticItemSpaceCheckbox').checked
+    assembly: {
+      offset: [cosmeticAssembly.offsetX, cosmeticAssembly.offsetY, cosmeticAssembly.offsetZ],
+      rotation: [cosmeticAssembly.rotationX, cosmeticAssembly.rotationY, cosmeticAssembly.rotationZ],
+      scale: cosmeticAssembly.scale,
+      itemModelSpace: cosmeticAssembly.itemModelSpace !== false,
+      anim: cosmeticAssembly.anim
+    },
+    parts
   };
+}
+
+function hasEditorModel() {
+  return cosmeticParts.some((p) => Array.isArray(p.elements) && p.elements.length);
 }
 
 // Ennyi világ-egység esik egy képpontra a megadott kamera-távolságnál
@@ -6494,8 +6925,13 @@ function wrapDegrees(n) {
 // eltolást, amitől a modell a csontra KÖZÉPRE kerül - onnan már csak
 // finomhangolás a húzogatás. A Z-t SZÁNDÉKOSAN nem nyúljuk: a mélység
 // (szárny hátul, sapka fölül) a modell szerzői szándéka.
+//
+// MINDIG a TELJES kiegészítőt igazítja (nem az épp kiválasztott részt): a
+// részek egymáshoz képesti helyzete a modell szerzői szándéka, azt egy
+// automatikus középre-igazítás elrontaná.
 function autoFitCosmetic() {
-  if (!cosmeticEditorModel) return false;
+  const model = buildEditorModel();
+  if (!model) return false;
   const slot = $('#cosmeticSlotSelect').value || 'head';
   const pivot = SkinPreview.COSMETIC_PIVOTS[slot] || [0, 0, 0];
 
@@ -6504,10 +6940,7 @@ function autoFitCosmetic() {
   // elforgatott modell befoglaló doboza más, tehát forgatás után újra
   // beillesztve mást kell kapni - különben a gomb egy elfordított kardot
   // a forgatás ELŐTTI helyzete szerint középre igazítana.
-  const probe = {
-    ...cosmeticEditorModel,
-    transform: { ...currentEditorTransform(), offset: [0, 0, 0] }
-  };
+  const probe = { ...model, assembly: { ...model.assembly, offset: [0, 0, 0] } };
   let g;
   try { g = SkinPreview.buildCosmeticGeometry(probe, slot); } catch { return false; }
   if (!g.positions.length) return false;
@@ -6522,8 +6955,9 @@ function autoFitCosmetic() {
   // A csont horgonypontja az előnézeti térben (ld. skin3d.js levezetését):
   //   (pivotX, 6 - pivotY, -pivotZ)
   // Az eltolás előjelei ugyanonnan jönnek.
-  $('#cosmeticOffsetXInput').value = round2(cx - pivot[0]);
-  $('#cosmeticOffsetYInput').value = round2((6 - pivot[1]) - cy);
+  cosmeticAssembly.offsetX = round2(cx - pivot[0]);
+  cosmeticAssembly.offsetY = round2((6 - pivot[1]) - cy);
+  if (cosmeticTarget < 0) writeTargetToInputs();
   return true;
 }
 
@@ -6556,7 +6990,8 @@ async function doRestartCosmeticEditor() {
 
   if (stopCosmeticEditor) { stopCosmeticEditor(); stopCosmeticEditor = null; }
 
-  if (!cosmeticEditorModel || !cosmeticEditorTexture) {
+  const model = cosmeticEditorTexture ? buildEditorModel() : null;
+  if (!model) {
     if (empty) empty.hidden = false;
     canvas.style.visibility = 'hidden';
     return;
@@ -6571,15 +7006,15 @@ async function doRestartCosmeticEditor() {
   if (!skinImg) return;
 
   const slot = $('#cosmeticSlotSelect').value || 'head';
-  const model = { ...cosmeticEditorModel, transform: currentEditorTransform() };
 
   stopCosmeticEditor = SkinPreview.start(
     canvas, skinImg, myCosmeticsSkinSlim(), null,
     [{ model, slot, img: cosmeticEditorTexture }],
     (dx, dy, angle, camDistance, dragMode) => {
       if (dragMode === 'rotate') {
-        // A KIEGÉSZÍTŐ forgatása (Ctrl + húzás) - nem a kameráé.
-        // Vízszintes mozdulat = Y (függőleges) tengely, függőleges = X.
+        // A KIEGÉSZÍTŐ (vagy a kiválasztott RÉSZ) forgatása (Ctrl + húzás) -
+        // nem a kameráé. Vízszintes mozdulat = Y (függőleges) tengely,
+        // függőleges = X.
         //
         // AZ ELŐJELEK LEVEZETVE, nem próbálgatva (a skin3d.js
         // transzformáció-láncából, alap-kameraállásnál):
@@ -6626,10 +7061,10 @@ async function doRestartCosmeticEditor() {
   );
 }
 
-// A geometriát minden mozdulatnál újra kell építeni (az eltolás bele van
-// sütve a csúcsokba) - de CSAK a geometriát: a teljes előnézet újraindítása
-// elvágná a folyamatban lévő húzást (ld. skin3d.js updateCosmetics
-// megjegyzését). Ezért ha már fut a szerkesztő, csak a puffereket cseréljük.
+// A geometriát minden mozdulatnál újra kell építeni - de CSAK a geometriát:
+// a teljes előnézet újraindítása elvágná a folyamatban lévő húzást (ld.
+// skin3d.js updateCosmetics megjegyzését). Ezért ha már fut a szerkesztő,
+// csak a puffereket cseréljük.
 // A "dirty" jelző NEM elhagyható: a modell és a textúra KÜLÖN, aszinkron
 // úton töltődik be (FileReader + Image). Ha a második közülük épp akkor
 // készül el, amikor már ütemezve van egy frissítés, egy sima
@@ -6643,10 +7078,10 @@ function queueEditorRefresh() {
   cosmeticEditorRefreshQueued = true;
   requestAnimationFrame(async () => {
     cosmeticEditorRefreshQueued = false;
-    if (stopCosmeticEditor && stopCosmeticEditor.updateCosmetics
-        && cosmeticEditorModel && cosmeticEditorTexture) {
+    const model = cosmeticEditorTexture ? buildEditorModel() : null;
+    if (stopCosmeticEditor && stopCosmeticEditor.updateCosmetics && model) {
       stopCosmeticEditor.updateCosmetics([{
-        model: { ...cosmeticEditorModel, transform: currentEditorTransform() },
+        model,
         slot: $('#cosmeticSlotSelect').value || 'head',
         img: cosmeticEditorTexture
       }]);
@@ -6667,13 +7102,128 @@ function queueEditorRefresh() {
   $(sel)?.addEventListener('change', queueEditorRefresh);
 });
 
+// ── Rész- és animáció-vezérlők ─────────────────────────────────────────
+$('#cosmeticPartsBar')?.addEventListener('click', (e) => {
+  const chip = e.target.closest('[data-cosmetic-target]');
+  if (chip) { setCosmeticTarget(Number(chip.dataset.cosmeticTarget)); return; }
+  if (e.target.closest('[data-cosmetic-add-part]')) {
+    if (!cosmeticEditingId) {
+      showToast('Előbb mentsd el a kiegészítőt, utána adhatsz hozzá további részeket.', true);
+      return;
+    }
+    cosmeticModelTargetPart = cosmeticParts.length;   // "új rész" jelzés
+    $('#cosmeticModelInput').value = '';
+    $('#cosmeticModelInput').click();
+  }
+});
+
+$('#cosmeticPartPanel')?.addEventListener('click', (e) => {
+  if (e.target.closest('[data-cosmetic-replace-part-model]')) {
+    cosmeticModelTargetPart = cosmeticTarget;
+    $('#cosmeticModelInput').value = '';
+    $('#cosmeticModelInput').click();
+    return;
+  }
+  if (e.target.closest('[data-cosmetic-delete-part]')) deleteCosmeticPart(cosmeticTarget);
+});
+
+$('#cosmeticPartPanel')?.addEventListener('input', (e) => {
+  if (e.target.id !== 'cosmeticPartNameInput') return;
+  const part = cosmeticParts[cosmeticTarget];
+  if (!part) return;
+  part.name = e.target.value.trim() || null;
+  part.dirty = true;
+  // A csík újrarajzolása a nevet is frissíti - a beviteli mezőt viszont NEM
+  // építjük újra (elveszne a kurzor), ezért csak a gomb-feliratokat.
+  const chip = $('#cosmeticPartsBar')?.querySelector(`[data-cosmetic-target="${cosmeticTarget}"]`);
+  if (chip) chip.firstChild && (chip.firstChild.textContent = cosmeticPartLabel(cosmeticTarget));
+  const t1 = $('#cosmeticTargetLabel');
+  const t2 = $('#cosmeticAnimTargetLabel');
+  if (t1) t1.textContent = cosmeticPartLabel(cosmeticTarget);
+  if (t2) t2.textContent = cosmeticPartLabel(cosmeticTarget);
+});
+
+$('#cosmeticAnimPresets')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-anim-preset]');
+  if (!btn) return;
+  const preset = ANIM_PRESETS[Number(btn.dataset.animPreset)];
+  if (!preset) return;
+  const anim = ensureAnim();
+  if (anim.tracks.length >= 6) { showToast('Legfeljebb 6 mozgás lehet egy célon.', true); return; }
+  anim.tracks.push({ ...preset.track });
+  renderCosmeticAnimEditor();
+  renderCosmeticPartsBar();
+  queueEditorRefresh();
+});
+
+$('#cosmeticAnimAddBtn')?.addEventListener('click', () => {
+  const anim = ensureAnim();
+  if (anim.tracks.length >= 6) { showToast('Legfeljebb 6 mozgás lehet egy célon.', true); return; }
+  anim.tracks.push({ type: 'rotate', axis: 'y', amp: 10, speed: 1, phase: 0, wave: 'sine', react: 'none' });
+  renderCosmeticAnimEditor();
+  renderCosmeticPartsBar();
+  queueEditorRefresh();
+});
+
+$('#cosmeticAnimClearBtn')?.addEventListener('click', () => {
+  setCurrentAnim(null);
+  renderCosmeticAnimEditor();
+  renderCosmeticPartsBar();
+  queueEditorRefresh();
+});
+
+$('#cosmeticAnimTracks')?.addEventListener('click', (e) => {
+  const rm = e.target.closest('[data-anim-remove]');
+  if (!rm) return;
+  const anim = currentAnim();
+  if (!anim) return;
+  anim.tracks.splice(Number(rm.dataset.animRemove), 1);
+  if (!anim.tracks.length && !anim.pivot) setCurrentAnim(null);
+  if (cosmeticTarget >= 0 && cosmeticParts[cosmeticTarget]) cosmeticParts[cosmeticTarget].dirty = true;
+  renderCosmeticAnimEditor();
+  renderCosmeticPartsBar();
+  queueEditorRefresh();
+});
+
+function onAnimTrackFieldChange(e) {
+  const field = e.target.dataset.animField;
+  if (!field) return;
+  const row = e.target.closest('[data-anim-index]');
+  const anim = currentAnim();
+  if (!row || !anim) return;
+  const track = anim.tracks[Number(row.dataset.animIndex)];
+  if (!track) return;
+  track[field] = (field === 'amp' || field === 'speed' || field === 'phase')
+    ? (Number(e.target.value) || 0)
+    : e.target.value;
+  if (cosmeticTarget >= 0 && cosmeticParts[cosmeticTarget]) cosmeticParts[cosmeticTarget].dirty = true;
+  // A típusváltás a tengely-mező elérhetőségét is befolyásolja (a "Méret"
+  // egyenletes), ezért ott újra kell rajzolni a sort.
+  if (field === 'type') renderCosmeticAnimEditor();
+  queueEditorRefresh();
+}
+$('#cosmeticAnimTracks')?.addEventListener('input', onAnimTrackFieldChange);
+$('#cosmeticAnimTracks')?.addEventListener('change', onAnimTrackFieldChange);
+
+['#cosmeticAnimPivotXInput', '#cosmeticAnimPivotYInput', '#cosmeticAnimPivotZInput'].forEach((sel) => {
+  $(sel)?.addEventListener('input', () => {
+    const pivot = readAnimPivotFromInputs();
+    if (!pivot && !currentAnim()) return;
+    const anim = ensureAnim();
+    anim.pivot = pivot;
+    if (!anim.tracks.length && !pivot) setCurrentAnim(null);
+    if (cosmeticTarget >= 0 && cosmeticParts[cosmeticTarget]) cosmeticParts[cosmeticTarget].dirty = true;
+    queueEditorRefresh();
+  });
+});
+
 // SHIFT + görgő: a Z-tengely (előre/hátra). Húzással ezt nem lehetne
 // egyértelműen megadni, mert a képernyőn a mélység nem különböztethető meg a
 // vízszintes mozgástól. A CSUPASZ görgő SZÁNDÉKOSAN nem ide tartozik: azt a
 // nagyítás kapja (ld. skin3d.js), mert egy 3D szerkesztőben a görgőtől azt
 // várja az ember.
 $('#cosmeticEditorPreview')?.addEventListener('wheel', (e) => {
-  if (!cosmeticEditorModel) return;
+  if (!hasEditorModel()) return;
   if (e.ctrlKey || e.metaKey) {
     // CTRL + görgő: a Z tengely körüli forgatás ("roll"). Húzással ezt sem
     // lehetne megadni: a képernyőn a két húzás-irány már a másik két
@@ -6716,24 +7266,34 @@ $('#cosmeticDiscardBtn')?.addEventListener('click', resetCosmeticForm);
 
 $('#cosmeticSaveBtn')?.addEventListener('click', async () => {
   const resultEl = $('#cosmeticFormResult');
+  const btn = $('#cosmeticSaveBtn');
   const name = $('#cosmeticNameInput').value.trim();
   const slug = $('#cosmeticSlugInput').value.trim().toLowerCase();
-  if (!name) {
-    resultEl.textContent = 'Adj meg egy nevet.';
-    resultEl.className = 'redeem-result error';
-    return;
-  }
+
+  // A mezők értékei a MEGJELENÍTETT célhoz tartoznak - mentés előtt vissza
+  // kell írni őket a saját rekordjukba, különben az utoljára szerkesztett
+  // cél változtatásai elvesznének.
+  readTargetFromInputs();
+
+  resultEl.className = 'redeem-result';
+  if (!name) { resultEl.textContent = 'Adj meg egy nevet.'; resultEl.classList.add('error'); return; }
   if (!cosmeticEditingId && !/^[a-z0-9_]{3,48}$/.test(slug)) {
     resultEl.textContent = 'Az azonosító csak kisbetűt, számot és alulvonást tartalmazhat (3-48 karakter).';
-    resultEl.className = 'redeem-result error';
+    resultEl.classList.add('error');
     return;
   }
-  // Modell nélkül a kiegészítő nem tud megjelenni in-game - létrehozáskor
-  // ezért itt is figyelmeztetünk, nem csak a listában jelezzük utólag.
-  if (!cosmeticEditingId && !cosmeticSelectedModelFile) {
-    resultEl.textContent = 'Modell nélkül a kiegészítő nem jelenik meg a játékban - tölts fel egy Blockbench .json fájlt.';
-    resultEl.className = 'redeem-result error';
+  const firstPart = cosmeticParts[0];
+  if (!cosmeticEditingId && !(firstPart && firstPart.file)) {
+    resultEl.textContent = 'Új kiegészítőhöz modellt is fel kell tölteni.';
+    resultEl.classList.add('error');
     return;
+  }
+
+  function animField(anim) {
+    // Üres animációnál üres sztringet küldünk - a backend ezt "nincs
+    // animáció"-ként értelmezi (ld. validateAnim), így a TÖRLÉS is működik.
+    if (!anim || !Array.isArray(anim.tracks) || (!anim.tracks.length && !anim.pivot)) return '';
+    return JSON.stringify({ tracks: anim.tracks, pivot: anim.pivot || null });
   }
 
   const formData = new FormData();
@@ -6746,17 +7306,21 @@ $('#cosmeticSaveBtn')?.addEventListener('click', async () => {
   formData.append('defaultDurationDays', $('#cosmeticDurationInput').value.trim());
   formData.append('tradable', $('#cosmeticTradableCheckbox').checked ? 'true' : 'false');
   formData.append('enabled', $('#cosmeticEnabledCheckbox').checked ? 'true' : 'false');
-  formData.append('offsetX', $('#cosmeticOffsetXInput').value.trim());
-  formData.append('offsetY', $('#cosmeticOffsetYInput').value.trim());
-  formData.append('offsetZ', $('#cosmeticOffsetZInput').value.trim());
-  formData.append('rotationX', $('#cosmeticRotXInput').value.trim());
-  formData.append('rotationY', $('#cosmeticRotYInput').value.trim());
-  formData.append('rotationZ', $('#cosmeticRotZInput').value.trim());
-  formData.append('scale', $('#cosmeticScaleInput').value.trim());
-  formData.append('itemModelSpace', $('#cosmeticItemSpaceCheckbox').checked ? 'true' : 'false');
-  if (cosmeticSelectedModelFile) formData.append('model', cosmeticSelectedModelFile);
+  formData.append('offsetX', String(cosmeticAssembly.offsetX));
+  formData.append('offsetY', String(cosmeticAssembly.offsetY));
+  formData.append('offsetZ', String(cosmeticAssembly.offsetZ));
+  formData.append('rotationX', String(cosmeticAssembly.rotationX));
+  formData.append('rotationY', String(cosmeticAssembly.rotationY));
+  formData.append('rotationZ', String(cosmeticAssembly.rotationZ));
+  formData.append('scale', String(cosmeticAssembly.scale));
+  formData.append('itemModelSpace', cosmeticAssembly.itemModelSpace !== false ? 'true' : 'false');
+  formData.append('anim', animField(cosmeticAssembly.anim));
+  // Az ELSŐ rész modellje a kiegészítő-végponton megy fel (a backend oda
+  // teszi, ld. src/cosmetics.js) - a többi részé a saját végpontján.
+  if (firstPart && firstPart.file) formData.append('model', firstPart.file);
   if (cosmeticSelectedTextureFile) formData.append('texture', cosmeticSelectedTextureFile);
 
+  btn.disabled = true;
   try {
     const url = cosmeticEditingId
       ? BACKEND_URL + '/api/admin/cosmetics/' + cosmeticEditingId
@@ -6769,78 +7333,189 @@ $('#cosmeticSaveBtn')?.addEventListener('click', async () => {
     const data = await res.json();
     if (!data.ok) {
       resultEl.textContent = data.message || 'Nem sikerült menteni.';
-      resultEl.className = 'redeem-result error';
+      resultEl.classList.add('error');
       return;
     }
-    showToast(cosmeticEditingId ? 'Kiegészítő frissítve.' : 'Kiegészítő létrehozva.');
-    resetCosmeticForm();
-    loadCosmeticsAdmin();
+
+    const savedId = cosmeticEditingId || data.cosmetic?.id;
+    const wasCreate = !cosmeticEditingId;
+
+    // A RÉSZEK mentése. Az elsőé is kell (a modellje már fent van, de a neve,
+    // az illesztése és az animációja a rész-végponton él). Új kiegészítőnél a
+    // 0. rész azonosítóját a válaszból vesszük.
+    if (wasCreate && data.cosmetic?.parts?.length && cosmeticParts[0]) {
+      cosmeticParts[0].id = data.cosmetic.parts[0].id;
+      cosmeticParts[0].hasModel = true;
+    }
+    let partError = null;
+    for (const part of cosmeticParts) {
+      if (!part.id || !savedId) continue;
+      const pf = new FormData();
+      pf.append('name', part.name || '');
+      pf.append('offsetX', String(part.offsetX));
+      pf.append('offsetY', String(part.offsetY));
+      pf.append('offsetZ', String(part.offsetZ));
+      pf.append('rotationX', String(part.rotationX));
+      pf.append('rotationY', String(part.rotationY));
+      pf.append('rotationZ', String(part.rotationZ));
+      pf.append('scale', String(part.scale));
+      pf.append('anim', animField(part.anim));
+      // A 0. rész modellje MÁR feltöltődött a kiegészítő-végponton - ide
+      // csak a többi rész frissen választott fájlja kerül.
+      if (part.file && part !== cosmeticParts[0]) pf.append('model', part.file);
+      try {
+        const pres = await fetch(BACKEND_URL + '/api/admin/cosmetics/' + savedId + '/parts/' + part.id, {
+          method: 'PUT',
+          headers: { Authorization: 'Bearer ' + session.token },
+          body: pf
+        });
+        const pdata = await pres.json();
+        if (!pdata.ok) partError = pdata.message || 'Egy rész mentése nem sikerült.';
+        else { part.file = null; part.dirty = false; }
+      } catch {
+        partError = 'Hálózati hiba egy rész mentésekor.';
+      }
+    }
+    if (partError) {
+      resultEl.textContent = partError;
+      resultEl.classList.add('error');
+      return;
+    }
+
+    // A bélyegkép- és modell-gyorsítótár SZÁNDÉKOSAN ürül: a modell/illesztés/
+    // animáció változása után a régi kép már mást mutatna. A "bust" számláló
+    // emelése a BÖNGÉSZŐ HTTP-gyorsítótárát is megkerüli - a memóriabeli
+    // ürítés önmagában nem lenne elég (ld. cosmeticAssetBust).
+    cosmeticAssetBust++;
+    if (savedId) cosmeticThumbCache.delete(savedId);
+    if (savedId) cosmeticModelCache.delete(savedId);
+
+    showToast(wasCreate ? 'Kiegészítő létrehozva.' : 'Kiegészítő frissítve.');
+    await loadCosmeticsAdmin();
+    if (wasCreate && savedId) {
+      // Létrehozás után RÖGTÖN szerkesztő módba lépünk: további részt csak
+      // létező kiegészítőhöz lehet adni, és ez a leggyakoribb következő lépés.
+      openCosmeticForEdit(savedId);
+    } else {
+      renderCosmeticPartsBar();
+    }
   } catch {
-    resultEl.textContent = 'Nem sikerült elérni a szervert.';
-    resultEl.className = 'redeem-result error';
+    resultEl.textContent = 'Hálózati hiba.';
+    resultEl.classList.add('error');
+  } finally {
+    btn.disabled = false;
   }
 });
+
+/**
+ * Egy meglévő kiegészítő betöltése a szerkesztő űrlapba - a részeivel,
+ * illesztésével és animációjával együtt.
+ */
+async function openCosmeticForEdit(id) {
+  const item = cosmeticsAdminItems.find((c) => String(c.id) === String(id));
+  if (!item) return;
+
+  cosmeticEditingId = item.id;
+  cosmeticSelectedTextureFile = null;
+  $('#cosmeticFormTitle').textContent = 'Kiegészítő szerkesztése';
+  $('#cosmeticNameInput').value = item.name;
+  // A slug SZÁNDÉKOSAN nem módosítható (a kliens gyorsítótárazza - ld.
+  // SolarBackend src/cosmetics.js PUT végpontjának megjegyzését).
+  $('#cosmeticSlugInput').value = item.slug;
+  $('#cosmeticSlugInput').disabled = true;
+  $('#cosmeticSlotSelect').value = item.slot;
+  $('#cosmeticRaritySelect').value = item.rarity;
+  $('#cosmeticDescInput').value = item.description || '';
+  $('#cosmeticPriceInput').value = item.priceSc !== null && item.priceSc !== undefined ? item.priceSc : '';
+  $('#cosmeticDurationInput').value = item.defaultDurationDays || '';
+  $('#cosmeticTradableCheckbox').checked = !!item.tradable;
+  $('#cosmeticEnabledCheckbox').checked = !!item.enabled;
+  $('#cosmeticModelInput').value = '';
+  $('#cosmeticTextureInput').value = '';
+  $('#cosmeticModelNote').textContent = item.hasModel
+    ? 'Van feltöltött modell. Új fájl kiválasztása felülírja az 1. rész geometriáját.'
+    : 'Ehhez a kiegészítőhöz még nincs modell feltöltve.';
+  if (item.hasTexture) {
+    $('#cosmeticTexturePreview').src = cosmeticTextureUrl(item.id);
+    $('#cosmeticTexturePreviewWrap').hidden = false;
+  } else {
+    $('#cosmeticTexturePreview').src = '';
+    $('#cosmeticTexturePreviewWrap').hidden = true;
+  }
+  $('#cosmeticFormResult').textContent = '';
+  $('#cosmeticFormResult').className = 'redeem-result';
+  $('#cosmeticSaveBtn').textContent = 'Frissítés';
+
+  cosmeticAssembly = {
+    offsetX: item.offsetX ?? 0,
+    offsetY: item.offsetY ?? 0,
+    offsetZ: item.offsetZ ?? 0,
+    rotationX: item.rotationX ?? 0,
+    rotationY: item.rotationY ?? 0,
+    rotationZ: item.rotationZ ?? 0,
+    scale: item.scale ?? 1,
+    itemModelSpace: item.itemModelSpace !== false,
+    anim: item.anim || null
+  };
+  cosmeticParts = (item.parts && item.parts.length ? item.parts : [{ id: null, idx: 0 }]).map((raw, i) => {
+    const part = emptyPart(i);
+    part.id = raw.id ?? null;
+    part.name = raw.name || null;
+    part.offsetX = raw.offsetX ?? 0;
+    part.offsetY = raw.offsetY ?? 0;
+    part.offsetZ = raw.offsetZ ?? 0;
+    part.rotationX = raw.rotationX ?? 0;
+    part.rotationY = raw.rotationY ?? 0;
+    part.rotationZ = raw.rotationZ ?? 0;
+    part.scale = raw.scale ?? 1;
+    part.anim = raw.anim || null;
+    part.hasModel = !!raw.hasModel;
+    return part;
+  });
+  cosmeticTarget = -1;
+  cosmeticEditorTexture = null;
+  writeTargetToInputs();
+  renderCosmeticPartsBar();
+  renderCosmeticAnimEditor();
+  queueEditorRefresh();
+
+  $('#cosmeticFormTitle').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  // A geometriát és a textúrát a PUBLIKUS modell-végpontról töltjük - így a
+  // szerkesztő a TÉNYLEGESEN kiszolgált adatot mutatja, nem egy külön,
+  // esetleg elcsúszó admin-változatot.
+  if (!item.hasModel || !item.hasTexture) return;
+  try {
+    const [model, img] = await Promise.all([
+      fetchCosmeticModel(item.id, { fresh: true }),
+      loadImage(cosmeticTextureUrl(item.id))
+    ]);
+    if (String(cosmeticEditingId) !== String(item.id)) return;  // közben másra váltottak
+    cosmeticEditorTexture = img;
+    const rawParts = (model && Array.isArray(model.parts) && model.parts.length)
+      ? model.parts
+      : (model ? [{ elements: model.elements, texture_size: model.texture_size }] : []);
+    // A modell-végpont CSAK a modellel rendelkező részeket adja vissza, a
+    // sorrendjük viszont ugyanaz (idx szerint) - ezért a modellel rendelkező
+    // rekordokra osztjuk ki őket sorban.
+    const withModel = cosmeticParts.filter((pp) => pp.hasModel);
+    rawParts.forEach((raw, i) => {
+      const target = withModel[i];
+      if (!target) return;
+      target.elements = raw.elements || null;
+      target.textureSize = Array.isArray(raw.texture_size) ? raw.texture_size : null;
+    });
+    renderCosmeticPartsBar();
+    restartCosmeticEditor();
+  } catch {
+    /* a szerkesztő ilyenkor egyszerűen üres marad - a mezők használhatók */
+  }
+}
 
 document.addEventListener('click', async (e) => {
   const editBtn = e.target.closest('[data-cosmetic-edit]');
   if (editBtn) {
-    const item = cosmeticsAdminItems.find((c) => String(c.id) === editBtn.dataset.cosmeticEdit);
-    if (!item) return;
-    cosmeticEditingId = item.id;
-    cosmeticSelectedModelFile = null;
-    cosmeticSelectedTextureFile = null;
-    $('#cosmeticFormTitle').textContent = 'Kiegészítő szerkesztése';
-    $('#cosmeticNameInput').value = item.name;
-    // Az azonosítót a kliens gyorsítótárazza, ezért nem módosítható (ld.
-    // SolarBackend src/cosmetics.js PUT végpontjának megjegyzését).
-    $('#cosmeticSlugInput').value = item.slug;
-    $('#cosmeticSlugInput').disabled = true;
-    $('#cosmeticSlotSelect').value = item.slot;
-    $('#cosmeticRaritySelect').value = item.rarity;
-    $('#cosmeticDescInput').value = item.description || '';
-    $('#cosmeticPriceInput').value = item.priceSc !== null && item.priceSc !== undefined ? item.priceSc : '';
-    $('#cosmeticDurationInput').value = item.defaultDurationDays || '';
-    $('#cosmeticTradableCheckbox').checked = !!item.tradable;
-    $('#cosmeticEnabledCheckbox').checked = !!item.enabled;
-    $('#cosmeticOffsetXInput').value = item.offsetX ?? 0;
-    $('#cosmeticOffsetYInput').value = item.offsetY ?? 0;
-    $('#cosmeticOffsetZInput').value = item.offsetZ ?? 0;
-    $('#cosmeticRotXInput').value = item.rotationX ?? 0;
-    $('#cosmeticRotYInput').value = item.rotationY ?? 0;
-    $('#cosmeticRotZInput').value = item.rotationZ ?? 0;
-    $('#cosmeticScaleInput').value = item.scale ?? 1;
-    $('#cosmeticItemSpaceCheckbox').checked = item.itemModelSpace !== false;
-    $('#cosmeticModelInput').value = '';
-    $('#cosmeticTextureInput').value = '';
-    $('#cosmeticModelNote').textContent = item.hasModel
-      ? 'Van feltöltött modell - csak akkor válassz újat, ha cserélni akarod.'
-      : 'Nincs feltöltött modell.';
-    if (item.hasTexture) {
-      $('#cosmeticTexturePreview').src = cosmeticTextureUrl(item.id);
-      $('#cosmeticTexturePreviewWrap').hidden = false;
-    } else {
-      $('#cosmeticTexturePreview').src = '';
-      $('#cosmeticTexturePreviewWrap').hidden = true;
-    }
-    $('#cosmeticFormResult').textContent = '';
-    $('#cosmeticSaveBtn').textContent = 'Frissítés';
-
-    // A MÁR FELTÖLTÖTT modellt/textúrát is betöltjük a szerkesztőbe, hogy egy
-    // meglévő kiegészítő illesztése is húzogatással hangolható legyen - nem
-    // csak létrehozáskor.
-    cosmeticEditorModel = null;
-    cosmeticEditorTexture = null;
-    queueEditorRefresh();
-    if (item.hasModel && item.hasTexture) {
-      Promise.all([fetchCosmeticModel(item.id), loadImage(cosmeticTextureUrl(item.id))])
-        .then(([model, img]) => {
-          cosmeticEditorModel = model;
-          cosmeticEditorTexture = img;
-          restartCosmeticEditor();
-        });
-    }
-
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    openCosmeticForEdit(editBtn.dataset.cosmeticEdit);
     return;
   }
 

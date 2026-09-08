@@ -1660,3 +1660,215 @@ a { color: inherit; }
   padding: 8px 16px 2px; font-size: 10.5px; letter-spacing: .06em;
   color: var(--text-faint); font-variant-numeric: tabular-nums;
 }
+
+/* ── Kiegészítő-RÉSZEK és ANIMÁCIÓ (admin szerkesztő) ─────────────────────
+   A "rész" egy kiegészítő egy modellje: egy szárny bal és jobb fele közös
+   textúrán. A csík a szerkesztés CÉLJÁT váltja - az illesztés- és
+   animáció-mezők mindig az itt kiválasztottra vonatkoznak. */
+.cosmetic-parts-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.cosmetic-part-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color .15s, background .15s, color .15s;
+}
+
+.cosmetic-part-chip:hover { border-color: var(--gold); }
+
+.cosmetic-part-chip.active {
+  border-color: var(--gold);
+  background: rgba(255,176,32,.12);
+  color: var(--gold);
+}
+
+.cosmetic-part-chip-add {
+  border-style: dashed;
+  font-weight: 500;
+  opacity: .85;
+}
+
+.cosmetic-part-chip-warn {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--danger);
+}
+
+/* A hullámjel azt jelzi, hogy ennek a célnak VAN mozgása - így egy
+   nyolcrészes kiegészítőnél sem kell végigkattintani a részeket ahhoz, hogy
+   megtudd, melyik animált. */
+.cosmetic-part-chip-anim {
+  font-size: 15px;
+  line-height: 1;
+  color: var(--gold);
+}
+
+.cosmetic-part-panel { margin-bottom: 4px; }
+
+.cosmetic-part-panel-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+}
+
+.cosmetic-part-name {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-dim);
+  min-width: 180px;
+}
+
+.cosmetic-part-name input {
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.cosmetic-part-model {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.cosmetic-part-model .btn-outline { margin: 0; }
+
+.cosmetic-part-panel-row .news-delete-btn { margin-left: auto; }
+
+/* ── Animáció-szerkesztő ───────────────────────────────────────────────── */
+.cosmetic-anim-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 14px;
+}
+
+.cosmetic-anim-preset {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px dashed var(--line);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color .15s, color .15s, background .15s;
+}
+
+.cosmetic-anim-preset:hover {
+  border-style: solid;
+  border-color: var(--gold);
+  color: var(--gold);
+  background: rgba(255,176,32,.12);
+}
+
+/* A sávok rácsa. A fejléc és a sorok UGYANAZT a grid-template-et használják,
+   ezért maradnak egymás alatt az oszlopok. */
+.cosmetic-anim-head,
+.cosmetic-anim-track {
+  display: grid;
+  grid-template-columns: 1.2fr .7fr .8fr .8fr .8fr 1.3fr 1.2fr 32px;
+  gap: 6px;
+  align-items: center;
+}
+
+.cosmetic-anim-head {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin-bottom: 4px;
+  padding: 0 2px;
+}
+
+.cosmetic-anim-track { margin-bottom: 6px; }
+
+.cosmetic-anim-track select,
+.cosmetic-anim-track input {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.cosmetic-anim-track select:disabled { opacity: .45; }
+
+.cosmetic-anim-remove {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text-dim);
+  border-radius: 8px;
+  padding: 5px 0;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.cosmetic-anim-remove:hover { border-color: var(--danger); color: var(--danger); }
+
+.cosmetic-anim-pivot {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.cosmetic-anim-pivot .btn-outline { margin-top: 8px; }
+
+/* Keskeny képernyőn a rács oszlopai összenyomódnának olvashatatlanra -
+   ott inkább egymás alá kerülnek, a fejléc pedig elrejtve (a mezők
+   sorrendje ugyanaz marad). */
+@media (max-width: 860px) {
+  .cosmetic-anim-head { display: none; }
+  .cosmetic-anim-track {
+    grid-template-columns: 1fr 1fr 32px;
+    padding: 8px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--panel-2);
+  }
+}
+
+/* Szűrősáv a Kiegészítők nézeten (saját + megvásárolható rács közösen). */
+.cosmetic-filter-bar {
+  display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+  margin: 0 0 16px;
+}
+.cosmetic-filter-input {
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px;
+  padding: 9px 12px; color: var(--text); font-size: 13px; min-width: 150px;
+}
+.cosmetic-filter-input:focus { outline: none; border-color: var(--gold); }
+.cosmetic-filter-check { margin: 0; white-space: nowrap; }
+
+/* Az "animált" címke. A bélyegkép ÁLLÓ kép, a mozgás rajta nem látszik -
+   ezért kell külön jelezni, hogy ez a kiegészítő mozog a játékban. */
+.cosmetic-tag-animated {
+  border-color: var(--gold); color: var(--gold);
+}

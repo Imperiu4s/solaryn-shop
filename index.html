@@ -54,11 +54,11 @@
   <!-- A téma minél korábban, a stíluslap ELŐTT alkalmazódjon (ld.
        theme.js), hogy az első kirajzolás már a mentett témával történjen,
        ne legyen látható "villanás" az alap témáról. -->
-  <script src="theme.js?v=20260903a"></script>
-  <link rel="stylesheet" href="style.css?v=20260903a" />
+  <script src="theme.js?v=20260908a"></script>
+  <link rel="stylesheet" href="style.css?v=20260908a" />
   <!-- A vizuális réteg SZÁNDÉKOSAN a style.css UTÁN: csak ráépít az ottani
        osztályokra, és a kaszkádban felülír, ahol kell (ld. ui.css eleje). -->
-  <link rel="stylesheet" href="ui.css?v=20260903a" />
+  <link rel="stylesheet" href="ui.css?v=20260908a" />
 
   <!-- Strukturált adat a keresőknek/megosztásoknak (schema.org). -->
   <script type="application/ld+json">
@@ -783,6 +783,29 @@
 
           <div class="cosmetic-slot-bar" id="cosmeticSlotBar"></div>
 
+          <!-- Szűrősáv. MIÉRT KELL: a katalógus nő, és egy 40 elemű rácsban a
+               "hol van az a szárny" kérdés végiggörgetés nélkül nem
+               válaszolható meg. A szűrés SZÁNDÉKOSAN kliens-oldali: az adat
+               már úgyis mind itt van, egy szerverkérés csak lassítana. -->
+          <div class="cosmetic-filter-bar">
+            <input type="search" id="cosmeticFilterSearch" class="cosmetic-filter-input" placeholder="Keresés név szerint..." aria-label="Keresés a kiegészítők között" />
+            <select id="cosmeticFilterSlot" class="cosmetic-filter-input" aria-label="Szűrés hely szerint">
+              <option value="">Minden hely</option>
+            </select>
+            <select id="cosmeticFilterRarity" class="cosmetic-filter-input" aria-label="Szűrés ritkaság szerint">
+              <option value="">Minden ritkaság</option>
+              <option value="common">Általános</option>
+              <option value="rare">Ritka</option>
+              <option value="epic">Epikus</option>
+              <option value="legendary">Legendás</option>
+              <option value="mythic">Mítikus</option>
+            </select>
+            <label class="check-row cosmetic-filter-check">
+              <input type="checkbox" id="cosmeticFilterAnimated" />
+              Csak animált
+            </label>
+          </div>
+
           <div class="content-grid">
             <div>
               <div id="cosmeticsOwnedWrap"></div>
@@ -1329,8 +1352,19 @@
                  viszont Y-felfelé, a (8,8,8) blokk-középpont körül készül -
                  ezekkel a mezőkkel lehet a helyére igazítani ÚJRAFELTÖLTÉS NÉLKÜL
                  (mentés után a kliensek ~1 percen belül átveszik). -->
+            <!-- RÉSZEK: egy kiegészítő több modellből állhat, amik EGY KÖZÖS
+                 textúrán osztoznak (ld. SolarBackend cosmetic_parts). Egy
+                 szárny jellemzően két félből áll, és pont az kell, hogy a két
+                 fél egymáshoz képest ellentétes fázisban mozogjon. -->
+            <div class="cosmetic-transform-box" data-cosmetic-parts-box>
+              <div class="cosmetic-transform-title">Részek (közös textúrán)</div>
+              <p class="cosmetic-file-note" style="margin-bottom:10px;">Egy kiegészítő több modellből is állhat - például egy szárny bal és jobb feléből -, amik ugyanazt a textúrát használják. Válaszd ki lent, mit szerkessz: a <strong>teljes kiegészítőt</strong> (az egész együtt mozdul) vagy egy <strong>részt</strong> külön.</p>
+              <div class="cosmetic-parts-bar" id="cosmeticPartsBar"></div>
+              <div class="cosmetic-part-panel" id="cosmeticPartPanel"></div>
+            </div>
+
             <div class="cosmetic-transform-box">
-              <div class="cosmetic-transform-title">Illesztés a karakterhez</div>
+              <div class="cosmetic-transform-title">Illesztés a karakterhez - <span id="cosmeticTargetLabel">teljes kiegészítő</span></div>
               <p class="cosmetic-file-note" style="margin-bottom:12px;">A saját karaktereden állíthatod be a kiegészítő helyét és állását.<br /><strong>Bal gomb:</strong> a nézet forgatása · <strong>görgő:</strong> nagyítás · <strong>Shift + húzás</strong> vagy <strong>jobb gomb:</strong> a kiegészítő mozgatása · <strong>Shift + görgő:</strong> előre/hátra (Z) · <strong>Ctrl + húzás:</strong> a kiegészítő forgatása · <strong>Ctrl + görgő:</strong> döntés (Z tengely)</p>
 
               <div class="cosmetic-editor">
@@ -1358,7 +1392,31 @@
               </div>
             </div>
 
-            <label class="gift-modal-label">Modell (Blockbench .json)</label>
+            <!-- ANIMÁCIÓ: a kiválasztott célra (teljes kiegészítő vagy egy
+                 rész). A sávok képlete SZÓ SZERINT ugyanaz, mint a kliensben
+                 (ld. SolarClient CosmeticAnim.java) - amit itt látsz, az
+                 jelenik meg in-game. -->
+            <div class="cosmetic-transform-box">
+              <div class="cosmetic-transform-title">Animáció - <span id="cosmeticAnimTargetLabel">teljes kiegészítő</span></div>
+              <p class="cosmetic-file-note" style="margin-bottom:10px;">Az előnézetben a mozgás azonnal látszik. A <strong>fázis</strong> adja a tükrözést: két szárnyfélnél az egyikre 0, a másikra 180 fokot állíts, vagy fordítsd meg a kitérés előjelét. Az <strong>előnézet mindig a legnagyobb kitérést mutatja</strong>, akkor is, ha a sáv csak mozgás/repülés közben aktív.</p>
+
+              <div class="cosmetic-anim-presets" id="cosmeticAnimPresets"></div>
+
+              <div class="cosmetic-anim-tracks" id="cosmeticAnimTracks"></div>
+              <button type="button" class="btn-outline" id="cosmeticAnimAddBtn">+ Mozgás hozzáadása</button>
+
+              <div class="cosmetic-anim-pivot">
+                <div class="cosmetic-transform-grid">
+                  <label>Forgáspont X<input type="number" id="cosmeticAnimPivotXInput" step="0.5" placeholder="közép" /></label>
+                  <label>Forgáspont Y<input type="number" id="cosmeticAnimPivotYInput" step="0.5" placeholder="közép" /></label>
+                  <label>Forgáspont Z<input type="number" id="cosmeticAnimPivotZInput" step="0.5" placeholder="közép" /></label>
+                </div>
+                <p class="cosmetic-file-note">Üresen hagyva a modell közepe körül forog. Egy szárny a TÖVÉNÉL csuklik - ott állítsd be a forgáspontot, különben lebegő deszkának látszik, nem csapkodásnak. (A modell saját, Blockbench-koordinátáiban.)</p>
+                <button type="button" class="btn-outline" id="cosmeticAnimClearBtn">Animáció törlése</button>
+              </div>
+            </div>
+
+            <label class="gift-modal-label">Modell (Blockbench .json) - az 1. rész geometriája</label>
             <input type="file" id="cosmeticModelInput" accept=".json,application/json" hidden />
             <button type="button" class="btn-outline file-picker-btn" id="cosmeticModelPickBtn">Modell kiválasztása</button>
             <p class="cosmetic-file-note" id="cosmeticModelNote"></p>
@@ -2371,8 +2429,8 @@
        ez utóbbi itt lényeges, mert a ui.js az app.js globális
        switchView()/showToast() függvényeit csomagolja be, tehát csak
        azok létrejötte után futhat. -->
-  <script src="skin3d.js?v=20260903a" defer></script>
-  <script src="app.js?v=20260903a" defer></script>
-  <script src="ui.js?v=20260903a" defer></script>
+  <script src="skin3d.js?v=20260908a" defer></script>
+  <script src="app.js?v=20260908a" defer></script>
+  <script src="ui.js?v=20260908a" defer></script>
 </body>
 </html>

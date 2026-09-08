@@ -223,10 +223,149 @@ const SkinPreview = (() => {
     right_arm: [-5, 2, 0]
   };
 
-  // Egy pont elforgatása a megadott tengely körül, az ADOTT (szerzői) térben.
-  // Azért itt, a flip ELŐTT forgatunk az EREDETI szöggel, mert ez matematikailag
-  // azonos azzal, amit a kliens csinál (ott a flip miatt konjugált szöggel
-  // forgat: S·R·S), viszont sokkal egyszerűbb és kevésbé hibázható.
+  // ── KIEGÉSZÍTŐK: RÉSZEK ÉS ANIMÁCIÓ ──────────────────────────────────
+  //
+  // MIÉRT MÁTRIX-LÁNC, ÉS NEM (mint korábban) ELŐRE KISZÁMOLT ELŐNÉZETI
+  // KOORDINÁTÁK: az animáció képkockánként változik, tehát a geometriát nem
+  // lehet egyszer, véglegesen a helyére számolni. A csúcsok ezért a SZERZŐI
+  // (Blockbench-) térben maradnak, és képkockánként egyetlen 4x4-es mátrix
+  // viszi őket a helyükre.
+  //
+  // A LÁNC PONTOSAN A KLIENSÉT KÖVETI (SolarClient CosmeticRenderer): ez nem
+  // kényelmi kérdés, hanem követelmény - amit az admin itt beállít, annak
+  // in-game UGYANOTT kell megjelennie. Ezért nem "hasonló" matek van itt,
+  // hanem ugyanazoknak a translate/scale/rotate hívásoknak a mátrix-alakja,
+  // ugyanabban a sorrendben, ugyanazokkal az előjelekkel:
+  //
+  //   szerzői pont
+  //     -> A2M          szerzői -> kliens modell-tér: diag(f, f, 1) / 16
+  //     -> illesztés és animáció (kiegészítő szint, majd rész szint)
+  //     -> M2P          kliens modell-tér -> előnézeti tér
+  //
+  // Az M2P levezetése (a régi toPreview()-ból, azzal bitre egyezően):
+  //   x_e = csont_x + 16*x_m ; y_e = (6 - csont_y) - 16*y_m ; z_e = -csont_z - 16*z_m
+  // azaz  M2P = eltolás(csont_x, 6-csont_y, -csont_z) * diag(16, -16, -16).
+
+  function rotateZ(angle) {
+    const c = Math.cos(angle), s = Math.sin(angle);
+    return new Float32Array([c, s, 0, 0, -s, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  }
+  function scaleMat3(x, y, z) {
+    return new Float32Array([x, 0, 0, 0, 0, y, 0, 0, 0, 0, z, 0, 0, 0, 0, 1]);
+  }
+  function transformPoint(m, x, y, z) {
+    return [
+      m[0] * x + m[4] * y + m[8] * z + m[12],
+      m[1] * x + m[5] * y + m[9] * z + m[13],
+      m[2] * x + m[6] * y + m[10] * z + m[14]
+    ];
+  }
+
+  // ── Animáció-kiértékelés ────────────────────────────────────────────
+  // A képletek SZÓ SZERINT a kliens CosmeticAnim-jéé (Java) - ha itt más
+  // hullámalak vagy más fázis-képlet lenne, a szerkesztőben beállított mozgás
+  // in-game máshogy nézne ki.
+  function animWave(wave, turns) {
+    if (wave === 'tri') {
+      const x = turns + 0.25;
+      return 4 * Math.abs(x - Math.floor(x + 0.5)) - 1;
+    }
+    if (wave === 'saw') return 2 * (turns - Math.floor(turns)) - 1;
+    if (wave === 'pulse') return (turns - Math.floor(turns)) < 0.5 ? 1 : -1;
+    return Math.sin(turns * 2 * Math.PI);
+  }
+
+  // Az ELŐNÉZETBEN minden reakció TELJESEN aktív (1.0). Szándékos: az admin a
+  // beállított LEGNAGYOBB kitérést akarja látni, nem egy álló figuráét - a
+  // "csak repülés közben csapkodjon" sáv különben mozdulatlannak látszana, és
+  // az admin azt hinné, elrontotta.
+  function animReact() { return 1; }
+
+  function evalAnim(anim, timeSec) {
+    const out = { rot: [0, 0, 0], trans: [0, 0, 0], scale: 1 };
+    if (!anim || !Array.isArray(anim.tracks)) return out;
+    const AXIS = { x: 0, y: 1, z: 2 };
+    for (const t of anim.tracks) {
+      if (!t || typeof t !== 'object') continue;
+      const amp = Number(t.amp) || 0;
+      const speed = Number(t.speed) || 0;
+      if (!amp || !speed) continue;
+      const turns = speed * timeSec + (Number(t.phase) || 0) / 360;
+      const value = amp * animWave(t.wave, turns) * animReact(t.react);
+      const axis = AXIS[t.axis] !== undefined ? AXIS[t.axis] : 0;
+      if (t.type === 'rotate') out.rot[axis] += value;
+      else if (t.type === 'translate') out.trans[axis] += value;
+      else if (t.type === 'scale') out.scale *= Math.max(0.05, 1 + value);
+    }
+    return out;
+  }
+
+  // Egy szint (kiegészítő vagy rész) STATIKUS illesztése, a kliens
+  // modell-terében. Ugyanaz a sorrend, mint a kliensben: eltolás -> méret ->
+  // forgatás a befoglaló doboz középpontja körül.
+  function placementMatrix(offset, scale, rotation, center, f) {
+    let m = translate(-offset[0] / 16, -offset[1] / 16, offset[2] / 16);
+    if (scale !== 1) m = multiply(m, scaleMat(scale));
+    if (rotation[0] || rotation[1] || rotation[2]) {
+      const cx = center[0] * f / 16, cy = center[1] * f / 16, cz = center[2] / 16;
+      // Az előjelek a tükrözésből következnek (S = diag(-1,-1,1) melletti
+      // S*R*S konjugálás az X/Y forgást negálja, a Z-t nem) - ugyanaz a
+      // szabály, mint a kliensben, levezetve, nem próbálgatva.
+      const rx = (f < 0 ? -rotation[0] : rotation[0]) * Math.PI / 180;
+      const ry = (f < 0 ? -rotation[1] : rotation[1]) * Math.PI / 180;
+      const rz = rotation[2] * Math.PI / 180;
+      m = multiply(m, translate(cx, cy, cz));
+      // A sorrend Rz*Ry*Rx, tehát a csúcsra ELŐSZÖR az X hat - pontosan úgy,
+      // ahogy a kliens egymás utáni multiply(Z), multiply(Y), multiply(X)
+      // hívásai.
+      m = multiply(m, rotateZ(rz));
+      m = multiply(m, rotateY(ry));
+      m = multiply(m, rotateX(rx));
+      m = multiply(m, translate(-cx, -cy, -cz));
+    }
+    return m;
+  }
+
+  function animMatrix(anim, pivot, f, timeSec) {
+    if (!anim || !Array.isArray(anim.tracks) || !anim.tracks.length) return null;
+    const a = evalAnim(anim, timeSec);
+    let m = null;
+    if (a.trans[0] || a.trans[1] || a.trans[2]) {
+      m = translate(a.trans[0] * f / 16, a.trans[1] * f / 16, a.trans[2] / 16);
+    }
+    const hasRot = a.rot[0] || a.rot[1] || a.rot[2];
+    if (!hasRot && a.scale === 1) return m;
+
+    const px = pivot[0] * f / 16, py = pivot[1] * f / 16, pz = pivot[2] / 16;
+    let r = translate(px, py, pz);
+    if (hasRot) {
+      const rx = (f < 0 ? -a.rot[0] : a.rot[0]) * Math.PI / 180;
+      const ry = (f < 0 ? -a.rot[1] : a.rot[1]) * Math.PI / 180;
+      const rz = a.rot[2] * Math.PI / 180;
+      r = multiply(r, rotateZ(rz));
+      r = multiply(r, rotateY(ry));
+      r = multiply(r, rotateX(rx));
+    }
+    if (a.scale !== 1) r = multiply(r, scaleMat(a.scale));
+    r = multiply(r, translate(-px, -py, -pz));
+    return m ? multiply(m, r) : r;
+  }
+
+  function boundsOf(elements) {
+    let nx = Infinity, xx = -Infinity, ny = Infinity, xy = -Infinity, nz = Infinity, xz = -Infinity;
+    for (const el of (elements || [])) {
+      if (!Array.isArray(el.from) || !Array.isArray(el.to)) continue;
+      nx = Math.min(nx, el.from[0], el.to[0]); xx = Math.max(xx, el.from[0], el.to[0]);
+      ny = Math.min(ny, el.from[1], el.to[1]); xy = Math.max(xy, el.from[1], el.to[1]);
+      nz = Math.min(nz, el.from[2], el.to[2]); xz = Math.max(xz, el.from[2], el.to[2]);
+    }
+    if (!Number.isFinite(nx)) return [0, 0, 0];
+    return [(nx + xx) / 2, (ny + xy) / 2, (nz + xz) / 2];
+  }
+
+  // Egy pont elforgatása a megadott tengely körül, az ADOTT (szerzői) térben -
+  // a KOCKÁK saját forgatásához (az bele van sütve a geometriába, mert
+  // statikus).
   function rotatePoint(p, origin, axis, angleDeg) {
     const rad = angleDeg * Math.PI / 180;
     const c = Math.cos(rad), s = Math.sin(rad);
@@ -239,28 +378,29 @@ const SkinPreview = (() => {
   }
 
   /**
-   * Geometria egy kiegészítő-modellből.
-   * @param model a backend /api/cosmetics/model/:slug válasza
-   * @param slot  melyik csonthoz kötődik (a pivotot ez adja)
-   * @param opts  { standalone: true } esetén a csont-pivot és az eltolás
-   *              KIMARAD, és a modell a saját közepére kerül - ez a kártyákon
-   *              látható, önálló "így néz ki a kiegészítő" előnézethez kell.
+   * Egy kiegészítő ELŐKÉSZÍTÉSE rajzolásra: részenként egy-egy geometria a
+   * SZERZŐI térben, plusz minden adat, amiből képkockánként a mátrix számol.
+   *
+   * @param model a backend /api/cosmetics/model/:slug válasza (a régi,
+   *              "parts" nélküli alak is működik - az egyetlen résznek számít)
+   * @param slot  melyik csonthoz kötődik (a csont-pivotot ez adja)
+   * @param opts  { standalone: true } esetén a csont-pivot és az eltolások
+   *              KIMARADNAK, és a modell a saját közepére kerül - ez a
+   *              kártyákon látható, önálló előnézethez kell.
    */
-  function buildCosmeticGeometry(model, slot, opts) {
-    const positions = [], uvs = [], indices = [];
+  function buildCosmeticParts(model, slot, opts) {
     const standalone = !!(opts && opts.standalone);
 
-    const t = model.transform || {};
+    // A kiegészítő-szintű illesztés: az ÚJ válaszban "assembly", a régiben
+    // "transform". Ha van assembly, az az elsődleges - a "transform" ott már
+    // az ELSŐ rész illesztését is tartalmazza (a régi kliensek kedvéért),
+    // tehát itt hibás lenne.
+    const t = (model.assembly && typeof model.assembly === 'object') ? model.assembly : (model.transform || {});
     const off = Array.isArray(t.offset) && t.offset.length === 3 ? t.offset : [0, 0, 0];
     const mScale = typeof t.scale === 'number' && t.scale > 0 ? t.scale : 1;
-    // A TELJES modell forgatása fokban (X, Y, Z sorrendben), a modell
-    // befoglaló dobozának középpontja körül - PONTOSAN úgy, ahogy a kliens
-    // CosmeticRenderer-e csinálja. Az eltoláshoz hasonlóan ez sem lehet
-    // "körülbelül ugyanaz": a szerkesztőben beállított érték in-game
-    // érvényesül, tehát a két számításnak egyeznie KELL.
     const rot = Array.isArray(t.rotation) && t.rotation.length === 3 ? t.rotation : [0, 0, 0];
-    const hasModelRot = !!(rot[0] || rot[1] || rot[2]);
     const itemSpace = t.itemModelSpace !== false;
+    const f = itemSpace ? -1 : 1;
 
     // AZ UV-TÉR MÉRETE - ld. a kliens CosmeticModel.parse() azonos, részletes
     // megjegyzését. Röviden: a vanilla blokk-/item-modellekben a lap-UV-k
@@ -269,115 +409,174 @@ const SkinPreview = (() => {
     // A vásárolt csomagokban ez a mező elavultan marad benne, és ha elhisszük,
     // a textúrának csak egy töredékét mintázzuk (mérve: a Volt Wingsnél 49%,
     // a Butterfly Wingsnél 19%) - ettől tűnt "hiányosnak" a textúra.
-    let texW, texH;
-    if (itemSpace) {
-      texW = 16; texH = 16;
-    } else {
-      const texSize = Array.isArray(model.texture_size) && model.texture_size.length === 2
-        ? model.texture_size : [64, 64];
-      texW = texSize[0] > 0 ? texSize[0] : 64;
-      texH = texSize[1] > 0 ? texSize[1] : 64;
-    }
-    const pivot = COSMETIC_PIVOTS[slot] || [0, 0, 0];
+    const rawParts = Array.isArray(model.parts) && model.parts.length
+      ? model.parts
+      : [{ elements: model.elements, texture_size: model.texture_size, transform: null, anim: null }];
 
-    // A forgatás PIVOTJA: a modell befoglaló dobozának középpontja a szerzői
-    // térben, a NYERS from/to értékekből (inflate és kocka-forgatás nélkül) -
-    // a kliens CosmeticModel.parse() ugyanezt számolja.
-    let modelCenter = [0, 0, 0];
-    if (hasModelRot) {
-      let nx = Infinity, xx = -Infinity, ny = Infinity, xy = -Infinity, nz = Infinity, xz = -Infinity;
-      for (const el of (model.elements || [])) {
+    const parts = [];
+    let allMin = [Infinity, Infinity, Infinity];
+    let allMax = [-Infinity, -Infinity, -Infinity];
+
+    for (const raw of rawParts) {
+      let texW, texH;
+      if (itemSpace) {
+        texW = 16; texH = 16;
+      } else {
+        const ts = Array.isArray(raw.texture_size) && raw.texture_size.length === 2 ? raw.texture_size : [64, 64];
+        texW = ts[0] > 0 ? ts[0] : 64;
+        texH = ts[1] > 0 ? ts[1] : 64;
+      }
+
+      const positions = [], uvs = [], indices = [];
+      const FACE_DIRS = ['north', 'south', 'east', 'west', 'up', 'down'];
+
+      for (const el of (raw.elements || [])) {
         if (!Array.isArray(el.from) || !Array.isArray(el.to)) continue;
-        nx = Math.min(nx, el.from[0], el.to[0]); xx = Math.max(xx, el.from[0], el.to[0]);
-        ny = Math.min(ny, el.from[1], el.to[1]); xy = Math.max(xy, el.from[1], el.to[1]);
-        nz = Math.min(nz, el.from[2], el.to[2]); xz = Math.max(xz, el.from[2], el.to[2]);
+        const inf = typeof el.inflate === 'number' ? el.inflate : 0;
+        const x1 = Math.min(el.from[0], el.to[0]) - inf, x2 = Math.max(el.from[0], el.to[0]) + inf;
+        const y1 = Math.min(el.from[1], el.to[1]) - inf, y2 = Math.max(el.from[1], el.to[1]) + inf;
+        const z1 = Math.min(el.from[2], el.to[2]) - inf, z2 = Math.max(el.from[2], el.to[2]) + inf;
+
+        // A 8 sarok a SZERZŐI térben, a kocka saját forgatásával (az statikus,
+        // ezért bele lehet sütni a geometriába).
+        function corner(x, y, z) {
+          let pt = [x, y, z];
+          if (el.rotation && typeof el.rotation.angle === 'number' && el.rotation.angle !== 0
+              && Array.isArray(el.rotation.origin)) {
+            pt = rotatePoint(pt, el.rotation.origin, el.rotation.axis, el.rotation.angle);
+          }
+          return pt;
+        }
+
+        // A lapok sarkai a SZERZŐI tér irányai szerint (a "north" a -Z felé néz).
+        const quads = {
+          north: [corner(x2, y2, z1), corner(x1, y2, z1), corner(x1, y1, z1), corner(x2, y1, z1)],
+          south: [corner(x1, y2, z2), corner(x2, y2, z2), corner(x2, y1, z2), corner(x1, y1, z2)],
+          east:  [corner(x2, y2, z2), corner(x2, y2, z1), corner(x2, y1, z1), corner(x2, y1, z2)],
+          west:  [corner(x1, y2, z1), corner(x1, y2, z2), corner(x1, y1, z2), corner(x1, y1, z1)],
+          up:    [corner(x1, y2, z1), corner(x2, y2, z1), corner(x2, y2, z2), corner(x1, y2, z2)],
+          down:  [corner(x1, y1, z2), corner(x2, y1, z2), corner(x2, y1, z1), corner(x1, y1, z1)]
+        };
+
+        for (const dir of FACE_DIRS) {
+          const face = el.faces && el.faces[dir];
+          if (!face || !Array.isArray(face.uv) || face.uv.length !== 4) continue;
+          const [u1, v1, u2, v2] = face.uv;
+          const base = positions.length / 3;
+          const pts = quads[dir];
+          // A LAP-FORGATÁS (Blockbench "rotation" a face-en, 90/180/270)
+          // ugyanúgy alkalmazódik, mint a kliensben (ld. CosmeticModel.Face):
+          // a vanilla ELLENTÉTES körüljárással indexel és ott a forgatás
+          // hozzáadódik, ezért a mi körüljárásunkban kivonni kell. Enélkül a
+          // vásárolt csomagok lapjainak jó része (a Volt Wingsnél 39%-a)
+          // elfordult mintával jelenne meg.
+          const baseU = [u1, u2, u2, u1];
+          const baseV = [v1, v1, v2, v2];
+          const steps = ((((face.rotation | 0) / 90) % 4) + 4) % 4;
+          for (let i = 0; i < 4; i++) {
+            const src = ((i - steps) % 4 + 4) % 4;
+            positions.push(pts[i][0], pts[i][1], pts[i][2]);
+            uvs.push(baseU[src] / texW, baseV[src] / texH);
+          }
+          indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+        }
       }
-      if (Number.isFinite(nx)) modelCenter = [(nx + xx) / 2, (ny + xy) / 2, (nz + xz) / 2];
+
+      if (!indices.length) continue;
+
+      const pt = raw.transform || {};
+      const partOffset = standalone ? [0, 0, 0]
+        : (Array.isArray(pt.offset) && pt.offset.length === 3 ? pt.offset : [0, 0, 0]);
+      const partRotation = Array.isArray(pt.rotation) && pt.rotation.length === 3 ? pt.rotation : [0, 0, 0];
+      const partScale = typeof pt.scale === 'number' && pt.scale > 0 ? pt.scale : 1;
+      const center = boundsOf(raw.elements);
+      const anim = raw.anim && typeof raw.anim === 'object' ? raw.anim : null;
+
+      for (const el of (raw.elements || [])) {
+        if (!Array.isArray(el.from) || !Array.isArray(el.to)) continue;
+        for (let k = 0; k < 3; k++) {
+          allMin[k] = Math.min(allMin[k], el.from[k], el.to[k]);
+          allMax[k] = Math.max(allMax[k], el.from[k], el.to[k]);
+        }
+      }
+
+      parts.push({
+        positions, uvs, indices,
+        offset: partOffset, rotation: partRotation, scale: partScale,
+        center,
+        anim,
+        animPivot: (anim && Array.isArray(anim.pivot) && anim.pivot.length === 3) ? anim.pivot : center
+      });
     }
 
-    const f = itemSpace ? -1 : 1;
+    const allCenter = Number.isFinite(allMin[0])
+      ? [(allMin[0] + allMax[0]) / 2, (allMin[1] + allMax[1]) / 2, (allMin[2] + allMax[2]) / 2]
+      : [0, 0, 0];
+    const bonePivot = COSMETIC_PIVOTS[slot] || [0, 0, 0];
+    const assemblyAnim = (t.anim && typeof t.anim === 'object') ? t.anim : null;
 
-    // Szerzői térből az előnézeti térbe - ld. a fenti levezetést.
-    // A modell-forgatás ITT, a tükrözés/skálázás ELŐTT történik, mert a mező
-    // értelmezése a SZERZŐI tér (ugyanaz az elv, mint a kocka-forgatásnál):
-    // a kliens a tükrözött térben, konjugált (X/Y-ban negált) szöggel forgat,
-    // ami matematikailag ezzel azonos, viszont itt sokkal kevésbé hibázható.
-    function toPreview(v) {
-      if (hasModelRot) {
-        // A sorrend KÖTÖTT: X, majd Y, majd Z.
-        v = rotatePoint(v, modelCenter, 'x', rot[0]);
-        v = rotatePoint(v, modelCenter, 'y', rot[1]);
-        v = rotatePoint(v, modelCenter, 'z', rot[2]);
-      }
-      const sx = v[0] * mScale * f;
-      const sy = v[1] * mScale * f;
-      const sz = v[2] * mScale;
-      if (standalone) return [sx, -sy, -sz];
-      return [
-        pivot[0] - off[0] + sx,
-        6 - (pivot[1] - off[1] + sy),
-        -(pivot[2] + off[2] + sz)
-      ];
+    return {
+      parts,
+      standalone,
+      f,
+      assembly: {
+        offset: standalone ? [0, 0, 0] : off,
+        scale: mScale,
+        rotation: rot,
+        center: allCenter,
+        anim: assemblyAnim,
+        animPivot: (assemblyAnim && Array.isArray(assemblyAnim.pivot) && assemblyAnim.pivot.length === 3)
+          ? assemblyAnim.pivot : allCenter
+      },
+      bonePivot
+    };
+  }
+
+  /** Egy rész teljes szerzői-térből-előnézeti-térbe mátrixa az adott időpontban. */
+  function cosmeticPartMatrix(built, index, timeSec) {
+    const f = built.f;
+    const a = built.assembly;
+    const part = built.parts[index];
+
+    let m = placementMatrix(a.offset, a.scale, a.rotation, a.center, f);
+    const aAnim = animMatrix(a.anim, a.animPivot, f, timeSec);
+    if (aAnim) m = multiply(m, aAnim);
+
+    m = multiply(m, placementMatrix(part.offset, part.scale, part.rotation, part.center, f));
+    const pAnim = animMatrix(part.anim, part.animPivot, f, timeSec);
+    if (pAnim) m = multiply(m, pAnim);
+
+    // kliens modell-tér -> előnézeti tér
+    let m2p = scaleMat3(16, -16, -16);
+    if (!built.standalone) {
+      const bp = built.bonePivot;
+      m2p = multiply(translate(bp[0], 6 - bp[1], -bp[2]), m2p);
     }
+    // szerzői tér -> kliens modell-tér
+    const a2m = scaleMat3(f / 16, f / 16, 1 / 16);
+    return multiply(m2p, multiply(m, a2m));
+  }
 
-    const FACE_DIRS = ['north', 'south', 'east', 'west', 'up', 'down'];
-
-    for (const el of (model.elements || [])) {
-      if (!Array.isArray(el.from) || !Array.isArray(el.to)) continue;
-      const inf = typeof el.inflate === 'number' ? el.inflate : 0;
-      const x1 = Math.min(el.from[0], el.to[0]) - inf, x2 = Math.max(el.from[0], el.to[0]) + inf;
-      const y1 = Math.min(el.from[1], el.to[1]) - inf, y2 = Math.max(el.from[1], el.to[1]) + inf;
-      const z1 = Math.min(el.from[2], el.to[2]) - inf, z2 = Math.max(el.from[2], el.to[2]) + inf;
-
-      // A 8 sarok a SZERZŐI térben, majd (ha kell) elforgatva.
-      function corner(x, y, z) {
-        let p = [x, y, z];
-        if (el.rotation && typeof el.rotation.angle === 'number' && el.rotation.angle !== 0
-            && Array.isArray(el.rotation.origin)) {
-          p = rotatePoint(p, el.rotation.origin, el.rotation.axis, el.rotation.angle);
-        }
-        return toPreview(p);
+  /**
+   * VISSZAFELÉ KOMPATIBILIS burkoló: egyetlen, ELŐNÉZETI térbe számolt
+   * geometria (az animáció nulla időpontjában). A bélyegképeknek és az
+   * automatikus illesztésnek (app.js autoFitCosmetic) ez kell - ott nincs
+   * képkockánkénti újraszámolás.
+   */
+  function buildCosmeticGeometry(model, slot, opts) {
+    const built = buildCosmeticParts(model, slot, opts);
+    const positions = [], uvs = [], indices = [];
+    for (let i = 0; i < built.parts.length; i++) {
+      const part = built.parts[i];
+      const m = cosmeticPartMatrix(built, i, 0);
+      const base = positions.length / 3;
+      for (let v = 0; v < part.positions.length; v += 3) {
+        const q = transformPoint(m, part.positions[v], part.positions[v + 1], part.positions[v + 2]);
+        positions.push(q[0], q[1], q[2]);
       }
-
-      // A lapok sarkai a SZERZŐI tér irányai szerint (a "north" a -Z felé néz).
-      const quads = {
-        north: [corner(x2, y2, z1), corner(x1, y2, z1), corner(x1, y1, z1), corner(x2, y1, z1)],
-        south: [corner(x1, y2, z2), corner(x2, y2, z2), corner(x2, y1, z2), corner(x1, y1, z2)],
-        east:  [corner(x2, y2, z2), corner(x2, y2, z1), corner(x2, y1, z1), corner(x2, y1, z2)],
-        west:  [corner(x1, y2, z1), corner(x1, y2, z2), corner(x1, y1, z2), corner(x1, y1, z1)],
-        up:    [corner(x1, y2, z1), corner(x2, y2, z1), corner(x2, y2, z2), corner(x1, y2, z2)],
-        down:  [corner(x1, y1, z2), corner(x2, y1, z2), corner(x2, y1, z1), corner(x1, y1, z1)]
-      };
-
-      for (const dir of FACE_DIRS) {
-        const face = el.faces && el.faces[dir];
-        if (!face || !Array.isArray(face.uv) || face.uv.length !== 4) continue;
-        const [u1, v1, u2, v2] = face.uv;
-        const base = positions.length / 3;
-        const pts = quads[dir];
-        // A UV-sarkok sorrendje a fenti sarok-sorrendhez igazodik.
-        // A LAP-FORGATÁS (Blockbench "rotation" a face-en, 90/180/270) itt
-        // ugyanúgy alkalmazódik, mint a kliensben (ld. CosmeticModel.Face):
-        // a vanilla ELLENTÉTES körüljárással indexel és ott a forgatás
-        // hozzáadódik, ezért a mi körüljárásunkban kivonni kell. Enélkül a
-        // vásárolt csomagok lapjainak jó része (a Volt Wingsnél 39%-a)
-        // elfordult mintával jelenne meg.
-        const baseU = [u1, u2, u2, u1];
-        const baseV = [v1, v1, v2, v2];
-        const steps = ((((face.rotation | 0) / 90) % 4) + 4) % 4;
-        const uvC = [];
-        for (let i = 0; i < 4; i++) {
-          const src = ((i - steps) % 4 + 4) % 4;
-          uvC.push([baseU[src] / texW, baseV[src] / texH]);
-        }
-        for (let i = 0; i < 4; i++) {
-          positions.push(pts[i][0], pts[i][1], pts[i][2]);
-          uvs.push(uvC[i][0], uvC[i][1]);
-        }
-        indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
-      }
+      for (const u of part.uvs) uvs.push(u);
+      for (const idx of part.indices) indices.push(base + idx);
     }
-
     return { positions, uvs, indices };
   }
 
@@ -439,7 +638,11 @@ const SkinPreview = (() => {
   // Egy geometria (positions/uvs/indices) feltöltése GL-pufferekbe + egy
   // textúra létrehozása egy Image-ből - a testhez ÉS a köpenyhez is
   // ugyanezzel a segédfüggvénnyel (csak más geometria/kép a bemenete).
-  function createDrawable(gl, geometry, img) {
+  // ÚJ paraméter: sharedTex. Egy TÖBB RÉSZBŐL álló kiegészítő minden része
+  // UGYANAZON a textúralapon osztozik - részenként külön GL-textúrát
+  // létrehozni ugyanabból a képből tiszta pazarlás lenne (és egy nagyobb
+  // katalógusnál mérhető memória).
+  function createDrawable(gl, geometry, img, sharedTex) {
     const posBuf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(geometry.positions), gl.STATIC_DRAW);
@@ -452,15 +655,18 @@ const SkinPreview = (() => {
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf);
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(geometry.indices), gl.STATIC_DRAW);
 
-    const tex = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    let tex = sharedTex;
+    if (!tex) {
+      tex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    }
 
-    return { posBuf, uvBuf, idxBuf, tex, indexCount: geometry.indices.length };
+    return { posBuf, uvBuf, idxBuf, tex, ownsTexture: !sharedTex, indexCount: geometry.indices.length };
   }
 
   // Egy adott canvason indít (vagy újraindít) egy forgó 3D előnézetet a
@@ -512,17 +718,30 @@ const SkinPreview = (() => {
     function buildCosmetics(list) {
       // A régi puffereket/textúrákat KÖTELEZŐ felszabadítani: a szerkesztőben
       // ez másodpercenként sokszor lefut (minden húzás-mozdulatnál), és
-      // enélkül percek alatt elfogyna a GPU-memória.
+      // enélkül percek alatt elfogyna a GPU-memória. A textúrát csak az a
+      // rész szabadítja fel, AMELYIK létrehozta (ownsTexture) - a többi rész
+      // ugyanazt használja.
       for (const d of cosmeticDrawables) {
         gl.deleteBuffer(d.posBuf); gl.deleteBuffer(d.uvBuf); gl.deleteBuffer(d.idxBuf);
-        gl.deleteTexture(d.tex);
+        if (d.ownsTexture) gl.deleteTexture(d.tex);
       }
       cosmeticDrawables = [];
       for (const c of (list || [])) {
         if (!c || !c.model || !c.img) continue;
         try {
-          const g = buildCosmeticGeometry(c.model, c.slot);
-          if (g.indices.length) cosmeticDrawables.push(createDrawable(gl, g, c.img));
+          // RÉSZENKÉNT külön rajzolás: minden résznek saját (képkockánként
+          // újraszámolt) mátrixa van, mert saját animációja lehet.
+          const built = buildCosmeticParts(c.model, c.slot);
+          let sharedTex = null;
+          for (let i = 0; i < built.parts.length; i++) {
+            const part = built.parts[i];
+            if (!part.indices.length) continue;
+            const d = createDrawable(gl, part, c.img, sharedTex);
+            if (!sharedTex) sharedTex = d.tex;
+            d.built = built;
+            d.partIndex = i;
+            cosmeticDrawables.push(d);
+          }
         } catch (e) {
           // Egy hibás modell ne akassza meg a teljes előnézetet - a többi
           // (és maga a karakter) így is megjelenik.
@@ -633,7 +852,13 @@ const SkinPreview = (() => {
       gl.uniformMatrix4fv(uMVP, false, mvp);
       drawDrawable(body);
       if (cape) drawDrawable(cape);
-      for (const c of cosmeticDrawables) drawDrawable(c);
+      // A kiegészítő-részek SAJÁT mátrixot kapnak (illesztés + animáció) -
+      // ezért itt minden résznél újra beállítjuk az uMVP-t.
+      const animTime = (performance.now() % 3600000) / 1000;
+      for (const c of cosmeticDrawables) {
+        gl.uniformMatrix4fv(uMVP, false, multiply(mvp, cosmeticPartMatrix(c.built, c.partIndex, animTime)));
+        drawDrawable(c);
+      }
       requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
@@ -920,6 +1145,8 @@ const SkinPreview = (() => {
     start,
     startCosmetic,
     buildCosmeticGeometry,
+    buildCosmeticParts,
+    cosmeticPartMatrix,
     renderCosmeticThumbnail,
     getSteveImage,
     COSMETIC_PIVOTS
