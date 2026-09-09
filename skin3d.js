@@ -265,7 +265,19 @@ const SkinPreview = (() => {
   // A képletek SZÓ SZERINT a kliens CosmeticAnim-jéé (Java) - ha itt más
   // hullámalak vagy más fázis-képlet lenne, a szerkesztőben beállított mozgás
   // in-game máshogy nézne ki.
+  const FLAP_DOWN_FRACTION = 0.34;
+
   function animWave(wave, turns) {
+    if (wave === 'flap') {
+      // ASZIMMETRIKUS CSAPÁS: a ciklus első harmada a lecsapás (1 -> -1), a
+      // maradék a visszaemelkedés. Mindkét szakasz koszinusz, ezért a
+      // fordulópontokon a sebesség nulla - az illesztés szakadásmentes.
+      // Egy szinusz oda-vissza ugyanolyan gyors, és épp ettől néz ki egy
+      // szárnycsapás "billegő lapnak".
+      const t = turns - Math.floor(turns);
+      if (t < FLAP_DOWN_FRACTION) return Math.cos(Math.PI * (t / FLAP_DOWN_FRACTION));
+      return Math.cos(Math.PI + Math.PI * ((t - FLAP_DOWN_FRACTION) / (1 - FLAP_DOWN_FRACTION)));
+    }
     if (wave === 'tri') {
       const x = turns + 0.25;
       return 4 * Math.abs(x - Math.floor(x + 0.5)) - 1;
@@ -281,17 +293,30 @@ const SkinPreview = (() => {
   // az admin azt hinné, elrontotta.
   function animReact() { return 1; }
 
-  function evalAnim(anim, timeSec) {
+  /**
+   * Egy animáció kiértékelése a megadott TÁVOLSÁG-ARÁNYNÁL (0..1 a
+   * forgásponttól). A képletek SZÓ SZERINT a kliens CosmeticAnim-jéé - ha itt
+   * más lenne, a szerkesztőben beállított mozgás in-game máshogy nézne ki.
+   *
+   * A HULLÁM két hozzájárulása (ld. a kliens hosszabb magyarázatát):
+   *   falloff - a kitérés a tőnél közel nulla, a hegynél a legnagyobb
+   *   spread  - a hegy késve követi a tövet, a mozgás végigfut a részen
+   */
+  function evalAnim(anim, timeSec, distance) {
     const out = { rot: [0, 0, 0], trans: [0, 0, 0], scale: 1 };
     if (!anim || !Array.isArray(anim.tracks)) return out;
+    const d = typeof distance === 'number' ? distance : 1;
     const AXIS = { x: 0, y: 1, z: 2 };
     for (const t of anim.tracks) {
       if (!t || typeof t !== 'object') continue;
       const amp = Number(t.amp) || 0;
       const speed = Number(t.speed) || 0;
       if (!amp || !speed) continue;
-      const turns = speed * timeSec + (Number(t.phase) || 0) / 360;
-      const value = amp * animWave(t.wave, turns) * animReact(t.react);
+      const falloff = Math.max(0, Math.min(1, Number(t.falloff) || 0));
+      const spread = Number(t.spread) || 0;
+      const turns = speed * timeSec + ((Number(t.phase) || 0) + spread * d) / 360;
+      const ampScale = 1 - falloff + falloff * d;
+      const value = amp * ampScale * animWave(t.wave, turns) * animReact(t.react);
       const axis = AXIS[t.axis] !== undefined ? AXIS[t.axis] : 0;
       if (t.type === 'rotate') out.rot[axis] += value;
       else if (t.type === 'translate') out.trans[axis] += value;
@@ -326,9 +351,9 @@ const SkinPreview = (() => {
     return m;
   }
 
-  function animMatrix(anim, pivot, f, timeSec) {
+  function animMatrix(anim, pivot, f, timeSec, distance) {
     if (!anim || !Array.isArray(anim.tracks) || !anim.tracks.length) return null;
-    const a = evalAnim(anim, timeSec);
+    const a = evalAnim(anim, timeSec, distance);
     let m = null;
     if (a.trans[0] || a.trans[1] || a.trans[2]) {
       m = translate(a.trans[0] * f / 16, a.trans[1] * f / 16, a.trans[2] / 16);
@@ -349,6 +374,40 @@ const SkinPreview = (() => {
     if (a.scale !== 1) r = multiply(r, scaleMat(a.scale));
     r = multiply(r, translate(-px, -py, -pz));
     return m ? multiply(m, r) : r;
+  }
+
+  /** Igaz, ha bármelyik sáv kockánként eltérő eredményt ad (nem merev test). */
+  function animIsWave(anim) {
+    if (!anim || !Array.isArray(anim.tracks)) return false;
+    return anim.tracks.some((t) => t && ((Number(t.falloff) || 0) !== 0 || (Number(t.spread) || 0) !== 0));
+  }
+
+  /** A hullám távolság-tengelye: a sáv választása, vagy "auto" (a leghosszabb kiterjedés). */
+  function animAlongAxis(anim, elements) {
+    const AXIS = { x: 0, y: 1, z: 2 };
+    if (anim && Array.isArray(anim.tracks)) {
+      for (const t of anim.tracks) {
+        if (!t) continue;
+        if ((Number(t.falloff) || 0) === 0 && (Number(t.spread) || 0) === 0) continue;
+        if (AXIS[t.along] !== undefined) return AXIS[t.along];
+        break;
+      }
+    }
+    let min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+    for (const el of (elements || [])) {
+      if (!Array.isArray(el.from) || !Array.isArray(el.to)) continue;
+      for (let k = 0; k < 3; k++) {
+        const c = (el.from[k] + el.to[k]) / 2;
+        if (c < min[k]) min[k] = c;
+        if (c > max[k]) max[k] = c;
+      }
+    }
+    let axis = 0, best = max[0] - min[0];
+    for (let k = 1; k < 3; k++) {
+      const extent = max[k] - min[k];
+      if (extent > best) { best = extent; axis = k; }
+    }
+    return Number.isFinite(best) ? axis : 0;
   }
 
   function boundsOf(elements) {
@@ -429,9 +488,15 @@ const SkinPreview = (() => {
 
       const positions = [], uvs = [], indices = [];
       const FACE_DIRS = ['north', 'south', 'east', 'west', 'up', 'down'];
+      // KOCKÁNKÉNTI csúcs-tartomány. Hullámzó animációnál minden kocka MÁS
+      // szöggel áll, tehát képkockánként külön kell transzformálni őket -
+      // ehhez kell tudni, hol kezdődik és hol ér véget egy kocka a közös
+      // csúcstömbben.
+      const elementRanges = [];
 
       for (const el of (raw.elements || [])) {
         if (!Array.isArray(el.from) || !Array.isArray(el.to)) continue;
+        const rangeStart = positions.length;
         const inf = typeof el.inflate === 'number' ? el.inflate : 0;
         const x1 = Math.min(el.from[0], el.to[0]) - inf, x2 = Math.max(el.from[0], el.to[0]) + inf;
         const y1 = Math.min(el.from[1], el.to[1]) - inf, y2 = Math.max(el.from[1], el.to[1]) + inf;
@@ -480,6 +545,14 @@ const SkinPreview = (() => {
           }
           indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
         }
+
+        if (positions.length > rangeStart) {
+          elementRanges.push({
+            start: rangeStart,
+            end: positions.length,
+            center: [(el.from[0] + el.to[0]) / 2, (el.from[1] + el.to[1]) / 2, (el.from[2] + el.to[2]) / 2]
+          });
+        }
       }
 
       if (!indices.length) continue;
@@ -500,12 +573,31 @@ const SkinPreview = (() => {
         }
       }
 
+      const animPivot = (anim && Array.isArray(anim.pivot) && anim.pivot.length === 3) ? anim.pivot : center;
+      const wave = animIsWave(anim);
+
+      // A kockák 0..1-re normált távolsága a forgásponttól, a hullám
+      // tengelye mentén - EBBŐL jön a hajlás és a késés (ld. evalAnim).
+      let elementDistance = null;
+      if (wave && elementRanges.length) {
+        const axis = animAlongAxis(anim, raw.elements);
+        const raws = elementRanges.map((r) => Math.abs(r.center[axis] - animPivot[axis]));
+        const maxDist = raws.reduce((a, b) => Math.max(a, b), 0);
+        // Ha minden kocka a forgásponttal egy síkban van, nincs mihez
+        // viszonyítani - ilyenkor mindegyik "teljes" távolságú, ami épp a
+        // merev viselkedést adja vissza.
+        elementDistance = raws.map((d) => (maxDist > 0 ? d / maxDist : 1));
+      }
+
       parts.push({
         positions, uvs, indices,
         offset: partOffset, rotation: partRotation, scale: partScale,
         center,
         anim,
-        animPivot: (anim && Array.isArray(anim.pivot) && anim.pivot.length === 3) ? anim.pivot : center
+        animPivot,
+        wave,
+        elementRanges,
+        elementDistance
       });
     }
 
@@ -532,18 +624,26 @@ const SkinPreview = (() => {
     };
   }
 
-  /** Egy rész teljes szerzői-térből-előnézeti-térbe mátrixa az adott időpontban. */
-  function cosmeticPartMatrix(built, index, timeSec) {
+  /**
+   * Egy rész teljes szerzői-térből-előnézeti-térbe mátrixa az adott időpontban.
+   *
+   * @param skipPartAnim HULLÁMZÓ résznél igaz: a rész animációja ilyenkor
+   *        KOCKÁNKÉNT, a csúcsokon érvényesül (ld. waveElementPositions), mert
+   *        egyetlen mátrix nem tud kockánként eltérő szöget adni.
+   */
+  function cosmeticPartMatrix(built, index, timeSec, skipPartAnim) {
     const f = built.f;
     const a = built.assembly;
     const part = built.parts[index];
 
     let m = placementMatrix(a.offset, a.scale, a.rotation, a.center, f);
-    const aAnim = animMatrix(a.anim, a.animPivot, f, timeSec);
+    // A kiegészítő-szintű animáció SZÁNDÉKOSAN merev (a teljes összeállításra
+    // hat egyben) - ugyanaz a szabály, mint a kliensben.
+    const aAnim = animMatrix(a.anim, a.animPivot, f, timeSec, 1);
     if (aAnim) m = multiply(m, aAnim);
 
     m = multiply(m, placementMatrix(part.offset, part.scale, part.rotation, part.center, f));
-    const pAnim = animMatrix(part.anim, part.animPivot, f, timeSec);
+    const pAnim = skipPartAnim ? null : animMatrix(part.anim, part.animPivot, f, timeSec, 1);
     if (pAnim) m = multiply(m, pAnim);
 
     // kliens modell-tér -> előnézeti tér
@@ -558,6 +658,58 @@ const SkinPreview = (() => {
   }
 
   /**
+   * A HULLÁM kirajzolása: kockánként más szög.
+   *
+   * MIÉRT A PROCESSZORON, ÉS NEM KOCKÁNKÉNTI RAJZOLÁSSAL: kockánként külön
+   * draw call egy 256 kockás szárnynál képkockánként 256 hívás lenne, ami a
+   * böngészőben nagyságrendekkel drágább, mint egyszer végigmenni a
+   * csúcsokon. Így marad EGY draw call: a csúcsokat itt mozgatjuk a helyükre,
+   * és a puffert egyben töltjük fel újra.
+   *
+   * A forgatás a SZERZŐI térben, a forgáspont körül történik - ugyanúgy, mint
+   * a kliensben; a szerzői térből az előnézetibe a rész mátrixa visz.
+   *
+   * @param out előre lefoglalt Float32Array (a hívó tartja életben)
+   */
+  function waveElementPositions(built, index, timeSec, out) {
+    const part = built.parts[index];
+    const src = part.positions;
+    const pivot = part.animPivot;
+
+    for (let e = 0; e < part.elementRanges.length; e++) {
+      const range = part.elementRanges[e];
+      const a = evalAnim(part.anim, timeSec, part.elementDistance[e]);
+      const hasRot = a.rot[0] || a.rot[1] || a.rot[2];
+
+      if (!hasRot && a.scale === 1 && !a.trans[0] && !a.trans[1] && !a.trans[2]) {
+        for (let i = range.start; i < range.end; i++) out[i] = src[i];
+        continue;
+      }
+
+      // A sorrend a kliensével egyezik: X, majd Y, majd Z, a forgáspont körül.
+      const cx = Math.cos(a.rot[0] * Math.PI / 180), sx = Math.sin(a.rot[0] * Math.PI / 180);
+      const cy = Math.cos(a.rot[1] * Math.PI / 180), sy = Math.sin(a.rot[1] * Math.PI / 180);
+      const cz = Math.cos(a.rot[2] * Math.PI / 180), sz = Math.sin(a.rot[2] * Math.PI / 180);
+
+      for (let i = range.start; i < range.end; i += 3) {
+        let x = (src[i] - pivot[0]) * a.scale;
+        let y = (src[i + 1] - pivot[1]) * a.scale;
+        let z = (src[i + 2] - pivot[2]) * a.scale;
+        let ty = y * cx - z * sx, tz = y * sx + z * cx;   // X
+        y = ty; z = tz;
+        let tx = x * cy + z * sy; tz = -x * sy + z * cy;  // Y
+        x = tx; z = tz;
+        tx = x * cz - y * sz; ty = x * sz + y * cz;       // Z
+        x = tx; y = ty;
+        out[i]     = x + pivot[0] + a.trans[0];
+        out[i + 1] = y + pivot[1] + a.trans[1];
+        out[i + 2] = z + pivot[2] + a.trans[2];
+      }
+    }
+    return out;
+  }
+
+  /**
    * VISSZAFELÉ KOMPATIBILIS burkoló: egyetlen, ELŐNÉZETI térbe számolt
    * geometria (az animáció nulla időpontjában). A bélyegképeknek és az
    * automatikus illesztésnek (app.js autoFitCosmetic) ez kell - ott nincs
@@ -568,10 +720,16 @@ const SkinPreview = (() => {
     const positions = [], uvs = [], indices = [];
     for (let i = 0; i < built.parts.length; i++) {
       const part = built.parts[i];
-      const m = cosmeticPartMatrix(built, i, 0);
+      const m = cosmeticPartMatrix(built, i, 0, part.wave);
+      // Hullámzó résznél a nulla időpont állását vesszük - a bélyegképnek és
+      // az automatikus illesztésnek egy állókép kell, de az is a TÉNYLEGES
+      // alakot mutassa, ne a deformálatlant.
+      const src = part.wave
+        ? waveElementPositions(built, i, 0, new Float32Array(part.positions.length))
+        : part.positions;
       const base = positions.length / 3;
-      for (let v = 0; v < part.positions.length; v += 3) {
-        const q = transformPoint(m, part.positions[v], part.positions[v + 1], part.positions[v + 2]);
+      for (let v = 0; v < src.length; v += 3) {
+        const q = transformPoint(m, src[v], src[v + 1], src[v + 2]);
         positions.push(q[0], q[1], q[2]);
       }
       for (const u of part.uvs) uvs.push(u);
@@ -740,6 +898,16 @@ const SkinPreview = (() => {
             if (!sharedTex) sharedTex = d.tex;
             d.built = built;
             d.partIndex = i;
+            d.wave = !!part.wave;
+            // Hullámzó résznél képkockánként új csúcspozíciók kellenek (a
+            // kockák eltérő szöggel állnak) - a puffert DYNAMIC_DRAW-ként
+            // hozzuk létre, és egy előre lefoglalt tömbbe számolunk, hogy
+            // képkockánként ne keletkezzen szemét.
+            if (d.wave) {
+              d.scratch = new Float32Array(part.positions.length);
+              gl.bindBuffer(gl.ARRAY_BUFFER, d.posBuf);
+              gl.bufferData(gl.ARRAY_BUFFER, d.scratch, gl.DYNAMIC_DRAW);
+            }
             cosmeticDrawables.push(d);
           }
         } catch (e) {
@@ -856,7 +1024,13 @@ const SkinPreview = (() => {
       // ezért itt minden résznél újra beállítjuk az uMVP-t.
       const animTime = (performance.now() % 3600000) / 1000;
       for (const c of cosmeticDrawables) {
-        gl.uniformMatrix4fv(uMVP, false, multiply(mvp, cosmeticPartMatrix(c.built, c.partIndex, animTime)));
+        if (c.wave) {
+          waveElementPositions(c.built, c.partIndex, animTime, c.scratch);
+          gl.bindBuffer(gl.ARRAY_BUFFER, c.posBuf);
+          gl.bufferSubData(gl.ARRAY_BUFFER, 0, c.scratch);
+        }
+        gl.uniformMatrix4fv(uMVP, false,
+          multiply(mvp, cosmeticPartMatrix(c.built, c.partIndex, animTime, c.wave)));
         drawDrawable(c);
       }
       requestAnimationFrame(frame);
@@ -1147,6 +1321,8 @@ const SkinPreview = (() => {
     buildCosmeticGeometry,
     buildCosmeticParts,
     cosmeticPartMatrix,
+    waveElementPositions,
+    animAlongAxis,
     renderCosmeticThumbnail,
     getSteveImage,
     COSMETIC_PIVOTS

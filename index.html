@@ -54,11 +54,11 @@
   <!-- A téma minél korábban, a stíluslap ELŐTT alkalmazódjon (ld.
        theme.js), hogy az első kirajzolás már a mentett témával történjen,
        ne legyen látható "villanás" az alap témáról. -->
-  <script src="theme.js?v=20260908a"></script>
-  <link rel="stylesheet" href="style.css?v=20260908a" />
+  <script src="theme.js?v=20260909a"></script>
+  <link rel="stylesheet" href="style.css?v=20260909a" />
   <!-- A vizuális réteg SZÁNDÉKOSAN a style.css UTÁN: csak ráépít az ottani
        osztályokra, és a kaszkádban felülír, ahol kell (ld. ui.css eleje). -->
-  <link rel="stylesheet" href="ui.css?v=20260908a" />
+  <link rel="stylesheet" href="ui.css?v=20260909a" />
 
   <!-- Strukturált adat a keresőknek/megosztásoknak (schema.org). -->
   <script type="application/ld+json">
@@ -1398,7 +1398,7 @@
                  jelenik meg in-game. -->
             <div class="cosmetic-transform-box">
               <div class="cosmetic-transform-title">Animáció - <span id="cosmeticAnimTargetLabel">teljes kiegészítő</span></div>
-              <p class="cosmetic-file-note" style="margin-bottom:10px;">Az előnézetben a mozgás azonnal látszik. A <strong>fázis</strong> adja a tükrözést: két szárnyfélnél az egyikre 0, a másikra 180 fokot állíts, vagy fordítsd meg a kitérés előjelét. Az <strong>előnézet mindig a legnagyobb kitérést mutatja</strong>, akkor is, ha a sáv csak mozgás/repülés közben aktív.</p>
+              <p class="cosmetic-file-note" style="margin-bottom:10px;">Az előnézetben a mozgás azonnal látszik. Egy hihető szárnycsapáshoz <strong>három dolog kell együtt</strong>: a <em>Csapás</em> jelleg (gyors le, lassú vissza), a <em>Hajlás</em> (a tőnél alig, a hegynél teljes kitérés) és a <em>Késés</em> (a hegy késve követi a tövet, ettől fut végig a mozgás). Ezeket a kész mozgások már beállítják &ndash; kezdd azokkal. A <strong>forgáspontot mindenképp a szárny tövére</strong> tedd, különben a közepe körül forog. Az <strong>előnézet mindig a legnagyobb kitérést mutatja</strong>, akkor is, ha a sáv csak mozgás/repülés közben aktív.</p>
 
               <div class="cosmetic-anim-presets" id="cosmeticAnimPresets"></div>
 
@@ -1411,7 +1411,8 @@
                   <label>Forgáspont Y<input type="number" id="cosmeticAnimPivotYInput" step="0.5" placeholder="közép" /></label>
                   <label>Forgáspont Z<input type="number" id="cosmeticAnimPivotZInput" step="0.5" placeholder="közép" /></label>
                 </div>
-                <p class="cosmetic-file-note">Üresen hagyva a modell közepe körül forog. Egy szárny a TÖVÉNÉL csuklik - ott állítsd be a forgáspontot, különben lebegő deszkának látszik, nem csapkodásnak. (A modell saját, Blockbench-koordinátáiban.)</p>
+                <p class="cosmetic-file-note">Üresen hagyva a modell közepe körül forog. Egy szárny a TÖVÉNÉL csuklik &ndash; ott állítsd be a forgáspontot, különben a közepén hajlik, nem a tövénél. (A modell saját, Blockbench-koordinátáiban.) A kész mozgások ezt automatikusan beállítják.</p>
+                <button type="button" class="btn-outline" id="cosmeticAnimRootPivotBtn">Forgáspont a rész tövére</button>
                 <button type="button" class="btn-outline" id="cosmeticAnimClearBtn">Animáció törlése</button>
               </div>
             </div>
@@ -2429,8 +2430,8 @@
        ez utóbbi itt lényeges, mert a ui.js az app.js globális
        switchView()/showToast() függvényeit csomagolja be, tehát csak
        azok létrejötte után futhat. -->
-  <script src="skin3d.js?v=20260908a" defer></script>
-  <script src="app.js?v=20260908a" defer></script>
-  <script src="ui.js?v=20260908a" defer></script>
+  <script src="skin3d.js?v=20260909a" defer></script>
+  <script src="app.js?v=20260909a" defer></script>
+  <script src="ui.js?v=20260909a" defer></script>
 </body>
 </html>

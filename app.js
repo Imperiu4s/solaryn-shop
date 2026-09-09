@@ -12,7 +12,7 @@
 // számot látsz, a böngésző MÉG A RÉGI app.js-t futtatja (a webtárhely
 // cache-e miatt egy feltöltés nem feltétlenül ér ki azonnal). MINDEN
 // kiadásnál emelni kell, az index.html ?v= paramétereivel EGYÜTT.
-const CENTER_VERSION = '20260908a';
+const CENTER_VERSION = '20260909a';
 
 const BACKEND_URL = 'https://api.overclockgame.hu:8908';
 
@@ -6703,27 +6703,113 @@ function renderCosmeticPartPanel() {
 // A sáv-mezők jelentése SZÓ SZERINT a kliens CosmeticAnim-jéé (Java) - ha itt
 // más lenne, a beállított mozgás in-game máshogy nézne ki.
 const ANIM_TYPE_LABELS = { rotate: 'Forgatás', translate: 'Eltolás', scale: 'Méret' };
-const ANIM_WAVE_LABELS = { sine: 'Lágy (szinusz)', tri: 'Egyenletes (háromszög)', saw: 'Körbe (fűrész)', pulse: 'Kapcsolgatás' };
+const ANIM_WAVE_LABELS = {
+  sine: 'Lágy (szinusz)',
+  flap: 'Csapás (gyors le, lassú vissza)',
+  tri: 'Egyenletes (háromszög)',
+  saw: 'Körbe (fűrész)',
+  pulse: 'Kapcsolgatás'
+};
 const ANIM_REACT_LABELS = {
   none: 'Mindig', move: 'Mozgás közben', air: 'Levegőben', sneak: 'Lopakodva', ground: 'Földön'
 };
+const ANIM_ALONG_LABELS = { auto: 'Automatikus', x: 'X', y: 'Y', z: 'Z' };
 
-// Kész mozgások. MIÉRT KELLENEK: sáv-szinten (típus/tengely/kitérés/sebesség/
-// fázis/hullám) gondolkodni tanulást igényel - a felhasználó viszont azt
-// akarja, hogy "csapkodjon a szárny". A gombok pontosan ezt a lépést hidalják
-// át, a beállított értékek utána szabadon hangolhatók.
+// Kész mozgások.
+//
+// MIÉRT EZEK AZ ÉRTÉKEK: az első változat merev testként forgatta a részt egy
+// pont körül, és az eredmény használhatatlan volt - egy billegő lap. Egy
+// valódi szárnycsapás HÁROM dologtól él, és mindhárom benne van ezekben:
+//   falloff  a tőnél alig, a hegynél teljes kitérés  -> a szárny HAJLIK
+//   spread   a hegy késve követi a tövet             -> a mozgás VÉGIGFUT
+//   flap     gyors lecsapás, lassabb visszaemelkedés -> nem "billeg", CSAP
+// Kétrészes szárnynál a tükrözött változat kell a másik félre (a kitérés
+// előjele fordított), és a forgáspontot a szárny TÖVÉRE kell állítani.
 const ANIM_PRESETS = [
-  { label: 'Szárnycsapás (fel-le)', track: { type: 'rotate', axis: 'z', amp: 18, speed: 1.1, phase: 0, wave: 'sine', react: 'none' } },
-  { label: 'Szárnycsapás (fel-le, tükrözött)', track: { type: 'rotate', axis: 'z', amp: -18, speed: 1.1, phase: 0, wave: 'sine', react: 'none' } },
-  { label: 'Szárnynyitás (nyit-zár)', track: { type: 'rotate', axis: 'y', amp: 15, speed: 0.9, phase: 0, wave: 'sine', react: 'none' } },
-  { label: 'Szárnynyitás (tükrözött)', track: { type: 'rotate', axis: 'y', amp: -15, speed: 0.9, phase: 0, wave: 'sine', react: 'none' } },
-  { label: 'Lebegés', track: { type: 'translate', axis: 'y', amp: 0.8, speed: 0.35, phase: 0, wave: 'sine', react: 'none' } },
-  { label: 'Ringás', track: { type: 'rotate', axis: 'z', amp: 6, speed: 0.4, phase: 0, wave: 'sine', react: 'none' } },
-  { label: 'Folyamatos pörgés', track: { type: 'rotate', axis: 'y', amp: 180, speed: 0.35, phase: 0, wave: 'saw', react: 'none' } },
-  { label: 'Lüktetés', track: { type: 'scale', axis: 'x', amp: 0.06, speed: 0.8, phase: 0, wave: 'sine', react: 'none' } },
-  { label: 'Repülés közben csapkod', track: { type: 'rotate', axis: 'z', amp: 32, speed: 2.2, phase: 0, wave: 'sine', react: 'air' } },
-  { label: 'Futásra felgyorsul', track: { type: 'rotate', axis: 'z', amp: 20, speed: 1.6, phase: 0, wave: 'sine', react: 'move' } }
+  { label: 'Szárnycsapás', track: { type: 'rotate', axis: 'z', amp: 38, speed: 1.15, phase: 0, wave: 'flap', react: 'none', falloff: 0.85, spread: 130, along: 'auto' } },
+  { label: 'Szárnycsapás (tükrözött)', track: { type: 'rotate', axis: 'z', amp: -38, speed: 1.15, phase: 0, wave: 'flap', react: 'none', falloff: 0.85, spread: 130, along: 'auto' } },
+  { label: 'Repülés közben csapkod', track: { type: 'rotate', axis: 'z', amp: 46, speed: 2.4, phase: 0, wave: 'flap', react: 'air', falloff: 0.85, spread: 140, along: 'auto' } },
+  { label: 'Futásra felgyorsul', track: { type: 'rotate', axis: 'z', amp: 26, speed: 1.8, phase: 0, wave: 'flap', react: 'move', falloff: 0.85, spread: 120, along: 'auto' } },
+  { label: 'Lassú suhogás', track: { type: 'rotate', axis: 'z', amp: 14, speed: 0.45, phase: 0, wave: 'sine', react: 'none', falloff: 0.9, spread: 90, along: 'auto' } },
+  { label: 'Köpeny-hullám', track: { type: 'rotate', axis: 'x', amp: 10, speed: 0.7, phase: 0, wave: 'sine', react: 'none', falloff: 1, spread: 200, along: 'auto' } },
+  { label: 'Szárnynyitás (nyit-zár)', track: { type: 'rotate', axis: 'y', amp: 16, speed: 0.9, phase: 0, wave: 'sine', react: 'none', falloff: 0.7, spread: 60, along: 'auto' } },
+  { label: 'Lebegés', track: { type: 'translate', axis: 'y', amp: 0.8, speed: 0.35, phase: 0, wave: 'sine', react: 'none', falloff: 0, spread: 0, along: 'auto' } },
+  { label: 'Ringás', track: { type: 'rotate', axis: 'z', amp: 6, speed: 0.4, phase: 0, wave: 'sine', react: 'none', falloff: 0, spread: 0, along: 'auto' } },
+  { label: 'Folyamatos pörgés', track: { type: 'rotate', axis: 'y', amp: 180, speed: 0.35, phase: 0, wave: 'saw', react: 'none', falloff: 0, spread: 0, along: 'auto' } },
+  { label: 'Lüktetés', track: { type: 'scale', axis: 'x', amp: 0.06, speed: 0.8, phase: 0, wave: 'sine', react: 'none', falloff: 0, spread: 0, along: 'auto' } }
 ];
+
+function animSelect(field, labels, value) {
+  return `<select data-anim-field="${field}">${Object.entries(labels)
+    .map(([v, l]) => `<option value="${v}"${value === v ? ' selected' : ''}>${escapeHtml(l)}</option>`)
+    .join('')}</select>`;
+}
+
+function animField(label, inner, title) {
+  return `<label class="cosmetic-anim-field"${title ? ` title="${escapeHtml(title)}"` : ''}><span>${escapeHtml(label)}</span>${inner}</label>`;
+}
+
+/**
+ * A rész TÖVE: az a pont, ahol a csukló van.
+ *
+ * MIÉRT KELL AUTOMATIKUSAN: a forgáspont alapértéke a rész befoglaló
+ * dobozának KÖZEPE, egy szárny viszont a TÖVÉNÉL csuklik. Aki csak rákattint
+ * egy kész mozgásra, az középen csuklóra hajló szárnyat kapna, és azt hinné,
+ * hogy a hullám nem működik - pedig csak a forgáspont rossz.
+ *
+ * A HEURISZTIKA: a hullám tengelye mentén a rész két széle közül az, amelyik
+ * KÖZELEBB van a modell-tér középpontjához - vagyis a testhez. Egy Blockbench
+ * item-modell a (8,8,8) blokk-középpont köré készül (minden vásárolt csomag
+ * ilyen), egy entitás-modell pedig a (0,0,0) köré; a szárny ettől a ponttól
+ * FELÉ nyúlik ki, tehát a közelebbi vége a töve. A másik két koordináta a
+ * rész közepe marad - ott nincs mit eltalálni.
+ */
+function suggestRootPivot(partIndex) {
+  const model = buildEditorModel();
+  if (!model) return null;
+  const part = cosmeticParts[partIndex];
+  if (!part || !Array.isArray(part.elements) || !part.elements.length) return null;
+
+  let built;
+  try { built = SkinPreview.buildCosmeticParts(model, $('#cosmeticSlotSelect').value || 'head'); } catch { return null; }
+  // A buildEditorModel csak a modellel rendelkező részeket adja tovább, ezért
+  // a sorszámot azok között kell megkeresni.
+  const withModel = cosmeticParts.filter((p) => Array.isArray(p.elements) && p.elements.length);
+  const builtIndex = withModel.indexOf(part);
+  const builtPart = built.parts[builtIndex];
+  if (!builtPart) return null;
+
+  const axis = SkinPreview.animAlongAxis(builtPart.anim, part.elements);
+  let min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+  for (const el of part.elements) {
+    if (!Array.isArray(el.from) || !Array.isArray(el.to)) continue;
+    for (let k = 0; k < 3; k++) {
+      min[k] = Math.min(min[k], el.from[k], el.to[k]);
+      max[k] = Math.max(max[k], el.from[k], el.to[k]);
+    }
+  }
+  if (!Number.isFinite(min[0])) return null;
+
+  const reference = cosmeticAssembly.itemModelSpace !== false ? 8 : 0;
+  const pivot = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2];
+  pivot[axis] = Math.abs(min[axis] - reference) <= Math.abs(max[axis] - reference) ? min[axis] : max[axis];
+  return pivot.map((n) => Math.round(n * 100) / 100);
+}
+
+function applyRootPivot() {
+  if (cosmeticTarget < 0) {
+    showToast('A forgáspont-javaslat egy RÉSZRE vonatkozik - válassz ki egyet fent.', true);
+    return false;
+  }
+  const pivot = suggestRootPivot(cosmeticTarget);
+  if (!pivot) { showToast('Előbb válassz modellt ehhez a részhez.', true); return false; }
+  const anim = ensureAnim();
+  anim.pivot = pivot;
+  if (cosmeticParts[cosmeticTarget]) cosmeticParts[cosmeticTarget].dirty = true;
+  renderCosmeticAnimEditor();
+  queueEditorRefresh();
+  return true;
+}
 
 function currentAnim() {
   const rec = currentTargetRecord();
@@ -6762,20 +6848,30 @@ function renderCosmeticAnimEditor() {
   if (!tracks.length) {
     tracksWrap.innerHTML = '<p class="cosmetic-file-note">Ehhez még nincs mozgás beállítva. Válassz egy kész mozgást fent, vagy vegyél fel egyet kézzel.</p>';
   } else {
-    tracksWrap.innerHTML = `
-      <div class="cosmetic-anim-head">
-        <span>Mit</span><span>Tengely</span><span>Kitérés</span><span>Sebesség</span><span>Fázis°</span><span>Jelleg</span><span>Mikor</span><span></span>
-      </div>` + tracks.map((t, i) => `
+    tracksWrap.innerHTML = tracks.map((t, i) => {
+      const isScale = t.type === 'scale';
+      const step = isScale ? '0.02' : (t.type === 'translate' ? '0.2' : '1');
+      return `
       <div class="cosmetic-anim-track" data-anim-index="${i}">
-        <select data-anim-field="type">${Object.entries(ANIM_TYPE_LABELS).map(([v, l]) => `<option value="${v}"${t.type === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
-        <select data-anim-field="axis"${t.type === 'scale' ? ' disabled' : ''}>${['x', 'y', 'z'].map((v) => `<option value="${v}"${t.axis === v ? ' selected' : ''}>${v.toUpperCase()}</option>`).join('')}</select>
-        <input type="number" data-anim-field="amp" step="${t.type === 'scale' ? '0.02' : (t.type === 'translate' ? '0.2' : '1')}" value="${Number(t.amp) || 0}" />
-        <input type="number" data-anim-field="speed" step="0.05" min="0" max="8" value="${Number(t.speed) || 0}" />
-        <input type="number" data-anim-field="phase" step="15" min="-360" max="360" value="${Number(t.phase) || 0}" />
-        <select data-anim-field="wave">${Object.entries(ANIM_WAVE_LABELS).map(([v, l]) => `<option value="${v}"${t.wave === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
-        <select data-anim-field="react">${Object.entries(ANIM_REACT_LABELS).map(([v, l]) => `<option value="${v}"${t.react === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
-        <button type="button" class="cosmetic-anim-remove" data-anim-remove="${i}" title="Sáv törlése">&times;</button>
-      </div>`).join('');
+        <div class="cosmetic-anim-row">
+          ${animField('Mit', animSelect('type', ANIM_TYPE_LABELS, t.type))}
+          ${animField('Tengely', `<select data-anim-field="axis"${isScale ? ' disabled' : ''}>${['x', 'y', 'z'].map((v) => `<option value="${v}"${t.axis === v ? ' selected' : ''}>${v.toUpperCase()}</option>`).join('')}</select>`)}
+          ${animField('Kitérés', `<input type="number" data-anim-field="amp" step="${step}" value="${Number(t.amp) || 0}" />`, 'Forgatásnál fok, eltolásnál modell-egység, méretnél arány. A NEGATÍV érték a tükrözött oldal.')}
+          ${animField('Sebesség', `<input type="number" data-anim-field="speed" step="0.05" min="0" max="8" value="${Number(t.speed) || 0}" />`, 'Teljes ciklus másodpercenként.')}
+          ${animField('Fázis°', `<input type="number" data-anim-field="phase" step="15" min="-360" max="360" value="${Number(t.phase) || 0}" />`, 'Eltolja a mozgás kezdetét. Két azonos szárnyfélnél 0 és 180 ellentétes ütemet ad.')}
+          ${animField('Jelleg', animSelect('wave', ANIM_WAVE_LABELS, t.wave))}
+          ${animField('Mikor', animSelect('react', ANIM_REACT_LABELS, t.react))}
+          <button type="button" class="cosmetic-anim-remove" data-anim-remove="${i}" title="Sáv törlése">&times;</button>
+        </div>
+        ${isScale ? '' : `
+        <div class="cosmetic-anim-row cosmetic-anim-wave-row">
+          <span class="cosmetic-anim-rowlabel">Hullám</span>
+          ${animField('Hajlás', `<input type="range" data-anim-field="falloff" min="0" max="1" step="0.05" value="${Number(t.falloff) || 0}" /><output>${(Number(t.falloff) || 0).toFixed(2)}</output>`, '0 = az egész rész merev testként fordul (billegő lap). 1 = a forgáspontnál nem mozdul, a hegyénél teljes a kitérés - EZ hajlítja meg a szárnyat.')}
+          ${animField('Késés°', `<input type="number" data-anim-field="spread" step="10" min="-720" max="720" value="${Number(t.spread) || 0}" />`, 'Mennyivel késik a legtávolabbi kocka a forgáspontnál lévőhöz képest. Ettől FUT VÉGIG a mozgás a szárnyon (suhogás). 100-150 fok a jellemző.')}
+          ${animField('Mentén', animSelect('along', ANIM_ALONG_LABELS, t.along || 'auto'), 'Melyik tengely mentén fut a hullám. Automatikusan a rész leghosszabb kiterjedése - szárnynál ez általában helyes.')}
+        </div>`}
+      </div>`;
+    }).join('');
   }
 
   const pivot = anim && Array.isArray(anim.pivot) ? anim.pivot : null;
@@ -7151,15 +7247,31 @@ $('#cosmeticAnimPresets')?.addEventListener('click', (e) => {
   const anim = ensureAnim();
   if (anim.tracks.length >= 6) { showToast('Legfeljebb 6 mozgás lehet egy célon.', true); return; }
   anim.tracks.push({ ...preset.track });
+
+  // HULLÁMZÓ mozgásnál a forgáspont dönti el, hogy szárnycsapást vagy egy
+  // közepén hajló deszkát kapunk - ha még nincs beállítva, a rész tövére
+  // tesszük. Egy MÁR beállított forgáspontot sose írunk felül.
+  const wavy = (Number(preset.track.falloff) || 0) !== 0 || (Number(preset.track.spread) || 0) !== 0;
+  if (wavy && cosmeticTarget >= 0 && !Array.isArray(anim.pivot)) {
+    const pivot = suggestRootPivot(cosmeticTarget);
+    if (pivot) {
+      anim.pivot = pivot;
+      showToast('A forgáspont a rész tövére állt - ha nem stimmel, írd át kézzel.');
+    }
+  }
+
   renderCosmeticAnimEditor();
   renderCosmeticPartsBar();
   queueEditorRefresh();
 });
 
+$('#cosmeticAnimRootPivotBtn')?.addEventListener('click', applyRootPivot);
+
 $('#cosmeticAnimAddBtn')?.addEventListener('click', () => {
   const anim = ensureAnim();
   if (anim.tracks.length >= 6) { showToast('Legfeljebb 6 mozgás lehet egy célon.', true); return; }
-  anim.tracks.push({ type: 'rotate', axis: 'y', amp: 10, speed: 1, phase: 0, wave: 'sine', react: 'none' });
+  anim.tracks.push({ type: 'rotate', axis: 'z', amp: 20, speed: 1, phase: 0, wave: 'flap',
+                     react: 'none', falloff: 0.8, spread: 110, along: 'auto' });
   renderCosmeticAnimEditor();
   renderCosmeticPartsBar();
   queueEditorRefresh();
@@ -7185,6 +7297,8 @@ $('#cosmeticAnimTracks')?.addEventListener('click', (e) => {
   queueEditorRefresh();
 });
 
+const ANIM_NUMBER_FIELDS = ['amp', 'speed', 'phase', 'falloff', 'spread'];
+
 function onAnimTrackFieldChange(e) {
   const field = e.target.dataset.animField;
   if (!field) return;
@@ -7193,9 +7307,13 @@ function onAnimTrackFieldChange(e) {
   if (!row || !anim) return;
   const track = anim.tracks[Number(row.dataset.animIndex)];
   if (!track) return;
-  track[field] = (field === 'amp' || field === 'speed' || field === 'phase')
-    ? (Number(e.target.value) || 0)
-    : e.target.value;
+  track[field] = ANIM_NUMBER_FIELDS.includes(field) ? (Number(e.target.value) || 0) : e.target.value;
+  // A csúszka melletti szám azonnal kövesse a húzást - teljes újrarajzolás
+  // NÉLKÜL, mert az elvágná a folyamatban lévő húzást.
+  if (field === 'falloff') {
+    const out = e.target.parentElement && e.target.parentElement.querySelector('output');
+    if (out) out.textContent = (Number(e.target.value) || 0).toFixed(2);
+  }
   if (cosmeticTarget >= 0 && cosmeticParts[cosmeticTarget]) cosmeticParts[cosmeticTarget].dirty = true;
   // A típusváltás a tengely-mező elérhetőségét is befolyásolja (a "Méret"
   // egyenletes), ezért ott újra kell rajzolni a sort.
