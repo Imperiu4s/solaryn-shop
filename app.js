@@ -12,7 +12,7 @@
 // számot látsz, a böngésző MÉG A RÉGI app.js-t futtatja (a webtárhely
 // cache-e miatt egy feltöltés nem feltétlenül ér ki azonnal). MINDEN
 // kiadásnál emelni kell, az index.html ?v= paramétereivel EGYÜTT.
-const CENTER_VERSION = '20260909a';
+const CENTER_VERSION = '20260909b';
 
 const BACKEND_URL = 'https://api.overclockgame.hu:8908';
 
@@ -7244,6 +7244,26 @@ $('#cosmeticAnimPresets')?.addEventListener('click', (e) => {
   if (!btn) return;
   const preset = ANIM_PRESETS[Number(btn.dataset.animPreset)];
   if (!preset) return;
+  const wavy = (Number(preset.track.falloff) || 0) !== 0 || (Number(preset.track.spread) || 0) !== 0;
+
+  // A HULLÁM (hajlás/késés) csak RÉSZEN belül értelmes: a "teljes kiegészítő"
+  // szint az egész összeállítást mozgatja egyben, ott nincs mihez viszonyítani
+  // a kockák távolságát, ezért a kliens ott MEREVEN számol. Ha a felhasználó
+  // a "Teljes kiegészítő" célon kattint egy szárnycsapásra, pontosan a régi,
+  // billegő mozgást kapná - ezért automatikusan átváltunk a részre.
+  if (wavy && cosmeticTarget < 0) {
+    const withModel = cosmeticParts.findIndex((p) => Array.isArray(p.elements) && p.elements.length);
+    if (withModel < 0) {
+      showToast('Előbb tölts fel modellt, utána állítható be a mozgás.', true);
+      return;
+    }
+    const partCount = cosmeticParts.filter((p) => Array.isArray(p.elements) && p.elements.length).length;
+    setCosmeticTarget(withModel);
+    showToast(partCount > 1
+      ? 'A szárnycsapás RÉSZENKÉNT állítható - az 1. részre került. A másikra válaszd a tükrözött változatot.'
+      : 'A mozgás a részre került (a teljes kiegészítő szintjén nem tudna hullámozni).');
+  }
+
   const anim = ensureAnim();
   if (anim.tracks.length >= 6) { showToast('Legfeljebb 6 mozgás lehet egy célon.', true); return; }
   anim.tracks.push({ ...preset.track });
@@ -7251,13 +7271,9 @@ $('#cosmeticAnimPresets')?.addEventListener('click', (e) => {
   // HULLÁMZÓ mozgásnál a forgáspont dönti el, hogy szárnycsapást vagy egy
   // közepén hajló deszkát kapunk - ha még nincs beállítva, a rész tövére
   // tesszük. Egy MÁR beállított forgáspontot sose írunk felül.
-  const wavy = (Number(preset.track.falloff) || 0) !== 0 || (Number(preset.track.spread) || 0) !== 0;
   if (wavy && cosmeticTarget >= 0 && !Array.isArray(anim.pivot)) {
     const pivot = suggestRootPivot(cosmeticTarget);
-    if (pivot) {
-      anim.pivot = pivot;
-      showToast('A forgáspont a rész tövére állt - ha nem stimmel, írd át kézzel.');
-    }
+    if (pivot) anim.pivot = pivot;
   }
 
   renderCosmeticAnimEditor();
