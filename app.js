@@ -12,7 +12,7 @@
 // számot látsz, a böngésző MÉG A RÉGI app.js-t futtatja (a webtárhely
 // cache-e miatt egy feltöltés nem feltétlenül ér ki azonnal). MINDEN
 // kiadásnál emelni kell, az index.html ?v= paramétereivel EGYÜTT.
-const CENTER_VERSION = '20260909b';
+const CENTER_VERSION = '20260912a';
 
 const BACKEND_URL = 'https://api.overclockgame.hu:8908';
 
@@ -6717,27 +6717,135 @@ const ANIM_ALONG_LABELS = { auto: 'Automatikus', x: 'X', y: 'Y', z: 'Z' };
 
 // Kész mozgások.
 //
-// MIÉRT EZEK AZ ÉRTÉKEK: az első változat merev testként forgatta a részt egy
-// pont körül, és az eredmény használhatatlan volt - egy billegő lap. Egy
-// valódi szárnycsapás HÁROM dologtól él, és mindhárom benne van ezekben:
-//   falloff  a tőnél alig, a hegynél teljes kitérés  -> a szárny HAJLIK
-//   spread   a hegy késve követi a tövet             -> a mozgás VÉGIGFUT
-//   flap     gyors lecsapás, lassabb visszaemelkedés -> nem "billeg", CSAP
-// Kétrészes szárnynál a tükrözött változat kell a másik félre (a kitérés
-// előjele fordított), és a forgáspontot a szárny TÖVÉRE kell állítani.
-const ANIM_PRESETS = [
-  { label: 'Szárnycsapás', track: { type: 'rotate', axis: 'z', amp: 38, speed: 1.15, phase: 0, wave: 'flap', react: 'none', falloff: 0.85, spread: 130, along: 'auto' } },
-  { label: 'Szárnycsapás (tükrözött)', track: { type: 'rotate', axis: 'z', amp: -38, speed: 1.15, phase: 0, wave: 'flap', react: 'none', falloff: 0.85, spread: 130, along: 'auto' } },
-  { label: 'Repülés közben csapkod', track: { type: 'rotate', axis: 'z', amp: 46, speed: 2.4, phase: 0, wave: 'flap', react: 'air', falloff: 0.85, spread: 140, along: 'auto' } },
-  { label: 'Futásra felgyorsul', track: { type: 'rotate', axis: 'z', amp: 26, speed: 1.8, phase: 0, wave: 'flap', react: 'move', falloff: 0.85, spread: 120, along: 'auto' } },
-  { label: 'Lassú suhogás', track: { type: 'rotate', axis: 'z', amp: 14, speed: 0.45, phase: 0, wave: 'sine', react: 'none', falloff: 0.9, spread: 90, along: 'auto' } },
-  { label: 'Köpeny-hullám', track: { type: 'rotate', axis: 'x', amp: 10, speed: 0.7, phase: 0, wave: 'sine', react: 'none', falloff: 1, spread: 200, along: 'auto' } },
-  { label: 'Szárnynyitás (nyit-zár)', track: { type: 'rotate', axis: 'y', amp: 16, speed: 0.9, phase: 0, wave: 'sine', react: 'none', falloff: 0.7, spread: 60, along: 'auto' } },
-  { label: 'Lebegés', track: { type: 'translate', axis: 'y', amp: 0.8, speed: 0.35, phase: 0, wave: 'sine', react: 'none', falloff: 0, spread: 0, along: 'auto' } },
-  { label: 'Ringás', track: { type: 'rotate', axis: 'z', amp: 6, speed: 0.4, phase: 0, wave: 'sine', react: 'none', falloff: 0, spread: 0, along: 'auto' } },
-  { label: 'Folyamatos pörgés', track: { type: 'rotate', axis: 'y', amp: 180, speed: 0.35, phase: 0, wave: 'saw', react: 'none', falloff: 0, spread: 0, along: 'auto' } },
-  { label: 'Lüktetés', track: { type: 'scale', axis: 'x', amp: 0.06, speed: 0.8, phase: 0, wave: 'sine', react: 'none', falloff: 0, spread: 0, along: 'auto' } }
+// MIÉRT TÖBBSÁVOSAK (ez a 2026-09-12-i újratervezés lényege): egyetlen
+// tengely körüli forgatás - bármilyen jól hangolva - CSUKLÓ marad. A szárny
+// fel-le billeg, és a szem azonnal kiszúrja, hogy gépi. Egy élő szárnycsapást
+// nem a KITÉRÉS NAGYSÁGA tesz hitelessé, hanem három, egymáshoz RÖGZÍTETT
+// FÁZISÚ mozgás együttállása:
+//
+//   Z körül (csapás)    a tő alig, a hegy teljesen mozdul, és a mozgás
+//                       végigfut a szárnyon           -> falloff + spread
+//   X körül (csavarás)  a csapás LEGGYORSABB pontján tetőzik: ekkor fordul
+//                       bele a szárny a levegőbe. A helyes fázis a hullám
+//                       ALAKJÁTÓL függ: az aszimmetrikus "flap"-nél a
+//                       leggyorsabb pont a ciklus 17%-ánál van -> phase 30,
+//                       sima szinusznál a ciklus elején -> phase 95. Ezt a
+//                       különbséget numerikus teszt fogta meg, nem szemre
+//                       hangoltuk.
+//   Y körül (söprés)    KÉTSZERES ütemben, kicsit - ettől lesz a szárnyhegy
+//                       pályája 8-as alakú            -> speed x2
+//
+// A kétszeres ütem szándékosan EGÉSZ SZÁMÚ arány: egy 1,7-szeres sebesség a
+// főmozgáshoz képest lassan szétcsúszna, és a csapkodás "dülöngélne".
+//
+// KÉT ÉRTÉK VÁLTOZOTT ÉRDEMBEN a korábbi készletből:
+//   - sebesség 1,15 -> 0,6 ciklus/mp. A régi 0,87 másodpercenként egy teljes
+//     csapás, ami egy nagy szárnytól kapkodó; 1,6 mp a nyugodt, lebegő ütem.
+//   - késés (spread) 130 -> 55 fok. A 130 fok a ciklus több mint harmada: a
+//     szárny töve és hegye ennyire eltérő fázisban gumiszerűen hullámzott,
+//     csapás helyett.
+//
+// A TÜKRÖZÖTT változatot nem kézzel írjuk le: a mirrorAnimTracks() a test
+// síkjára tükröz, ami a helyes átalakítás (ld. ott).
+const ANIM_PRESET_DEFS = [
+  {
+    label: 'Szárnycsapás',
+    mirror: true,
+    replace: true,
+    tracks: [
+      { type: 'rotate', axis: 'z', amp: 30, speed: 0.6, phase: 0, wave: 'flap', react: 'none', falloff: 0.9, spread: 55, along: 'auto' },
+      { type: 'rotate', axis: 'x', amp: 11, speed: 0.6, phase: 30, wave: 'sine', react: 'none', falloff: 1, spread: 55, along: 'auto' },
+      { type: 'rotate', axis: 'y', amp: 5, speed: 1.2, phase: 35, wave: 'sine', react: 'none', falloff: 0.7, spread: 40, along: 'auto' },
+      { type: 'translate', axis: 'y', amp: 0.35, speed: 0.6, phase: 180, wave: 'sine', react: 'none', falloff: 0, spread: 0, along: 'auto' }
+    ]
+  },
+  {
+    label: 'Repülés közben csapkod',
+    mirror: true,
+    replace: true,
+    tracks: [
+      { type: 'rotate', axis: 'z', amp: 42, speed: 1.35, phase: 0, wave: 'flap', react: 'air', falloff: 0.9, spread: 60, along: 'auto' },
+      { type: 'rotate', axis: 'x', amp: 15, speed: 1.35, phase: 30, wave: 'sine', react: 'air', falloff: 1, spread: 60, along: 'auto' },
+      { type: 'rotate', axis: 'y', amp: 7, speed: 2.7, phase: 35, wave: 'sine', react: 'air', falloff: 0.7, spread: 45, along: 'auto' }
+    ]
+  },
+  {
+    label: 'Futásra felgyorsul',
+    mirror: true,
+    replace: true,
+    tracks: [
+      { type: 'rotate', axis: 'z', amp: 22, speed: 0.95, phase: 0, wave: 'flap', react: 'move', falloff: 0.9, spread: 55, along: 'auto' },
+      { type: 'rotate', axis: 'x', amp: 9, speed: 0.95, phase: 30, wave: 'sine', react: 'move', falloff: 1, spread: 55, along: 'auto' }
+    ]
+  },
+  {
+    label: 'Lassú suhogás',
+    mirror: true,
+    replace: true,
+    tracks: [
+      { type: 'rotate', axis: 'z', amp: 11, speed: 0.28, phase: 0, wave: 'sine', react: 'none', falloff: 0.95, spread: 70, along: 'auto' },
+      { type: 'rotate', axis: 'x', amp: 6, speed: 0.28, phase: 95, wave: 'sine', react: 'none', falloff: 1, spread: 70, along: 'auto' }
+    ]
+  },
+  {
+    // Köpenynél a hullám a VÁLLTÓL lefelé fut, és két tengely körül egyszerre
+    // (negyed ciklus eltéréssel) - ettől "lobog" ahelyett, hogy egy síkban
+    // előre-hátra lengene.
+    label: 'Köpeny-hullám',
+    replace: true,
+    tracks: [
+      { type: 'rotate', axis: 'x', amp: 9, speed: 0.5, phase: 0, wave: 'sine', react: 'none', falloff: 1, spread: 150, along: 'auto' },
+      { type: 'rotate', axis: 'z', amp: 4, speed: 0.5, phase: 90, wave: 'sine', react: 'none', falloff: 1, spread: 150, along: 'auto' }
+    ]
+  },
+  {
+    label: 'Szárnynyitás (nyit-zár)',
+    mirror: true,
+    tracks: [
+      { type: 'rotate', axis: 'y', amp: 16, speed: 0.5, phase: 0, wave: 'sine', react: 'none', falloff: 0.7, spread: 45, along: 'auto' }
+    ]
+  },
+  { label: 'Lebegés', tracks: [{ type: 'translate', axis: 'y', amp: 0.8, speed: 0.35, phase: 0, wave: 'sine', react: 'none', falloff: 0, spread: 0, along: 'auto' }] },
+  { label: 'Ringás', tracks: [{ type: 'rotate', axis: 'z', amp: 6, speed: 0.4, phase: 0, wave: 'sine', react: 'none', falloff: 0, spread: 0, along: 'auto' }] },
+  { label: 'Folyamatos pörgés', tracks: [{ type: 'rotate', axis: 'y', amp: 180, speed: 0.35, phase: 0, wave: 'saw', react: 'none', falloff: 0, spread: 0, along: 'auto' }] },
+  { label: 'Lüktetés', tracks: [{ type: 'scale', axis: 'x', amp: 0.06, speed: 0.8, phase: 0, wave: 'sine', react: 'none', falloff: 0, spread: 0, along: 'auto' }] }
 ];
+
+/**
+ * Egy mozgás TÜKÖRKÉPE - a másik szárnyfélre.
+ *
+ * MIÉRT NEM ELÉG MINDEN KITÉRÉST NEGÁLNI (ez volt a régi, egysávos készlet
+ * megoldása, és egysávosan véletlenül helyes is volt): a tükrözés a test
+ * síkjára (x -> -x) történik. Ez egy IRÁNYVÁLTÓ leképezés, amiben
+ *   - a FORGATÁS tengelyvektora (axiális) így viselkedik: az X körüli szög
+ *     VÁLTOZATLAN, az Y és Z körüli NEGÁLÓDIK,
+ *   - az ELTOLÁS (poláris vektor) fordítva: az X negálódik, az Y és Z nem,
+ *   - a MÉRET (skalár) egyáltalán nem változik.
+ * Ha a csavarást (X körüli forgás) is negálnánk, a két szárnyfél a csapás
+ * közben EGYMÁSSAL SZEMBE fordulna bele a levegőbe - pont a mozgás lelke
+ * veszne el.
+ */
+function mirrorAnimTracks(tracks) {
+  return tracks.map((t) => {
+    const m = Object.assign({}, t);
+    const amp = Number(t.amp) || 0;
+    if (t.type === 'rotate' && (t.axis === 'y' || t.axis === 'z')) m.amp = -amp;
+    else if (t.type === 'translate' && t.axis === 'x') m.amp = -amp;
+    return m;
+  });
+}
+
+// A gomblistába a tükrözött változatok is bekerülnek - a szerkesztő
+// index alapján hivatkozik rájuk, ezért itt egy LAPOS listát építünk.
+const ANIM_PRESETS = ANIM_PRESET_DEFS.flatMap((def) => {
+  const base = { label: def.label, replace: !!def.replace, tracks: def.tracks };
+  if (!def.mirror) return [base];
+  return [base, {
+    label: def.label + ' (tükrözött)',
+    replace: !!def.replace,
+    tracks: mirrorAnimTracks(def.tracks)
+  }];
+});
 
 function animSelect(field, labels, value) {
   return `<select data-anim-field="${field}">${Object.entries(labels)
@@ -7244,7 +7352,7 @@ $('#cosmeticAnimPresets')?.addEventListener('click', (e) => {
   if (!btn) return;
   const preset = ANIM_PRESETS[Number(btn.dataset.animPreset)];
   if (!preset) return;
-  const wavy = (Number(preset.track.falloff) || 0) !== 0 || (Number(preset.track.spread) || 0) !== 0;
+  const wavy = preset.tracks.some((t) => (Number(t.falloff) || 0) !== 0 || (Number(t.spread) || 0) !== 0);
 
   // A HULLÁM (hajlás/késés) csak RÉSZEN belül értelmes: a "teljes kiegészítő"
   // szint az egész összeállítást mozgatja egyben, ott nincs mihez viszonyítani
@@ -7265,8 +7373,20 @@ $('#cosmeticAnimPresets')?.addEventListener('click', (e) => {
   }
 
   const anim = ensureAnim();
-  if (anim.tracks.length >= 6) { showToast('Legfeljebb 6 mozgás lehet egy célon.', true); return; }
-  anim.tracks.push({ ...preset.track });
+
+  // EGY KÉSZ MOZGÁS EGY EGÉSZ. A sávjai egymás fázisához vannak hangolva
+  // (a csavarás negyed ciklussal késik a csapáshoz képest, a söprés kétszeres
+  // ütemű) - a meglévő sávok MELLÉ fűzve nem kiegészítenék, hanem összevesznének
+  // velük, és megint az lenne az eredmény, hogy "nem jó". Ezért lecseréljük
+  // őket, és ezt ki is írjuk, hogy ne tűnjön el csendben a korábbi munka.
+  const hadTracks = anim.tracks.length > 0;
+  if (preset.replace) anim.tracks = [];
+
+  if (anim.tracks.length + preset.tracks.length > 6) {
+    showToast('Legfeljebb 6 mozgás lehet egy célon - előbb törölj néhányat.', true);
+    return;
+  }
+  for (const t of preset.tracks) anim.tracks.push(Object.assign({}, t));
 
   // HULLÁMZÓ mozgásnál a forgáspont dönti el, hogy szárnycsapást vagy egy
   // közepén hajló deszkát kapunk - ha még nincs beállítva, a rész tövére
@@ -7275,6 +7395,9 @@ $('#cosmeticAnimPresets')?.addEventListener('click', (e) => {
     const pivot = suggestRootPivot(cosmeticTarget);
     if (pivot) anim.pivot = pivot;
   }
+
+  if (cosmeticTarget >= 0 && cosmeticParts[cosmeticTarget]) cosmeticParts[cosmeticTarget].dirty = true;
+  if (preset.replace && hadTracks) showToast('A kész mozgás lecserélte a korábbi sávokat.');
 
   renderCosmeticAnimEditor();
   renderCosmeticPartsBar();
