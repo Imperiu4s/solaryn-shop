@@ -609,20 +609,151 @@ a { color: inherit; }
   width: 20px; height: 20px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
 }
 
-/* ÚJ: aktív némítás-/kitiltás-/kliens-tiltás kártya(ák) - a Főoldal saját
-   profiljában ÉS a játékos-kereső profil-nézetében is (ld. app.js
-   renderSanctionStatus()) - üres marad, ha nincs aktív szankció. JAVÍTVA:
-   korábban csak egy hover-tooltipben volt a ki/mikor/meddig, most mindig
-   látható, kártyaszerűen. */
-.profile-sanction-status { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; width: 100%; }
-.sanction-status-card {
-  padding: 12px 14px; border-radius: 12px;
-  background: rgba(255,90,90,.1); border: 1px solid rgba(255,90,90,.35);
+/* ÚJ: aktív némítás-/kitiltás-/kliens-tiltás-/fiók-zárolás jelzés - a Főoldal
+   saját profiljában ÉS a játékos-kereső profil-nézetében is (ld. app.js
+   renderSanctionStatus()) - üres marad, ha nincs aktív szankció.
+   JAVÍTVA (2): korábban mindegyik szankció egy-egy nagy, mindig kinyitott
+   kártya volt; a felhasználó kérésére most csak egy-egy kis SVG-ikon látszik
+   (NEM emoji - az platformonként más képet adna és nem venné fel a téma
+   színét), a részletek pedig egy rákattintásra, animációval előugró kis
+   panelben (.sanction-popover) olvashatók. */
+.profile-sanction-status { margin-top: 12px; width: 100%; }
+.profile-sanction-status:empty { margin-top: 0; }
+
+.sanction-icon-row { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Minden szankciótípus a saját színét kapja (a téma tokenjeiből, hogy a 4
+   téma mindegyikében illeszkedjen) - így az ikon alakja MELLETT a szín is
+   megkülönbözteti őket. */
+.sanction-icon-btn[data-sanction-type="mute"],
+.sanction-popover[data-sanction-type="mute"] { --sanction-color: var(--gold); }
+.sanction-icon-btn[data-sanction-type="ban"],
+.sanction-popover[data-sanction-type="ban"] { --sanction-color: var(--danger); }
+.sanction-icon-btn[data-sanction-type="cban"],
+.sanction-popover[data-sanction-type="cban"] { --sanction-color: var(--orange); }
+.sanction-icon-btn[data-sanction-type="lock"],
+.sanction-popover[data-sanction-type="lock"] { --sanction-color: var(--danger); }
+
+.sanction-icon-btn {
+  --sanction-color: var(--danger);
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; padding: 0; border-radius: 12px;
+  cursor: pointer; color: var(--sanction-color);
+  background: color-mix(in srgb, var(--sanction-color) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sanction-color) 40%, transparent);
+  transition: transform .18s cubic-bezier(.2,.7,.3,1), background .18s, border-color .18s, box-shadow .18s;
+  /* Betöltéskor egymás után "pattannak be" (ld. a fájl végi Animációk
+     szekció ugyanezt a mintát követő szabályait). */
+  /* "backwards" (nem "both"): a betöltő-animáció kitöltött végállapota
+     egyébként FELÜLÍRNÁ a :hover/.active transformját, mivel az animációk
+     erősebbek a szokásos deklarációknál. */
+  animation: sanctionIconPop .4s cubic-bezier(.2,.9,.3,1.5) backwards;
+  animation-delay: calc(var(--i, 0) * .07s);
 }
-.sanction-status-card-title { font-weight: 800; font-size: 13.5px; color: var(--danger); margin-bottom: 6px; }
-.sanction-status-card-row { font-size: 12.5px; color: var(--text-dim); margin-top: 2px; }
-.sanction-status-card-row span { color: var(--text-faint); }
-.sanction-status-card-reason { font-size: 12.5px; color: var(--text-dim); margin-top: 6px; font-style: italic; }
+.sanction-icon-btn svg { width: 19px; height: 19px; display: block; }
+.sanction-icon-btn:hover {
+  transform: translateY(-2px);
+  background: color-mix(in srgb, var(--sanction-color) 22%, transparent);
+  border-color: color-mix(in srgb, var(--sanction-color) 62%, transparent);
+  box-shadow: 0 7px 18px color-mix(in srgb, var(--sanction-color) 26%, transparent);
+}
+.sanction-icon-btn:focus-visible { outline: 2px solid var(--sanction-color); outline-offset: 2px; }
+.sanction-icon-btn.active {
+  background: color-mix(in srgb, var(--sanction-color) 26%, transparent);
+  border-color: color-mix(in srgb, var(--sanction-color) 75%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sanction-color) 16%, transparent);
+}
+@keyframes sanctionIconPop {
+  from { opacity: 0; transform: scale(.5) translateY(6px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* A rákattintásra megjelenő kis panel ("GUI") - a megnyitott ikon közepéből
+   nő ki (a pozíciót és a --arrow-x-et az app.js positionSanctionPopover()
+   számolja ki). A panel a <body> végén él, FIX pozícióval: a profil-kártya
+   overflow: hidden-je (ld. ui.css .card) egyébként elvágná. */
+.sanction-popover {
+  --sanction-color: var(--danger);
+  position: fixed; z-index: 120; top: 0; left: 0;
+  width: max-content; min-width: 236px;
+  max-width: min(320px, calc(100vw - 24px));
+  padding: 14px 15px 13px; border-radius: 14px;
+  background: color-mix(in srgb, var(--panel-2) 97%, var(--text));
+  border: 1px solid color-mix(in srgb, var(--sanction-color) 34%, var(--line));
+  box-shadow: 0 20px 44px rgba(0,0,0,.5);
+  backdrop-filter: blur(14px);
+  transform-origin: var(--arrow-x, 24px) top;
+}
+.sanction-popover[hidden] { display: none; }
+/* Ha alul nem fér ki, az ikon FÖLÉ fordul - ilyenkor a nyíl és az animáció
+   origója is alulra kerül. */
+.sanction-popover.above { transform-origin: var(--arrow-x, 24px) bottom; }
+.sanction-popover.open { animation: sanctionPopIn .24s cubic-bezier(.2,.8,.3,1.15) both; }
+.sanction-popover.closing { animation: sanctionPopOut .14s ease-in both; }
+.sanction-popover.above.open { animation-name: sanctionPopInUp; }
+.sanction-popover.above.closing { animation-name: sanctionPopOutUp; }
+@keyframes sanctionPopIn {
+  from { opacity: 0; transform: scale(.85) translateY(-10px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes sanctionPopOut {
+  from { opacity: 1; transform: scale(1) translateY(0); }
+  to   { opacity: 0; transform: scale(.94) translateY(-6px); }
+}
+@keyframes sanctionPopInUp {
+  from { opacity: 0; transform: scale(.85) translateY(10px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes sanctionPopOutUp {
+  from { opacity: 1; transform: scale(1) translateY(0); }
+  to   { opacity: 0; transform: scale(.94) translateY(6px); }
+}
+
+/* A nyíl pontosan a megnyitott ikonra mutat. */
+.sanction-pop-arrow {
+  position: absolute; top: -6px; left: var(--arrow-x, 24px);
+  width: 11px; height: 11px; margin-left: -5.5px;
+  transform: rotate(45deg); border-radius: 3px 0 0 0;
+  background: color-mix(in srgb, var(--panel-2) 97%, var(--text));
+  border-top: 1px solid color-mix(in srgb, var(--sanction-color) 34%, var(--line));
+  border-left: 1px solid color-mix(in srgb, var(--sanction-color) 34%, var(--line));
+}
+.sanction-popover.above .sanction-pop-arrow {
+  top: auto; bottom: -6px; transform: rotate(225deg);
+}
+
+.sanction-pop-head { display: flex; align-items: center; gap: 9px; }
+.sanction-pop-icon { display: inline-flex; color: var(--sanction-color); }
+.sanction-pop-icon svg { width: 18px; height: 18px; display: block; }
+.sanction-pop-title { flex: 1; font-size: 13.5px; font-weight: 800; color: var(--text); }
+.sanction-pop-close {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; padding: 0; border-radius: 8px; cursor: pointer;
+  background: transparent; border: 1px solid transparent; color: var(--text-faint);
+  transition: color .15s, background .15s;
+}
+.sanction-pop-close svg { width: 14px; height: 14px; display: block; }
+.sanction-pop-close:hover { color: var(--text); background: rgba(255,255,255,.07); }
+.sanction-pop-close:focus-visible { outline: 2px solid var(--sanction-color); outline-offset: 1px; }
+
+.sanction-pop-rows { display: flex; flex-direction: column; gap: 5px; margin-top: 11px; }
+.sanction-pop-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 12.5px; }
+.sanction-pop-row > span { color: var(--text-faint); flex-shrink: 0; }
+.sanction-pop-row > strong { color: var(--text-dim); font-weight: 700; text-align: right; }
+/* A sorok a panel megnyílása UTÁN, egymás után úsznak be. */
+.sanction-popover.open .sanction-pop-row { animation: fadeSlideUp .3s cubic-bezier(.2,.7,.3,1) both; }
+.sanction-popover.open .sanction-pop-row:nth-child(1) { animation-delay: .08s; }
+.sanction-popover.open .sanction-pop-row:nth-child(2) { animation-delay: .13s; }
+.sanction-popover.open .sanction-pop-row:nth-child(3) { animation-delay: .18s; }
+
+.sanction-pop-reason { margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--line); }
+.sanction-pop-reason > span {
+  font-size: 10.5px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--text-faint);
+}
+.sanction-pop-reason > p { margin-top: 4px; font-size: 12.5px; color: var(--text-dim); line-height: 1.5; }
+.sanction-pop-note { margin-top: 11px; font-size: 11.5px; color: var(--text-faint); line-height: 1.5; }
 
 /* ── Casino (SolarLucky nyerőgép) - státusz-oldal, a tényleges pörgetés
    in-game történik, ez csak a "van hány pörgetésed" kijelzés + egy dísz-

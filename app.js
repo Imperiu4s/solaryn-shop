@@ -825,47 +825,276 @@ document.addEventListener('click', (e) => {
   });
 });
 
-// ÚJ: "van-e aktív némításod/kitiltásod/kliens-tiltásod" jelvény(ek) a
-// profil-kártyán - a data.activeMute/activeBan/activeCban mezőket a
-// SolarBackend GET /api/me adja (ld. ott activeMuteInfo/activeBanInfoFromUser/
-// getActiveCbanForUsername) null-t, ha épp nincs aktív szankció az adott
-// típusból. Ha egyik sincs aktív, a konténer üresen marad (nincs "minden
+// ÚJ: "van-e aktív némításod/kitiltásod/kliens-tiltásod/fiók-zárolásod"
+// jelzés a profil-kártyán - a data.activeMute/activeBan/activeCban mezőket a
+// SolarBackend GET /api/me (ld. ott activeMuteInfo/activeBanInfoFromUser/
+// getActiveCbanForUsername) és a GET /api/profile/:username adja, null-t, ha
+// épp nincs aktív szankció az adott típusból; a "locked" a fiók zárolását
+// jelenti. Ha egyik sincs aktív, a konténer üresen marad (nincs "minden
 // rendben" jelvény - csak a figyelmeztetés jellegű állapotok jelennek meg).
-// JAVÍTVA: korábban csak egy hover-title-ban (csak egérrel rávitelre látszó
-// tooltip) volt benne, hogy ki és mikor adta a szankciót - a felhasználó
-// kérésére ez mostantól MINDIG látható, kártyaszerűen kiírva (ki adta,
-// mikor, mennyi van hátra, indoklás).
+// JAVÍTVA (2): korábban minden szankció egy-egy nagy, MINDIG kinyitott
+// kártyaként jelent meg, emoji-s címkével. A felhasználó kérésére mostantól
+// csak egy-egy kis IKON jelzi őket (valódi, kézzel rajzolt SVG-ikonok, NEM
+// emoji - az emoji platformonként más-más képet ad és nem veszi fel a téma
+// színét), a részletek (ki adta, mikor, meddig, miért) pedig egy
+// rákattintásra, animációval előugró kis panelben olvashatók.
+const SANCTION_ICONS = {
+  // Némítás - áthúzott mikrofon.
+  mute: `<svg viewBox="0 0 24 24" aria-hidden="true">
+    <rect x="9" y="3" width="6" height="10.5" rx="3" fill="currentColor"/>
+    <path d="M5.5 11a6.5 6.5 0 0 0 13 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <line x1="12" y1="17.5" x2="12" y2="20.8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <line x1="8.5" y1="20.8" x2="15.5" y2="20.8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <line x1="4" y1="4" x2="20" y2="20" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+  </svg>`,
+  // Kitiltás - "ban hammer", azaz bírói kalapács: a 45 fokkal elfordított
+  // kalapácsfej + nyél, alatta a talp, amire lecsap.
+  ban: `<svg viewBox="0 0 24 24" aria-hidden="true">
+    <g transform="rotate(-45 12 10)">
+      <rect x="5.4" y="4" width="13.2" height="5.6" rx="1.7" fill="currentColor"/>
+      <rect x="10.6" y="9.6" width="2.8" height="8.8" rx="1.4" fill="currentColor"/>
+    </g>
+    <rect x="3.2" y="19.2" width="14.6" height="2.8" rx="1.4" fill="currentColor"/>
+  </svg>`,
+  // Kliens-tiltás - a témához illően maga a kliens (monitor/képernyő) van
+  // áthúzva, nem egy általános tiltótábla.
+  cban: `<svg viewBox="0 0 24 24" aria-hidden="true">
+    <rect x="2.6" y="3.8" width="18.8" height="13" rx="2.4" fill="none" stroke="currentColor" stroke-width="2"/>
+    <line x1="12" y1="16.8" x2="12" y2="20.2" stroke="currentColor" stroke-width="2"/>
+    <line x1="8" y1="20.4" x2="16" y2="20.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <line x1="6.4" y1="13.4" x2="17.6" y2="7.2" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+  </svg>`,
+  // Fiók-zárolás - lakat.
+  lock: `<svg viewBox="0 0 24 24" aria-hidden="true">
+    <rect x="4.2" y="10.2" width="15.6" height="10.6" rx="2.6" fill="none" stroke="currentColor" stroke-width="2"/>
+    <path d="M8 10.2V7.8a4 4 0 0 1 8 0v2.4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="12" cy="14.5" r="1.6" fill="currentColor"/>
+    <line x1="12" y1="15.7" x2="12" y2="17.8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  </svg>`
+};
+
+// A "note" a panel alján álló egymondatos magyarázat - az ikon önmagában
+// nem mondja meg, mit is korlátoz az adott szankció.
+const SANCTION_TYPES = {
+  mute: { label: 'Aktív némítás', note: 'A chat használata korlátozva van.' },
+  ban: { label: 'Aktív kitiltás', note: 'A szerverre való belépés korlátozva van.' },
+  cban: { label: 'Aktív kliens-tiltás', note: 'A Solaryn kliens használata korlátozva van.' },
+  // A zárolás indoka szándékosan NEM nyilvános (ld. GET /api/profile/:username
+  // "locked" mezőjét: az csak egy igaz/hamis, by/reason/until nélkül) - ezért
+  // ennél a típusnál csak ez a mondat jelenik meg, adatsorok nélkül.
+  lock: { label: 'A fiók zárolva van', note: 'Erre a fiókra jelenleg nem lehet bejelentkezni. A zárolás indoka nem nyilvános.' }
+};
+
 function renderSanctionStatus(container, data) {
   if (!container) return;
-  // ÚJ: a fiók-zárolás ténye (indok NÉLKÜL - az senki másra nem tartozik,
-  // ld. GET /api/profile/:username "locked" mezőjét) külön, egyszerű
-  // kártyaként jelenik meg, a némítás/kitiltás-kártyák "info" (by/since/
-  // until/reason) szerkezete nélkül, mivel a zárolásnak nincs ilyen adata.
-  const lockedHtml = data?.locked ? `
-    <div class="sanction-status-card">
-      <div class="sanction-status-card-title">🔒 A fiók zárolva van</div>
-    </div>
-  ` : '';
+  // Újrarendereléskor (pl. másik játékos profiljára lépve) az esetleg nyitva
+  // maradt panel azonnal, animáció nélkül tűnjön el - különben a régi
+  // szankció adatai villannának fel az új profil alatt.
+  closeSanctionPopover(true);
 
-  const cards = [];
-  if (data?.activeMute) cards.push({ label: '🔇 Aktív némítás', info: data.activeMute });
-  if (data?.activeBan) cards.push({ label: '⛔ Aktív kitiltás', info: data.activeBan });
-  if (data?.activeCban) cards.push({ label: '🖥 Aktív kliens-tiltás', info: data.activeCban });
+  const items = [];
+  if (data?.activeMute) items.push({ type: 'mute', info: data.activeMute });
+  if (data?.activeBan) items.push({ type: 'ban', info: data.activeBan });
+  if (data?.activeCban) items.push({ type: 'cban', info: data.activeCban });
+  if (data?.locked) items.push({ type: 'lock', info: null });
 
-  if (!lockedHtml && !cards.length) {
+  if (!items.length) {
     container.innerHTML = '';
+    container.__sanctions = null;
     return;
   }
-  container.innerHTML = lockedHtml + cards.map((c) => `
-    <div class="sanction-status-card">
-      <div class="sanction-status-card-title">${c.label}</div>
-      ${c.info.by ? `<div class="sanction-status-card-row"><span>Kiadta:</span> ${escapeHtml(c.info.by)}</div>` : ''}
-      ${c.info.since ? `<div class="sanction-status-card-row"><span>Kiadva:</span> ${formatSanctionUntil(c.info.since)}</div>` : ''}
-      <div class="sanction-status-card-row"><span>${c.info.permanent ? 'Időtartam:' : 'Hátralévő idő:'}</span> ${c.info.permanent ? 'végleges' : formatRemaining(c.info.until)}</div>
-      ${c.info.reason ? `<div class="sanction-status-card-reason">Indok: ${escapeHtml(c.info.reason)}</div>` : ''}
+  // A panel tartalmát csak kattintáskor építjük fel, ezért a nyers adatot
+  // magán a konténeren tároljuk (nem data-attribútumban: oda a felhasználói
+  // szöveget - pl. az indokot - külön escape-elni kellene).
+  container.__sanctions = Object.fromEntries(items.map((it) => [it.type, it.info]));
+  container.innerHTML = `
+    <div class="sanction-icon-row" role="group" aria-label="Aktív szankciók">
+      ${items.map((it, i) => `
+        <button type="button" class="sanction-icon-btn" data-sanction-type="${it.type}"
+                style="--i:${i}" aria-haspopup="dialog" aria-expanded="false"
+                title="${SANCTION_TYPES[it.type].label} - kattints a részletekért">
+          ${SANCTION_ICONS[it.type]}
+          <span class="sr-only">${SANCTION_TYPES[it.type].label} - részletek megjelenítése</span>
+        </button>`).join('')}
     </div>
-  `).join('');
+  `;
 }
+
+function sanctionPopRow(label, value) {
+  return `<div class="sanction-pop-row"><span>${label}</span><strong>${value}</strong></div>`;
+}
+
+function sanctionPopoverHtml(type, info) {
+  const t = SANCTION_TYPES[type] || { label: 'Szankció', note: '' };
+  const rows = [];
+  if (info) {
+    if (info.by) rows.push(sanctionPopRow('Kiadta', escapeHtml(info.by)));
+    if (info.since) rows.push(sanctionPopRow('Kiadva', escapeHtml(formatSanctionUntil(info.since))));
+    rows.push(sanctionPopRow(
+      info.permanent ? 'Időtartam' : 'Hátralévő idő',
+      info.permanent ? 'végleges' : escapeHtml(formatRemaining(info.until))
+    ));
+  }
+  return `
+    <span class="sanction-pop-arrow" aria-hidden="true"></span>
+    <div class="sanction-pop-head">
+      <span class="sanction-pop-icon">${SANCTION_ICONS[type] || ''}</span>
+      <div class="sanction-pop-title">${t.label}</div>
+      <button type="button" class="sanction-pop-close" data-sanction-close aria-label="Bezárás">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+    ${rows.length ? `<div class="sanction-pop-rows">${rows.join('')}</div>` : ''}
+    ${info && info.reason ? `
+      <div class="sanction-pop-reason">
+        <span>Indok</span>
+        <p>${escapeHtml(info.reason)}</p>
+      </div>` : ''}
+    <p class="sanction-pop-note">${t.note}</p>
+  `;
+}
+
+// FONTOS: a panel NEM a profil-kártyán belül él, hanem a <body> végén, fix
+// pozícióval. A kártyák ugyanis "overflow: hidden"-esek (ld. ui.css .card) ÉS
+// a rájuk kötött fadeSlideUp animáció transformja miatt saját réteget is
+// nyitnak - a kártyán belül maradó panelt így a kártya széle elvágná, a
+// szomszédos (DOM-ban későbbi) kártya pedig rátakarna. Egyszerre csak egy
+// panel létezik, azt használja a főoldali profil és a játékos-kereső
+// profil-nézete is.
+let sanctionPopEl = null;
+let openSanctionBtn = null;
+
+function getSanctionPopover() {
+  if (sanctionPopEl && document.body.contains(sanctionPopEl)) return sanctionPopEl;
+  sanctionPopEl = document.createElement('div');
+  sanctionPopEl.className = 'sanction-popover';
+  sanctionPopEl.setAttribute('role', 'dialog');
+  sanctionPopEl.setAttribute('aria-label', 'Szankció részletei');
+  sanctionPopEl.hidden = true;
+  document.body.appendChild(sanctionPopEl);
+  return sanctionPopEl;
+}
+
+// A panel az ikon alatt, középre igazítva jelenik meg - a képernyő szélénél
+// visszahúzva, alul kifutva pedig az ikon FÖLÉ fordítva (ekkor a nyíl is
+// alulra kerül, ld. .sanction-popover.above).
+function positionSanctionPopover(btn) {
+  const pop = getSanctionPopover();
+  const r = btn.getBoundingClientRect();
+  const w = pop.offsetWidth;
+  const h = pop.offsetHeight;
+  const margin = 12;
+  const centerX = r.left + r.width / 2;
+  const left = Math.max(margin, Math.min(centerX - w / 2, window.innerWidth - w - margin));
+  const below = r.bottom + 10;
+  const above = r.top - h - 10;
+  const placeAbove = (below + h > window.innerHeight - margin) && above >= margin;
+  pop.classList.toggle('above', placeAbove);
+  pop.style.left = Math.round(left) + 'px';
+  pop.style.top = Math.round(placeAbove ? above : below) + 'px';
+  pop.style.setProperty('--arrow-x', Math.round(Math.max(16, Math.min(centerX - left, w - 16))) + 'px');
+}
+
+function openSanctionPopover(container, btn) {
+  closeSanctionPopover(true);
+  const pop = getSanctionPopover();
+  const type = btn.dataset.sanctionType;
+  const info = (container.__sanctions || {})[type] || null;
+
+  clearTimeout(pop.__closeTimer);
+  pop.dataset.sanctionType = type;
+  pop.innerHTML = sanctionPopoverHtml(type, info);
+  pop.classList.remove('closing', 'open');
+  pop.hidden = false;
+  // Előbb pozicionálunk (ehhez kell a tényleges méret), és csak utána
+  // indítjuk az "előugrás" animációt, hogy ne ugorjon egyet a panel.
+  positionSanctionPopover(btn);
+  void pop.offsetWidth;
+  pop.classList.add('open');
+  btn.classList.add('active');
+  btn.setAttribute('aria-expanded', 'true');
+  openSanctionBtn = btn;
+}
+
+function closeSanctionPopover(instant) {
+  // Az "active"/aria-expanded takarítása minden ikonon: a nyitva hagyott
+  // panel gombja egy profil-újrarenderelés után már nem is létezik.
+  document.querySelectorAll('.sanction-icon-btn.active, .sanction-icon-btn[aria-expanded="true"]').forEach((b) => {
+    b.classList.remove('active');
+    b.setAttribute('aria-expanded', 'false');
+  });
+  openSanctionBtn = null;
+  const pop = sanctionPopEl;
+  if (!pop || pop.hidden) return;
+  clearTimeout(pop.__closeTimer);
+  const finish = () => {
+    pop.hidden = true;
+    pop.innerHTML = '';
+    pop.classList.remove('closing');
+  };
+  pop.classList.remove('open');
+  if (instant) { finish(); return; }
+  // A záró-animáció (.14s) után takarítunk - animationend helyett időzítővel,
+  // hogy a prefers-reduced-motion (ott .01ms a futásidő) se hagyhassa
+  // "félúton" ragadva a panelt.
+  pop.classList.add('closing');
+  pop.__closeTimer = setTimeout(finish, 170);
+}
+
+// Az ikonok dinamikusan (innerHTML-lel) jönnek létre, ezért delegált
+// figyelőt kötünk a dokumentumra - így egy profil újratöltése után is
+// működik, külön újrakötés nélkül.
+document.addEventListener('click', (e) => {
+  const target = e.target;
+  if (!target || typeof target.closest !== 'function') { closeSanctionPopover(); return; }
+
+  const btn = target.closest('.sanction-icon-btn');
+  if (btn) {
+    const container = btn.closest('.profile-sanction-status');
+    if (btn.getAttribute('aria-expanded') === 'true') closeSanctionPopover();
+    else if (container) openSanctionPopover(container, btn);
+    return;
+  }
+  if (target.closest('.sanction-popover')) {
+    // A panelen belüli kattintás nem zárja be, csak az X gomb.
+    if (target.closest('[data-sanction-close]')) closeSanctionPopover();
+    return;
+  }
+  closeSanctionPopover();
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || !openSanctionBtn) return;
+  // A fókusz visszakerül arra az ikonra, amelyikről a panel nyílt.
+  const btn = openSanctionBtn;
+  closeSanctionPopover();
+  btn.focus();
+});
+
+// Görgetéskor/átméretezéskor a panel követi az ikont (fix pozíciójú, tehát
+// magától nem mozdulna vele); ha az ikon kigörgött a képernyőről, bezárjuk.
+// A "capture" fázis kell, mert nem az ablak, hanem a belső .app-content
+// görgethető konténer mozog.
+let sanctionRepositionQueued = false;
+function repositionOpenSanctionPopover() {
+  if (!openSanctionBtn || sanctionRepositionQueued) return;
+  sanctionRepositionQueued = true;
+  requestAnimationFrame(() => {
+    sanctionRepositionQueued = false;
+    if (!openSanctionBtn) return;
+    const r = openSanctionBtn.getBoundingClientRect();
+    if (r.bottom < 0 || r.top > window.innerHeight || !openSanctionBtn.isConnected) {
+      closeSanctionPopover(true);
+      return;
+    }
+    positionSanctionPopover(openSanctionBtn);
+  });
+}
+document.addEventListener('scroll', repositionOpenSanctionPopover, true);
+window.addEventListener('resize', repositionOpenSanctionPopover);
 
 function formatSanctionUntil(iso) {
   if (!iso) return '-';
