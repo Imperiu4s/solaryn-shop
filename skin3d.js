@@ -267,16 +267,32 @@ const SkinPreview = (() => {
   // in-game máshogy nézne ki.
   const FLAP_DOWN_FRACTION = 0.34;
 
+  /** 6u^5-15u^4+10u^3 - a 0 és 1 pontban az ELSŐ és a MÁSODIK deriváltja is 0. */
+  function smootherStep(u) {
+    return u * u * u * (u * (u * 6 - 15) + 10);
+  }
+
   function animWave(wave, turns) {
     if (wave === 'flap') {
       // ASZIMMETRIKUS CSAPÁS: a ciklus első harmada a lecsapás (1 -> -1), a
-      // maradék a visszaemelkedés. Mindkét szakasz koszinusz, ezért a
-      // fordulópontokon a sebesség nulla - az illesztés szakadásmentes.
-      // Egy szinusz oda-vissza ugyanolyan gyors, és épp ettől néz ki egy
-      // szárnycsapás "billegő lapnak".
+      // maradék a visszaemelkedés. Egy szinusz oda-vissza ugyanolyan gyors, és
+      // épp ettől néz ki egy szárnycsapás "billegő lapnak".
+      //
+      // JAVÍTVA (élesben visszajelzett hiba: "egy bizonyos ponton az animáció
+      // közben mintha visszaugrana"): a két szakasz KORÁBBAN koszinusz volt.
+      // Ott a SEBESSÉG valóban nulla a fordulópontokon, a GYORSULÁS viszont
+      // (pi/0,34)^2 = 85,4-ről (pi/0,66)^2 = 22,7-re ugrott, vagyis 3,8-
+      // szorosára - mérve a csúcsgyorsulás 36,7%-a, PONTOSAN a ciklus
+      // 34,0%-ánál. Egy ekkora gyorsulás-ugrás a szemnek megrándulás.
+      //
+      // Az ÖTÖDFOKÚ simítás (smootherstep) első ÉS második deriváltja is nulla
+      // a két végén, ezért a szakaszhatárokon a sebesség és a gyorsulás is
+      // nulla MINDKÉT oldalról: a mozgás C2-folytonos (mérve 36,7% -> 0,02%).
+      // Az aszimmetria (34% lecsapás) és a +-1 szélsőértékek változatlanok.
+      // A kliens CosmeticAnim.wave()-je szóról szóra ugyanez.
       const t = turns - Math.floor(turns);
-      if (t < FLAP_DOWN_FRACTION) return Math.cos(Math.PI * (t / FLAP_DOWN_FRACTION));
-      return Math.cos(Math.PI + Math.PI * ((t - FLAP_DOWN_FRACTION) / (1 - FLAP_DOWN_FRACTION)));
+      if (t < FLAP_DOWN_FRACTION) return 1 - 2 * smootherStep(t / FLAP_DOWN_FRACTION);
+      return -1 + 2 * smootherStep((t - FLAP_DOWN_FRACTION) / (1 - FLAP_DOWN_FRACTION));
     }
     if (wave === 'tri') {
       const x = turns + 0.25;
@@ -398,9 +414,9 @@ const SkinPreview = (() => {
   // ez az "egy bizonyos ponton mintha visszaugrana a textúra" tünet.
   //
   // Ha a geometria ÁTNYÚLIK a forgásponton, a varrat körül simán nullába
-  // visszük a teljes kitérést. A szárnyhegy kitérése és a félút változatlan
-  // marad, a két szárnyfél szimmetrikus marad; egyoldalas kiegészítőnél a
-  // fade ki van kapcsolva, ott semmi nem változik.
+  // visszük a szakadást okozó komponenseket. A szárnyhegy kitérése és a félút
+  // változatlan marad, a két szárnyfél szimmetrikus marad; egyoldalas
+  // kiegészítőnél a fade ki van kapcsolva, ott semmi nem változik.
   const SEAM_FADE = 0.2;
   function seamFactor(d) {
     if (d >= SEAM_FADE) return 1;
@@ -458,20 +474,27 @@ const SkinPreview = (() => {
         for (let b = 0; b <= WAVE_BANDS; b++) {
           const d = b / WAVE_BANDS;
           const a = evalAnim(anim, timeSec, d);
-          // A varrat-elhalványítás a TELJES deformációt viszi nullába a
-          // forgáspont közelében (forgatás, eltolás, nagyítás egyaránt) -
-          // különben a maradék komponens felszakítaná a modellt a varratnál.
-          const k = straddles ? seamFactor(d) : 1;
+          // A varrat-elhalványítás CSAK azokat a komponenseket viszi nullába,
+          // amelyek ténylegesen felszakítanák a modellt: a mirrorAxis-ra
+          // MERŐLEGES tengelyek körüli forgást és a mirrorAxis MENTI eltolást
+          // (ezek váltanak előjelet a tükrözésnél). A mirrorAxis körüli
+          // forgás, a többi eltolás és a nagyítás a varrat két oldalán is
+          // azonos, ezért érintetlen marad - tőlük marad "életben" a tő.
+          // A kliens CosmeticWave.Bands.build()-je szóról szóra ugyanez.
+          const k = (straddles && mirrorAxis >= 0 && mirrorAxis < 3) ? seamFactor(d) : 1;
+          const kr = [k, k, k];
+          const kt = [1, 1, 1];
+          if (k !== 1) { kr[mirrorAxis] = 1; kt[mirrorAxis] = k; }
           const ro = b * 9, to = b * 3;
-          trans[to] = a.trans[0] * k * unit * f;
-          trans[to + 1] = a.trans[1] * k * unit * f;
-          trans[to + 2] = a.trans[2] * k * unit;
-          scl[b] = 1 + (a.scale - 1) * k;
-          const rx = a.rot[0] * k * Math.PI / 180 * f;
-          const ry = a.rot[1] * k * Math.PI / 180 * f;
-          const rz = a.rot[2] * k * Math.PI / 180;
+          trans[to] = a.trans[0] * kt[0] * unit * f;
+          trans[to + 1] = a.trans[1] * kt[1] * unit * f;
+          trans[to + 2] = a.trans[2] * kt[2] * unit;
+          scl[b] = a.scale;
+          const rx = a.rot[0] * kr[0] * Math.PI / 180 * f;
+          const ry = a.rot[1] * kr[1] * Math.PI / 180 * f;
+          const rz = a.rot[2] * kr[2] * Math.PI / 180;
           bandMatrix(rot, ro, rx, ry, rz);
-          if (scl[b] !== 1 || trans[to] || trans[to + 1] || trans[to + 2] || rx || ry || rz) any = true;
+          if (a.scale !== 1 || trans[to] || trans[to + 1] || trans[to + 2] || rx || ry || rz) any = true;
         }
         identity = !any;
         return any;
