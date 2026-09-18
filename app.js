@@ -12,7 +12,7 @@
 // számot látsz, a böngésző MÉG A RÉGI app.js-t futtatja (a webtárhely
 // cache-e miatt egy feltöltés nem feltétlenül ér ki azonnal). MINDEN
 // kiadásnál emelni kell, az index.html ?v= paramétereivel EGYÜTT.
-const CENTER_VERSION = '20260918a';
+const CENTER_VERSION = '20260918b';
 
 const BACKEND_URL = 'https://api.overclockgame.hu:8908';
 
@@ -1444,6 +1444,11 @@ function renderWalletBadge() {
   animateNumberTo($('#topbarWalletValue'), from, currentWalletBalanceHuf, formatHuf);
   const pageEl = $('#walletPageBalance');
   if (pageEl) pageEl.textContent = formatHuf(currentWalletBalanceHuf);
+  // A főoldali egyenleg-csempe pénztárca-jele. Egyszer töltjük be (a
+  // számláló ezután másodpercenként többször is újrafut - fölösleges lenne
+  // minden képkockán újra beírni ugyanazt az SVG-t).
+  const walletIcon = $('#homeWalletIcon');
+  if (walletIcon && !walletIcon.firstChild) walletIcon.innerHTML = STAT_ICONS.wallet;
   // ÚJ: nagyban kiírt egyenleg a főoldalon (ld. index.html #homeWalletBalance).
   const homeEl = $('#homeWalletBalance');
   if (homeEl) animateNumberTo(homeEl, lastRenderedWalletBalance === null ? 0 : lastRenderedWalletBalance, currentWalletBalanceHuf, formatHuf);
@@ -2130,7 +2135,7 @@ function switchView(view) {
   if (view === 'cosmetics') loadMyCosmetics();
   if (view === 'market') loadMarket();
   if (view === 'trades') loadTrades();
-  if (view === 'cosmeticsAdmin') { resetCosmeticForm(); loadCosmeticsAdmin(); }
+  if (view === 'cosmeticsAdmin') { closeCosmeticEditor(); resetCosmeticForm(); loadCosmeticsAdmin(); }
 }
 $$('.app-nav-item[data-view]').forEach((btn) => {
   btn.addEventListener('click', () => switchView(btn.dataset.view));
@@ -3902,6 +3907,10 @@ $('#btnWalletTopup').addEventListener('click', async () => {
 // a szöveges keresést (érintett/művelet/részletek) kliens-oldalon, a már
 // letöltött listán, hogy ne kelljen minden billentyűleütésre új kérést
 // küldeni. ──
+// A típusok a beváltó plugin oldaláról érkeznek szabad szövegként (ld.
+// SolarCore ShopService postLedgerEntry / SolarBackend POST /api/shop/ledger) -
+// az itt fel nem sorolt típus a nyers, aláhúzásos kulcsával jelenne meg a
+// Napló fülön, ezért minden ténylegesen írt típusnak szerepelnie kell itt.
 const LEDGER_TYPE_LABELS = {
   transfer_in: 'Átutalás',
   transfer_out: 'Átutalás',
@@ -3909,7 +3918,12 @@ const LEDGER_TYPE_LABELS = {
   game_purchase: 'Játékbeli vásárlás',
   gift_sent: 'Ajándékozás (küldött)',
   gift_received: 'Ajándékozás (kapott)',
-  admin_adjust: 'Admin módosítás'
+  admin_adjust: 'Admin módosítás',
+  cosmetic_purchase: 'Kiegészítő vásárlás',
+  cosmetic_market_buy: 'Kiegészítő (piacról)',
+  cosmetic_market_sell: 'Kiegészítő eladás (piac)',
+  cosmetic_trade_buy: 'Kiegészítő (csere)',
+  cosmetic_trade_sell: 'Kiegészítő eladás (csere)'
 };
 
 let ledgerEntries = [];
@@ -7617,32 +7631,106 @@ async function loadCosmeticsAdmin() {
   if (hasPerm('global.cosmeticsMarketManage')) loadCosmeticsMarketAdmin();
 }
 
+// ── Admin: lista- és szerkesztő-nézet váltása ────────────────────────────
+// Ld. index.html indoklását: a szerkesztő-űrlap ALAPÉRTELMEZÉSBEN nincs
+// kitéve, mert a gyakori művelet a meglévők átnézése/szerkesztése, nem az új
+// felvétele. A váltás egy osztály a nézet-szekción (NEM a "hidden", mert azt
+// az applyPermVisibility() kezeli a data-perm alapján).
+function cosmeticAdminSection() {
+  return document.querySelector('.view[data-view="cosmeticsAdmin"]');
+}
+
+/**
+ * @param mode 'new' (üres űrlap) | 'pet' (üres űrlap + figura-generátor)
+ *             | 'edit' (a hívó már betöltötte a mezőket)
+ */
+function openCosmeticEditor(mode) {
+  const section = cosmeticAdminSection();
+  if (!section) return;
+  if (mode === 'new' || mode === 'pet') resetCosmeticForm();
+  section.classList.add('editing');
+  // A figura-generátor CSAK a saját gombjából nyitva látszik: egy sima
+  // kiegészítő felvételénél csak zaj lenne.
+  $('#cosmeticPetBox')?.classList.toggle('hidden', mode !== 'pet');
+  if (mode === 'pet') {
+    $('#cosmeticFormTitle').textContent = 'Új vállon ülő figura';
+    // A figura mindig a testhez kapcsolódik - ld. a generátor indoklását.
+    const slotSel = $('#cosmeticSlotSelect');
+    if (slotSel) slotSel.value = 'body';
+  }
+  setCosmeticTab('basics');
+  // A szerkesztő tetejére ugrunk: hosszú listáról érkezve a görgetés
+  // különben a lap közepén hagyna.
+  section.scrollIntoView({ block: 'start', behavior: 'smooth' });
+}
+
+function closeCosmeticEditor() {
+  cosmeticAdminSection()?.classList.remove('editing');
+}
+
+function setCosmeticTab(name) {
+  $$('.cosmetic-tab').forEach((b) => b.classList.toggle('active', b.dataset.cosmeticTab === name));
+  $$('.cosmetic-tab-pane').forEach((p) => p.classList.toggle('active', p.dataset.cosmeticPane === name));
+}
+
+$$('.cosmetic-tab').forEach((btn) => {
+  btn.addEventListener('click', () => setCosmeticTab(btn.dataset.cosmeticTab));
+});
+
+$('#cosmeticNewBtn')?.addEventListener('click', () => openCosmeticEditor('new'));
+$('#cosmeticNewPetBtn')?.addEventListener('click', () => openCosmeticEditor('pet'));
+$('#cosmeticBackBtn')?.addEventListener('click', closeCosmeticEditor);
+
+// A kereső SZÁNDÉKOSAN kliens-oldali: a katalógus már úgyis itt van, egy
+// szerverkérés csak lassítana (ugyanaz az elv, mint a játékos-oldali
+// kiegészítő-szűrőnél).
+let cosmeticAdminSearch = '';
+$('#cosmeticAdminSearch')?.addEventListener('input', (e) => {
+  cosmeticAdminSearch = e.target.value.trim().toLowerCase();
+  renderCosmeticsAdminList();
+});
+
 function renderCosmeticsAdminList() {
   const wrap = $('#cosmeticsAdminList');
   if (!wrap) return;
-  wrap.innerHTML = cosmeticsAdminItems.map((c) => `
-    <div class="badges-admin-item">
+
+  const visible = cosmeticAdminSearch
+    ? cosmeticsAdminItems.filter((c) =>
+        c.name.toLowerCase().includes(cosmeticAdminSearch) || c.slug.toLowerCase().includes(cosmeticAdminSearch))
+    : cosmeticsAdminItems;
+
+  if (!visible.length) {
+    wrap.innerHTML = `<div class="card"><p class="redeem-result">${cosmeticsAdminItems.length
+      ? 'Nincs a keresésnek megfelelő kiegészítő.'
+      : 'Még nincs egyetlen kiegészítő sem - vegyél fel egyet a fenti gombbal.'}</p></div>`;
+    return;
+  }
+
+  wrap.innerHTML = `<div class="cosmetic-admin-grid">${visible.map((c) => `
+    <div class="cosmetic-admin-card rarity-${escapeHtml(c.rarity)}${c.enabled ? '' : ' is-off'}">
       ${cosmeticThumbHtml(c)}
-      <div class="badges-admin-item-info">
-        <div class="badges-admin-item-name">
-          ${escapeHtml(c.name)}
-          ${c.enabled ? '' : '<span class="cosmetic-badge-off">kikapcsolva</span>'}
-          ${c.hasModel ? '' : '<span class="cosmetic-badge-warn">nincs modell</span>'}
-        </div>
-        <div class="badges-admin-item-meta">
-          ${escapeHtml(c.slug)} · ${escapeHtml(c.slotLabel)} · ${escapeHtml(RARITY_LABELS[c.rarity] || c.rarity)}
-          · ${c.priceSc !== null && c.priceSc !== undefined ? c.priceSc.toLocaleString('hu-HU') + ' PP' : 'nem vásárolható'}
-          · ${c.defaultDurationDays ? c.defaultDurationDays + ' nap' : 'örök'}
-          · ${c.tradable ? 'piacozható' : 'nem piacozható'}
-          · ${c.ownerCount} tulajdonos${c.listingCount ? `, ${c.listingCount} hirdetés` : ''}
-        </div>
+      <div class="cosmetic-admin-card-name">${escapeHtml(c.name)}</div>
+      <div class="cosmetic-admin-card-slug">${escapeHtml(c.slug)}</div>
+      <div class="cosmetic-admin-card-tags">
+        <span class="cosmetic-tag">${escapeHtml(c.slotLabel)}</span>
+        <span class="cosmetic-tag rarity">${escapeHtml(RARITY_LABELS[c.rarity] || c.rarity)}</span>
+        ${cosmeticAnimatedTag(c)}
+        ${c.enabled ? '' : '<span class="cosmetic-badge-off">kikapcsolva</span>'}
+        ${c.hasModel ? '' : '<span class="cosmetic-badge-warn">nincs modell</span>'}
       </div>
-      <div class="badges-admin-item-actions">
-        <button type="button" class="news-edit-btn" data-cosmetic-edit="${c.id}">Szerkesztés</button>
-        <button type="button" class="news-delete-btn" data-cosmetic-delete="${c.id}">Törlés</button>
+      <div class="cosmetic-admin-card-meta">
+        ${c.priceSc !== null && c.priceSc !== undefined ? c.priceSc.toLocaleString('hu-HU') + ' PP' : 'nem vásárolható'}
+        · ${c.defaultDurationDays ? c.defaultDurationDays + ' nap' : 'örök'}
+        · ${c.tradable ? 'továbbadható' : 'kötött'}<br />
+        ${c.ownerCount} tulajdonos${c.listingCount ? `, ${c.listingCount} hirdetés` : ''}
+      </div>
+      <div class="cosmetic-admin-card-actions">
+        <button type="button" data-cosmetic-edit="${c.id}">Szerkesztés</button>
+        <button type="button" data-cosmetic-anim="${c.id}" title="Egyből az animáció fülre nyitja">Animáció</button>
+        <button type="button" class="is-danger" data-cosmetic-delete="${c.id}">Törlés</button>
       </div>
     </div>
-  `).join('') || '<p class="redeem-result">Még nincs egyetlen kiegészítő sem.</p>';
+  `).join('')}</div>`;
   hydrateCosmeticThumbs(wrap);
 }
 
@@ -8650,7 +8738,9 @@ $('#cosmeticEditorResetBtn')?.addEventListener('click', () => {
   queueEditorRefresh();
 });
 
-$('#cosmeticDiscardBtn')?.addEventListener('click', resetCosmeticForm);
+// Az "Elvetés" a listához is visszavisz - a kiürített űrlapon ülve nincs mit
+// csinálni, és a felhasználó úgyis oda akar visszajutni.
+$('#cosmeticDiscardBtn')?.addEventListener('click', () => { resetCosmeticForm(); closeCosmeticEditor(); });
 
 $('#cosmeticSaveBtn')?.addEventListener('click', async () => {
   const resultEl = $('#cosmeticFormResult');
@@ -8805,6 +8895,10 @@ async function openCosmeticForEdit(id) {
 
   cosmeticEditingId = item.id;
   cosmeticSelectedTextureFile = null;
+  // A szerkesztőt MÁR ITT kinyitjuk, nem a függvény végén: lentebb van egy
+  // korai kilépés (modell/textúra nélküli kiegészítőnél), és onnan a
+  // megnyitás kimaradna - a szerkesztés némán nem történne meg.
+  openCosmeticEditor('edit');
   $('#cosmeticFormTitle').textContent = 'Kiegészítő szerkesztése';
   $('#cosmeticNameInput').value = item.name;
   // A slug SZÁNDÉKOSAN nem módosítható (a kliens gyorsítótárazza - ld.
@@ -8904,6 +8998,15 @@ document.addEventListener('click', async (e) => {
   const editBtn = e.target.closest('[data-cosmetic-edit]');
   if (editBtn) {
     openCosmeticForEdit(editBtn.dataset.cosmeticEdit);
+    return;
+  }
+
+  // Ugyanaz a megnyitás, csak egyből az Animáció fülön - ez a leggyakoribb ok,
+  // amiért egy MÁR kész kiegészítőt újra elő kell venni.
+  const animBtn = e.target.closest('[data-cosmetic-anim]');
+  if (animBtn) {
+    await openCosmeticForEdit(animBtn.dataset.cosmeticAnim);
+    setCosmeticTab('anim');
     return;
   }
 

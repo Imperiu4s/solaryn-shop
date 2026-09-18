@@ -920,12 +920,16 @@ a { color: inherit; }
 }
 .home-stat-row > .stat-badge-grid { display: contents; }
 
-/* ÚJ: nagyban kiírt egyenleg a főoldalon (ld. index.html #homeWalletBalance) */
+/* ÚJ: nagyban kiírt egyenleg a főoldalon (ld. index.html #homeWalletBalance).
+   A felépítése SZÁNDÉKOSAN a .stat-badge-é (ikon + szöveg egymás mellett):
+   ugyanabban a csempesorban áll, mint a rang/PP/játékidő, ott egy ikon
+   nélküli csempe hiányosnak látszana. */
 .wallet-highlight-card {
   padding: 22px 24px; margin-bottom: 0;
-  display: flex; flex-direction: column; justify-content: center;
+  display: flex; align-items: center; gap: 18px;
   background: linear-gradient(180deg, var(--panel), var(--panel-2));
 }
+.wallet-highlight-text { min-width: 0; }
 .wallet-highlight-label {
   font-size: 12px; text-transform: uppercase; letter-spacing: .5px;
   color: var(--text-faint); margin-bottom: 4px; font-weight: 700;
@@ -1921,6 +1925,88 @@ a { color: inherit; }
 .trade-status.accepted { color: var(--success); border-color: color-mix(in srgb, var(--success) 45%, transparent); }
 .trade-status.declined, .trade-status.cancelled { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
 .trade-status.reserved { color: var(--orange); border-color: color-mix(in srgb, var(--gold) 45%, transparent); }
+
+/* ── Admin kiegészítők: lista- és szerkesztő-nézet ──────────────────────
+   A kettő KIZÁRJA egymást: a szekcióra tett ".editing" osztály kapcsol
+   köztük (ld. index.html indoklását és app.js openCosmeticEditor-át). Azért
+   osztály és nem a "hidden", mert azt az applyPermVisibility() kezeli a
+   data-perm attribútumok alapján - a kettő felülírná egymást. */
+.cosmetic-admin-editor { display: none; }
+.view[data-view="cosmeticsAdmin"].editing .cosmetic-admin-list { display: none; }
+.view[data-view="cosmeticsAdmin"].editing .cosmetic-admin-editor { display: block; }
+
+.admin-toolbar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.admin-toolbar .btn-glow, .admin-toolbar .btn-outline {
+  width: auto; margin-top: 0; padding: 11px 18px; font-size: 13.5px;
+}
+/* A kereső kitölti a maradék helyet, de nem nyomja ki a gombokat. */
+.admin-toolbar-search { flex: 1 1 220px; min-width: 180px; margin: 0; }
+
+.admin-editor-head { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; flex-wrap: wrap; }
+.admin-back-btn { width: auto; margin-top: 0; padding: 9px 16px; font-size: 13px; }
+.admin-editor-title { font-size: 20px; font-weight: 800; color: var(--text); }
+
+/* Bal oszlop: fülek; jobb oszlop: a végig látható előnézet. */
+.cosmetic-admin-layout { display: grid; grid-template-columns: 1fr 300px; gap: 24px; align-items: start; }
+@media (max-width: 1100px) { .cosmetic-admin-layout { grid-template-columns: 1fr; } }
+.cosmetic-admin-main { min-width: 0; }
+/* Ragadós: görgetés közben is látszik, mit állítasz. A "top" a felső sáv
+   magassága + egy kis levegő. */
+.cosmetic-admin-side { position: sticky; top: 20px; }
+@media (max-width: 1100px) { .cosmetic-admin-side { position: static; } }
+.cosmetic-stage-card { display: flex; flex-direction: column; align-items: center; }
+.cosmetic-stage-help { margin-top: 12px; line-height: 1.6; }
+
+.cosmetic-tabbar {
+  display: flex; gap: 6px; margin-bottom: 18px; flex-wrap: wrap;
+  border-bottom: 1px solid var(--line); padding-bottom: 0;
+}
+.cosmetic-tab {
+  border: none; background: transparent; cursor: pointer;
+  padding: 11px 16px; border-radius: 10px 10px 0 0;
+  font-size: 13.5px; font-weight: 700; color: var(--text-faint);
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  transition: color .16s, border-color .16s, background .16s;
+}
+.cosmetic-tab:hover { color: var(--text); background: var(--panel-2); }
+.cosmetic-tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+
+.cosmetic-tab-pane { display: none; }
+.cosmetic-tab-pane.active { display: block; animation: fadeSlideUp .25s cubic-bezier(.2,.7,.3,1) both; }
+
+.cosmetic-editor-actions { margin-top: 20px; }
+.cosmetic-pet-card { border-color: color-mix(in srgb, var(--gold) 30%, var(--line)); }
+
+/* A katalógus KÁRTYÁS rácsa (ld. app.js renderCosmeticsAdminList) - a
+   korábbi, egysoros listánál ránézésre megmondható, melyik kiegészítő
+   micsoda, mert a bélyegkép nagy és a jelzők a kártyán vannak. */
+.cosmetic-admin-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 16px;
+}
+.cosmetic-admin-card {
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+  padding: 16px 14px; position: relative; overflow: hidden;
+  transition: transform .12s, box-shadow .16s, border-color .16s;
+}
+.cosmetic-admin-card:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(0,0,0,.35); }
+.cosmetic-admin-card.is-off { opacity: .6; }
+.cosmetic-admin-card-name { margin-top: 10px; font-size: 14.5px; font-weight: 800; color: var(--text); }
+.cosmetic-admin-card-slug { margin-top: 2px; font-size: 11.5px; color: var(--text-faint); font-family: ui-monospace, Consolas, monospace; }
+.cosmetic-admin-card-tags { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; margin-top: 10px; }
+.cosmetic-admin-card-meta { margin-top: 10px; font-size: 11.5px; color: var(--text-faint); line-height: 1.6; }
+.cosmetic-admin-card-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin-top: auto; padding-top: 14px; width: 100%; }
+.cosmetic-admin-card-actions button {
+  flex: 1 1 auto; border: 1px solid var(--line); background: var(--panel-2);
+  color: var(--text-dim); border-radius: 9px; padding: 8px 10px;
+  font-size: 12px; font-weight: 700; cursor: pointer;
+  transition: color .16s, border-color .16s;
+}
+.cosmetic-admin-card-actions button:hover { color: var(--gold); border-color: color-mix(in srgb, var(--gold) 45%, transparent); }
+.cosmetic-admin-card-actions button.is-danger:hover { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
 
 .cosmetic-editor { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; }
 .cosmetic-editor-stage {
