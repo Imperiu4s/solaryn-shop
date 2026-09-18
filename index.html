@@ -54,11 +54,11 @@
   <!-- A téma minél korábban, a stíluslap ELŐTT alkalmazódjon (ld.
        theme.js), hogy az első kirajzolás már a mentett témával történjen,
        ne legyen látható "villanás" az alap témáról. -->
-  <script src="theme.js?v=20260918b"></script>
-  <link rel="stylesheet" href="style.css?v=20260918b" />
+  <script src="theme.js?v=20260918c"></script>
+  <link rel="stylesheet" href="style.css?v=20260918c" />
   <!-- A vizuális réteg SZÁNDÉKOSAN a style.css UTÁN: csak ráépít az ottani
        osztályokra, és a kaszkádban felülír, ahol kell (ld. ui.css eleje). -->
-  <link rel="stylesheet" href="ui.css?v=20260918b" />
+  <link rel="stylesheet" href="ui.css?v=20260918c" />
 
   <!-- Strukturált adat a keresőknek/megosztásoknak (schema.org). -->
   <script type="application/ld+json">
@@ -1517,8 +1517,8 @@
                        és pontosan úgy tölti ki az űrlapot, mintha kézzel
                        töltöttél volna fel egy Blockbench-modellt. -->
                   <div class="card cosmetic-pet-card hidden" id="cosmeticPetBox">
-                    <div class="card-title">Figura készítése skinből</div>
-                    <p class="cosmetic-file-note" style="margin-bottom:10px;">Tölts fel egy sima Minecraft-skint (64&times;64 vagy régi 64&times;32), és a rendszer összerak belőle egy kicsinyített, a vállon ülő figurát. A generálás után a többi fül (alapadatok, illesztés, animáció) ugyanúgy szerkeszthető, mint bármelyik kézzel feltöltött kiegészítőnél &ndash; a figura a <strong>test</strong> helyre kerül.</p>
+                    <div class="card-title" id="cosmeticPetTitle">Figura készítése skinből</div>
+                    <p class="cosmetic-file-note" style="margin-bottom:10px;">Tölts fel egy sima Minecraft-skint (64&times;64 vagy régi 64&times;32), és a rendszer összerak belőle egy kicsinyített, a vállon ülő figurát. A generálás után a többi fül (alapadatok, illesztés, animáció) ugyanúgy szerkeszthető, mint bármelyik kézzel feltöltött kiegészítőnél &ndash; a figura a <strong>test</strong> helyre kerül.<br />Egy <strong>meglévő</strong> figuránál ugyanez a doboz nyílik ki a mentett beállításaival és a jelenlegi skinjével: elég átállítani, amit szeretnél, és újragenerálni &ndash; az illesztés, a forgatás és a méret megmarad.</p>
 
                     <input type="file" id="petSkinInput" accept=".png,image/png" hidden />
                     <button type="button" class="btn-outline file-picker-btn" id="petSkinPickBtn">Skin kiválasztása (.png)</button>
@@ -1755,6 +1755,7 @@
               <option value="pp">PrémiumPont</option>
               <option value="wallet">Egyenleg (Ft)</option>
               <option value="cosmetic">Kiegészítő</option>
+              <option value="rank">Rang</option>
             </select>
             <!-- Kiegészítő-jutalom: a lista a katalógusból jön (ld. app.js
                  populateCouponCosmeticSelect). Csak "Kiegészítő" típusnál
@@ -1762,6 +1763,15 @@
             <div id="couponCosmeticRow" class="hidden">
               <label class="gift-modal-label">Melyik kiegészítő</label>
               <select id="couponCosmeticSelect" class="gift-modal-input"></select>
+            </div>
+            <!-- Rang-jutalom: a lista a bolt rang-katalógusából jön (ld. app.js
+                 populateCouponRewardRankSelect). Az időtartam nem kötelező -
+                 üresen hagyva a rang végleges. Csak "Rang" típusnál látszik. -->
+            <div id="couponRankRow" class="hidden">
+              <label class="gift-modal-label">Melyik rang</label>
+              <select id="couponRewardRankSelect" class="gift-modal-input"></select>
+              <label class="gift-modal-label">Mennyi időre (nap, üresen hagyva végleges)</label>
+              <input type="number" id="couponRankDurationInput" class="gift-modal-input" placeholder="Pl. 30" min="1" max="3650" step="1" />
             </div>
             <label class="gift-modal-label" id="couponRewardAmountLabel">Jutalom mennyisége</label>
             <input type="number" id="couponRewardAmountInput" class="gift-modal-input" placeholder="Pl. 500" min="1" step="1" />
@@ -2689,8 +2699,8 @@
        ez utóbbi itt lényeges, mert a ui.js az app.js globális
        switchView()/showToast() függvényeit csomagolja be, tehát csak
        azok létrejötte után futhat. -->
-  <script src="skin3d.js?v=20260918b" defer></script>
-  <script src="app.js?v=20260918b" defer></script>
-  <script src="ui.js?v=20260918b" defer></script>
+  <script src="skin3d.js?v=20260918c" defer></script>
+  <script src="app.js?v=20260918c" defer></script>
+  <script src="ui.js?v=20260918c" defer></script>
 </body>
 </html>

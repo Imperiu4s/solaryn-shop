@@ -12,7 +12,7 @@
 // számot látsz, a böngésző MÉG A RÉGI app.js-t futtatja (a webtárhely
 // cache-e miatt egy feltöltés nem feltétlenül ér ki azonnal). MINDEN
 // kiadásnál emelni kell, az index.html ?v= paramétereivel EGYÜTT.
-const CENTER_VERSION = '20260918b';
+const CENTER_VERSION = '20260918c';
 
 const BACKEND_URL = 'https://api.overclockgame.hu:8908';
 
@@ -2420,6 +2420,11 @@ $('#redeemSubmit').addEventListener('click', async () => {
         ? ` Érvényes: ${new Date(data.expiresAt.replace(' ', 'T')).toLocaleDateString('hu-HU')}-ig.`
         : ' Örökre a tiéd.';
       resultEl.textContent = `Sikeres beváltás! Megkaptad ezt a kiegészítőt: ${data.cosmeticName}.${until} A Kiegészítők fülön veheted fel.`;
+    } else if (data.rewardType === 'rank') {
+      // A rangot a Minecraft-szerver adja (LuckPerms), ezért a beváltás
+      // pillanatában még nincs meg - ugyanaz a helyzet, mint a PP-nél.
+      const until = data.rankDurationDays ? ` ${data.rankDurationDays} napra` : ' véglegesen';
+      resultEl.textContent = `Sikeres beváltás! A(z) ${data.rankLabel} rangot${until} a következő szerverre lépéskor kapod meg.`;
     } else if (data.rewardType === 'wallet') {
       resultEl.textContent = `Sikeres beváltás! +${formatHuf(data.rewardAmount)} jóváírva az egyenlegeden.`;
       refreshPpBalance();
@@ -4980,17 +4985,43 @@ let couponsAdminItems = [];
 function syncCouponRewardTypeUI() {
   const type = $('#couponRewardTypeSelect').value;
   const isCosmetic = type === 'cosmetic';
+  const isRank = type === 'rank';
   $('#couponCosmeticRow').classList.toggle('hidden', !isCosmetic);
+  $('#couponRankRow')?.classList.toggle('hidden', !isRank);
+  // RANGNÁL a "jutalom mennyisége" mező értelmetlen: a rangot az azonosítója,
+  // az időtartamát pedig a saját mezője adja meg - ezért el is rejtjük,
+  // nehogy az admin azt higgye, még valamit meg kell adnia.
   const amount = $('#couponRewardAmountInput');
+  const amountLabel = $('#couponRewardAmountLabel');
+  amount.classList.toggle('hidden', isRank);
+  amountLabel.classList.toggle('hidden', isRank);
   if (isCosmetic) {
-    $('#couponRewardAmountLabel').textContent = 'Érvényesség napokban (0 = örökre)';
+    amountLabel.textContent = 'Érvényesség napokban (0 = örökre)';
     amount.min = '0';
     amount.placeholder = 'Pl. 30 vagy 0';
   } else {
-    $('#couponRewardAmountLabel').textContent = 'Jutalom mennyisége';
+    amountLabel.textContent = 'Jutalom mennyisége';
     amount.min = '1';
     amount.placeholder = 'Pl. 500';
   }
+}
+
+/**
+ * A rang-választó feltöltése a BOLT katalógusából (shopRanks - ld. loadRanks,
+ * ami már oldalbetöltéskor lefut).
+ *
+ * MIÉRT A BOLTI LISTA, ÉS NEM SZABAD SZÖVEG: a backend is ehhez a
+ * katalógushoz méri a mentést (ld. coupons.js validateCouponBody "rank"
+ * ágát), mert a "users.rank_name" a Centeren jogosultságokat is jelent - egy
+ * szabad szöveges mezővel egy kuponnal staff-rangot lehetne osztani.
+ */
+function populateCouponRewardRankSelect(selectedId) {
+  const sel = $('#couponRewardRankSelect');
+  if (!sel) return;
+  sel.innerHTML = shopRanks.length
+    ? shopRanks.map((r) => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.label)}</option>`).join('')
+    : '<option value="">- nincs elérhető rang -</option>';
+  if (selectedId) sel.value = String(selectedId);
 }
 
 /**
@@ -5030,6 +5061,8 @@ function resetCouponForm() {
   syncCouponRewardTypeUI();
   populateCouponCosmeticSelect();
   $('#couponRewardAmountInput').value = '';
+  populateCouponRewardRankSelect();
+  $('#couponRankDurationInput').value = '';
   $('#couponMaxUsesInput').value = '';
   $('#couponStartsInput').value = '';
   $('#couponExpiresInput').value = '';
@@ -5057,6 +5090,12 @@ function couponRewardLabel(c) {
     const name = c.rewardCosmetic ? c.rewardCosmetic.name : 'törölt kiegészítő';
     const days = Number(c.reward_amount) || 0;
     return `${name} (${days > 0 ? days + ' nap' : 'örökre'})`;
+  }
+  if (c.reward_type === 'rank') {
+    // A backend a lista-válaszban az olvasható rangnevet is mellékeli
+    // (rewardRankLabel) - a tárolt érték a katalógus kulcsa.
+    const days = Number(c.reward_duration_days) || 0;
+    return `${c.rewardRankLabel || c.reward_rank} rang (${days > 0 ? days + ' nap' : 'végleges'})`;
   }
   return c.reward_type === 'wallet' ? `${formatHuf(c.reward_amount)} egyenleg` : `${formatPp(c.reward_amount)} PP`;
 }
@@ -5115,6 +5154,7 @@ $('#couponDiscardBtn').addEventListener('click', resetCouponForm);
 $('#couponRewardTypeSelect')?.addEventListener('change', () => {
   syncCouponRewardTypeUI();
   if ($('#couponRewardTypeSelect').value === 'cosmetic') populateCouponCosmeticSelect();
+  if ($('#couponRewardTypeSelect').value === 'rank') populateCouponRewardRankSelect();
 });
 
 $('#couponSaveBtn').addEventListener('click', async () => {
@@ -5131,18 +5171,37 @@ $('#couponSaveBtn').addEventListener('click', async () => {
 
   if (!code) { resultEl.textContent = 'Adj meg egy kódot.'; resultEl.className = 'redeem-result error'; return; }
   // Kiegészítőnél a szám az ÉRVÉNYESSÉG napokban, ahol a 0 ("örökre")
-  // szintén érvényes - ld. syncCouponRewardTypeUI().
-  const minAmount = rewardType === 'cosmetic' ? 0 : 1;
-  if (!Number.isInteger(rewardAmount) || rewardAmount < minAmount) {
-    resultEl.textContent = rewardType === 'cosmetic'
-      ? 'Az érvényesség csak nemnegatív egész nap lehet (0 = örökre).'
-      : 'Adj meg egy érvényes jutalom-mennyiséget.';
-    resultEl.className = 'redeem-result error';
-    return;
+  // szintén érvényes - ld. syncCouponRewardTypeUI(). RANGNÁL ez a mező nem
+  // szerepel (a rangot és az időtartamát külön mezők adják).
+  if (rewardType !== 'rank') {
+    const minAmount = rewardType === 'cosmetic' ? 0 : 1;
+    if (!Number.isInteger(rewardAmount) || rewardAmount < minAmount) {
+      resultEl.textContent = rewardType === 'cosmetic'
+        ? 'Az érvényesség csak nemnegatív egész nap lehet (0 = örökre).'
+        : 'Adj meg egy érvényes jutalom-mennyiséget.';
+      resultEl.className = 'redeem-result error';
+      return;
+    }
   }
   const rewardCosmeticId = rewardType === 'cosmetic' ? Number($('#couponCosmeticSelect').value) : undefined;
   if (rewardType === 'cosmetic' && !Number.isInteger(rewardCosmeticId)) {
     resultEl.textContent = 'Válassz ki egy kiegészítőt.';
+    resultEl.className = 'redeem-result error';
+    return;
+  }
+
+  const rewardRank = rewardType === 'rank' ? $('#couponRewardRankSelect').value : undefined;
+  if (rewardType === 'rank' && !rewardRank) {
+    resultEl.textContent = 'Válassz ki egy rangot.';
+    resultEl.className = 'redeem-result error';
+    return;
+  }
+  // Üresen hagyva VÉGLEGES a rang - ezért "undefined", nem 0 (a backend a
+  // hiányzó mezőt tekinti véglegesnek, ld. coupons.js).
+  const rankDurationRaw = $('#couponRankDurationInput').value.trim();
+  const rewardDurationDays = rewardType === 'rank' && rankDurationRaw ? Number(rankDurationRaw) : undefined;
+  if (rewardType === 'rank' && rankDurationRaw && (!Number.isInteger(rewardDurationDays) || rewardDurationDays < 1)) {
+    resultEl.textContent = 'A rang időtartama csak pozitív egész nap lehet (vagy hagyd üresen a véglegeshez).';
     resultEl.className = 'redeem-result error';
     return;
   }
@@ -5152,7 +5211,7 @@ $('#couponSaveBtn').addEventListener('click', async () => {
     const res = await fetch(url, {
       method: couponEditingId ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
-      body: JSON.stringify({ code, rewardType, rewardAmount, rewardCosmeticId, maxUses, requiredRank, startsAt, expiresAt, active })
+      body: JSON.stringify({ code, rewardType, rewardAmount, rewardCosmeticId, rewardRank, rewardDurationDays, maxUses, requiredRank, startsAt, expiresAt, active })
     });
     const data = await res.json();
     if (!data.ok) {
@@ -5180,6 +5239,8 @@ document.addEventListener('click', (e) => {
     $('#couponRewardTypeSelect').value = item.reward_type;
     syncCouponRewardTypeUI();
     if (item.reward_type === 'cosmetic') populateCouponCosmeticSelect(item.reward_cosmetic_id);
+    populateCouponRewardRankSelect(item.reward_rank);
+    $('#couponRankDurationInput').value = item.reward_duration_days || '';
     $('#couponRewardAmountInput').value = item.reward_amount;
     $('#couponMaxUsesInput').value = item.max_uses !== null ? item.max_uses : '';
     populateCouponRequiredRankSelect(item.required_rank);
@@ -7229,6 +7290,9 @@ let allCosmeticsCache = [];
 function resetCosmeticForm() {
   cosmeticEditingId = null;
   cosmeticSelectedTextureFile = null;
+  cosmeticPetMeta = null;
+  petSkinFile = null;
+  petSkinIsLegacy = false;
   cosmeticAssembly = emptyAssembly();
   cosmeticParts = [emptyPart(0)];
   cosmeticTarget = -1;
@@ -7512,6 +7576,19 @@ function shoulderPetAnim(seatPivot) {
 
 let petSkinFile = null;
 let petSkinIsLegacy = false;
+/**
+ * A NYITOTT űrlap figura-mivolta: null = sima kiegészítő, egyébként a
+ * generátor négy beállítása ({side, scale, legAngle, slim, anim}).
+ *
+ * MIÉRT KELL KÜLÖN ÁLLAPOT (és miért nem elég a doboz láthatósága): ezt
+ * küldjük vissza a backendnek "petMeta" néven, és ebből tudja a szerkesztő
+ * legközelebbi megnyitása, hogy ki kell tennie a generátor dobozát. A
+ * MENTÉSKOR SZÁNDÉKOSAN EZT küldjük, nem a mezők pillanatnyi állását: az
+ * eltárolt beállításnak azt a geometriát kell leírnia, ami ténylegesen ott
+ * van. Egy elállított, de le nem generált mező különben azt hazudná, hogy a
+ * figura már az új méretben/vállon van.
+ */
+let cosmeticPetMeta = null;
 
 $('#petSkinPickBtn')?.addEventListener('click', () => $('#petSkinInput').click());
 
@@ -7547,6 +7624,77 @@ $('#petSkinInput')?.addEventListener('change', (e) => {
   reader.readAsDataURL(file);
 });
 
+/** A figura-mezők aktuális állása - ezt mentjük el a kiegészítőhöz. */
+function readPetMeta() {
+  return {
+    side: $('#petSideSelect').value === 'right' ? 'right' : 'left',
+    scale: Number($('#petScaleInput').value),
+    legAngle: Number($('#petLegAngleInput').value),
+    slim: !!$('#petSlimCheckbox').checked,
+    anim: !!$('#petAnimCheckbox').checked
+  };
+}
+
+/** Egy elmentett figura-beállítás visszatöltése a mezőkbe. */
+function writePetMeta(meta) {
+  if (!meta || !$('#petSideSelect')) return;
+  $('#petSideSelect').value = meta.side === 'right' ? 'right' : 'left';
+  if (Number.isFinite(Number(meta.scale))) $('#petScaleInput').value = meta.scale;
+  if (Number.isFinite(Number(meta.legAngle))) $('#petLegAngleInput').value = meta.legAngle;
+  $('#petSlimCheckbox').checked = !!meta.slim;
+  $('#petAnimCheckbox').checked = meta.anim !== false;
+}
+
+/**
+ * Egy MEGLÉVŐ figura textúrájának betöltése skin-forrásként.
+ *
+ * MIÉRT MŰKÖDIK EZ: a generátor a skint VÁLTOZATLANUL teszi be a kiegészítő
+ * textúrájának (ld. buildShoulderPetModel UV-megjegyzését) - a kiegészítő
+ * textúrája tehát bitre az eredeti skin. Így az admin újragenerálhat anélkül,
+ * hogy elő kellene kerítenie az eredeti fájlt.
+ *
+ * Hibát SZÁNDÉKOSAN csak jelzünk, nem dobunk: a szerkesztés minden más része
+ * enélkül is működik, csak a "Figura generálása" gomb marad letiltva, amíg az
+ * admin nem választ kézzel egy skint.
+ */
+async function loadPetSkinFromCosmetic(item) {
+  const note = $('#petSkinNote');
+  const btn = $('#petGenerateBtn');
+  petSkinFile = null;
+  if (btn) btn.disabled = true;
+  if (!item.hasTexture) {
+    if (note) note.textContent = 'Ehhez a figurához nincs textúra - válassz egy skint az újrageneráláshoz.';
+    return;
+  }
+  if (note) note.textContent = 'A jelenlegi skin betöltése...';
+  try {
+    // "no-store": a textúra-végpont max-age=60-at küld (minden néző kliens
+    // ezt kéri), és a böngésző azt tiszteletben tartja - egy frissen mentett
+    // textúra után a régit kapnánk vissza. Ld. cosmeticAssetBust.
+    const res = await fetch(cosmeticTextureUrl(item.id), { cache: 'no-store' });
+    if (!res.ok) throw new Error(String(res.status));
+    const blob = await res.blob();
+    const file = new File([blob], item.slug + '.png', { type: 'image/png' });
+    const img = await loadImage(URL.createObjectURL(blob));
+    const w = img?.naturalWidth || 0;
+    const h = img?.naturalHeight || 0;
+    if (!w || !h || w < 64 || (h !== w && h * 2 !== w)) {
+      if (note) note.textContent = 'A jelenlegi textúra nem szabványos skin (' + w + 'x' + h + ') - válassz egy skint az újrageneráláshoz.';
+      return;
+    }
+    // Ha közben már másik kiegészítőre váltottak, ez a válasz elavult - ne
+    // írjuk felül vele az új űrlap állapotát (a betöltés aszinkron).
+    if (String(cosmeticEditingId) !== String(item.id)) return;
+    petSkinIsLegacy = h * 2 === w;
+    petSkinFile = file;
+    if (note) note.textContent = 'A figura jelenlegi skinje (' + w + 'x' + h
+      + (petSkinIsLegacy ? ', régi formátum' : '') + ') - más fájlt is választhatsz.';
+    if (btn) btn.disabled = false;
+  } catch {
+    if (note) note.textContent = 'A jelenlegi skint nem sikerült betölteni - válassz egyet kézzel.';
+  }
+}
+
 $('#petGenerateBtn')?.addEventListener('click', async () => {
   if (!petSkinFile) { showToast('Előbb válassz egy skint.', true); return; }
 
@@ -7565,20 +7713,32 @@ $('#petGenerateBtn')?.addEventListener('click', async () => {
 
   // Az űrlap kitöltése ugyanazokra a mezőkre, amiket egy kézi feltöltés is
   // használ - innentől semmi nem tud a figuráról, minden "sima kiegészítő".
-  $('#cosmeticSlotSelect').value = 'body';
+  // Az EGYETLEN, ami megmarad: a generátor beállításai (ld. cosmeticPetMeta),
+  // hogy egy meglévő figura később is újragenerálható legyen.
+  cosmeticPetMeta = readPetMeta();
   cosmeticAssembly.itemModelSpace = true;
   $('#cosmeticItemSpaceCheckbox').checked = true;
-  // A figura koordinátái MÁR a helyükön vannak (a generátor a vállra tette),
-  // ezért az illesztés nullázódik - így az admin egy tiszta alapról tud
-  // finomhangolni, és az "Automatikus beillesztés" sem rántja el.
-  cosmeticAssembly.offsetX = 0;
-  cosmeticAssembly.offsetY = 0;
-  cosmeticAssembly.offsetZ = 0;
-  cosmeticAssembly.rotationX = 0;
-  cosmeticAssembly.rotationY = 0;
-  cosmeticAssembly.rotationZ = 0;
-  cosmeticAssembly.scale = 1;
-  cosmeticAssembly.anim = $('#petAnimCheckbox').checked ? shoulderPetAnim(built.seatPivot) : null;
+  // ÚJ figuránál tiszta lappal indulunk: a slot a test, az illesztés nulla
+  // (a generátor koordinátái MÁR a vállon vannak, így az admin egy tiszta
+  // alapról hangol, és az "Automatikus beillesztés" sem rántja el).
+  //
+  // MEGLÉVŐ figura ÚJRAGENERÁLÁSAKOR viszont mindezt MEGTARTJUK: az admin
+  // illesztése/forgatása/mérete a saját, kézzel beállított munkája - egy
+  // "legyen kicsit kisebb a figura" kérés nem dobhatja el.
+  if (!cosmeticEditingId) {
+    $('#cosmeticSlotSelect').value = 'body';
+    cosmeticAssembly.offsetX = 0;
+    cosmeticAssembly.offsetY = 0;
+    cosmeticAssembly.offsetZ = 0;
+    cosmeticAssembly.rotationX = 0;
+    cosmeticAssembly.rotationY = 0;
+    cosmeticAssembly.rotationZ = 0;
+    cosmeticAssembly.scale = 1;
+  }
+  // A lebegő alapmozgás forgáspontja a figura ülepéhez kötött, ami a
+  // MÉRETTŐL függ - ezért újragenerálásnál is frissíteni kell. Ha a kapcsoló
+  // ki van kapcsolva, a meglévő (akár kézzel szerkesztett) mozgás marad.
+  if ($('#petAnimCheckbox').checked) cosmeticAssembly.anim = shoulderPetAnim(built.seatPivot);
 
   if (!cosmeticParts.length) cosmeticParts.push(emptyPart(0));
   const part = cosmeticParts[0];
@@ -7604,7 +7764,9 @@ $('#petGenerateBtn')?.addEventListener('click', async () => {
   renderCosmeticPartsBar();
   renderCosmeticAnimEditor();
   restartCosmeticEditor();
-  showToast('A figura elkészült - nézd meg az előnézetben, és állíts rajta, ha kell.');
+  showToast(cosmeticEditingId
+    ? 'A figura újragenerálva - a mentéssel válik élessé.'
+    : 'A figura elkészült - nézd meg az előnézetben, és állíts rajta, ha kell.');
 });
 
 async function loadCosmeticsAdmin() {
@@ -7652,6 +7814,12 @@ function openCosmeticEditor(mode) {
   // A figura-generátor CSAK a saját gombjából nyitva látszik: egy sima
   // kiegészítő felvételénél csak zaj lenne.
   $('#cosmeticPetBox')?.classList.toggle('hidden', mode !== 'pet');
+  // SZERKESZTÉSNÉL a hívó (openCosmeticForEdit) teszi ki újra a dobozt, ha a
+  // kiegészítő figuraként készült - ld. ott. A cím itt áll vissza az
+  // alapértelmezettre, hogy egy korábbi szerkesztés után ne az
+  // "újragenerálás" felirat maradjon.
+  const petTitle = $('#cosmeticPetTitle');
+  if (petTitle) petTitle.textContent = 'Figura készítése skinből';
   if (mode === 'pet') {
     $('#cosmeticFormTitle').textContent = 'Új vállon ülő figura';
     // A figura mindig a testhez kapcsolódik - ld. a generátor indoklását.
@@ -7715,6 +7883,7 @@ function renderCosmeticsAdminList() {
         <span class="cosmetic-tag">${escapeHtml(c.slotLabel)}</span>
         <span class="cosmetic-tag rarity">${escapeHtml(RARITY_LABELS[c.rarity] || c.rarity)}</span>
         ${cosmeticAnimatedTag(c)}
+        ${c.petMeta ? '<span class="cosmetic-tag">figura</span>' : ''}
         ${c.enabled ? '' : '<span class="cosmetic-badge-off">kikapcsolva</span>'}
         ${c.hasModel ? '' : '<span class="cosmetic-badge-warn">nincs modell</span>'}
       </div>
@@ -8793,6 +8962,10 @@ $('#cosmeticSaveBtn')?.addEventListener('click', async () => {
   formData.append('scale', String(cosmeticAssembly.scale));
   formData.append('itemModelSpace', cosmeticAssembly.itemModelSpace !== false ? 'true' : 'false');
   formData.append('anim', animField(cosmeticAssembly.anim));
+  // A figura generátor-beállításai. Üres string = "ez nem (már nem) figura" -
+  // ezt a backend a mező TÖRLÉSEKÉNT értelmezi (ld. validatePetMeta); a
+  // hiányzó mező viszont a meglévőt hagyná érintetlenül.
+  formData.append('petMeta', cosmeticPetMeta ? JSON.stringify(cosmeticPetMeta) : '');
   // Az ELSŐ rész modellje a kiegészítő-végponton megy fel (a backend oda
   // teszi, ld. src/cosmetics.js) - a többi részé a saját végpontján.
   if (firstPart && firstPart.file) formData.append('model', firstPart.file);
@@ -8927,6 +9100,24 @@ async function openCosmeticForEdit(id) {
   $('#cosmeticFormResult').textContent = '';
   $('#cosmeticFormResult').className = 'redeem-result';
   $('#cosmeticSaveBtn').textContent = 'Frissítés';
+
+  // VÁLLON ÜLŐ FIGURA (a felhasználó kérésére: eddig egy figurát is csak
+  // "sima kiegészítőként" lehetett szerkeszteni, a figura-részét nem).
+  //
+  // Ha a kiegészítő figuraként készült, itt kitesszük ugyanazt a generátort,
+  // amivel létrehozták, a MENTETT beállításaival - így a "legyen kisebb",
+  // "üljön a másik vállra", "más skinnel" kérések egy gombnyomásból mennek,
+  // nem kell nulláról újra felvenni a kiegészítőt.
+  cosmeticPetMeta = (item.petMeta && typeof item.petMeta === 'object') ? item.petMeta : null;
+  if (cosmeticPetMeta) {
+    $('#cosmeticPetBox')?.classList.remove('hidden');
+    $('#cosmeticPetTitle') && ($('#cosmeticPetTitle').textContent = 'Figura újragenerálása');
+    writePetMeta(cosmeticPetMeta);
+    // A figura TEXTÚRÁJA maga a skin, amiből készült - ezért a meglévőt
+    // betöltjük skin-forrásként. Enélkül minden apró változtatáshoz (pl.
+    // "legyen kisebb") újra elő kellene keresni az eredeti .png-t.
+    loadPetSkinFromCosmetic(item);
+  }
 
   cosmeticAssembly = {
     offsetX: item.offsetX ?? 0,

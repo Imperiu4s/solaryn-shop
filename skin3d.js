@@ -387,6 +387,27 @@ const SkinPreview = (() => {
   // szerkesztőben beállított mozgás in-game máshogy nézne ki.
   const WAVE_BANDS = 64;
 
+  // ── VARRAT-ELHALVÁNYÍTÁS (a kliens CosmeticWave SEAM_FADE-jének párja) ──
+  // A forgáspont túloldalán lévő csúcsok a deformációt TÜKRÖZVE kapják
+  // (M·D·M, ld. makeBands().apply) - ettől csap a jobb+bal szárnypár EGYÜTT.
+  // A két oldal a varratnál (d = 0) viszont csak akkor ér össze, ha ott a
+  // deformáció ÉPP AZONOSSÁG; falloff < 1 mellett marad egy távolság-
+  // FÜGGETLEN kitérés-maradék (amp * (1 - falloff)), ami a varrat két oldalán
+  // ellentétes irányba hat, és felszakítja a modellt. Mérve a "Szárnycsapás"
+  // kész mozgáson: 0,59 modell-egység, a lecsapás alján (a ciklus 33,6%-a) -
+  // ez az "egy bizonyos ponton mintha visszaugrana a textúra" tünet.
+  //
+  // Ha a geometria ÁTNYÚLIK a forgásponton, a varrat körül simán nullába
+  // visszük a teljes kitérést. A szárnyhegy kitérése és a félút változatlan
+  // marad, a két szárnyfél szimmetrikus marad; egyoldalas kiegészítőnél a
+  // fade ki van kapcsolva, ott semmi nem változik.
+  const SEAM_FADE = 0.2;
+  function seamFactor(d) {
+    if (d >= SEAM_FADE) return 1;
+    const t = d / SEAM_FADE;
+    return t * t * (3 - 2 * t);
+  }
+
   // Munkapufferek - a modul élettartamára, hogy képkockánként ne keletkezzen
   // szemét (a bélyegkép-generálás és az élő előnézet is ezt hívja).
   //
@@ -428,24 +449,29 @@ const SkinPreview = (() => {
     let px = 0, py = 0, pz = 0, identity = true, mirrorAxis = 0;
 
     return {
-      build(anim, timeSec, pivot, unit, f, axis) {
+      build(anim, timeSec, pivot, unit, f, axis, straddles) {
         mirrorAxis = axis | 0;
         px = pivot[0] * unit * f;
         py = pivot[1] * unit * f;
         pz = pivot[2] * unit;
         let any = false;
         for (let b = 0; b <= WAVE_BANDS; b++) {
-          const a = evalAnim(anim, timeSec, b / WAVE_BANDS);
+          const d = b / WAVE_BANDS;
+          const a = evalAnim(anim, timeSec, d);
+          // A varrat-elhalványítás a TELJES deformációt viszi nullába a
+          // forgáspont közelében (forgatás, eltolás, nagyítás egyaránt) -
+          // különben a maradék komponens felszakítaná a modellt a varratnál.
+          const k = straddles ? seamFactor(d) : 1;
           const ro = b * 9, to = b * 3;
-          trans[to] = a.trans[0] * unit * f;
-          trans[to + 1] = a.trans[1] * unit * f;
-          trans[to + 2] = a.trans[2] * unit;
-          scl[b] = a.scale;
-          const rx = a.rot[0] * Math.PI / 180 * f;
-          const ry = a.rot[1] * Math.PI / 180 * f;
-          const rz = a.rot[2] * Math.PI / 180;
+          trans[to] = a.trans[0] * k * unit * f;
+          trans[to + 1] = a.trans[1] * k * unit * f;
+          trans[to + 2] = a.trans[2] * k * unit;
+          scl[b] = 1 + (a.scale - 1) * k;
+          const rx = a.rot[0] * k * Math.PI / 180 * f;
+          const ry = a.rot[1] * k * Math.PI / 180 * f;
+          const rz = a.rot[2] * k * Math.PI / 180;
           bandMatrix(rot, ro, rx, ry, rz);
-          if (a.scale !== 1 || trans[to] || trans[to + 1] || trans[to + 2] || rx || ry || rz) any = true;
+          if (scl[b] !== 1 || trans[to] || trans[to + 1] || trans[to + 2] || rx || ry || rz) any = true;
         }
         identity = !any;
         return any;
@@ -605,7 +631,7 @@ const SkinPreview = (() => {
     // viselkedést adja vissza (ugyanaz a döntés, mint a közös skálás
     // változatban volt).
     const degenerate = maxNeg === 0 && maxPos === 0;
-    return (signed) => {
+    const normalize = (signed) => {
       if (degenerate) return 1;
       const denom = signed < 0 ? maxNeg : maxPos;
       // Az az oldal, amelyiken NINCS geometria (egyetlen szárny, farok), nem
@@ -614,6 +640,11 @@ const SkinPreview = (() => {
       const ratio = Math.min(1, Math.abs(signed) / denom);
       return signed < 0 ? -ratio : ratio;
     };
+    // Van-e geometria a forgáspont MINDKÉT oldalán, vagyis történik-e
+    // egyáltalán tükrözés. Ez a VARRAT-ELHALVÁNYÍTÁS kapcsolója (ld.
+    // seamFactor), és a kliens SideScale.straddles() párja.
+    normalize.straddles = maxNeg > 0 && maxPos > 0;
+    return normalize;
   }
 
   // Egy pont elforgatása a megadott tengely körül, az ADOTT (szerzői) térben -
@@ -787,12 +818,15 @@ const SkinPreview = (() => {
       let elementDistance = null;
       let vertexDistance = null;
       let waveAxis = 0;
+      // Átnyúlik-e a rész a forgásponton - a varrat-elhalványítás kapcsolója.
+      let waveStraddles = false;
       if (wave && elementRanges.length) {
         const axis = animAlongAxis(anim, raw.elements);
         const signedCenters = elementRanges.map((r) => r.center[axis] - animPivot[axis]);
         const normalize = makeSideNormalizer(signedCenters);
         elementDistance = signedCenters.map(normalize);
         waveAxis = axis;
+        waveStraddles = normalize.straddles;
         // ELŐJELES: a negatív érték a forgáspont túloldalát jelenti, ahol a
         // deformációt tükrözve alkalmazzuk (ld. makeBands().apply).
         vertexDistance = new Float32Array(positions.length / 3);
@@ -811,7 +845,8 @@ const SkinPreview = (() => {
         elementRanges,
         elementDistance,
         vertexDistance,
-        waveAxis
+        waveAxis,
+        waveStraddles
       });
     }
 
@@ -840,6 +875,7 @@ const SkinPreview = (() => {
       ? assemblyAnim.pivot : allCenter;
     const assemblyWave = animIsWave(assemblyAnim) && parts.length > 0;
     let assemblyWaveAxis = 0;
+    let assemblyWaveStraddles = false;
     if (assemblyWave) {
       const AXIS = { x: 0, y: 1, z: 2 };
       // A részek illesztése SZERZŐI térben (a mátrix modell-térben dolgozik,
@@ -881,6 +917,7 @@ const SkinPreview = (() => {
       }
       const normalize = makeSideNormalizer(signedCenters);
       assemblyWaveAxis = axis;
+      assemblyWaveStraddles = normalize.straddles;
       for (const p of parts) {
         p.assemblyVertexDistance = new Float32Array(p.positions.length / 3);
         for (let i = 0; i < p.assemblyVertexDistance.length; i++) {
@@ -896,6 +933,7 @@ const SkinPreview = (() => {
       f,
       assemblyWave,
       assemblyWaveAxis,
+      assemblyWaveStraddles,
       assembly: {
         offset: standalone ? [0, 0, 0] : off,
         scale: mScale,
@@ -967,7 +1005,7 @@ const SkinPreview = (() => {
     const src = part.positions;
     const partWaving = !!part.vertexDistance;
 
-    if (partWaving) partBands.build(part.anim, timeSec, part.animPivot, 1, 1, part.waveAxis);
+    if (partWaving) partBands.build(part.anim, timeSec, part.animPivot, 1, 1, part.waveAxis, part.waveStraddles);
 
     // ── EGYSZERŰ ESET: csak a RÉSZ hullámzik ──────────────────────────
     // A kimenet SZERZŐI térben marad; a rész illesztését és a kiegészítőét
@@ -993,7 +1031,7 @@ const SkinPreview = (() => {
     // renderAssemblyWave() metódusát: szó szerint ugyanez.
     const a = built.assembly;
     const f = built.f;
-    assemblyBands.build(a.anim, timeSec, a.animPivot, 1 / 16, f, built.assemblyWaveAxis);
+    assemblyBands.build(a.anim, timeSec, a.animPivot, 1 / 16, f, built.assemblyWaveAxis, built.assemblyWaveStraddles);
 
     // rész-illesztés (+ a rész MEREV animációja, ha van) egyetlen mátrixba
     let pm = placementMatrix(part.offset, part.scale, part.rotation, part.center, f);
