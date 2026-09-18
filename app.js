@@ -12,7 +12,7 @@
 // számot látsz, a böngésző MÉG A RÉGI app.js-t futtatja (a webtárhely
 // cache-e miatt egy feltöltés nem feltétlenül ér ki azonnal). MINDEN
 // kiadásnál emelni kell, az index.html ?v= paramétereivel EGYÜTT.
-const CENTER_VERSION = '20260912a';
+const CENTER_VERSION = '20260918a';
 
 const BACKEND_URL = 'https://api.overclockgame.hu:8908';
 
@@ -1497,7 +1497,16 @@ async function enterApp(meData) {
     el.classList.toggle('hidden', !keys.some(hasPerm));
   });
   $('#navPermissionsBtn')?.classList.toggle('hidden', !isOwner);
-  $('.app-nav-divider.admin-nav-item')?.classList.toggle('hidden', !(isOwner || permSet.size > 0));
+  // Maga az "Admin" CSOPORT akkor látszik, ha maradt benne legalább egy
+  // látható elem. Szándékosan a tényleges elemekből számoljuk, nem az
+  // "isOwner || van bármilyen jog" közelítésből: egy olyan jogkészlettel,
+  // amiben csak nem-nav jogok vannak (pl. csak játékos-műveletek), különben
+  // egy üresen lenyíló csoport maradna a menüben.
+  const adminGroup = document.querySelector('.app-nav-group[data-nav-group="admin"]');
+  if (adminGroup) {
+    const anyVisible = adminGroup.querySelectorAll('.app-nav-sub .app-nav-item:not(.hidden)').length > 0;
+    adminGroup.classList.toggle('hidden', !anyVisible);
+  }
 
   loadTopbarAvatar();
   loadHomeSkinPreview();
@@ -1523,6 +1532,10 @@ async function enterApp(meData) {
   // A csapattagok saját havi statisztikája a barátlista alatt (ld.
   // loadHomeStaffStats lentebb) - sima játékosnál a kártya rejtve marad.
   loadHomeStaffStats();
+
+  // Az oldalsáv "Csere ajánlatok" jelvénye (ld. refreshTradeBadge) - a
+  // beérkezett ajánlat különben észrevétlen maradna egy csukott csoportban.
+  refreshTradeBadge();
 }
 
 // A Rangok fül megnyitásakor (ld. switchView) hívjuk - friss egyenleget kér
@@ -2005,9 +2018,80 @@ $('#btnDisableSecurityPin').addEventListener('click', async () => {
 });
 
 // ── Oldalsáv / nézetváltás ──
+
+// A LENYITHATÓ CSOPORTOK nyitva/csukva állapota a böngészőben marad meg
+// (nem a fiókban): ez pusztán megjelenési szokás, nem adat - ha valaki más
+// gépről lép be, semmi hasznos nem veszik el azzal, hogy nála alapból az van
+// nyitva, amiben épp jár.
+const NAV_GROUPS_KEY = 'solaryn.navGroups';
+
+function readOpenNavGroups() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(NAV_GROUPS_KEY));
+    return new Set(Array.isArray(raw) ? raw : []);
+  } catch { return new Set(); }
+}
+
+function persistOpenNavGroups() {
+  try {
+    const open = $$('.app-nav-group.open').map((g) => g.dataset.navGroup).filter(Boolean);
+    localStorage.setItem(NAV_GROUPS_KEY, JSON.stringify(open));
+  } catch { /* privát mód / letiltott tároló - a menü ettől még működik */ }
+}
+
+/**
+ * EGYSZERRE EGY CSOPORT lehet nyitva.
+ *
+ * MIÉRT: a csoportosítás célja épp az, hogy a menü ne nőjön a képernyőnél
+ * magasabbra. Ha minden megnyitott csoport nyitva is maradna, néhány fül
+ * bejárása után visszakapnánk ugyanazt a huszonvalahány elemes, görgetendő
+ * listát, ami elől elindultunk - csak most még a csoportfejekkel megtoldva.
+ */
+function setNavGroupOpen(group, open) {
+  if (open) {
+    for (const other of $$('.app-nav-group')) {
+      if (other === group) continue;
+      other.classList.remove('open');
+      other.querySelector('.app-nav-group-head')?.setAttribute('aria-expanded', 'false');
+    }
+  }
+  group.classList.toggle('open', open);
+  group.querySelector('.app-nav-group-head')?.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+/**
+ * A csoportok igazítása az AKTUÁLIS nézethez: az a csoport, amiben az épp
+ * megnyitott oldal van, mindig kinyílik (különben a kattintás után eltűnne a
+ * szem elől, hogy hol vagyunk), és a feje akkor is kiemelve marad, ha a
+ * felhasználó utólag visszacsukja.
+ */
+function syncNavGroups(view) {
+  $$('.app-nav-group').forEach((group) => {
+    const holds = !!group.querySelector(`.app-nav-item[data-view="${view}"]`);
+    group.querySelector('.app-nav-group-head')?.classList.toggle('holds-active', holds);
+    if (holds) setNavGroupOpen(group, true);
+  });
+  persistOpenNavGroups();
+}
+
+$$('.app-nav-group').forEach((group) => {
+  const head = group.querySelector('.app-nav-group-head');
+  if (!head) return;
+  head.setAttribute('aria-expanded', 'false');
+  head.addEventListener('click', () => {
+    setNavGroupOpen(group, !group.classList.contains('open'));
+    persistOpenNavGroups();
+  });
+});
+readOpenNavGroups().forEach((name) => {
+  const group = document.querySelector(`.app-nav-group[data-nav-group="${name}"]`);
+  if (group) setNavGroupOpen(group, true);
+});
+
 function switchView(view) {
   $$('.app-nav-item[data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
   $$('.view').forEach((v) => v.classList.toggle('active', v.dataset.view === view));
+  syncNavGroups(view);
   if (view === 'skin') loadSkinPreview3d();
   // A PP-egyenleg (rangvásárlás fedezet-ellenőrzéséhez) minden alkalommal
   // frissül, amikor a felhasználó megnyitja a Rangok fület - nem élő/valós
@@ -2045,6 +2129,7 @@ function switchView(view) {
   // hibába futna vásárláskor.
   if (view === 'cosmetics') loadMyCosmetics();
   if (view === 'market') loadMarket();
+  if (view === 'trades') loadTrades();
   if (view === 'cosmeticsAdmin') { resetCosmeticForm(); loadCosmeticsAdmin(); }
 }
 $$('.app-nav-item[data-view]').forEach((btn) => {
@@ -6263,6 +6348,7 @@ async function loadMyCosmetics() {
   }
   renderCosmeticSlotBar();
   renderOwnedCosmetics();
+  renderCosmeticSummary();
   loadCosmeticShop();
   renderCosmeticCharacterPreview();
 }
@@ -6300,7 +6386,85 @@ async function renderCosmeticCharacterPreview() {
   }
 
   const slim = myCosmeticsSkinSlim();
-  stopCosmeticCharPreview = SkinPreview.start(canvas, skinImg, slim, capeImg, cosmetics);
+  stopCosmeticCharPreview = SkinPreview.start(canvas, skinImg, slim, capeImg, cosmetics, null, { wheelZoom: true });
+  syncCosmeticZoomRange();
+}
+
+// ── Nagyítás az "Így nézel ki" előnézeten ────────────────────────────────
+// A vezérlők a SkinPreview 0..1-es "szintjével" dolgoznak, nem a kamera
+// távolságával (ld. skin3d.js stop.setZoomLevel) - így a határok a
+// rendererben maradnak, és itt nem kell semmit hozzájuk igazítani.
+function syncCosmeticZoomRange() {
+  const range = $('#cosmeticZoomRange');
+  if (!range || !stopCosmeticCharPreview?.getZoomLevel) return;
+  range.value = String(Math.round(stopCosmeticCharPreview.getZoomLevel() * 100));
+}
+
+$('#cosmeticZoomInBtn')?.addEventListener('click', () => {
+  stopCosmeticCharPreview?.zoomBy?.(1.25);
+  syncCosmeticZoomRange();
+});
+$('#cosmeticZoomOutBtn')?.addEventListener('click', () => {
+  stopCosmeticCharPreview?.zoomBy?.(1 / 1.25);
+  syncCosmeticZoomRange();
+});
+$('#cosmeticZoomResetBtn')?.addEventListener('click', () => {
+  stopCosmeticCharPreview?.resetView?.();
+  syncCosmeticZoomRange();
+});
+$('#cosmeticZoomRange')?.addEventListener('input', (e) => {
+  stopCosmeticCharPreview?.setZoomLevel?.(Number(e.target.value) / 100);
+});
+// A görgős/csípős nagyítás a vásznon történik, a csúszka viszont nem tudná
+// magától, hogy közben elmozdult - ezért a vászon fölötti gesztus után
+// utánaigazítjuk. (A rAF-onkénti szinkron pazarlás lenne egy olyan értékért,
+// amit csak ritkán, kézzel változtatnak.)
+$('#cosmeticCharPreview')?.addEventListener('wheel', () => setTimeout(syncCosmeticZoomRange, 0), { passive: true });
+$('#cosmeticCharPreview')?.addEventListener('touchend', syncCosmeticZoomRange);
+
+/**
+ * A "Gyűjteményed" kártya a jobb oszlopban. Minden száma a MÁR letöltött
+ * listából jön (myCosmetics) - nincs mögötte külön szerverkérés.
+ */
+function renderCosmeticSummary() {
+  const owned = myCosmetics.owned || [];
+  const equipped = Object.keys(myCosmetics.loadout || {}).length;
+  const animated = owned.filter((c) => c.animated).length;
+
+  const set = (id, value) => { const el = $(id); if (el) el.textContent = String(value); };
+  set('#cosmeticSummaryOwned', owned.length);
+  set('#cosmeticSummaryEquipped', equipped);
+  set('#cosmeticSummaryAnimated', animated);
+
+  // Ritkaság-bontás. Csak a ténylegesen előforduló ritkaságok kerülnek ki -
+  // öt üres sáv semmit nem mondana arról, mid van.
+  const bars = $('#cosmeticSummaryBars');
+  if (bars) {
+    const order = ['mythic', 'legendary', 'epic', 'rare', 'common'];
+    const counts = new Map();
+    for (const c of owned) counts.set(c.rarity, (counts.get(c.rarity) || 0) + 1);
+    const max = Math.max(1, ...counts.values());
+    bars.innerHTML = order.filter((r) => counts.has(r)).map((r) => `
+      <div class="cosmetic-summary-bar-row rarity-${escapeHtml(r)}">
+        <div class="cosmetic-summary-bar-head">
+          <span>${escapeHtml(RARITY_LABELS[r] || r)}</span><strong>${counts.get(r)}</strong>
+        </div>
+        <div class="cosmetic-summary-bar-track">
+          <div class="cosmetic-summary-bar-fill" style="width:${Math.round(counts.get(r) / max * 100)}%"></div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  const note = $('#cosmeticSummaryNote');
+  if (note) {
+    const freeSlots = (myCosmetics.slots || []).length - equipped;
+    note.textContent = !owned.length
+      ? 'Még nincs kiegészítőd - a lenti kínálatból vásárolhatsz, vagy nézd meg a Piacot.'
+      : freeSlots > 0
+        ? `Még ${freeSlots} helyre vehetsz fel kiegészítőt.`
+        : 'Minden helyed foglalt - egy újabb felvételéhez előbb vegyél le egyet.';
+  }
 }
 
 // A köpeny (ha van) - a 3D előnézet ezt is kirajzolja, hogy a kiegészítő és a
@@ -6727,6 +6891,278 @@ document.addEventListener('click', async (e) => {
   }
 });
 
+// ── Csere ajánlatok ──────────────────────────────────────────────────────
+// Névre szóló adásvétel: a piactól abban tér el, hogy EGY konkrét játékosnak
+// szól, és csak ő tudja elbírálni (ld. SolarBackend src/cosmetics.js "Csere
+// ajánlatok" szakaszát). Az adó és az aszinkron fizetés viszont szó szerint
+// ugyanaz, mint a piacon.
+let tradeTaxPercent = 10;
+
+async function loadTrades() {
+  if (!session || !session.token) return;
+  // Az ajánlat-küldő legördülőhöz kell a saját, TOVÁBBADHATÓ készletünk -
+  // ugyanaz az elv, mint a piacnál (ld. loadMarket).
+  try {
+    const res = await fetch(BACKEND_URL + '/api/cosmetics/mine', {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    if (data.ok) myCosmetics = { owned: data.owned || [], loadout: data.loadout || {}, slots: data.slots || [] };
+  } catch { /* a lenti űrlap ilyenkor üres marad, a listák külön töltődnek */ }
+
+  renderTradeSendForm();
+
+  let payload = null;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/cosmetics/trades', {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    if (data.ok) payload = data;
+  } catch { /* lent "nem sikerült" üzenet */ }
+
+  if (!payload) {
+    const msg = '<div class="card"><p class="redeem-result error">Nem sikerült lekérni a csere ajánlatokat.</p></div>';
+    $('#tradesIncomingWrap').innerHTML = msg;
+    $('#tradesOutgoingWrap').innerHTML = '';
+    $('#tradesHistoryWrap').innerHTML = '';
+    return;
+  }
+
+  if (typeof payload.taxPercent === 'number') {
+    tradeTaxPercent = payload.taxPercent;
+    const note = $('#tradeTaxNote');
+    if (note) note.textContent = tradeTaxPercent + '%';
+    updateTradePayoutPreview();
+  }
+  const ttlNote = $('#tradeTtlNote');
+  if (ttlNote && typeof payload.ttlDays === 'number') ttlNote.textContent = String(payload.ttlDays);
+
+  renderTradeList($('#tradesIncomingWrap'), payload.incoming, 'incoming');
+  renderTradeList($('#tradesOutgoingWrap'), payload.outgoing, 'outgoing');
+  renderTradeList($('#tradesHistoryWrap'), payload.history, 'history');
+  setTradeBadge(payload.incoming.filter((o) => o.status === 'pending').length);
+}
+
+const TRADE_STATUS_LABELS = {
+  accepted: 'Elfogadva',
+  declined: 'Elutasítva',
+  cancelled: 'Visszavonva',
+  expired: 'Lejárt',
+  reserved: 'Folyamatban'
+};
+
+function tradePriceHtml(offer) {
+  if (offer.priceSc === 0) return '<div class="trade-row-price">Ajándék</div>';
+  return `<div class="trade-row-price">${offer.priceSc.toLocaleString('hu-HU')} PP<small>neki ${offer.payoutSc.toLocaleString('hu-HU')} PP</small></div>`;
+}
+
+function renderTradeList(wrap, offers, kind) {
+  if (!wrap) return;
+  const list = Array.isArray(offers) ? offers : [];
+  if (!list.length) {
+    const empty = {
+      incoming: 'Nincs beérkezett csere ajánlatod.',
+      outgoing: 'Nincs elküldött csere ajánlatod.',
+      history: 'Még nincs lezárult csere ajánlatod.'
+    }[kind];
+    wrap.innerHTML = `<div class="card"><p class="redeem-result">${empty}</p></div>`;
+    return;
+  }
+
+  wrap.innerHTML = `<div class="trade-list">${list.map((offer) => {
+    const who = kind === 'incoming' || (kind === 'history' && !offer.isSender)
+      ? `tőle: ${escapeHtml(offer.sender)}`
+      : `neki: ${escapeHtml(offer.recipient)}`;
+
+    // A "folyamatban" állapotban SEM a küldő, SEM a címzett nem tud
+    // beavatkozni: ott már fut a SolarShop felé indított levonás (ld. a
+    // backend resolveTradeAsClosed() 409-esét) - a gomb kiírása csak hamis
+    // reményt keltene.
+    let actions = '';
+    if (offer.status === 'pending' && kind === 'incoming') {
+      actions = `
+        <div class="trade-row-actions">
+          <button type="button" class="btn-glow" data-trade-accept="${offer.id}">Elfogadás</button>
+          <button type="button" class="btn-outline" data-trade-decline="${offer.id}">Elutasítás</button>
+        </div>`;
+    } else if (offer.status === 'pending' && kind === 'outgoing') {
+      actions = `<div class="trade-row-actions"><button type="button" class="btn-outline" data-trade-cancel="${offer.id}">Visszavonás</button></div>`;
+    } else {
+      const label = TRADE_STATUS_LABELS[offer.status] || offer.status;
+      actions = `<span class="trade-status ${escapeHtml(offer.status)}">${escapeHtml(label)}</span>`;
+    }
+
+    const when = offer.resolvedAt || offer.createdAt;
+    return `
+      <div class="trade-row">
+        ${offer.cosmetic ? cosmeticThumbHtml(offer.cosmetic) : '<div class="cosmetic-thumb cosmetic-thumb-empty"></div>'}
+        <div class="trade-row-main">
+          <div class="trade-row-name">${escapeHtml(offer.cosmetic?.name || 'Ismeretlen kiegészítő')}</div>
+          <div class="trade-row-meta">${who}${when ? ' · ' + escapeHtml(formatLedgerDate(when)) : ''}</div>
+          ${offer.message ? `<div class="trade-row-message">${escapeHtml(offer.message)}</div>` : ''}
+        </div>
+        ${tradePriceHtml(offer)}
+        ${actions}
+      </div>`;
+  }).join('')}</div>`;
+  hydrateCosmeticThumbs(wrap);
+}
+
+function renderTradeSendForm() {
+  const select = $('#tradeCosmeticSelect');
+  if (!select) return;
+  const offerable = myCosmetics.owned.filter((c) => c.tradable);
+  if (!offerable.length) {
+    select.innerHTML = '<option value="">Nincs továbbadható kiegészítőd</option>';
+    $('#tradeSendBtn').disabled = true;
+  } else {
+    select.innerHTML = offerable
+      .map((c) => `<option value="${c.id}">${escapeHtml(c.name)} (${escapeHtml(c.slotLabel)})</option>`).join('');
+    $('#tradeSendBtn').disabled = false;
+  }
+  updateTradePayoutPreview();
+}
+
+// Ugyanaz az élő adó-bontás, mint a piacon - itt is az a legfontosabb szám,
+// hogy a küldő MENNYIT KAP KÉZHEZ, nem az, amit beírt.
+function updateTradePayoutPreview() {
+  const el = $('#tradePayoutPreview');
+  if (!el) return;
+  const raw = $('#tradePriceInput')?.value;
+  const price = Number(raw);
+  if (raw === '' || !Number.isInteger(price) || price < 0) { el.innerHTML = ''; return; }
+  if (price === 0) {
+    el.innerHTML = '<div class="market-payout-row market-payout-total"><span>Ajándék</span><strong>0 PP</strong></div>';
+    return;
+  }
+  const payout = Math.floor(price * (100 - tradeTaxPercent) / 100);
+  el.innerHTML = `
+    <div class="market-payout-row"><span>Ő fizet</span><strong>${price.toLocaleString('hu-HU')} PP</strong></div>
+    <div class="market-payout-row market-payout-tax"><span>Adó (${tradeTaxPercent}%)</span><strong>-${(price - payout).toLocaleString('hu-HU')} PP</strong></div>
+    <div class="market-payout-row market-payout-total"><span>Te kapsz</span><strong>${payout.toLocaleString('hu-HU')} PP</strong></div>
+  `;
+}
+$('#tradePriceInput')?.addEventListener('input', updateTradePayoutPreview);
+
+// A beérkezett ajánlatok száma az oldalsávon. MIÉRT KELL: a "Csere ajánlatok"
+// egy alapból CSUKOTT csoportban van - enélkül észrevétlen maradna, hogy
+// valaki ajánlatot küldött.
+function setTradeBadge(count) {
+  const badge = $('#navTradeBadge');
+  if (!badge) return;
+  badge.textContent = String(count);
+  badge.classList.toggle('hidden', !count);
+}
+
+async function refreshTradeBadge() {
+  if (!session || !session.token) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/cosmetics/trades/count', {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    if (data.ok) setTradeBadge(data.incoming || 0);
+  } catch { /* a jelvény elmaradása nem hiba, csak nem jelenik meg */ }
+}
+
+$('#tradeSendBtn')?.addEventListener('click', async () => {
+  const resultEl = $('#tradeSendResult');
+  const setError = (msg) => { resultEl.textContent = msg; resultEl.className = 'redeem-result error'; };
+
+  const recipient = ($('#tradeRecipientInput').value || '').trim();
+  const cosmeticId = Number($('#tradeCosmeticSelect').value);
+  const rawPrice = $('#tradePriceInput').value;
+  const priceSc = Number(rawPrice);
+  const message = ($('#tradeMessageInput').value || '').trim();
+
+  if (!/^[A-Za-z0-9_]{3,16}$/.test(recipient)) return setError('Adj meg egy érvényes játékosnevet.');
+  if (!Number.isInteger(cosmeticId)) return setError('Válassz egy kiegészítőt.');
+  if (rawPrice === '' || !Number.isInteger(priceSc) || priceSc < 0) return setError('Adj meg egy érvényes árat (0 = ajándék).');
+
+  const payout = Math.floor(priceSc * (100 - tradeTaxPercent) / 100);
+  // Ugyanaz a figyelmeztetés, mint a piacnál: az ajánlat LETÉTBE teszi a
+  // kiegészítőt, tehát addig nem viselhető - ezt előre kimondjuk.
+  const confirmed = await confirmModal(
+    'Csere ajánlat küldése',
+    priceSc === 0
+      ? `Odaadod ezt a kiegészítőt ${recipient} játékosnak ingyen? Amíg nem dönt, nem tudod viselni.`
+      : `Felajánlod ${recipient} játékosnak ${priceSc.toLocaleString('hu-HU')} PP-ért? Amíg nem dönt, nem tudod viselni a kiegészítőt. Elfogadáskor ${tradeTaxPercent}% adó vonódik le, tehát ${payout.toLocaleString('hu-HU')} PP lesz a tiéd.`,
+    'Igen, elküldöm'
+  );
+  if (!confirmed) return;
+
+  try {
+    const res = await fetch(BACKEND_URL + '/api/cosmetics/trades/offer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ recipient, cosmeticId, priceSc, message })
+    });
+    const data = await res.json();
+    if (!data.ok) return setError(data.message || 'Nem sikerült elküldeni az ajánlatot.');
+    resultEl.textContent = '';
+    $('#tradeRecipientInput').value = '';
+    $('#tradePriceInput').value = '';
+    $('#tradeMessageInput').value = '';
+    updateTradePayoutPreview();
+    showToast('Csere ajánlat elküldve.');
+    loadTrades();
+  } catch {
+    setError('Nem sikerült elérni a szervert.');
+  }
+});
+
+document.addEventListener('click', async (e) => {
+  const acceptBtn = e.target.closest('[data-trade-accept]');
+  if (acceptBtn) {
+    const confirmed = await confirmModal(
+      'Ajánlat elfogadása',
+      'Elfogadod ezt az ajánlatot? A PrémiumPont levonása a következő szerverre lépésedkor történik meg - utána kerül át hozzád a kiegészítő. Ha nincs elég PrémiumPontod, az elfogadás visszavonódik.',
+      'Igen, elfogadom'
+    );
+    if (!confirmed) return;
+    acceptBtn.disabled = true;
+    await tradeAction('/api/cosmetics/trades/accept', Number(acceptBtn.dataset.tradeAccept), null, () => { acceptBtn.disabled = false; });
+    return;
+  }
+
+  const declineBtn = e.target.closest('[data-trade-decline]');
+  if (declineBtn) {
+    const confirmed = await confirmModal('Ajánlat elutasítása', 'Elutasítod ezt az ajánlatot? A kiegészítő visszakerül a küldőhöz.', 'Igen, elutasítom');
+    if (!confirmed) return;
+    await tradeAction('/api/cosmetics/trades/decline', Number(declineBtn.dataset.tradeDecline), 'Ajánlat elutasítva.');
+    return;
+  }
+
+  const cancelTradeBtn = e.target.closest('[data-trade-cancel]');
+  if (cancelTradeBtn) {
+    const confirmed = await confirmModal('Ajánlat visszavonása', 'Visszavonod az ajánlatot? A kiegészítő visszakerül hozzád.', 'Igen, visszavonom');
+    if (!confirmed) return;
+    await tradeAction('/api/cosmetics/trades/cancel', Number(cancelTradeBtn.dataset.tradeCancel), 'Ajánlat visszavonva.');
+  }
+});
+
+async function tradeAction(path, offerId, successToast, onError) {
+  try {
+    const res = await fetch(BACKEND_URL + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ offerId })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      showToast(data.message || 'A művelet nem sikerült.', true);
+      if (onError) onError();
+      return;
+    }
+    showToast(successToast || data.message || 'Kész.');
+    loadTrades();
+  } catch {
+    showToast('Nem sikerült elérni a szervert.', true);
+    if (onError) onError();
+  }
+}
+
 // ── Admin: katalógus ─────────────────────────────────────────────────────
 let cosmeticsAdminItems = [];
 let cosmeticEditingId = null;
@@ -6898,6 +7334,263 @@ $('#cosmeticTextureInput')?.addEventListener('change', (e) => {
     });
   };
   reader.readAsDataURL(file);
+});
+
+// ── Vállon ülő figura: modell-generálás skinből ──────────────────────────
+//
+// MIT CSINÁL: egy sima Minecraft-skinből előállítja ANNAK a kockamodellnek a
+// Blockbench-JSON-ját, ami a skint viselő, kicsinyített, ÜLŐ játékost adja -
+// és ezt a modellt + magát a skint pontosan úgy tölti be az űrlapba, mintha
+// az admin kézzel választott volna ki egy modellt és egy textúrát. Innentől
+// minden a megszokott úton megy (illesztés, animáció, mentés, piac, csere):
+// a figura egy TELJESEN SZABVÁNYOS kiegészítő, csak nem rajzolni kellett.
+//
+// ── A KOORDINÁTA-TÉR (ez a rész a kényes) ───────────────────────────────
+// A generált modell ITEM-modell térben van (Blockbench-alapértelmezés), mert
+// a szerkesztő és a kliens is erre van hangolva. Ebben a térben a "test"
+// helyre kötött kiegészítő leképezése (ld. skin3d.js cosmeticPartMatrix,
+// f = -1, csont-pivot [0,0,0]):
+//
+//     előnézet = ( -szerzői_x , 6 + szerzői_y , -szerzői_z )
+//
+// Ebből három dolog következik, és mindhárom számít:
+//   - szerzői +Y FELFELÉ mutat (ezért lehet a figurát "normálisan", fejjel
+//     felfelé megrajzolni);
+//   - szerzői +X a karakter JOBB oldala (az előnézetben a jobb kar a -X-en
+//     van, ld. skin3d.js buildGeometry "jobb kar" sorát);
+//   - szerzői -Z a karakter ELŐRE iránya (a néző felé).
+// A szerzői (0,0,0) pont az előnézet (0, 6, 0)-jára esik: ez a TÖRZS TETEJE,
+// vagyis pont a vállvonal - ezért ül a figura a 0-s magasságon.
+//
+// ── AZ UV (a másik kényes rész) ─────────────────────────────────────────
+// Item-modell térben a lap-UV-k MINDIG 0..16 tartományban vannak, a textúra
+// tényleges felbontásától függetlenül (ld. skin3d.js buildCosmeticParts
+// texW/texH = 16 ágát) - ezért a skin PIXEL-koordinátáit a 64 széles
+// elrendezéshez képest ARÁNYOSÍTVA írjuk be. Így a generált modell egy
+// 64x64-es, egy 64x32-es (régi) és egy HD (128x128, 256x256...) skinnel is
+// ugyanúgy helyes marad.
+const PET_LOCAL_ORIGIN = [0, 0, 0];
+
+/**
+ * Egy doboz hat lapjának UV-je a SZABVÁNYOS Minecraft-skin kicsomagolás
+ * szerint, a Blockbench lapnevein.
+ *
+ * A megfeleltetés (levezetve a fenti leképezésből, nem próbálgatva):
+ *   north = elöl,  south = hátul,
+ *   east  = a karakter JOBB oldala,  west = a BAL oldala,
+ *   up    = felül, down = alul.
+ *
+ * Az "up" lap UV-je MEGFORDÍTVA megy be ([u2,v2,u1,v1]): a felülnézeti régió
+ * a skinben 180 fokkal elfordulva áll ahhoz képest, ahogy a lap sarkai ebben
+ * a térben körbejárnak (a "down" viszont épp egyezik - ez a skin-formátum
+ * szabálya, ld. skin3d.js addBox "bottom" ágának megjegyzését).
+ *
+ * @param u,v    a doboz UV-origója a 64 széles elrendezés PIXELEIBEN
+ * @param w,h,d  a doboz mérete (szélesség, magasság, mélység)
+ * @param su,sv  pixel -> 0..16 item-tér szorzó vízszintesen / függőlegesen
+ */
+function petFaceUvs(u, v, w, h, d, su, sv) {
+  const rect = (x, y, rw, rh) => [x * su, y * sv, (x + rw) * su, (y + rh) * sv];
+  const flip = (r) => [r[2], r[3], r[0], r[1]];
+  return {
+    north: { uv: rect(u + d, v + d, w, h) },
+    south: { uv: rect(u + d + w + d, v + d, w, h) },
+    east:  { uv: rect(u, v + d, d, h) },
+    west:  { uv: rect(u + d + w, v + d, d, h) },
+    up:    { uv: flip(rect(u + d, v, w, d)) },
+    down:  { uv: rect(u + d + w, v, w, d) }
+  };
+}
+
+/**
+ * A figura modellje.
+ *
+ * @param opts {slim, legacy, scale, legAngle, side} - a "side" a KARAKTER
+ *        melyik vállát jelenti ('left' / 'right').
+ */
+function buildShoulderPetModel(opts) {
+  const slim = !!opts.slim;
+  const legacy = !!opts.legacy;
+  const armW = slim ? 3 : 4;
+  const S = opts.scale;
+  const legAngle = opts.legAngle;
+
+  // A textúra függőleges aránya a régi (64x32) skineknél a kétszerese - ott
+  // a 32 pixel magas kép ugyanazt a 0..16 tartományt fedi le.
+  const su = 16 / 64;
+  const sv = legacy ? 16 / 32 : 16 / 64;
+
+  // A VISELŐ vállának félszélessége: a törzs fele (4) + a kar fele. A viselő
+  // karmodelljét itt nem ismerjük (játékosonként más lehet), ezért a
+  // klasszikus, 4 széles karral számolunk - az eltérés fél pixel, amit az
+  // admin az illesztő-szerkesztőben úgyis pontosít.
+  const shoulderX = 4 + 4 / 2;
+  // szerzői +X = a karakter JOBB oldala (ld. a fenti levezetést)
+  const tx = opts.side === 'right' ? shoulderX : -shoulderX;
+
+  const elements = [];
+  // A figura SAJÁT terében rajzolunk (y = 0 az ülepe), és csak a végén
+  // kicsinyítünk + toljuk a vállra - így a kockák koordinátái olvashatók
+  // maradnak, és egy helyen dől el, hova kerül az egész.
+  const place = (p) => [
+    Math.round((p[0] * S + tx) * 1000) / 1000,
+    Math.round((p[1] * S) * 1000) / 1000,
+    Math.round((p[2] * S) * 1000) / 1000
+  ];
+
+  function box(from, to, uvOrigin, w, h, d, extra) {
+    const el = {
+      from: place(from),
+      to: place(to),
+      faces: petFaceUvs(uvOrigin[0], uvOrigin[1], w, h, d, su, sv)
+    };
+    if (extra && extra.inflate) el.inflate = Math.round(extra.inflate * S * 1000) / 1000;
+    if (extra && typeof extra.legRotation === 'number' && extra.legRotation !== 0) {
+      // A comb a CSÍPŐNÉL hajlik előre - a forgáspont ezért a figura ülepe
+      // (a saját terében a [0,0,0]), a végleges koordinátákra átszámolva.
+      el.rotation = { angle: extra.legRotation, axis: 'x', origin: place(PET_LOCAL_ORIGIN) };
+    }
+    elements.push(el);
+  }
+
+  // ── Alapréteg ────────────────────────────────────────────────────────
+  box([-4, 12, -4], [4, 20, 4], [0, 0], 8, 8, 8);                       // fej
+  box([-4, 0, -2], [4, 12, 2], [16, 16], 8, 12, 4);                     // törzs
+  box([4, 0, -2], [4 + armW, 12, 2], [40, 16], armW, 12, 4);            // jobb kar
+  box([-4 - armW, 0, -2], [-4, 12, 2], legacy ? [40, 16] : [32, 48], armW, 12, 4); // bal kar
+  box([0, -12, -2], [4, 0, 2], [0, 16], 4, 12, 4, { legRotation: legAngle });      // jobb láb
+  box([-4, -12, -2], [0, 0, 2], legacy ? [0, 16] : [16, 48], 4, 12, 4, { legRotation: legAngle }); // bal láb
+
+  // ── Külső (overlay) réteg ────────────────────────────────────────────
+  // A haj/sapka nélkül a legtöbb skin FELISMERHETETLEN lenne - a fej
+  // overlay-e ezért a régi formátumban is megvan; a többi csak a modernben
+  // létezik. Az "inflate" a kliensben és az előnézetben is ugyanazt jelenti,
+  // és a figurával EGYÜTT kicsinyedik (különben egy 0,45-re zsugorított
+  // figurán aránytalanul vastag lenne).
+  const INFLATE = 0.3;
+  box([-4, 12, -4], [4, 20, 4], [32, 0], 8, 8, 8, { inflate: INFLATE });
+  if (!legacy) {
+    box([-4, 0, -2], [4, 12, 2], [16, 32], 8, 12, 4, { inflate: INFLATE });
+    box([4, 0, -2], [4 + armW, 12, 2], [40, 32], armW, 12, 4, { inflate: INFLATE });
+    box([-4 - armW, 0, -2], [-4, 12, 2], [48, 48], armW, 12, 4, { inflate: INFLATE });
+    box([0, -12, -2], [4, 0, 2], [0, 32], 4, 12, 4, { inflate: INFLATE, legRotation: legAngle });
+    box([-4, -12, -2], [0, 0, 2], [0, 48], 4, 12, 4, { inflate: INFLATE, legRotation: legAngle });
+  }
+
+  return {
+    model: { texture_size: [64, legacy ? 32 : 64], elements },
+    // A lebegés forgáspontja a figura ÜLEPE: onnan billegjen, ne a saját
+    // befoglaló dobozának közepe körül (az a hasa magasságában lenne).
+    seatPivot: place(PET_LOCAL_ORIGIN)
+  };
+}
+
+/** Finom, "él a figura" alapmozgás - nem hullám, tehát nagyon olcsó. */
+function shoulderPetAnim(seatPivot) {
+  return {
+    pivot: seatPivot,
+    tracks: [
+      { type: 'translate', axis: 'y', amp: 0.45, speed: 0.45, phase: 0, wave: 'sine', react: 'none', falloff: 0, spread: 0, along: 'auto' },
+      { type: 'rotate', axis: 'z', amp: 2.5, speed: 0.22, phase: 90, wave: 'sine', react: 'none', falloff: 0, spread: 0, along: 'auto' }
+    ]
+  };
+}
+
+let petSkinFile = null;
+let petSkinIsLegacy = false;
+
+$('#petSkinPickBtn')?.addEventListener('click', () => $('#petSkinInput').click());
+
+$('#petSkinInput')?.addEventListener('change', (e) => {
+  const file = e.target.files && e.target.files[0];
+  const note = $('#petSkinNote');
+  const btn = $('#petGenerateBtn');
+  petSkinFile = null;
+  if (btn) btn.disabled = true;
+  if (!file) { if (note) note.textContent = ''; return; }
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    loadImage(reader.result).then((img) => {
+      const w = img?.naturalWidth || 0;
+      const h = img?.naturalHeight || 0;
+      // A skin-elrendezés két aránya: a modern 1:1 (64x64, 128x128...) és a
+      // régi 2:1 (64x32). Bármi más nem skin, és a generált UV-k rossz
+      // helyre mutatnának - ezt jobb itt megmondani, mint a kész
+      // kiegészítőn látni.
+      if (!w || !h || w < 64 || (h !== w && h * 2 !== w)) {
+        if (note) note.textContent = `${file.name} - FIGYELEM: ez nem szabványos skin (${w}x${h}). 64x64 (vagy nagyobb, azonos arányú) illetve 64x32 kell.`;
+        return;
+      }
+      petSkinIsLegacy = h * 2 === w;
+      petSkinFile = file;
+      // A vékony kar felismerése nem lehetséges a képből (ugyanaz a felbontás
+      // mindkét modellnél), ezért az maradt kapcsolónak.
+      if (note) note.textContent = `${file.name} - ${w}x${h}${petSkinIsLegacy ? ' (régi formátum)' : ''}`;
+      if (btn) btn.disabled = false;
+    });
+  };
+  reader.readAsDataURL(file);
+});
+
+$('#petGenerateBtn')?.addEventListener('click', async () => {
+  if (!petSkinFile) { showToast('Előbb válassz egy skint.', true); return; }
+
+  const scale = Number($('#petScaleInput').value);
+  const legAngle = Number($('#petLegAngleInput').value);
+  if (!(scale > 0.05 && scale <= 1)) { showToast('A méret 0,05 és 1 között lehet.', true); return; }
+  if (!Number.isFinite(legAngle)) { showToast('Az ülés szöge nem szám.', true); return; }
+
+  const built = buildShoulderPetModel({
+    slim: $('#petSlimCheckbox').checked,
+    legacy: petSkinIsLegacy,
+    scale,
+    legAngle,
+    side: $('#petSideSelect').value === 'right' ? 'right' : 'left'
+  });
+
+  // Az űrlap kitöltése ugyanazokra a mezőkre, amiket egy kézi feltöltés is
+  // használ - innentől semmi nem tud a figuráról, minden "sima kiegészítő".
+  $('#cosmeticSlotSelect').value = 'body';
+  cosmeticAssembly.itemModelSpace = true;
+  $('#cosmeticItemSpaceCheckbox').checked = true;
+  // A figura koordinátái MÁR a helyükön vannak (a generátor a vállra tette),
+  // ezért az illesztés nullázódik - így az admin egy tiszta alapról tud
+  // finomhangolni, és az "Automatikus beillesztés" sem rántja el.
+  cosmeticAssembly.offsetX = 0;
+  cosmeticAssembly.offsetY = 0;
+  cosmeticAssembly.offsetZ = 0;
+  cosmeticAssembly.rotationX = 0;
+  cosmeticAssembly.rotationY = 0;
+  cosmeticAssembly.rotationZ = 0;
+  cosmeticAssembly.scale = 1;
+  cosmeticAssembly.anim = $('#petAnimCheckbox').checked ? shoulderPetAnim(built.seatPivot) : null;
+
+  if (!cosmeticParts.length) cosmeticParts.push(emptyPart(0));
+  const part = cosmeticParts[0];
+  const json = JSON.stringify(built.model);
+  part.file = new File([json], 'vallon_ulo_figura.json', { type: 'application/json' });
+  part.elements = built.model.elements;
+  part.textureSize = built.model.texture_size;
+  part.hasModel = true;
+  part.dirty = true;
+
+  cosmeticSelectedTextureFile = petSkinFile;
+  const dataUrl = await new Promise((resolve) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.readAsDataURL(petSkinFile);
+  });
+  $('#cosmeticTexturePreview').src = dataUrl;
+  $('#cosmeticTexturePreviewWrap').hidden = false;
+  cosmeticEditorTexture = await loadImage(dataUrl);
+
+  $('#cosmeticModelNote').textContent = `Generált figura - ${built.model.elements.length} kocka`;
+  setCosmeticTarget(-1);
+  renderCosmeticPartsBar();
+  renderCosmeticAnimEditor();
+  restartCosmeticEditor();
+  showToast('A figura elkészült - nézd meg az előnézetben, és állíts rajta, ha kell.');
 });
 
 async function loadCosmeticsAdmin() {
@@ -7240,7 +7933,33 @@ function animField(label, inner, title) {
  * ilyen), egy entitás-modell pedig a (0,0,0) köré; a szárny ettől a ponttól
  * FELÉ nyúlik ki, tehát a közelebbi vége a töve. A másik két koordináta a
  * rész közepe marad - ott nincs mit eltalálni.
+ *
+ * KIVÉTEL - A SZÁRNYPÁR (élesben visszajelzett hiba: "az egyik szárny sokkal
+ * jobban mozog, mint a másik"): ha a geometria a test vonalának MINDKÉT
+ * oldalára átnyúlik, akkor ez nem EGY szárny, hanem egy jobb+bal PÁR egyetlen
+ * modellben - és ilyenkor a töve nem a befoglaló doboz valamelyik SZÉLE,
+ * hanem a KÖZEPE, ahol a két fél a háthoz ér. A szélre tett forgáspont mellett
+ * a közeli szárny hegye a forgáspontra esne (nulla kitérés), a távolié pedig a
+ * skála 1-es végére - pontosan az a "az egyik alig mozog" tünet.
  */
+
+/**
+ * A tő koordinátája a hullám tengelye mentén - ld. suggestRootPivot() fenti
+ * magyarázatát. Külön függvény, mert a TELJES kiegészítőnél és egy RÉSZNÉL is
+ * szó szerint ugyanez a szabály.
+ *
+ * @param reference a test vonala a szerzői térben (item-modellnél 8, entitás-
+ *                  modellnél 0)
+ */
+function rootPivotCoord(min, max, reference) {
+  const span = max - min;
+  // Mennyi geometria esik a test vonalának a KESKENYEBBIK oldalára. A 25%-os
+  // küszöb választja el a "pár" esetet attól, amikor a modell csak épphogy
+  // átlóg a testen (pl. egy szárnytő beleér a hátba).
+  const overhang = Math.min(reference - min, max - reference);
+  if (span > 0 && overhang > span * 0.25) return (min + max) / 2;
+  return Math.abs(min - reference) <= Math.abs(max - reference) ? min : max;
+}
 function suggestRootPivot(partIndex) {
   const model = buildEditorModel();
   if (!model) return null;
@@ -7267,7 +7986,7 @@ function suggestRootPivot(partIndex) {
     if (!Number.isFinite(mn[0])) return null;
     const ref = cosmeticAssembly.itemModelSpace !== false ? 8 : 0;
     const piv = [(mn[0] + mx[0]) / 2, (mn[1] + mx[1]) / 2, (mn[2] + mx[2]) / 2];
-    piv[axis] = Math.abs(mn[axis] - ref) <= Math.abs(mx[axis] - ref) ? mn[axis] : mx[axis];
+    piv[axis] = rootPivotCoord(mn[axis], mx[axis], ref);
     return piv.map((v) => Math.round(v * 100) / 100);
   }
 
@@ -7296,7 +8015,7 @@ function suggestRootPivot(partIndex) {
 
   const reference = cosmeticAssembly.itemModelSpace !== false ? 8 : 0;
   const pivot = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2];
-  pivot[axis] = Math.abs(min[axis] - reference) <= Math.abs(max[axis] - reference) ? min[axis] : max[axis];
+  pivot[axis] = rootPivotCoord(min[axis], max[axis], reference);
   return pivot.map((n) => Math.round(n * 100) / 100);
 }
 

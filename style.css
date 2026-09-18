@@ -348,6 +348,51 @@ a { color: inherit; }
   border-top: 1px solid var(--line);
 }
 .app-nav-divider:first-of-type { border-top: none; margin-top: 2px; }
+
+/* ── Lenyitható navigációs csoport ──────────────────────────────────────
+   A csoportfej ugyanaz a .app-nav-item, csak egy forgó nyíllal a végén; az
+   alatta lévő .app-nav-sub magasságban animálva nyílik. A max-height-os
+   megoldás SZÁNDÉKOS: a "height: auto" nem animálható, a konkrét pixelérték
+   pedig elemszámtól függene - a bőven elég nagy felső korlát mindkettőt
+   megkerüli, és mivel a lista magassága ismert nagyságrendű (max ~13 elem),
+   a nyílás így sem tűnik lassúnak. */
+.app-nav-group { display: flex; flex-direction: column; }
+.app-nav-group-head .app-nav-caret {
+  margin-left: auto; width: 15px; height: 15px; fill: none;
+  opacity: .55; transition: transform .22s cubic-bezier(.2,.7,.3,1), opacity .16s;
+}
+.app-nav-group.open > .app-nav-group-head .app-nav-caret { transform: rotate(180deg); opacity: .9; }
+/* A csoportfej akkor emelkedik ki, ha az AKTUÁLIS nézet benne van, de a
+   csoport épp csukva - így egy csukott csoportban sem vész el, hol vagyunk. */
+.app-nav-group-head.holds-active { color: var(--gold); }
+.app-nav-sub {
+  display: grid; gap: 2px;
+  max-height: 0; overflow: hidden;
+  transition: max-height .26s cubic-bezier(.2,.7,.3,1), opacity .2s;
+  opacity: 0;
+}
+.app-nav-group.open > .app-nav-sub { max-height: 640px; opacity: 1; }
+.app-nav-sub .app-nav-item {
+  padding: 10px 16px 10px 48px; font-size: 13px; font-weight: 600;
+  letter-spacing: .01em;
+}
+/* Pötty a szöveg előtt: az elemek ikon nélküliek (egy behúzott alsó szint
+   nem bír el még egy ikonoszlopot), a pötty viszont megadja a listajelleget
+   és a behúzás vizuális kapaszkodóját. */
+.app-nav-sub .app-nav-item::before {
+  content: ""; position: absolute; left: 30px; top: 50%; transform: translateY(-50%);
+  width: 5px; height: 5px; border-radius: 999px;
+  background: currentColor; opacity: .32; transition: opacity .16s, box-shadow .16s;
+}
+.app-nav-sub .app-nav-item.active::before { opacity: 1; box-shadow: 0 0 8px var(--gold-glow); }
+
+/* Számláló-jelvény (pl. beérkezett csere ajánlatok) */
+.app-nav-badge {
+  margin-left: auto; min-width: 20px; padding: 2px 6px; border-radius: 999px;
+  background: var(--danger); color: #12121a;
+  font-size: 10.5px; font-weight: 800; line-height: 1.5; text-align: center;
+}
+
 .app-nav-spacer { flex: 1; }
 .app-nav-bottom { display: flex; flex-direction: column; gap: 3px; padding-top: 12px; border-top: 1px solid var(--line); }
 
@@ -865,16 +910,27 @@ a { color: inherit; }
   color: var(--text-faint); font-size: 12px; margin: -10px 0 22px;
 }
 
+/* A főoldal felső csempesora: a statisztika-csempék ÉS az egyenleg EGY
+   rácsban (ld. index.html .home-stat-row indoklását). A #statBadgeGrid
+   "display: contents"-szel adja át a saját gyerekeit ennek a rácsnak, így az
+   ott generált csempék és az egyenleg-kártya egyenrangú elemek lesznek. */
+.home-stat-row {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 18px; margin-bottom: 28px;
+}
+.home-stat-row > .stat-badge-grid { display: contents; }
+
 /* ÚJ: nagyban kiírt egyenleg a főoldalon (ld. index.html #homeWalletBalance) */
 .wallet-highlight-card {
-  padding: 22px 26px; margin-bottom: 24px; text-align: center;
+  padding: 22px 24px; margin-bottom: 0;
+  display: flex; flex-direction: column; justify-content: center;
   background: linear-gradient(180deg, var(--panel), var(--panel-2));
 }
 .wallet-highlight-label {
   font-size: 12px; text-transform: uppercase; letter-spacing: .5px;
-  color: var(--text-faint); margin-bottom: 6px; font-weight: 700;
+  color: var(--text-faint); margin-bottom: 4px; font-weight: 700;
 }
-.wallet-highlight-value { font-size: 34px; font-weight: 900; color: var(--gold); line-height: 1.1; }
+.wallet-highlight-value { font-size: 26px; font-weight: 900; color: var(--gold); line-height: 1.1; }
 
 /* Discord kártya - a Discord saját hivatalos iframe-widgetjét ágyazza be
    (élő, valós tag-lista, ugyanaz, mint amit a felhasználó referenciaként küldött). */
@@ -1517,6 +1573,12 @@ a { color: inherit; }
   .app-sidebar { width: 100%; height: auto; position: relative; flex-direction: row; overflow-x: auto; padding: 12px; }
   .app-brand, .app-nav-spacer { display: none; }
   .app-nav { flex-direction: row; }
+  /* A CSOPORTOK mobilon SZÁNDÉKOSAN ugyanúgy viselkednek, mint asztali
+     gépen: a ui.css (19. szakasz) 900 pixel alatt egy balról becsúszó,
+     FÜGGŐLEGES fiókká alakítja az oldalsávot - abban a lenyitható csoport
+     pont ugyanolyan jó, sőt fontosabb, mert ott még kevesebb a hely. (A
+     fenti ".app-nav { flex-direction: row }" a fiók előtti, vízszintesen
+     görgethető sáv maradéka; a ui.css felülírja.) */
   .app-nav-bottom { border-top: none; border-left: 1px solid var(--line); padding-top: 0; padding-left: 12px; flex-direction: row; }
   .app-content { padding: 24px 18px; }
 }
@@ -1762,7 +1824,103 @@ a { color: inherit; }
 
 /* Karakter-előnézet a Kiegészítők nézetben + admin illesztő-szerkesztő */
 .cosmetic-char-card { display: flex; flex-direction: column; align-items: center; }
-.cosmetic-char-card canvas { max-width: 100%; touch-action: none; }
+.cosmetic-char-card canvas { max-width: 100%; touch-action: none; cursor: grab; user-select: none; }
+.cosmetic-char-card canvas:active { cursor: grabbing; }
+
+/* Nagyítás-sáv az előnézet alatt (ld. skin3d.js stop.zoomBy/setZoomLevel) */
+.preview-zoom-bar {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; max-width: 260px; margin-top: 12px;
+}
+.preview-zoom-btn {
+  flex: 0 0 auto; width: 30px; height: 30px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 9px; border: 1px solid var(--line); cursor: pointer;
+  background: var(--panel-2); color: var(--text-dim);
+  transition: color .16s, border-color .16s, background .16s;
+}
+.preview-zoom-btn svg { width: 15px; height: 15px; }
+.preview-zoom-btn:hover { color: var(--gold); border-color: color-mix(in srgb, var(--gold) 45%, transparent); }
+.preview-zoom-range {
+  flex: 1; min-width: 0; height: 4px; -webkit-appearance: none; appearance: none;
+  border-radius: 999px; background: var(--line); cursor: pointer;
+}
+.preview-zoom-range::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 14px; height: 14px; border-radius: 999px; border: none; cursor: pointer;
+  background: linear-gradient(180deg, var(--gold), var(--gold-2));
+  box-shadow: 0 0 8px var(--gold-glow);
+}
+.preview-zoom-range::-moz-range-thumb {
+  width: 14px; height: 14px; border-radius: 999px; border: none; cursor: pointer;
+  background: var(--gold); box-shadow: 0 0 8px var(--gold-glow);
+}
+
+/* Gyűjtemény-összegző a Kiegészítők nézet jobb oszlopában */
+.cosmetic-summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.cosmetic-summary-stat {
+  text-align: center; padding: 12px 6px; border-radius: 12px;
+  background: var(--panel-2); border: 1px solid var(--line);
+}
+.cosmetic-summary-value {
+  font-size: 22px; font-weight: 900; color: var(--gold); font-variant-numeric: tabular-nums;
+}
+.cosmetic-summary-label {
+  margin-top: 2px; font-size: 10.5px; font-weight: 800; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--text-faint);
+}
+.cosmetic-summary-bars { display: grid; gap: 8px; margin-top: 14px; }
+.cosmetic-summary-bars:empty { display: none; }
+.cosmetic-summary-bar-row { display: grid; gap: 4px; }
+.cosmetic-summary-bar-head {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+  font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums;
+}
+.cosmetic-summary-bar-track { height: 5px; border-radius: 999px; background: var(--line); overflow: hidden; }
+/* A sáv színe ugyanaz a ritkaság-paletta, mint a kártyák felső csíkjáé
+   (.cosmetic-card::before) - szándékosan, hogy a kettő ránézésre
+   összekapcsolódjon. */
+.cosmetic-summary-bar-fill { height: 100%; border-radius: 999px; background: var(--text-faint); }
+.rarity-rare .cosmetic-summary-bar-fill { background: var(--discord); }
+.rarity-epic .cosmetic-summary-bar-fill { background: var(--orange); }
+.rarity-legendary .cosmetic-summary-bar-fill { background: linear-gradient(90deg, var(--gold-2), var(--gold)); }
+.rarity-mythic .cosmetic-summary-bar-fill { background: linear-gradient(90deg, var(--danger), var(--gold), var(--orange-2)); }
+.cosmetic-summary-note { margin-top: 12px; font-size: 12px; color: var(--text-faint); line-height: 1.5; }
+.cosmetic-summary-note:empty { display: none; }
+
+/* ── Csere ajánlatok ─────────────────────────────────────────────────────
+   Egy ajánlat egy sor: bélyegkép + név/kitől-kinek + ár + műveletek. A
+   listás (nem rácsos) forma szándékos: itt a DÖNTÉS a feladat, nem a
+   böngészés, ahhoz pedig az egymás alatti, gyorsan végigfutható sor a jó. */
+.trade-list { display: grid; gap: 10px; }
+.trade-row {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 14px 16px; border-radius: 14px;
+  background: var(--panel); border: 1px solid var(--line);
+}
+.trade-row .cosmetic-thumb { width: 52px; height: 52px; flex: 0 0 auto; margin: 0; }
+.trade-row-main { flex: 1; min-width: 160px; }
+.trade-row-name { font-size: 14.5px; font-weight: 800; color: var(--text); }
+.trade-row-meta { margin-top: 3px; font-size: 12px; color: var(--text-faint); }
+.trade-row-message {
+  margin-top: 6px; padding-left: 9px; border-left: 2px solid var(--line);
+  font-size: 12.5px; color: var(--text-dim); font-style: italic;
+}
+.trade-row-price {
+  flex: 0 0 auto; font-size: 17px; font-weight: 900; color: var(--gold);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.trade-row-price small { display: block; font-size: 11px; font-weight: 700; color: var(--text-faint); }
+.trade-row-actions { flex: 0 0 auto; display: flex; gap: 8px; }
+.trade-row-actions .btn-glow, .trade-row-actions .btn-outline { margin-top: 0; width: auto; padding: 9px 16px; font-size: 13px; }
+.trade-status {
+  flex: 0 0 auto; font-size: 11px; font-weight: 800; letter-spacing: .05em;
+  text-transform: uppercase; border-radius: 999px; padding: 4px 11px;
+  border: 1px solid var(--line); color: var(--text-faint);
+}
+.trade-status.accepted { color: var(--success); border-color: color-mix(in srgb, var(--success) 45%, transparent); }
+.trade-status.declined, .trade-status.cancelled { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
+.trade-status.reserved { color: var(--orange); border-color: color-mix(in srgb, var(--gold) 45%, transparent); }
 
 .cosmetic-editor { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; }
 .cosmetic-editor-stage {

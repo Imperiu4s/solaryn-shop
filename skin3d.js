@@ -466,16 +466,50 @@ const SkinPreview = (() => {
       apply(d, x, y, z, out, o) {
         const mirror = d < 0;
         if (mirror) d = -d;
-        let b = Math.round(d * WAVE_BANDS);
-        if (b < 0) b = 0; else if (b > WAVE_BANDS) b = WAVE_BANDS;
-        const ro = b * 9, to = b * 3, sc = scl[b];
-        let vx = (x - px) * sc, vy = (y - py) * sc, vz = (z - pz) * sc;
+
+        // SÁVOK KÖZTI ÁTMENET (nem a legközelebbi sávra kerekítünk).
+        //
+        // MIÉRT: a sáv a 0..1 távolságot WAVE_BANDS lépcsőre osztja. Amíg a
+        // szomszédos sávok szöge alig tér el, a kerekítés láthatatlan - de a
+        // KÉSÉS (spread) pont azt csinálja, hogy a fázis végigfusson a
+        // részen: spread = 720-nál két teljes ciklus fér a szárny hosszába,
+        // vagyis sávonként ~11 fok fáziskülönbség, ami 40 fokos kitérésnél
+        // már ~8 fokos SZÖGLÉPCSŐ két szomszédos sáv között. Ez a szárnyon
+        // jól látható, szegmensekre törő "redőnyhatás" volt - pont az, amit
+        // egy jó kliens sima, folytonos hajlásként mutat.
+        //
+        // A két szomszédos sáv EREDMÉNYÉT interpoláljuk, nem a mátrixaikat:
+        // két forgatás lineáris keverése nem forgatás (nem lenne ortogonális),
+        // a transzformált PONTOK keverése viszont a két körívpont húrján
+        // marad. A húr és az ív eltérése sávonként ~r*(1-cos(dszög/2)) - a
+        // fenti szélső esetben is a modell-egység ezredrésze, vagyis
+        // láthatatlan, cserébe a felület minden távolságon folytonos.
+        let t = d * WAVE_BANDS;
+        if (t < 0) t = 0; else if (t > WAVE_BANDS) t = WAVE_BANDS;
+        let b0 = t | 0;
+        if (b0 >= WAVE_BANDS) b0 = WAVE_BANDS - 1;
+        const w = t - b0;
+
+        let vx = x - px, vy = y - py, vz = z - pz;
         if (mirror) {
           if (mirrorAxis === 0) vx = -vx; else if (mirrorAxis === 1) vy = -vy; else vz = -vz;
         }
-        let ox = rot[ro]     * vx + rot[ro + 1] * vy + rot[ro + 2] * vz + trans[to];
-        let oy = rot[ro + 3] * vx + rot[ro + 4] * vy + rot[ro + 5] * vz + trans[to + 1];
-        let oz = rot[ro + 6] * vx + rot[ro + 7] * vy + rot[ro + 8] * vz + trans[to + 2];
+
+        let ro = b0 * 9, to = b0 * 3, sc = scl[b0];
+        let sx = vx * sc, sy = vy * sc, sz = vz * sc;
+        const ax = rot[ro]     * sx + rot[ro + 1] * sy + rot[ro + 2] * sz + trans[to];
+        const ay = rot[ro + 3] * sx + rot[ro + 4] * sy + rot[ro + 5] * sz + trans[to + 1];
+        const az = rot[ro + 6] * sx + rot[ro + 7] * sy + rot[ro + 8] * sz + trans[to + 2];
+
+        ro += 9; to += 3; sc = scl[b0 + 1];
+        sx = vx * sc; sy = vy * sc; sz = vz * sc;
+        const bx = rot[ro]     * sx + rot[ro + 1] * sy + rot[ro + 2] * sz + trans[to];
+        const by = rot[ro + 3] * sx + rot[ro + 4] * sy + rot[ro + 5] * sz + trans[to + 1];
+        const bz = rot[ro + 6] * sx + rot[ro + 7] * sy + rot[ro + 8] * sz + trans[to + 2];
+
+        let ox = ax + (bx - ax) * w;
+        let oy = ay + (by - ay) * w;
+        let oz = az + (bz - az) * w;
         if (mirror) {
           if (mirrorAxis === 0) ox = -ox; else if (mirrorAxis === 1) oy = -oy; else oz = -oz;
         }
@@ -534,6 +568,52 @@ const SkinPreview = (() => {
     }
     if (!Number.isFinite(nx)) return [0, 0, 0];
     return [(nx + xx) / 2, (ny + xy) / 2, (nz + xz) / 2];
+  }
+
+  /**
+   * A hullám 0..1-es távolság-skálája, a forgáspont KÉT OLDALÁRA KÜLÖN.
+   *
+   * MIÉRT OLDALANKÉNT, ÉS NEM EGY KÖZÖS SKÁLÁVAL (élesben visszajelzett hiba:
+   * "az egyik szárny sokkal jobban mozog, mint a másik"): a kitérés a
+   * távolsággal nő (ld. evalAnim falloff/spread), a távolság pedig eddig a
+   * forgásponttól mért LEGNAGYOBB kitéréssel volt normálva - EGYETLEN,
+   * mindkét oldalra közös osztóval. Ha a forgáspont nem pont a két szárny
+   * közé esik (márpedig ritkán esik oda pontosan: a modell a szerzői térben
+   * el van tolva, és az admin is kézzel állítja), akkor a távolabbi szárny
+   * hegye 1-es távolságot kap, a közelebbié viszont csak pl. 0,4-et - és
+   * ugyanaz a beállítás az egyik szárnyat két és félszer nagyobbra lendíti.
+   *
+   * Oldalanként normálva MINDKÉT szárnyhegy 1-es távolságú lesz, tehát a
+   * kitérésük is egyforma - a forgáspont pontos helyétől függetlenül. A
+   * forgáspont ezzel azt szabályozza, HOL csuklik a szárny, nem azt, hogy
+   * melyik oldal mozog jobban. (A tükrözést továbbra is az előjel adja, ld.
+   * makeBands().apply.)
+   *
+   * @param signedValues előjeles távolságok a forgásponttól (a hullám
+   *                     tengelye mentén), a KOCKAKÖZÉPPONTOKÉ
+   * @returns {(signed: number) => number} az előjeles, 0..1-re normált arányt
+   *          adó függvény (tetszőleges - akár csúcs-szintű - távolságra)
+   */
+  function makeSideNormalizer(signedValues) {
+    let maxNeg = 0, maxPos = 0;
+    for (const s of signedValues) {
+      if (s < 0) { if (-s > maxNeg) maxNeg = -s; }
+      else if (s > maxPos) maxPos = s;
+    }
+    // Ha MINDEN kocka a forgásponttal egy síkban van, nincs mihez
+    // viszonyítani - ilyenkor mindegyik "teljes" távolságú, ami épp a merev
+    // viselkedést adja vissza (ugyanaz a döntés, mint a közös skálás
+    // változatban volt).
+    const degenerate = maxNeg === 0 && maxPos === 0;
+    return (signed) => {
+      if (degenerate) return 1;
+      const denom = signed < 0 ? maxNeg : maxPos;
+      // Az az oldal, amelyiken NINCS geometria (egyetlen szárny, farok), nem
+      // kaphat 1-et pusztán attól, hogy nullával osztanánk.
+      if (denom <= 0) return 0;
+      const ratio = Math.min(1, Math.abs(signed) / denom);
+      return signed < 0 ? -ratio : ratio;
+    };
   }
 
   // Egy pont elforgatása a megadott tengely körül, az ADOTT (szerzői) térben -
@@ -700,29 +780,24 @@ const SkinPreview = (() => {
       // illeszkedő csúcsai UGYANAZT a szöget kapják (azonos a távolságuk),
       // ezért a felület folytonos marad. A kliens ugyanígy működik.
       //
-      // A normalizálás továbbra is a KOCKAKÖZÉPPONTOK legnagyobb
-      // távolságával történik, hogy a meglévő beállítások kitérése ne
-      // változzon - a hegyen lévő kocka külső csúcsai emiatt 1 fölé
-      // kerülnének, ezt levágjuk.
+      // A normalizálás a KOCKAKÖZÉPPONTOK legnagyobb távolságával történik,
+      // hogy a meglévő beállítások kitérése ne változzon - a hegyen lévő
+      // kocka külső csúcsai emiatt 1 fölé kerülnének, ezt levágjuk. A skála
+      // a forgáspont KÉT OLDALÁRA KÜLÖN készül, ld. makeSideNormalizer().
       let elementDistance = null;
       let vertexDistance = null;
       let waveAxis = 0;
       if (wave && elementRanges.length) {
         const axis = animAlongAxis(anim, raw.elements);
-        const raws = elementRanges.map((r) => Math.abs(r.center[axis] - animPivot[axis]));
-        const maxDist = raws.reduce((a, b) => Math.max(a, b), 0);
-        // Ha minden kocka a forgásponttal egy síkban van, nincs mihez
-        // viszonyítani - ilyenkor mindegyik "teljes" távolságú, ami épp a
-        // merev viselkedést adja vissza.
-        elementDistance = raws.map((d) => (maxDist > 0 ? d / maxDist : 1));
+        const signedCenters = elementRanges.map((r) => r.center[axis] - animPivot[axis]);
+        const normalize = makeSideNormalizer(signedCenters);
+        elementDistance = signedCenters.map(normalize);
         waveAxis = axis;
         // ELŐJELES: a negatív érték a forgáspont túloldalát jelenti, ahol a
         // deformációt tükrözve alkalmazzuk (ld. makeBands().apply).
         vertexDistance = new Float32Array(positions.length / 3);
         for (let i = 0; i < vertexDistance.length; i++) {
-          const signed = positions[i * 3 + axis] - animPivot[axis];
-          const ratio = maxDist > 0 ? Math.min(1, Math.abs(signed) / maxDist) : 1;
-          vertexDistance[i] = signed < 0 ? -ratio : ratio;
+          vertexDistance[i] = normalize(positions[i * 3 + axis] - animPivot[axis]);
         }
       }
 
@@ -797,21 +872,20 @@ const SkinPreview = (() => {
         for (let k = 1; k < 3; k++) { if (mx[k] - mn[k] > best) { best = mx[k] - mn[k]; axis = k; } }
       }
 
-      // Normalizálás a KOCKAKÖZÉPPONTOK legnagyobb távolságával - ugyanaz a
-      // szabály, mint a részen belüli hullámnál, hogy a kitérés-tartomány
-      // ne változzon.
-      let maxDist = 0;
+      // Normalizálás a KOCKAKÖZÉPPONTOK legnagyobb távolságával, a forgáspont
+      // KÉT OLDALÁRA KÜLÖN (ld. makeSideNormalizer) - ez az a pont, ahol a
+      // "jobb+bal szárny" esetnél eldől, hogy a két szárny egyformán csap-e.
+      const signedCenters = [];
       for (const p of parts) for (const r of p.elementRanges) {
-        maxDist = Math.max(maxDist, Math.abs(inAssembly(p, r.center[0], r.center[1], r.center[2])[axis] - assemblyPivot0[axis]));
+        signedCenters.push(inAssembly(p, r.center[0], r.center[1], r.center[2])[axis] - assemblyPivot0[axis]);
       }
+      const normalize = makeSideNormalizer(signedCenters);
       assemblyWaveAxis = axis;
       for (const p of parts) {
         p.assemblyVertexDistance = new Float32Array(p.positions.length / 3);
         for (let i = 0; i < p.assemblyVertexDistance.length; i++) {
           const c = inAssembly(p, p.positions[i * 3], p.positions[i * 3 + 1], p.positions[i * 3 + 2]);
-          const signed = c[axis] - assemblyPivot0[axis];
-          const ratio = maxDist > 0 ? Math.min(1, Math.abs(signed) / maxDist) : 1;
-          p.assemblyVertexDistance[i] = signed < 0 ? -ratio : ratio;
+          p.assemblyVertexDistance[i] = normalize(c[axis] - assemblyPivot0[axis]);
         }
       }
     }
@@ -1081,8 +1155,14 @@ const SkinPreview = (() => {
    *        hanem ezt hívja (dx, dy) képpont-eltéréssel - a hívó ebből
    *        számol eltolás-értéket. A kamerát ilyenkor a jobb gomb/Shift
    *        forgatja.
+   * @param opts (nem kötelező) { wheelZoom, pinchZoom } - ld. onWheel().
+   *
+   * A visszaadott leállító-függvényen NAGYÍTÁS-vezérlők is vannak
+   * (zoomBy/setZoomLevel/getZoomLevel/resetView) - ezeken keresztül tud egy
+   * oldal saját +/- gombot vagy csúszkát adni a nézethez, anélkül hogy
+   * ismernie kellene a kamera belső egységeit.
    */
-  function start(canvas, img, slim, capeImg, cosmetics, onCosmeticDrag) {
+  function start(canvas, img, slim, capeImg, cosmetics, onCosmeticDrag, opts) {
     const gl = canvas.getContext('webgl', { alpha: true, antialias: false });
     if (!gl) return () => {};
 
@@ -1225,18 +1305,60 @@ const SkinPreview = (() => {
     }
     function onUp() { dragging = false; }
 
-    // Görgő = nagyítás. SZÁNDÉKOSAN CSAK a szerkesztőben: a főoldal és a
-    // játékos-kereső skin-előnézetén a görgőnek az OLDALT kell görgetnie,
-    // ott egy nagyítás csak zavaró, nem kért viselkedés lenne.
+    // A nagyítás határai. A 46 (a kezdőérték) az egész alak, a 14 a fej
+    // nagyjából képernyőt kitöltő közelije - ennél közelebb már a kamera
+    // belevágna a modellbe.
+    const CAM_NEAR = 14, CAM_FAR = 120;
+    function setCamDistance(v) {
+      camDistance = Math.max(CAM_NEAR, Math.min(CAM_FAR, v));
+    }
+
+    // Görgő = nagyítás. A SZERKESZTŐBEN mindig; a sima előnézeteken viszont
+    // csak akkor, ha a hívó kifejezetten kéri (opts.wheelZoom) - a főoldal és
+    // a játékos-kereső skin-előnézetén a görgőnek az OLDALT kell görgetnie,
+    // ott egy magától nagyító vászon csak elkapná a görgetést.
+    //
+    // Ahol be van kapcsolva, ott is CSAK módosítóbillentyűvel (Ctrl/Cmd)
+    // nagyít: enélkül az oldal görgetése akadna el, valahányszor az egér
+    // átfut az előnézet fölött. A módosító nélküli görgőt továbbengedjük az
+    // oldalnak. A gombok/csúszka (ld. lent zoomBy) módosító nélkül is
+    // elérhetővé teszik ugyanezt.
+    const wheelNeedsModifier = !onCosmeticDrag;
     function onWheel(e) {
+      if (wheelNeedsModifier && !(e.ctrlKey || e.metaKey)) return;
       e.preventDefault();
       const factor = e.deltaY > 0 ? 1.12 : 1 / 1.12;
-      camDistance = Math.max(12, Math.min(160, camDistance * factor));
+      setCamDistance(camDistance * factor);
     }
+
+    // Érintéses csípés-nagyítás. Két ujj: nagyítás, egy ujj: forgatás -
+    // ugyanaz, mint amit egy térképen mindenki vár.
+    let pinchStart = 0, pinchStartDistance = 0;
+    function touchSpan(e) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      return Math.hypot(dx, dy);
+    }
+    function onTouchStart(e) {
+      if (e.touches.length !== 2) return;
+      pinchStart = touchSpan(e);
+      pinchStartDistance = camDistance;
+    }
+    function onTouchMove(e) {
+      if (e.touches.length !== 2 || pinchStart <= 0) return;
+      e.preventDefault();
+      setCamDistance(pinchStartDistance * (pinchStart / touchSpan(e)));
+    }
+    function onTouchEnd() { pinchStart = 0; }
+
     canvas.addEventListener('mousedown', onDown);
-    if (onCosmeticDrag) {
-      canvas.addEventListener('contextmenu', preventCtx);
+    const zoomable = !!onCosmeticDrag || !!(opts && opts.wheelZoom);
+    if (onCosmeticDrag) canvas.addEventListener('contextmenu', preventCtx);
+    if (zoomable) {
       canvas.addEventListener('wheel', onWheel, { passive: false });
+      canvas.addEventListener('touchstart', onTouchStart, { passive: true });
+      canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+      canvas.addEventListener('touchend', onTouchEnd);
     }
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
@@ -1293,9 +1415,12 @@ const SkinPreview = (() => {
     const stop = () => {
       stopped = true;
       canvas.removeEventListener('mousedown', onDown);
-      if (onCosmeticDrag) {
+      if (onCosmeticDrag) canvas.removeEventListener('contextmenu', preventCtx);
+      if (zoomable) {
         canvas.removeEventListener('wheel', onWheel);
-        canvas.removeEventListener('contextmenu', preventCtx);
+        canvas.removeEventListener('touchstart', onTouchStart);
+        canvas.removeEventListener('touchmove', onTouchMove);
+        canvas.removeEventListener('touchend', onTouchEnd);
       }
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
@@ -1314,6 +1439,19 @@ const SkinPreview = (() => {
       if (stopped) return;
       buildCosmetics(list);
     };
+
+    // ── Nagyítás-vezérlők a hívónak (gombok, csúszka) ──────────────────
+    // A "szint" 0..1 arány, NEM a kamera távolsága: így az oldal egy sima
+    // csúszkát tud kitenni anélkül, hogy tudnia kellene, a 14 a közeli és a
+    // 120 a távoli - és ha ezek a határok itt változnak, az oldalon semmit
+    // nem kell hozzáigazítani.
+    const DEFAULT_CAM = camDistance;
+    stop.zoomBy = (factor) => { setCamDistance(camDistance / factor); return stop.getZoomLevel(); };
+    stop.getZoomLevel = () => (CAM_FAR - camDistance) / (CAM_FAR - CAM_NEAR);
+    stop.setZoomLevel = (t) => {
+      setCamDistance(CAM_FAR - Math.max(0, Math.min(1, t)) * (CAM_FAR - CAM_NEAR));
+    };
+    stop.resetView = () => { camDistance = DEFAULT_CAM; angle = 0.6; pitch = -0.15; };
 
     return stop;
   }

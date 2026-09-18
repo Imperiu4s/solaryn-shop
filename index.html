@@ -54,11 +54,11 @@
   <!-- A téma minél korábban, a stíluslap ELŐTT alkalmazódjon (ld.
        theme.js), hogy az első kirajzolás már a mentett témával történjen,
        ne legyen látható "villanás" az alap témáról. -->
-  <script src="theme.js?v=20260914a"></script>
-  <link rel="stylesheet" href="style.css?v=20260914a" />
+  <script src="theme.js?v=20260918a"></script>
+  <link rel="stylesheet" href="style.css?v=20260918a" />
   <!-- A vizuális réteg SZÁNDÉKOSAN a style.css UTÁN: csak ráépít az ottani
        osztályokra, és a kaszkádban felülír, ahol kell (ld. ui.css eleje). -->
-  <link rel="stylesheet" href="ui.css?v=20260914a" />
+  <link rel="stylesheet" href="ui.css?v=20260918a" />
 
   <!-- Strukturált adat a keresőknek/megosztásoknak (schema.org). -->
   <script type="application/ld+json">
@@ -257,64 +257,79 @@
         <div class="auth-brand-name">SOLARCENTER<small>Solaryn Network</small></div>
       </div>
 
+      <!-- OLDALSÁV: LENYITHATÓ CSOPORTOK.
+           MIÉRT NEM EGY HOSSZÚ LISTA: a nézetek száma húsz fölé nőtt, és egy
+           sima felsorolásban minden fül egyforma súlyú volt - a "Napló" és a
+           "Főoldal" ugyanúgy nézett ki, a lista pedig egy átlagos laptop-
+           képernyőn már görgetést igényelt, vagyis a legalsó elemek
+           láthatatlanok voltak. A csoportok alapból CSUKVA vannak, és mindig
+           az nyílik ki, amelyikben az aktuális nézet van (ld. app.js
+           syncNavGroups) - így egyszerre legfeljebb egy csoportnyi elem
+           látszik, és a lista elfér görgetés nélkül.
+           A csoportfejek SZÁNDÉKOSAN nem "data-view"-sak: nincs mögöttük
+           saját oldal, kizárólag nyitnak/csuknak. -->
       <div class="app-nav">
-        <button class="app-nav-item active" data-view="home">
+        <button class="app-nav-item" data-view="home">
           <svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>
           <span>Főoldal</span>
         </button>
-        <div class="app-nav-divider">Karakter</div>
-        <button class="app-nav-item" data-view="skin">
-          <svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-4 0-8 2-8 5v1h16v-1c0-3-4-5-8-5z"/></svg>
-          <span>Skin</span>
-        </button>
-        <button class="app-nav-item" data-view="cosmetics">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 4c-3 0-5 2.6-5 5v1h10V9c0-2.4-2-5-5-5z" stroke-linejoin="round"/><path d="M4 13h16a1 1 0 0 1 0 3H4a1 1 0 0 1 0-3z" stroke-linejoin="round"/><path d="M8 16v2M16 16v2" stroke-linecap="round"/></svg>
-          <span>Kiegészítők</span>
-        </button>
-        <div class="app-nav-divider">Bolt</div>
-        <button class="app-nav-item" data-view="coin">
-          <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 15.9v1.1h-2v-1.1a3.6 3.6 0 0 1-2.8-2.4l1.8-.7a1.8 1.8 0 0 0 1.8 1.3c.8 0 1.4-.4 1.4-1s-.5-.9-1.7-1.2c-1.8-.5-3-1.2-3-2.9a2.8 2.8 0 0 1 2.5-2.6V7.3h2v1.1a3.2 3.2 0 0 1 2.3 2l-1.8.7a1.5 1.5 0 0 0-1.5-1.1c-.7 0-1.2.3-1.2.9s.6.8 1.8 1.2c1.9.5 2.9 1.3 2.9 2.9a2.9 2.9 0 0 1-2.5 2.9z"/></svg>
-          <span>PrémiumPont</span>
-        </button>
+
+        <div class="app-nav-group" data-nav-group="character">
+          <button type="button" class="app-nav-item app-nav-group-head">
+            <svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-4 0-8 2-8 5v1h16v-1c0-3-4-5-8-5z"/></svg>
+            <span>Karakter</span>
+            <svg class="app-nav-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10l4 4 4-4"/></svg>
+          </button>
+          <div class="app-nav-sub">
+            <button class="app-nav-item" data-view="skin"><span>Skin / köpeny</span></button>
+            <button class="app-nav-item" data-view="cosmetics"><span>Kiegészítők</span></button>
+            <button class="app-nav-item" data-view="market"><span>Piac</span></button>
+            <!-- A jelvény a BEÉRKEZETT, még el nem bírált csere ajánlatok
+                 száma (ld. app.js refreshTradeBadge) - enne nélkül egy csukott
+                 csoportban észrevétlen maradna, hogy valaki ajánlatot küldött. -->
+            <button class="app-nav-item" data-view="trades">
+              <span>Csere ajánlatok</span>
+              <span class="app-nav-badge hidden" id="navTradeBadge">0</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="app-nav-group" data-nav-group="coin">
+          <button type="button" class="app-nav-item app-nav-group-head">
+            <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 15.9v1.1h-2v-1.1a3.6 3.6 0 0 1-2.8-2.4l1.8-.7a1.8 1.8 0 0 0 1.8 1.3c.8 0 1.4-.4 1.4-1s-.5-.9-1.7-1.2c-1.8-.5-3-1.2-3-2.9a2.8 2.8 0 0 1 2.5-2.6V7.3h2v1.1a3.2 3.2 0 0 1 2.3 2l-1.8.7a1.5 1.5 0 0 0-1.5-1.1c-.7 0-1.2.3-1.2.9s.6.8 1.8 1.2c1.9.5 2.9 1.3 2.9 2.9a2.9 2.9 0 0 1-2.5 2.9z"/></svg>
+            <span>PrémiumPont</span>
+            <svg class="app-nav-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10l4 4 4-4"/></svg>
+          </button>
+          <div class="app-nav-sub">
+            <button class="app-nav-item" data-view="coin"><span>Vásárlás</span></button>
+            <button class="app-nav-item" data-view="wallet"><span>Egyenleg</span></button>
+            <button class="app-nav-item" data-view="transfer"><span>Átutalás</span></button>
+            <button class="app-nav-item" data-view="redeem"><span>Kódbeváltás</span></button>
+            <button class="app-nav-item" data-view="ledger"><span>Napló</span></button>
+          </div>
+        </div>
+
         <button class="app-nav-item" data-view="ranks">
           <svg viewBox="0 0 24 24"><path d="M3 8l4 3 5-6 5 6 4-3-2 11H5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
           <span>Rangok</span>
-        </button>
-        <button class="app-nav-item" data-view="market">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 8h16l-1 3H5z" stroke-linejoin="round"/><path d="M5 11v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8" stroke-linejoin="round"/><path d="M6 8l1.5-4h9L18 8" stroke-linejoin="round"/><path d="M10 20v-5h4v5" stroke-linejoin="round"/></svg>
-          <span>Piac</span>
         </button>
         <button class="app-nav-item" data-view="sanction">
           <svg viewBox="0 0 24 24"><path d="M12 2l8 3.5v6c0 5-3.4 8.6-8 10.5-4.6-1.9-8-5.5-8-10.5v-6z"/></svg>
           <span>Kitiltáscsökkentés</span>
         </button>
-        <div class="app-nav-divider">Pénzügyek</div>
-        <button class="app-nav-item" data-view="wallet">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="6" width="20" height="14" rx="2.5"/><path d="M2 10.5h20"/><circle cx="17" cy="14.5" r="1.4" fill="currentColor" stroke="none"/></svg>
-          <span>Egyenleg</span>
-        </button>
-        <button class="app-nav-item" data-view="transfer">
-          <svg viewBox="0 0 24 24"><path d="M7 8h13M17 4l3 4-3 4M17 16H4M7 12l-3 4 3 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          <span>Átutalás</span>
-        </button>
-        <button class="app-nav-item" data-view="redeem">
-          <svg viewBox="0 0 24 24"><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6m9-9v9m0-9L8 7m4-4l4 4M4 12h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          <span>Kódbeváltás</span>
-        </button>
-        <button class="app-nav-item" data-view="ledger">
-          <svg viewBox="0 0 24 24"><path d="M6 3h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 12h6M9 16h6M9 8h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-          <span>Napló</span>
-        </button>
-        <div class="app-nav-divider">Közösség</div>
-        <button class="app-nav-item" data-view="players">
-          <svg viewBox="0 0 24 24"><path d="M11 2a5 5 0 1 0 5 5 5 5 0 0 0-5-5zm-8.5 20a8.5 8.5 0 0 1 17 0zM19 8a3.5 3.5 0 1 0 0 7 .5.5 0 0 0 0-1 2.5 2.5 0 1 1 0-5 .5.5 0 0 0 0-1z"/></svg>
-          <span>Játékosok</span>
-        </button>
-        <button class="app-nav-item" data-view="casino">
-          <svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="8" cy="13.5" r="1.4"/><circle cx="12" cy="13.5" r="1.4"/><circle cx="16" cy="13.5" r="1.4"/></svg>
-          <span>Casino</span>
-        </button>
-        <div class="app-nav-divider">Fiók</div>
+
+        <div class="app-nav-group" data-nav-group="community">
+          <button type="button" class="app-nav-item app-nav-group-head">
+            <svg viewBox="0 0 24 24"><path d="M11 2a5 5 0 1 0 5 5 5 5 0 0 0-5-5zm-8.5 20a8.5 8.5 0 0 1 17 0zM19 8a3.5 3.5 0 1 0 0 7 .5.5 0 0 0 0-1 2.5 2.5 0 1 1 0-5 .5.5 0 0 0 0-1z"/></svg>
+            <span>Közösség</span>
+            <svg class="app-nav-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10l4 4 4-4"/></svg>
+          </button>
+          <div class="app-nav-sub">
+            <button class="app-nav-item" data-view="players"><span>Játékosok</span></button>
+            <button class="app-nav-item" data-view="casino"><span>Casino</span></button>
+          </div>
+        </div>
+
         <button class="app-nav-item" data-view="security">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2l7 3v6c0 5-3.4 8.4-7 11-3.6-2.6-7-6-7-11V5z" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <span>Biztonság</span>
@@ -322,59 +337,32 @@
 
         <!-- Az egyes elemek a saját "data-permission" kulcsuk szerint jelennek
              meg, ld. app.js enterApp()/hasPerm() - NEM egy blanket "isOwner"
-             kapcsolóval. -->
-        <div class="app-nav-divider admin-nav-item hidden">Admin</div>
-        <button class="app-nav-item admin-nav-item hidden" data-view="purchaseLogs" data-permission="global.logs">
-          <svg viewBox="0 0 24 24"><path d="M6 3h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 12h6M9 16h6M9 8h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="18" cy="18" r="4.2" fill="var(--bg,#0d0d12)" stroke="currentColor" stroke-width="1.6"/><path d="M18 16.3v1.9l1.3 1.1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          <span>Vásárlás napló</span>
-        </button>
-        <button class="app-nav-item admin-nav-item hidden" data-view="staffActionLogs" data-permission="global.staffActionLogs">
-          <svg viewBox="0 0 24 24"><path d="M6 3h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 8h6M9 12h6M9 16h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-          <span>Napló (admin)</span>
-        </button>
-        <button class="app-nav-item admin-nav-item hidden" data-view="staffStats" data-permission="global.staffStats">
-          <svg viewBox="0 0 24 24"><path d="M11 2a5 5 0 1 0 5 5 5 5 0 0 0-5-5zm-8.5 20a8.5 8.5 0 0 1 17 0zM19 8a3.5 3.5 0 1 0 0 7 .5.5 0 0 0 0-1 2.5 2.5 0 1 1 0-5 .5.5 0 0 0 0-1z"/></svg>
-          <span>Csapat statisztika</span>
-        </button>
-        <button class="app-nav-item admin-nav-item hidden" data-view="revenue" data-permission="global.revenue">
-          <svg viewBox="0 0 24 24"><path d="M3 3v18h18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 15l4-5 3 3 5-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          <span>Havi bevétel</span>
-        </button>
-        <button class="app-nav-item admin-nav-item hidden" data-view="analytics" data-permission="global.analytics">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
-          <span>Látogatottság</span>
-        </button>
-        <button class="app-nav-item admin-nav-item hidden" data-view="newsAdmin" data-permission="global.newsManage">
-          <svg viewBox="0 0 24 24"><path d="M4 5h13a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M7 9h8M7 12h8M7 15h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M19 8l2 1.2v9.8a1 1 0 0 1-1 1h-1" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          <span>Felhívások</span>
-        </button>
-        <button class="app-nav-item admin-nav-item hidden" data-view="badges" data-permission="global.badgesManage">
-          <svg viewBox="0 0 24 24"><path d="M12 2l2.6 5.8 6.2.6-4.7 4.2 1.4 6.2L12 15.8 6.5 18.8l1.4-6.2-4.7-4.2 6.2-.6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
-          <span>Jelvények</span>
-        </button>
-        <button class="app-nav-item admin-nav-item hidden" data-view="cosmeticsAdmin" data-permission="global.cosmeticsManage,global.cosmeticsMarketManage">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 4c-3 0-5 2.6-5 5v1h10V9c0-2.4-2-5-5-5z" stroke-linejoin="round"/><path d="M4 13h16a1 1 0 0 1 0 3H4a1 1 0 0 1 0-3z" stroke-linejoin="round"/><circle cx="18.5" cy="18.5" r="3.6" fill="var(--bg,#0d0d12)" stroke="currentColor" stroke-width="1.4"/><path d="M18.5 17v3M17 18.5h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
-          <span>Kiegészítők</span>
-        </button>
-        <button class="app-nav-item admin-nav-item hidden" data-view="discounts" data-permission="global.discountsManage">
-          <svg viewBox="0 0 24 24"><path d="M20 12l-8 8-9-9V4h7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>
-          <span>Akciók</span>
-        </button>
-        <button class="app-nav-item admin-nav-item hidden" data-view="coupons" data-permission="global.couponsManage">
-          <svg viewBox="0 0 24 24"><path d="M3 9a2 2 0 0 0 0 6v2a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-2a2 2 0 0 1 0-6V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M10 8v8" stroke="currentColor" stroke-width="1.6" stroke-dasharray="1.6 2" stroke-linecap="round"/></svg>
-          <span>Kuponok</span>
-        </button>
-        <button class="app-nav-item admin-nav-item hidden" data-view="creatorCodes" data-permission="global.creatorCodesManage">
-          <svg viewBox="0 0 24 24"><path d="M15 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5 20c0-3.3 3.1-6 7-6s7 2.7 7 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M19 3l1 2 2 1-2 1-1 2-1-2-2-1 2-1z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
-          <span>Creator kódok</span>
-        </button>
-        <!-- Kizárólag a valódi tulajdonosnak látszik (nincs data-permission -
-             a jog-adás maga nem delegálható, ld. SolarBackend
-             src/permissions.js megjegyzését). -->
-        <button class="app-nav-item admin-nav-item hidden" data-view="permissions" id="navPermissionsBtn">
-          <svg viewBox="0 0 24 24"><path d="M12 2l7 3v6c0 5-3.4 8.4-7 11-3.6-2.6-7-6-7-11V5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          <span>Jogok</span>
-        </button>
+             kapcsolóval. Maga a CSOPORT akkor látszik, ha legalább egy eleme
+             látszik (ld. app.js syncAdminNavGroup). -->
+        <div class="app-nav-group admin-nav-item hidden" data-nav-group="admin">
+          <button type="button" class="app-nav-item app-nav-group-head">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3l7 3v5.5c0 4.6-3 7.8-7 9.5-4-1.7-7-4.9-7-9.5V6z" stroke-linejoin="round"/><path d="M12 9v4M12 15.6v.1" stroke-linecap="round"/></svg>
+            <span>Admin</span>
+            <svg class="app-nav-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10l4 4 4-4"/></svg>
+          </button>
+          <div class="app-nav-sub">
+            <button class="app-nav-item admin-nav-item hidden" data-view="purchaseLogs" data-permission="global.logs"><span>Vásárlás napló</span></button>
+            <button class="app-nav-item admin-nav-item hidden" data-view="staffActionLogs" data-permission="global.staffActionLogs"><span>Napló (admin)</span></button>
+            <button class="app-nav-item admin-nav-item hidden" data-view="staffStats" data-permission="global.staffStats"><span>Csapat statisztika</span></button>
+            <button class="app-nav-item admin-nav-item hidden" data-view="revenue" data-permission="global.revenue"><span>Havi bevétel</span></button>
+            <button class="app-nav-item admin-nav-item hidden" data-view="analytics" data-permission="global.analytics"><span>Látogatottság</span></button>
+            <button class="app-nav-item admin-nav-item hidden" data-view="newsAdmin" data-permission="global.newsManage"><span>Felhívások</span></button>
+            <button class="app-nav-item admin-nav-item hidden" data-view="badges" data-permission="global.badgesManage"><span>Jelvények</span></button>
+            <button class="app-nav-item admin-nav-item hidden" data-view="cosmeticsAdmin" data-permission="global.cosmeticsManage,global.cosmeticsMarketManage"><span>Kiegészítők</span></button>
+            <button class="app-nav-item admin-nav-item hidden" data-view="discounts" data-permission="global.discountsManage"><span>Akciók</span></button>
+            <button class="app-nav-item admin-nav-item hidden" data-view="coupons" data-permission="global.couponsManage"><span>Kuponok</span></button>
+            <button class="app-nav-item admin-nav-item hidden" data-view="creatorCodes" data-permission="global.creatorCodesManage"><span>Creator kódok</span></button>
+            <!-- Kizárólag a valódi tulajdonosnak látszik (nincs data-permission -
+                 a jog-adás maga nem delegálható, ld. SolarBackend
+                 src/permissions.js megjegyzését). -->
+            <button class="app-nav-item admin-nav-item hidden" data-view="permissions" id="navPermissionsBtn"><span>Jogok</span></button>
+          </div>
+        </div>
       </div>
 
       <div class="app-nav-spacer"></div>
@@ -446,16 +434,24 @@
           <h1 class="page-title">Üdvözlünk, <span id="homeUsername"></span>!</h1>
           <p class="page-note">Innen érheted el a fiókodhoz kapcsolódó összes SolarynNetwork-szolgáltatást.</p>
 
-          <div id="statBadgeGrid" class="stat-badge-grid"></div>
-
-          <!-- ÚJ: nagyban kiírt egyenleg a főoldalon (ld. app.js renderWalletBadge) -
-               SZÁNDÉKOSAN nem a #statBadgeGrid-be került, mert az a "Játékosok"
-               keresőben MÁSOK profiljának megjelenítésére is újrahasznosított
-               (renderStatBadges), az egyenleg viszont valós pénz, csak a
-               SAJÁT profilon jelenhet meg. -->
-          <div class="card wallet-highlight-card">
-            <div class="wallet-highlight-label">Egyenleged</div>
-            <div class="wallet-highlight-value" id="homeWalletBalance">0 Ft</div>
+          <!-- A statisztika-csempék ÉS az egyenleg EGY sorban.
+               MIÉRT A KÖZÖS SOR: az egyenleg korábban egy teljes szélességű,
+               egyetlen számot tartalmazó szalag volt a csempék alatt - a
+               főoldal tetején ez adta az "üres, kitöltetlen hely" érzet
+               nagyját. A .home-stat-row rácsba a #statBadgeGrid
+               "display: contents"-szel olvad bele, tehát a benne generált
+               csempék és az egyenleg-kártya EGYETLEN rács elemei lesznek, és
+               együtt töltik ki a sort (ld. style.css).
+               Az egyenleg SZÁNDÉKOSAN külön elem marad, nem a #statBadgeGrid
+               tartalma: azt a rácsot a "Játékosok" kereső MÁSOK profiljának
+               kirajzolására is újrahasznosítja (renderStatBadges), az egyenleg
+               viszont valós pénz, csak a SAJÁT profilon jelenhet meg. -->
+          <div class="home-stat-row">
+            <div id="statBadgeGrid" class="stat-badge-grid"></div>
+            <div class="card wallet-highlight-card">
+              <div class="wallet-highlight-label">Egyenleged</div>
+              <div class="wallet-highlight-value" id="homeWalletBalance">0 Ft</div>
+            </div>
           </div>
 
           <div class="content-grid">
@@ -838,12 +834,57 @@
             <div>
               <div id="cosmeticsOwnedWrap"></div>
             </div>
-            <div>
+            <!-- A jobb oldali oszlop: az előnézet ALATT a gyűjtemény-összegző
+                 és a támogató kártya. MIÉRT: a bal oldali rács tíz-húsz
+                 kiegészítőnél jóval magasabb, mint a 340 pixeles előnézet -
+                 alatta korábban több képernyőnyi ÜRES sáv maradt. -->
+            <div class="side-rail-col">
               <div class="card cosmetic-char-card">
                 <div class="card-title">Így nézel ki</div>
                 <canvas id="cosmeticCharPreview" width="260" height="340"></canvas>
+                <!-- NAGYÍTÁS: a görgő SZÁNDÉKOSAN csak Ctrl-lal nagyít (ld.
+                     skin3d.js onWheel), különben az oldal görgetése akadna el
+                     valahányszor az egér átfut az előnézet fölött - a gombok
+                     és a csúszka viszont módosító nélkül is elérhetők. -->
+                <div class="preview-zoom-bar">
+                  <button type="button" class="preview-zoom-btn" id="cosmeticZoomOutBtn" aria-label="Kicsinyítés" title="Kicsinyítés">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h14"/></svg>
+                  </button>
+                  <input type="range" class="preview-zoom-range" id="cosmeticZoomRange" min="0" max="100" value="50" aria-label="Nagyítás" />
+                  <button type="button" class="preview-zoom-btn" id="cosmeticZoomInBtn" aria-label="Nagyítás" title="Nagyítás">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                  </button>
+                  <button type="button" class="preview-zoom-btn" id="cosmeticZoomResetBtn" aria-label="Nézet visszaállítása" title="Nézet visszaállítása">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11A8 8 0 1 0 18 16"/><path d="M20 5v6h-6"/></svg>
+                  </button>
+                </div>
                 <p class="skin-preview-hint" id="cosmeticCharPreviewHint">Húzással forgatható</p>
               </div>
+
+              <!-- Gyűjtemény-összegző. Minden adata a MÁR letöltött listából
+                   számolódik (ld. app.js renderCosmeticSummary) - nincs
+                   mögötte külön szerverkérés. -->
+              <div class="card cosmetic-summary-card" id="cosmeticSummaryCard">
+                <div class="card-title">Gyűjteményed</div>
+                <div class="cosmetic-summary-grid">
+                  <div class="cosmetic-summary-stat">
+                    <div class="cosmetic-summary-value" id="cosmeticSummaryOwned">0</div>
+                    <div class="cosmetic-summary-label">Megvan</div>
+                  </div>
+                  <div class="cosmetic-summary-stat">
+                    <div class="cosmetic-summary-value" id="cosmeticSummaryEquipped">0</div>
+                    <div class="cosmetic-summary-label">Viseled</div>
+                  </div>
+                  <div class="cosmetic-summary-stat">
+                    <div class="cosmetic-summary-value" id="cosmeticSummaryAnimated">0</div>
+                    <div class="cosmetic-summary-label">Animált</div>
+                  </div>
+                </div>
+                <div class="cosmetic-summary-bars" id="cosmeticSummaryBars"></div>
+                <p class="cosmetic-summary-note" id="cosmeticSummaryNote"></p>
+              </div>
+
+              <div class="side-rail" data-side-rail="cosmetics"></div>
             </div>
           </div>
 
@@ -860,22 +901,72 @@
           <h1 class="page-title">Piac</h1>
           <p class="page-note">Add el a felesleges kiegészítőidet más játékosoknak PrémiumPontért, vagy vedd meg, ami neked kell. Eladáskor <strong id="marketTaxNote">10%</strong> adó vonódik le az árból - a vevő a teljes listaárat fizeti, te a 90%-át kapod meg.</p>
 
-          <div class="card">
-            <div class="card-title">Hirdetés feladása</div>
-            <label class="gift-modal-label" style="margin-top:0;">Kiegészítő</label>
-            <select id="marketListCosmeticSelect" class="gift-modal-input"></select>
-            <label class="gift-modal-label">Ár (PrémiumPont)</label>
-            <input type="number" id="marketListPriceInput" class="gift-modal-input" placeholder="Pl. 1000" min="1" step="1" />
-            <div class="market-payout-preview" id="marketPayoutPreview"></div>
-            <p class="redeem-result" id="marketListResult"></p>
-            <button type="button" class="btn-glow" id="marketListBtn">Hirdetés feladása</button>
+          <!-- A feladó-űrlap SZÁNDÉKOSAN a jobb oszlopba került (nem teljes
+               szélességben áll a lap tetején): egy hét mezős kártya kiterítve
+               egy 1200 pixeles tartalomterületen csupa levegő volt, miközben a
+               saját hirdetések listája alatta szorongott. -->
+          <div class="content-grid">
+            <div>
+              <div class="admin-subsection-title" style="margin-top:0;">Saját hirdetéseim</div>
+              <div id="marketMineWrap"></div>
+            </div>
+            <div class="side-rail-col">
+              <div class="card">
+                <div class="card-title">Hirdetés feladása</div>
+                <label class="gift-modal-label" style="margin-top:0;">Kiegészítő</label>
+                <select id="marketListCosmeticSelect" class="gift-modal-input"></select>
+                <label class="gift-modal-label">Ár (PrémiumPont)</label>
+                <input type="number" id="marketListPriceInput" class="gift-modal-input" placeholder="Pl. 1000" min="1" step="1" />
+                <div class="market-payout-preview" id="marketPayoutPreview"></div>
+                <p class="redeem-result" id="marketListResult"></p>
+                <button type="button" class="btn-glow" id="marketListBtn">Hirdetés feladása</button>
+              </div>
+              <div class="side-rail" data-side-rail="market"></div>
+            </div>
           </div>
-
-          <div class="admin-subsection-title">Saját hirdetéseim</div>
-          <div id="marketMineWrap"></div>
 
           <div class="admin-subsection-title">Piaci kínálat</div>
           <div id="marketListingsWrap"></div>
+        </section>
+
+        <!-- CSERE AJÁNLATOK - névre szóló adásvétel. A piactól abban tér el,
+             hogy EGY konkrét játékosnak szól, és csak ő tudja elfogadni vagy
+             elutasítani; a 10%-os adó ugyanúgy az eladót (a küldőt) terheli.
+             Ld. SolarBackend src/cosmetics.js "Csere ajánlatok" szakaszát. -->
+        <section class="view" data-view="trades">
+          <h1 class="page-title">Csere ajánlatok</h1>
+          <p class="page-note">Ajánld fel egy kiegészítődet közvetlenül egy játékosnak, te szabod meg, mennyi PrémiumPontért. Ő elfogadhatja vagy elutasíthatja - amíg nem dönt, a kiegészítő letétben van nálunk, tehát nem tudod közben viselni vagy másnak is felajánlani. Elfogadáskor <strong id="tradeTaxNote">10%</strong> adó vonódik le az árból, a többit megkapod. Az el nem bírált ajánlat <strong id="tradeTtlNote">7</strong> nap után magától visszakerül hozzád.</p>
+
+          <div class="content-grid">
+            <div>
+              <div class="admin-subsection-title" style="margin-top:0;">Beérkezett</div>
+              <div id="tradesIncomingWrap"></div>
+
+              <div class="admin-subsection-title">Elküldött</div>
+              <div id="tradesOutgoingWrap"></div>
+
+              <div class="admin-subsection-title">Előzmények</div>
+              <div id="tradesHistoryWrap"></div>
+            </div>
+
+            <div class="side-rail-col">
+              <div class="card">
+                <div class="card-title">Ajánlat küldése</div>
+                <label class="gift-modal-label" style="margin-top:0;">Kinek</label>
+                <input type="text" id="tradeRecipientInput" class="gift-modal-input" placeholder="Játékosnév" maxlength="16" autocomplete="off" />
+                <label class="gift-modal-label">Kiegészítő</label>
+                <select id="tradeCosmeticSelect" class="gift-modal-input"></select>
+                <label class="gift-modal-label">Ár (PrémiumPont) - 0 = ajándék</label>
+                <input type="number" id="tradePriceInput" class="gift-modal-input" placeholder="Pl. 1000" min="0" step="1" />
+                <label class="gift-modal-label">Üzenet (nem kötelező)</label>
+                <input type="text" id="tradeMessageInput" class="gift-modal-input" placeholder="Pl. megbeszéltük a Discordon" maxlength="200" />
+                <div class="market-payout-preview" id="tradePayoutPreview"></div>
+                <p class="redeem-result" id="tradeSendResult"></p>
+                <button type="button" class="btn-glow" id="tradeSendBtn">Ajánlat küldése</button>
+              </div>
+              <div class="side-rail" data-side-rail="trades"></div>
+            </div>
+          </div>
         </section>
 
         <!-- KITILTÁSCSÖKKENTÉS -->
@@ -967,22 +1058,26 @@
           <h1 class="page-title">Biztonság</h1>
           <p class="page-note">Kétlépcsős azonosítás (2FA) - bejelentkezéskor a jelszó mellett egy hitelesítő alkalmazásban (pl. Google Authenticator, Authy) megjelenő kódot is be kell majd írnod. A biztonsági kód egy ettől független, általad választott 4 vagy 6 jegyű PIN, amit szintén minden bejelentkezéskor be kell majd írnod - a kettő egyszerre, külön-külön, vagy egyik se is bekapcsolható.</p>
 
-          <div class="card redeem-result error hidden" id="securityWeakWarning" style="display:flex; align-items:center; gap:10px;">
-            <span style="font-size:1.4em; line-height:1;">⚠️</span>
-            <span>A fiókod jelenleg NINCS extra védelemmel ellátva - se a kétlépcsős azonosítás, se a biztonsági kód nincs bekapcsolva. Ha valaki megszerzi a jelszavadat, azonnal hozzáférhet a fiókodhoz. Javasoljuk, hogy kapcsold be legalább az egyiket lentebb.</span>
-          </div>
+          <!-- Kétoszlopos elrendezés: a kártyák teljes szélességben egyetlen
+               gombbal/mezővel túl üresek voltak egy szélesvásznú képernyőn. -->
+          <div class="content-grid">
+            <div>
+              <div class="card redeem-result error hidden" id="securityWeakWarning" style="display:flex; align-items:center; gap:10px;">
+                <span style="font-size:1.4em; line-height:1;">⚠️</span>
+                <span>A fiókod jelenleg NINCS extra védelemmel ellátva - se a kétlépcsős azonosítás, se a biztonsági kód nincs bekapcsolva. Ha valaki megszerzi a jelszavadat, azonnal hozzáférhet a fiókodhoz. Javasoljuk, hogy kapcsold be legalább az egyiket lentebb.</span>
+              </div>
 
-          <div class="card">
-            <div class="card-title">Kétlépcsős azonosítás</div>
-            <p class="redeem-result" id="securityTotpStatus">Betöltés...</p>
+              <div class="card">
+                <div class="card-title">Kétlépcsős azonosítás</div>
+                <p class="redeem-result" id="securityTotpStatus">Betöltés...</p>
 
-            <!-- Kikapcsolt állapot: "Bekapcsolás" indítja a folyamatot -->
-            <div id="securityTotpDisabledPanel" class="hidden">
+                <!-- Kikapcsolt állapot: "Bekapcsolás" indítja a folyamatot -->
+                <div id="securityTotpDisabledPanel" class="hidden">
               <button type="button" class="btn-glow" id="btnStart2faSetup">2FA bekapcsolása</button>
-            </div>
+                </div>
 
-            <!-- Beállítás folyamatban: QR + kód-megerősítés -->
-            <div id="securityTotpSetupPanel" class="hidden">
+                <!-- Beállítás folyamatban: QR + kód-megerősítés -->
+                <div id="securityTotpSetupPanel" class="hidden">
               <p>Olvasd be az alábbi QR-kódot a hitelesítő alkalmazásoddal, vagy add meg kézzel a titkot:</p>
               <img id="securityTotpQr" alt="QR-kód" style="display:block; margin:14px auto; border-radius:10px;" />
               <p class="redeem-result" id="securityTotpSecretText" style="text-align:center; word-break:break-all;"></p>
@@ -991,35 +1086,35 @@
               <p class="redeem-result error" id="securityTotpSetupError"></p>
               <button type="button" class="btn-glow" id="btnConfirm2faSetup" style="margin-top:10px;">Megerősítés és bekapcsolás</button>
               <button type="button" class="btn-outline" id="btnCancel2faSetup" style="margin-top:8px;">Mégse</button>
-            </div>
+                </div>
 
-            <!-- Helyreállítási kódok - EGYETLEN alkalommal jelennek meg -->
-            <div id="securityRecoveryCodesPanel" class="hidden">
+                <!-- Helyreállítási kódok - EGYETLEN alkalommal jelennek meg -->
+                <div id="securityRecoveryCodesPanel" class="hidden">
               <p class="redeem-result error">Mentsd el ezeket a kódokat biztonságos helyre - ha elveszíted a hitelesítő eszközödet, ezekkel tudsz újra bejelentkezni. TÖBBÉ NEM FOGOD ŐKET LÁTNI.</p>
               <div id="securityRecoveryCodesList" class="account-list"></div>
               <button type="button" class="btn-outline" id="btnDownloadRecoveryCodes">Letöltés .txt-ként</button>
               <button type="button" class="btn-glow" id="btnDoneRecoveryCodes" style="margin-top:10px;">Elmentettem, kész</button>
-            </div>
+                </div>
 
-            <!-- Bekapcsolt állapot: "Kikapcsolás" + kódok újragenerálása -->
-            <div id="securityTotpEnabledPanel" class="hidden">
+                <!-- Bekapcsolt állapot: "Kikapcsolás" + kódok újragenerálása -->
+                <div id="securityTotpEnabledPanel" class="hidden">
               <label class="gift-modal-label">Jelszó (a művelet megerősítéséhez)</label>
               <input type="password" id="securityTotpPasswordInput" class="gift-modal-input" autocomplete="current-password" placeholder="••••••••" />
               <p class="redeem-result error" id="securityTotpActionError"></p>
               <button type="button" class="btn-outline" id="btnRegenerateRecoveryCodes">Új helyreállítási kódok generálása</button>
               <button type="button" class="btn-glow admin-delete-btn" id="btnDisable2fa" style="margin-top:8px;">2FA kikapcsolása</button>
-            </div>
-          </div>
+                </div>
+              </div>
 
-          <!-- ÚJ: BIZTONSÁGI KÓD (4/6 jegyű PIN) - a fenti 2FA-tól FÜGGETLEN
+              <!-- ÚJ: BIZTONSÁGI KÓD (4/6 jegyű PIN) - a fenti 2FA-tól FÜGGETLEN
                be/kikapcsolás, ld. app.js loadSecurityPinStatus. -->
-          <div class="card">
-            <div class="card-title">Biztonsági kód</div>
-            <p class="redeem-result" id="securityPinStatus">Betöltés...</p>
+              <div class="card">
+                <div class="card-title">Biztonsági kód</div>
+                <p class="redeem-result" id="securityPinStatus">Betöltés...</p>
 
-            <!-- Kikapcsolt állapot VAGY meglévő kód módosítása - ugyanaz az
+                <!-- Kikapcsolt állapot VAGY meglévő kód módosítása - ugyanaz az
                  űrlap mindkettőhöz (ld. app.js openSecurityPinSetup). -->
-            <div id="securityPinSetupPanel" class="hidden">
+                <div id="securityPinSetupPanel" class="hidden">
               <label class="gift-modal-label">A kód hossza</label>
               <div style="display:flex; gap:16px; margin-bottom:10px;">
                 <label style="display:flex; align-items:center; gap:6px; font-weight:400;"><input type="radio" name="securityPinLength" id="securityPinLength4" value="4" /> 4 számjegy</label>
@@ -1034,17 +1129,20 @@
               <p class="redeem-result error" id="securityPinSetupError"></p>
               <button type="button" class="btn-glow" id="btnConfirmSecurityPin" style="margin-top:10px;">Bekapcsolás</button>
               <button type="button" class="btn-outline hidden" id="btnCancelSecurityPinSetup" style="margin-top:8px;">Mégse</button>
-            </div>
+                </div>
 
-            <!-- Bekapcsolt állapot: "Módosítás" (a fenti űrlapot nyitja meg) +
+                <!-- Bekapcsolt állapot: "Módosítás" (a fenti űrlapot nyitja meg) +
                  kikapcsolás. -->
-            <div id="securityPinEnabledPanel" class="hidden">
+                <div id="securityPinEnabledPanel" class="hidden">
               <button type="button" class="btn-outline" id="btnChangeSecurityPin">Kód módosítása</button>
               <label class="gift-modal-label" style="margin-top:14px;">Jelszó (a kikapcsolás megerősítéséhez)</label>
               <input type="password" id="securityPinDisablePasswordInput" class="gift-modal-input" autocomplete="current-password" placeholder="••••••••" />
               <p class="redeem-result error" id="securityPinActionError"></p>
               <button type="button" class="btn-glow admin-delete-btn" id="btnDisableSecurityPin" style="margin-top:8px;">Biztonsági kód kikapcsolása</button>
+                </div>
+              </div>
             </div>
+            <div class="side-rail" data-side-rail="security"></div>
           </div>
         </section>
 
@@ -1443,6 +1541,51 @@
                 <button type="button" class="btn-outline" id="cosmeticAnimRootPivotBtn" title="A forgáspontot a kiválasztott rész (vagy a teljes kiegészítő) TÖVÉHEZ teszi - ahhoz a véghez, amelyik a testhez közelebb van. Hullámnál ez a legfontosabb beállítás: középre tett forgáspont mellett a szárny nem csuklik, hanem billeg.">Forgáspont a tőre</button>
                 <button type="button" class="btn-outline" id="cosmeticAnimClearBtn">Animáció törlése</button>
               </div>
+            </div>
+
+            <!-- VÁLLON ÜLŐ FIGURA: modell-generátor skinből.
+                 MIÉRT NEM ÚJ SLOT, HANEM A "TEST" HELYRE MEGY: egy vállon ülő
+                 figura ugyanaz a fajta dolog, mint egy köpeny vagy egy páncél -
+                 a TESThez kapcsolódik, azzal együtt mozog. Egy külön "váll"
+                 hely azt jelentené, hogy a kliensben új csontot kell kezelni,
+                 a játékos pedig egy újabb, külön szabályokkal működő
+                 helyet kapna - miközben a "test" helyen minden meglévő
+                 eszköz (illesztés, animáció, piac, csere) változtatás nélkül
+                 működik rá.
+                 A generátor egy SZABVÁNYOS kiegészítőt állít elő: a skin
+                 lapjaiból összerak egy kicsinyített, ülő játékos-modellt, és
+                 pontosan úgy tölti ki az űrlapot, mintha kézzel töltöttél
+                 volna fel egy Blockbench-modellt - utána minden a megszokott
+                 módon finomhangolható. -->
+            <div class="cosmetic-transform-box">
+              <div class="cosmetic-transform-title">Vállon ülő figura készítése skinből</div>
+              <p class="cosmetic-file-note" style="margin-bottom:10px;">Tölts fel egy sima Minecraft-skint (64&times;64 vagy régi 64&times;32), és a rendszer összerak belőle egy kicsinyített, a vállon ülő figurát. A generálás után az űrlap többi része (név, azonosító, ár, illesztés, animáció) ugyanúgy szerkeszthető, mint bármelyik kézzel feltöltött kiegészítőnél &ndash; a figura a <strong>test</strong> helyre kerül.</p>
+
+              <input type="file" id="petSkinInput" accept=".png,image/png" hidden />
+              <button type="button" class="btn-outline file-picker-btn" id="petSkinPickBtn">Skin kiválasztása (.png)</button>
+              <p class="cosmetic-file-note" id="petSkinNote"></p>
+
+              <div class="cosmetic-transform-grid">
+                <label>Melyik váll
+                  <select id="petSideSelect">
+                    <option value="left">Bal</option>
+                    <option value="right">Jobb</option>
+                  </select>
+                </label>
+                <label>Méret<input type="number" id="petScaleInput" step="0.05" min="0.1" max="1" value="0.45" /></label>
+                <label>Ülés szöge<input type="number" id="petLegAngleInput" step="5" min="0" max="120" value="90" /></label>
+              </div>
+
+              <label class="check-row" style="margin-top:10px;">
+                <input type="checkbox" id="petSlimCheckbox" />
+                Vékony kar (Alex-modell)
+              </label>
+              <label class="check-row">
+                <input type="checkbox" id="petAnimCheckbox" checked />
+                Finom lebegő mozgás hozzáadása
+              </label>
+
+              <button type="button" class="btn-glow" id="petGenerateBtn" style="margin-top:14px;" disabled>Figura generálása</button>
             </div>
 
             <label class="gift-modal-label">Modell (Blockbench .json) - az 1. rész geometriája</label>
@@ -2466,8 +2609,8 @@
        ez utóbbi itt lényeges, mert a ui.js az app.js globális
        switchView()/showToast() függvényeit csomagolja be, tehát csak
        azok létrejötte után futhat. -->
-  <script src="skin3d.js?v=20260914a" defer></script>
-  <script src="app.js?v=20260914a" defer></script>
-  <script src="ui.js?v=20260914a" defer></script>
+  <script src="skin3d.js?v=20260918a" defer></script>
+  <script src="app.js?v=20260918a" defer></script>
+  <script src="ui.js?v=20260918a" defer></script>
 </body>
 </html>
