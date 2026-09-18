@@ -376,6 +376,65 @@ const SkinPreview = (() => {
     return m ? multiply(m, r) : r;
   }
 
+
+  // ── Hullám-sávok (a kliens CosmeticWave.Bands párja) ────────────────
+  // MIÉRT SÁVOK: a hullám mostantól CSÚCSONKÉNT deformál, nem kockánként
+  // forgat (ld. waveElementPositions). Csúcsonként három szög szinuszát
+  // kiszámolni képkockánként túl drága lenne, ezért a 0..1 távolságot
+  // WAVE_BANDS egyenletes sávra osztjuk, sávonként EGYSZER építünk egy 3x3-as
+  // forgatómátrixot, és a csúcs csak kiválasztja a sávját. A kliens
+  // pontosan ugyanezt teszi, ugyanennyi sávval - ha itt más lenne, a
+  // szerkesztőben beállított mozgás in-game máshogy nézne ki.
+  const WAVE_BANDS = 64;
+
+  // Munkapufferek - a modul élettartamára, hogy képkockánként ne keletkezzen
+  // szemét (a bélyegkép-generálás és az élő előnézet is ezt hívja).
+  const bandRot = new Float32Array((WAVE_BANDS + 1) * 9);
+  const bandTrans = new Float32Array((WAVE_BANDS + 1) * 3);
+  const bandScale = new Float32Array(WAVE_BANDS + 1);
+
+  /** M = Rz * Ry * Rx, soronként a megadott eltolásra. A kliens buildZYX-e. */
+  function bandMatrix(out, o, rx, ry, rz) {
+    const cx = Math.cos(rx), sx = Math.sin(rx);
+    const cy = Math.cos(ry), sy = Math.sin(ry);
+    const cz = Math.cos(rz), sz = Math.sin(rz);
+    out[o]     = cz * cy;
+    out[o + 1] = cz * sy * sx - sz * cx;
+    out[o + 2] = cz * sy * cx + sz * sx;
+    out[o + 3] = sz * cy;
+    out[o + 4] = sz * sy * sx + cz * cx;
+    out[o + 5] = sz * sy * cx - cz * sx;
+    out[o + 6] = -sy;
+    out[o + 7] = cy * sx;
+    out[o + 8] = cy * cx;
+  }
+
+  /**
+   * A sávok felépítése egy részhez, egy képkockára. A SZERZŐI térben
+   * dolgozik (a tükrözést a rész mátrixa végzi később), ezért a szögek
+   * előjele itt nem fordul meg - pontosan úgy, ahogy a korábbi,
+   * kockánkénti változat is tette.
+   *
+   * @returns {boolean} igaz, ha van bármilyen tényleges deformáció
+   */
+  function buildWaveBands(anim, timeSec) {
+    let any = false;
+    for (let b = 0; b <= WAVE_BANDS; b++) {
+      const a = evalAnim(anim, timeSec, b / WAVE_BANDS);
+      const ro = b * 9, to = b * 3;
+      bandTrans[to] = a.trans[0];
+      bandTrans[to + 1] = a.trans[1];
+      bandTrans[to + 2] = a.trans[2];
+      bandScale[b] = a.scale;
+      const rx = a.rot[0] * Math.PI / 180;
+      const ry = a.rot[1] * Math.PI / 180;
+      const rz = a.rot[2] * Math.PI / 180;
+      bandMatrix(bandRot, ro, rx, ry, rz);
+      if (a.scale !== 1 || a.trans[0] || a.trans[1] || a.trans[2] || rx || ry || rz) any = true;
+    }
+    return any;
+  }
+
   /** Igaz, ha bármelyik sáv kockánként eltérő eredményt ad (nem merev test). */
   function animIsWave(anim) {
     if (!anim || !Array.isArray(anim.tracks)) return false;
@@ -576,9 +635,22 @@ const SkinPreview = (() => {
       const animPivot = (anim && Array.isArray(anim.pivot) && anim.pivot.length === 3) ? anim.pivot : center;
       const wave = animIsWave(anim);
 
-      // A kockák 0..1-re normált távolsága a forgásponttól, a hullám
+      // A CSÚCSOK 0..1-re normált távolsága a forgásponttól, a hullám
       // tengelye mentén - EBBŐL jön a hajlás és a késés (ld. evalAnim).
+      //
+      // JAVÍTVA: korábban ez KOCKÁNKÉNT egyetlen érték volt, és a kocka merev
+      // testként fordult el vele. Egy szárny így nem hajlott, hanem néhány
+      // egymáshoz képest elfordult lap láncává TÖRT, a kockahatárokon
+      // szétnyíló résekkel. Csúcsonként viszont a szomszédos kockák
+      // illeszkedő csúcsai UGYANAZT a szöget kapják (azonos a távolságuk),
+      // ezért a felület folytonos marad. A kliens ugyanígy működik.
+      //
+      // A normalizálás továbbra is a KOCKAKÖZÉPPONTOK legnagyobb
+      // távolságával történik, hogy a meglévő beállítások kitérése ne
+      // változzon - a hegyen lévő kocka külső csúcsai emiatt 1 fölé
+      // kerülnének, ezt levágjuk.
       let elementDistance = null;
+      let vertexDistance = null;
       if (wave && elementRanges.length) {
         const axis = animAlongAxis(anim, raw.elements);
         const raws = elementRanges.map((r) => Math.abs(r.center[axis] - animPivot[axis]));
@@ -587,6 +659,11 @@ const SkinPreview = (() => {
         // viszonyítani - ilyenkor mindegyik "teljes" távolságú, ami épp a
         // merev viselkedést adja vissza.
         elementDistance = raws.map((d) => (maxDist > 0 ? d / maxDist : 1));
+        vertexDistance = new Float32Array(positions.length / 3);
+        for (let i = 0; i < vertexDistance.length; i++) {
+          const d = Math.abs(positions[i * 3 + axis] - animPivot[axis]);
+          vertexDistance[i] = maxDist > 0 ? Math.min(1, d / maxDist) : 1;
+        }
       }
 
       parts.push({
@@ -597,7 +674,8 @@ const SkinPreview = (() => {
         animPivot,
         wave,
         elementRanges,
-        elementDistance
+        elementDistance,
+        vertexDistance
       });
     }
 
@@ -607,10 +685,45 @@ const SkinPreview = (() => {
     const bonePivot = COSMETIC_PIVOTS[slot] || [0, 0, 0];
     const assemblyAnim = (t.anim && typeof t.anim === 'object') ? t.anim : null;
 
+    // A TELJES kiegészítőre rakott hullám RÉSZENKÉNTI távolságai.
+    //
+    // JAVÍTVA (élesben visszajelzett hiba: "van, amit nem lehet a teljes
+    // kiegészítőre rárakni"): a kiegészítő-szintű animáció eddig MINDIG 1-es
+    // távolsággal futott, tehát a "Hajlás" és a "Késés" ott némán hatástalan
+    // volt. Mostantól minden rész a saját, forgásponttól mért távolsága
+    // szerint kapja a kitérését és a fáziskésését - ugyanúgy, mint a
+    // kliensben (CosmeticModel.partDistance).
+    const assemblyPivot0 = (assemblyAnim && Array.isArray(assemblyAnim.pivot) && assemblyAnim.pivot.length === 3)
+      ? assemblyAnim.pivot : allCenter;
+    let partDistance = null;
+    if (animIsWave(assemblyAnim) && parts.length > 1) {
+      const AXIS = { x: 0, y: 1, z: 2 };
+      let axis = -1;
+      for (const tr of (assemblyAnim.tracks || [])) {
+        if (!tr) continue;
+        if ((Number(tr.falloff) || 0) === 0 && (Number(tr.spread) || 0) === 0) continue;
+        if (AXIS[tr.along] !== undefined) axis = AXIS[tr.along];
+        break;
+      }
+      if (axis < 0) {
+        let mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
+        for (const p of parts) {
+          for (let k = 0; k < 3; k++) { mn[k] = Math.min(mn[k], p.center[k]); mx[k] = Math.max(mx[k], p.center[k]); }
+        }
+        axis = 0;
+        let best = mx[0] - mn[0];
+        for (let k = 1; k < 3; k++) { if (mx[k] - mn[k] > best) { best = mx[k] - mn[k]; axis = k; } }
+      }
+      const raws = parts.map((p) => Math.abs(p.center[axis] - assemblyPivot0[axis]));
+      const maxDist = raws.reduce((a, b) => Math.max(a, b), 0);
+      partDistance = raws.map((d) => (maxDist > 0 ? d / maxDist : 1));
+    }
+
     return {
       parts,
       standalone,
       f,
+      partDistance,
       assembly: {
         offset: standalone ? [0, 0, 0] : off,
         scale: mScale,
@@ -637,9 +750,10 @@ const SkinPreview = (() => {
     const part = built.parts[index];
 
     let m = placementMatrix(a.offset, a.scale, a.rotation, a.center, f);
-    // A kiegészítő-szintű animáció SZÁNDÉKOSAN merev (a teljes összeállításra
-    // hat egyben) - ugyanaz a szabály, mint a kliensben.
-    const aAnim = animMatrix(a.anim, a.animPivot, f, timeSec, 1);
+    // A kiegészítő-szintű animáció merev ÉS hullámzó is lehet; hullámzó
+    // esetben minden rész a SAJÁT távolságával kapja (ld. partDistance).
+    const assemblyDistance = built.partDistance ? built.partDistance[index] : 1;
+    const aAnim = animMatrix(a.anim, a.animPivot, f, timeSec, assemblyDistance);
     if (aAnim) m = multiply(m, aAnim);
 
     m = multiply(m, placementMatrix(part.offset, part.scale, part.rotation, part.center, f));
@@ -675,36 +789,32 @@ const SkinPreview = (() => {
     const part = built.parts[index];
     const src = part.positions;
     const pivot = part.animPivot;
+    const vd = part.vertexDistance;
 
-    for (let e = 0; e < part.elementRanges.length; e++) {
-      const range = part.elementRanges[e];
-      const a = evalAnim(part.anim, timeSec, part.elementDistance[e]);
-      const hasRot = a.rot[0] || a.rot[1] || a.rot[2];
+    // Ha valamiért nincs csúcsonkénti távolság (nem hullámzó rész), az
+    // eredeti geometriát adjuk vissza változatlanul.
+    if (!vd) {
+      for (let i = 0; i < src.length; i++) out[i] = src[i];
+      return out;
+    }
 
-      if (!hasRot && a.scale === 1 && !a.trans[0] && !a.trans[1] && !a.trans[2]) {
-        for (let i = range.start; i < range.end; i++) out[i] = src[i];
-        continue;
-      }
+    if (!buildWaveBands(part.anim, timeSec)) {
+      for (let i = 0; i < src.length; i++) out[i] = src[i];
+      return out;
+    }
 
-      // A sorrend a kliensével egyezik: X, majd Y, majd Z, a forgáspont körül.
-      const cx = Math.cos(a.rot[0] * Math.PI / 180), sx = Math.sin(a.rot[0] * Math.PI / 180);
-      const cy = Math.cos(a.rot[1] * Math.PI / 180), sy = Math.sin(a.rot[1] * Math.PI / 180);
-      const cz = Math.cos(a.rot[2] * Math.PI / 180), sz = Math.sin(a.rot[2] * Math.PI / 180);
-
-      for (let i = range.start; i < range.end; i += 3) {
-        let x = (src[i] - pivot[0]) * a.scale;
-        let y = (src[i + 1] - pivot[1]) * a.scale;
-        let z = (src[i + 2] - pivot[2]) * a.scale;
-        let ty = y * cx - z * sx, tz = y * sx + z * cx;   // X
-        y = ty; z = tz;
-        let tx = x * cy + z * sy; tz = -x * sy + z * cy;  // Y
-        x = tx; z = tz;
-        tx = x * cz - y * sz; ty = x * sz + y * cz;       // Z
-        x = tx; y = ty;
-        out[i]     = x + pivot[0] + a.trans[0];
-        out[i + 1] = y + pivot[1] + a.trans[1];
-        out[i + 2] = z + pivot[2] + a.trans[2];
-      }
+    const px = pivot[0], py = pivot[1], pz = pivot[2];
+    for (let v = 0, i = 0; i < src.length; v++, i += 3) {
+      let b = Math.round(vd[v] * WAVE_BANDS);
+      if (b < 0) b = 0; else if (b > WAVE_BANDS) b = WAVE_BANDS;
+      const ro = b * 9, to = b * 3;
+      const sc = bandScale[b];
+      const x = (src[i] - px) * sc;
+      const y = (src[i + 1] - py) * sc;
+      const z = (src[i + 2] - pz) * sc;
+      out[i]     = px + bandRot[ro]     * x + bandRot[ro + 1] * y + bandRot[ro + 2] * z + bandTrans[to];
+      out[i + 1] = py + bandRot[ro + 3] * x + bandRot[ro + 4] * y + bandRot[ro + 5] * z + bandTrans[to + 1];
+      out[i + 2] = pz + bandRot[ro + 6] * x + bandRot[ro + 7] * y + bandRot[ro + 8] * z + bandTrans[to + 2];
     }
     return out;
   }

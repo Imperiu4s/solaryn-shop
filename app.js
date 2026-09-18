@@ -1519,6 +1519,10 @@ async function enterApp(meData) {
 
   // A "Barátok" kártya (ld. loadHomeFriends lentebb).
   loadHomeFriends();
+
+  // A csapattagok saját havi statisztikája a barátlista alatt (ld.
+  // loadHomeStaffStats lentebb) - sima játékosnál a kártya rejtve marad.
+  loadHomeStaffStats();
 }
 
 // A Rangok fül megnyitásakor (ld. switchView) hívjuk - friss egyenleget kér
@@ -2319,7 +2323,14 @@ $('#redeemSubmit').addEventListener('click', async () => {
       resultEl.textContent = data.message || 'Ismeretlen kód.';
       return;
     }
-    if (data.rewardType === 'wallet') {
+    if (data.rewardType === 'cosmetic') {
+      // A kiegészítő AZONNAL a fiókra kerül (nincs szerverre lépéshez kötve,
+      // mint a PP) - a "Kiegészítők" nézetben rögtön felvehető.
+      const until = data.expiresAt
+        ? ` Érvényes: ${new Date(data.expiresAt.replace(' ', 'T')).toLocaleDateString('hu-HU')}-ig.`
+        : ' Örökre a tiéd.';
+      resultEl.textContent = `Sikeres beváltás! Megkaptad ezt a kiegészítőt: ${data.cosmeticName}.${until} A Kiegészítők fülön veheted fel.`;
+    } else if (data.rewardType === 'wallet') {
       resultEl.textContent = `Sikeres beváltás! +${formatHuf(data.rewardAmount)} jóváírva az egyenlegeden.`;
       refreshPpBalance();
     } else {
@@ -4858,11 +4869,67 @@ document.addEventListener('click', (e) => {
 let couponEditingId = null;
 let couponsAdminItems = [];
 
+/**
+ * A jutalom-típushoz igazítja az űrlapot.
+ *
+ * MIÉRT KELL: a "Jutalom mennyisége" mező jelentése típusfüggő - PP-nél és
+ * egyenlegnél ÖSSZEG (legalább 1), kiegészítőnél viszont az ÉRVÉNYESSÉG
+ * NAPOKBAN, ahol a 0 is értelmes ("örökre"). Ha a mező felirata és a min
+ * korlátja nem követné ezt, az admin vagy nem tudná örökre adni a
+ * kiegészítőt, vagy azt hinné, napokat kell megadnia PP-ből is.
+ */
+function syncCouponRewardTypeUI() {
+  const type = $('#couponRewardTypeSelect').value;
+  const isCosmetic = type === 'cosmetic';
+  $('#couponCosmeticRow').classList.toggle('hidden', !isCosmetic);
+  const amount = $('#couponRewardAmountInput');
+  if (isCosmetic) {
+    $('#couponRewardAmountLabel').textContent = 'Érvényesség napokban (0 = örökre)';
+    amount.min = '0';
+    amount.placeholder = 'Pl. 30 vagy 0';
+  } else {
+    $('#couponRewardAmountLabel').textContent = 'Jutalom mennyisége';
+    amount.min = '1';
+    amount.placeholder = 'Pl. 500';
+  }
+}
+
+/**
+ * A kiegészítő-választó feltöltése a katalógusból.
+ *
+ * A "cosmeticsCatalog" globálist a Kiegészítők admin nézet tölti fel; ha a
+ * kuponok fület nyitják meg elsőként, még üres lehet - ezért itt saját,
+ * egyszeri lekérést is indítunk. Csendben hibázik: ilyenkor a lista üres
+ * marad, a mentés pedig a backend ellenőrzésén akad fenn érthető üzenettel.
+ */
+let couponCosmeticOptions = [];
+async function populateCouponCosmeticSelect(selectedId) {
+  const sel = $('#couponCosmeticSelect');
+  if (!sel) return;
+  if (!couponCosmeticOptions.length) {
+    try {
+      const res = await fetch(BACKEND_URL + '/api/admin/cosmetics', {
+        headers: { Authorization: 'Bearer ' + session.token }
+      });
+      const data = await res.json();
+      couponCosmeticOptions = data.ok && Array.isArray(data.cosmetics) ? data.cosmetics : [];
+    } catch {
+      couponCosmeticOptions = [];
+    }
+  }
+  sel.innerHTML = couponCosmeticOptions.length
+    ? couponCosmeticOptions.map((c) => `<option value="${c.id}">${escapeHtml(c.name)} (${escapeHtml(c.slot || '')})</option>`).join('')
+    : '<option value="">- nincs elérhető kiegészítő -</option>';
+  if (selectedId) sel.value = String(selectedId);
+}
+
 function resetCouponForm() {
   couponEditingId = null;
   $('#couponFormTitle').textContent = 'Új kupon';
   $('#couponCodeInput').value = '';
   $('#couponRewardTypeSelect').value = 'pp';
+  syncCouponRewardTypeUI();
+  populateCouponCosmeticSelect();
   $('#couponRewardAmountInput').value = '';
   $('#couponMaxUsesInput').value = '';
   $('#couponStartsInput').value = '';
@@ -4885,6 +4952,13 @@ function populateCouponRequiredRankSelect(selectedId) {
 }
 
 function couponRewardLabel(c) {
+  if (c.reward_type === 'cosmetic') {
+    // A backend a lista-válaszban a kiegészítő nevét is mellékeli
+    // (rewardCosmetic) - ha a kiegészítőt időközben törölték, az null.
+    const name = c.rewardCosmetic ? c.rewardCosmetic.name : 'törölt kiegészítő';
+    const days = Number(c.reward_amount) || 0;
+    return `${name} (${days > 0 ? days + ' nap' : 'örökre'})`;
+  }
   return c.reward_type === 'wallet' ? `${formatHuf(c.reward_amount)} egyenleg` : `${formatPp(c.reward_amount)} PP`;
 }
 
@@ -4939,6 +5013,10 @@ async function loadCouponsAdmin() {
 }
 
 $('#couponDiscardBtn').addEventListener('click', resetCouponForm);
+$('#couponRewardTypeSelect')?.addEventListener('change', () => {
+  syncCouponRewardTypeUI();
+  if ($('#couponRewardTypeSelect').value === 'cosmetic') populateCouponCosmeticSelect();
+});
 
 $('#couponSaveBtn').addEventListener('click', async () => {
   const resultEl = $('#couponFormResult');
@@ -4953,8 +5031,19 @@ $('#couponSaveBtn').addEventListener('click', async () => {
   const active = $('#couponActiveCheckbox').checked;
 
   if (!code) { resultEl.textContent = 'Adj meg egy kódot.'; resultEl.className = 'redeem-result error'; return; }
-  if (!Number.isInteger(rewardAmount) || rewardAmount < 1) {
-    resultEl.textContent = 'Adj meg egy érvényes jutalom-mennyiséget.';
+  // Kiegészítőnél a szám az ÉRVÉNYESSÉG napokban, ahol a 0 ("örökre")
+  // szintén érvényes - ld. syncCouponRewardTypeUI().
+  const minAmount = rewardType === 'cosmetic' ? 0 : 1;
+  if (!Number.isInteger(rewardAmount) || rewardAmount < minAmount) {
+    resultEl.textContent = rewardType === 'cosmetic'
+      ? 'Az érvényesség csak nemnegatív egész nap lehet (0 = örökre).'
+      : 'Adj meg egy érvényes jutalom-mennyiséget.';
+    resultEl.className = 'redeem-result error';
+    return;
+  }
+  const rewardCosmeticId = rewardType === 'cosmetic' ? Number($('#couponCosmeticSelect').value) : undefined;
+  if (rewardType === 'cosmetic' && !Number.isInteger(rewardCosmeticId)) {
+    resultEl.textContent = 'Válassz ki egy kiegészítőt.';
     resultEl.className = 'redeem-result error';
     return;
   }
@@ -4964,7 +5053,7 @@ $('#couponSaveBtn').addEventListener('click', async () => {
     const res = await fetch(url, {
       method: couponEditingId ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
-      body: JSON.stringify({ code, rewardType, rewardAmount, maxUses, requiredRank, startsAt, expiresAt, active })
+      body: JSON.stringify({ code, rewardType, rewardAmount, rewardCosmeticId, maxUses, requiredRank, startsAt, expiresAt, active })
     });
     const data = await res.json();
     if (!data.ok) {
@@ -4990,6 +5079,8 @@ document.addEventListener('click', (e) => {
     $('#couponFormTitle').textContent = 'Kupon szerkesztése';
     $('#couponCodeInput').value = item.code;
     $('#couponRewardTypeSelect').value = item.reward_type;
+    syncCouponRewardTypeUI();
+    if (item.reward_type === 'cosmetic') populateCouponCosmeticSelect(item.reward_cosmetic_id);
     $('#couponRewardAmountInput').value = item.reward_amount;
     $('#couponMaxUsesInput').value = item.max_uses !== null ? item.max_uses : '';
     populateCouponRequiredRankSelect(item.required_rank);
@@ -5531,6 +5622,47 @@ async function loadHomeFriends() {
     });
   } catch {
     // Csendben kihagyjuk - a kártya üresen marad, a következő belépéskor újra próbálkozunk.
+  }
+}
+
+/**
+ * A BEJELENTKEZETT csapattag saját havi statisztikája, a barátlista alatt.
+ *
+ * MIÉRT NEM AZ ADMIN "Csapat statisztika" NÉZETÉT HASZNÁLJUK: az a teljes
+ * csapat adatait adja, és a "global.staffStats" jogosultsághoz van kötve -
+ * egy jrmoderátor a SAJÁT számait sem látná. A backend ezért külön végpontot
+ * kapott (GET /api/staff/my-stats), ami kizárólag a hívó saját sorát adja
+ * vissza; ugyanazokból a forrásokból és ugyanazzal a hónap-szűréssel, mint a
+ * vezetői nézet, hogy a kettő sose mondjon mást.
+ *
+ * Ha a felhasználó nem csapattag, a válasz "staff: false" - ilyenkor a kártya
+ * egyszerűen rejtve marad, hibaüzenet nélkül.
+ */
+async function loadHomeStaffStats() {
+  const card = $('#homeStaffStatsCard');
+  if (!card || !session || !session.token) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/staff/my-stats', {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    if (!data.ok || !data.staff) { card.classList.add('hidden'); return; }
+
+    const hours = Math.floor((data.onlineSeconds || 0) / 3600);
+    const minutes = Math.floor(((data.onlineSeconds || 0) % 3600) / 60);
+    $('#homeStaffStatPlaytime').textContent = hours > 0 ? `${hours}ó ${minutes}p` : `${minutes}p`;
+    $('#homeStaffStatMutes').textContent = String(data.mutesIssued || 0);
+    $('#homeStaffStatBans').textContent = String(data.bansIssued || 0);
+    $('#homeStaffStatTickets').textContent = String(data.ticketsClosed || 0);
+    $('#homeStaffStatsRank').textContent = data.rank || '';
+    // A hónap nevét a böngésző adja - a backend mindig a FOLYÓ hónapot
+    // összesíti (strftime('%Y-%m','now')), tehát ez mindig egyezik.
+    $('#homeStaffStatsMonth').textContent =
+      new Date().toLocaleDateString('hu-HU', { year: 'numeric', month: 'long' }) + ' - a hónap elejétől';
+    card.classList.remove('hidden');
+  } catch {
+    // Csendben kihagyjuk: a kártya rejtve marad, a következő belépéskor újra próbálkozunk.
+    card.classList.add('hidden');
   }
 }
 
@@ -6904,7 +7036,7 @@ function renderCosmeticPartPanel() {
   const panel = $('#cosmeticPartPanel');
   if (!panel) return;
   if (cosmeticTarget < 0) {
-    panel.innerHTML = '<p class="cosmetic-file-note">A <strong>teljes kiegészítő</strong> van kiválasztva: az itt beállított illesztés és animáció MINDEN részre együtt hat. Egy rész külön mozgatásához válaszd ki a részt fent.</p>';
+    panel.innerHTML = '<p class="cosmetic-file-note">A <strong>teljes kiegészítő</strong> van kiválasztva: az itt beállított illesztés és animáció MINDEN részre együtt hat. Egy rész külön mozgatásához válaszd ki a részt fent.<br />A <strong>Hullám</strong> (Hajlás/Késés) itt RÉSZENKÉNT érvényesül: minden rész a forgásponttól mért saját távolsága szerint, késleltetve mozdul - ettől fut végig a mozgás a szegmenseken. Egy részen BELÜL a hullám csúcsonként hajlít; ahhoz válaszd ki a részt.</p>';
     return;
   }
   const part = cosmeticParts[cosmeticTarget];
@@ -7104,6 +7236,33 @@ function animField(label, inner, title) {
 function suggestRootPivot(partIndex) {
   const model = buildEditorModel();
   if (!model) return null;
+
+  // A TELJES kiegészítőnél ugyanaz a gondolat, csak a MINDEN rész együttes
+  // befoglaló dobozára: a hullám tengelye mentén az a vég, amelyik közelebb
+  // van a testhez. A tengelyt itt a RÉSZKÖZÉPPONTOK leghosszabb kiterjedése
+  // adja (ugyanaz a szabály, mint a kliens CosmeticModel.computePartDistances
+  // "automatikus" ágában).
+  if (partIndex < 0) {
+    const withModelAll = cosmeticParts.filter((p) => Array.isArray(p.elements) && p.elements.length);
+    if (!withModelAll.length) return null;
+    const all = [];
+    for (const p of withModelAll) for (const el of p.elements) all.push(el);
+    const axis = SkinPreview.animAlongAxis(cosmeticAssembly.anim, all);
+    let mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
+    for (const el of all) {
+      if (!Array.isArray(el.from) || !Array.isArray(el.to)) continue;
+      for (let k = 0; k < 3; k++) {
+        mn[k] = Math.min(mn[k], el.from[k], el.to[k]);
+        mx[k] = Math.max(mx[k], el.from[k], el.to[k]);
+      }
+    }
+    if (!Number.isFinite(mn[0])) return null;
+    const ref = cosmeticAssembly.itemModelSpace !== false ? 8 : 0;
+    const piv = [(mn[0] + mx[0]) / 2, (mn[1] + mx[1]) / 2, (mn[2] + mx[2]) / 2];
+    piv[axis] = Math.abs(mn[axis] - ref) <= Math.abs(mx[axis] - ref) ? mn[axis] : mx[axis];
+    return piv.map((v) => Math.round(v * 100) / 100);
+  }
+
   const part = cosmeticParts[partIndex];
   if (!part || !Array.isArray(part.elements) || !part.elements.length) return null;
 
@@ -7134,15 +7293,15 @@ function suggestRootPivot(partIndex) {
 }
 
 function applyRootPivot() {
-  if (cosmeticTarget < 0) {
-    showToast('A forgáspont-javaslat egy RÉSZRE vonatkozik - válassz ki egyet fent.', true);
-    return false;
-  }
+  // JAVÍTVA: korábban ez a TELJES kiegészítőnél elutasított ("válassz ki egy
+  // részt"). Amióta a hullám a kiegészítő egészére is hat (részenként), ott
+  // is pontosan ugyanolyan fontos, hogy a forgáspont a TŐNÉL legyen, ne a
+  // befoglaló doboz közepén - különben a szegmensek középen csuklanának.
   const pivot = suggestRootPivot(cosmeticTarget);
-  if (!pivot) { showToast('Előbb válassz modellt ehhez a részhez.', true); return false; }
+  if (!pivot) { showToast('Előbb tölts fel modellt.', true); return false; }
   const anim = ensureAnim();
   anim.pivot = pivot;
-  if (cosmeticParts[cosmeticTarget]) cosmeticParts[cosmeticTarget].dirty = true;
+  if (cosmeticTarget >= 0 && cosmeticParts[cosmeticTarget]) cosmeticParts[cosmeticTarget].dirty = true;
   renderCosmeticAnimEditor();
   queueEditorRefresh();
   return true;

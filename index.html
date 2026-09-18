@@ -503,6 +503,34 @@
                 <div id="homeFriendsGrid" class="player-result-grid"></div>
                 <p class="player-result-note hidden" id="homeFriendsEmpty">Még nincs egyetlen barátod sem - a szerveren a /fr add &lt;név&gt; paranccsal küldhetsz barátkérelmet.</p>
               </div>
+
+              <!-- ÚJ: a csapattag SAJÁT havi statisztikája (ld. SolarBackend
+                   src/client.js GET /api/staff/my-stats). Alapból rejtve: a
+                   kártya CSAK akkor jelenik meg, ha a válasz szerint a
+                   bejelentkezett felhasználó tényleg csapattag - egy sima
+                   játékos így soha nem is látja, hogy ilyen kártya létezik. -->
+              <div class="card staff-stats-card hidden" id="homeStaffStatsCard">
+                <div class="card-title">Havi statisztikád <span class="staff-stats-rank" id="homeStaffStatsRank"></span></div>
+                <p class="staff-stats-note" id="homeStaffStatsMonth"></p>
+                <div class="staff-stats-grid">
+                  <div class="staff-stat">
+                    <div class="staff-stat-value" id="homeStaffStatPlaytime">0ó</div>
+                    <div class="staff-stat-label">Játékidő</div>
+                  </div>
+                  <div class="staff-stat">
+                    <div class="staff-stat-value" id="homeStaffStatMutes">0</div>
+                    <div class="staff-stat-label">Némítás</div>
+                  </div>
+                  <div class="staff-stat">
+                    <div class="staff-stat-value" id="homeStaffStatBans">0</div>
+                    <div class="staff-stat-label">Kitiltás</div>
+                  </div>
+                  <div class="staff-stat">
+                    <div class="staff-stat-value" id="homeStaffStatTickets">0</div>
+                    <div class="staff-stat-label">Lezárt ticket</div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div class="card discord-card">
@@ -1412,7 +1440,7 @@
                   <label>Forgáspont Z<input type="number" id="cosmeticAnimPivotZInput" step="0.5" placeholder="közép" /></label>
                 </div>
                 <p class="cosmetic-file-note">Üresen hagyva a modell közepe körül forog. Egy szárny a TÖVÉNÉL csuklik &ndash; ott állítsd be a forgáspontot, különben a közepén hajlik, nem a tövénél. (A modell saját, Blockbench-koordinátáiban.) A kész mozgások ezt automatikusan beállítják.</p>
-                <button type="button" class="btn-outline" id="cosmeticAnimRootPivotBtn">Forgáspont a rész tövére</button>
+                <button type="button" class="btn-outline" id="cosmeticAnimRootPivotBtn" title="A forgáspontot a kiválasztott rész (vagy a teljes kiegészítő) TÖVÉHEZ teszi - ahhoz a véghez, amelyik a testhez közelebb van. Hullámnál ez a legfontosabb beállítás: középre tett forgáspont mellett a szárny nem csuklik, hanem billeg.">Forgáspont a tőre</button>
                 <button type="button" class="btn-outline" id="cosmeticAnimClearBtn">Animáció törlése</button>
               </div>
             </div>
@@ -1503,8 +1531,16 @@
             <select id="couponRewardTypeSelect" class="gift-modal-input">
               <option value="pp">PrémiumPont</option>
               <option value="wallet">Egyenleg (Ft)</option>
+              <option value="cosmetic">Kiegészítő</option>
             </select>
-            <label class="gift-modal-label">Jutalom mennyisége</label>
+            <!-- Kiegészítő-jutalom: a lista a katalógusból jön (ld. app.js
+                 populateCouponCosmeticSelect). Csak "Kiegészítő" típusnál
+                 látszik - ld. syncCouponRewardTypeUI(). -->
+            <div id="couponCosmeticRow" class="hidden">
+              <label class="gift-modal-label">Melyik kiegészítő</label>
+              <select id="couponCosmeticSelect" class="gift-modal-input"></select>
+            </div>
+            <label class="gift-modal-label" id="couponRewardAmountLabel">Jutalom mennyisége</label>
             <input type="number" id="couponRewardAmountInput" class="gift-modal-input" placeholder="Pl. 500" min="1" step="1" />
             <label class="gift-modal-label">Felhasználhatóság (nem kötelező, üres = korlátlan)</label>
             <input type="number" id="couponMaxUsesInput" class="gift-modal-input" placeholder="Pl. 100" min="1" step="1" />
