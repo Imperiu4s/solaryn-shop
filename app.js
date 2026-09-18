@@ -7036,7 +7036,7 @@ function renderCosmeticPartPanel() {
   const panel = $('#cosmeticPartPanel');
   if (!panel) return;
   if (cosmeticTarget < 0) {
-    panel.innerHTML = '<p class="cosmetic-file-note">A <strong>teljes kiegészítő</strong> van kiválasztva: az itt beállított illesztés és animáció MINDEN részre együtt hat. Egy rész külön mozgatásához válaszd ki a részt fent.<br />A <strong>Hullám</strong> (Hajlás/Késés) itt RÉSZENKÉNT érvényesül: minden rész a forgásponttól mért saját távolsága szerint, késleltetve mozdul - ettől fut végig a mozgás a szegmenseken. Egy részen BELÜL a hullám csúcsonként hajlít; ahhoz válaszd ki a részt.</p>';
+    panel.innerHTML = '<p class="cosmetic-file-note">A <strong>teljes kiegészítő</strong> van kiválasztva: az itt beállított illesztés és animáció MINDEN részre együtt hat. Egy rész külön mozgatásához válaszd ki a részt fent.<br />A <strong>Hullám</strong> (Hajlás/Késés) itt is teljes értékű: a kiegészítő egyetlen, összefüggő testként hajlik, a forgásponttól mért távolság az EGÉSZ kiegészítőn át számít. Egy jobb+bal szárnypárnál ezért a két szárny együtt, szimmetrikusan csap - ehhez a forgáspontot a test közepére (a szárnyak tövére) tedd.</p>';
     return;
   }
   const part = cosmeticParts[cosmeticTarget];
@@ -7106,8 +7106,16 @@ const ANIM_ALONG_LABELS = { auto: 'Automatikus', x: 'X', y: 'Y', z: 'Z' };
 //     szárny töve és hegye ennyire eltérő fázisban gumiszerűen hullámzott,
 //     csapás helyett.
 //
-// A TÜKRÖZÖTT változatot nem kézzel írjuk le: a mirrorAnimTracks() a test
-// síkjára tükröz, ami a helyes átalakítás (ld. ott).
+// AZ "ELLENTÉTES ÜTEM" változatot nem kézzel írjuk le: a mirrorAnimTracks()
+// a test síkjára tükröz, ami a helyes átalakítás (ld. ott).
+//
+// JAVÍTVA: ez a változat korábban "(tükrözött)" néven szerepelt, és arra
+// kellett, hogy a MÁSIK szárnyra rakva a két fél egyformán csapjon. A kliens
+// (és az előnézet) azóta a forgáspont túloldalát MAGÁTÓL tükrözi, tehát ha a
+// mozgást a TELJES kiegészítőre teszed, a két szárny eleve együtt mozog -
+// ehhez a változathoz nem kell hozzányúlni. Ami megmaradt neki: az az eset,
+// amikor SZÁNDÉKOSAN ellentétes ütemet akarsz (pl. két, egymással szemben
+// mozgó szegmens). A név ezért mondja meg, mit csinál, nem azt, hogyan.
 const ANIM_PRESET_DEFS = [
   {
     label: 'Szárnycsapás',
@@ -7202,7 +7210,7 @@ const ANIM_PRESETS = ANIM_PRESET_DEFS.flatMap((def) => {
   const base = { label: def.label, replace: !!def.replace, tracks: def.tracks };
   if (!def.mirror) return [base];
   return [base, {
-    label: def.label + ' (tükrözött)',
+    label: def.label + ' (ellentétes ütem)',
     replace: !!def.replace,
     tracks: mirrorAnimTracks(def.tracks)
   }];
@@ -7352,7 +7360,7 @@ function renderCosmeticAnimEditor() {
         <div class="cosmetic-anim-row">
           ${animField('Mit', animSelect('type', ANIM_TYPE_LABELS, t.type))}
           ${animField('Tengely', `<select data-anim-field="axis"${isScale ? ' disabled' : ''}>${['x', 'y', 'z'].map((v) => `<option value="${v}"${t.axis === v ? ' selected' : ''}>${v.toUpperCase()}</option>`).join('')}</select>`)}
-          ${animField('Kitérés', `<input type="number" data-anim-field="amp" step="${step}" value="${Number(t.amp) || 0}" />`, 'Forgatásnál fok, eltolásnál modell-egység, méretnél arány. A NEGATÍV érték a tükrözött oldal.')}
+          ${animField('Kitérés', `<input type="number" data-anim-field="amp" step="${step}" value="${Number(t.amp) || 0}" />`, 'Forgatásnál fok, eltolásnál modell-egység, méretnél arány. A NEGATÍV érték az ellenkező irányba mozgat - a forgáspont két oldalát NEM kell kézzel tükrözni, azt a kliens magától megteszi.')}
           ${animField('Sebesség', `<input type="number" data-anim-field="speed" step="0.05" min="0" max="8" value="${Number(t.speed) || 0}" />`, 'Teljes ciklus másodpercenként.')}
           ${animField('Fázis°', `<input type="number" data-anim-field="phase" step="15" min="-360" max="360" value="${Number(t.phase) || 0}" />`, 'Eltolja a mozgás kezdetét. Két azonos szárnyfélnél 0 és 180 ellentétes ütemet ad.')}
           ${animField('Jelleg', animSelect('wave', ANIM_WAVE_LABELS, t.wave))}
@@ -7742,22 +7750,38 @@ $('#cosmeticAnimPresets')?.addEventListener('click', (e) => {
   if (!preset) return;
   const wavy = preset.tracks.some((t) => (Number(t.falloff) || 0) !== 0 || (Number(t.spread) || 0) !== 0);
 
-  // A HULLÁM (hajlás/késés) csak RÉSZEN belül értelmes: a "teljes kiegészítő"
-  // szint az egész összeállítást mozgatja egyben, ott nincs mihez viszonyítani
-  // a kockák távolságát, ezért a kliens ott MEREVEN számol. Ha a felhasználó
-  // a "Teljes kiegészítő" célon kattint egy szárnycsapásra, pontosan a régi,
-  // billegő mozgást kapná - ezért automatikusan átváltunk a részre.
+  // JAVÍTVA (élesben visszajelzett hiba: "miért ne lehetne a teljes
+  // kiegészítőre?... csak a fele mozog"). Korábban a hullámos mozgás a
+  // "Teljes kiegészítő" célról AUTOMATIKUSAN átkerült az ELSŐ részre, mert a
+  // kliens a kiegészítő szintjén tényleg nem tudott hullámozni - egy
+  // jobb+bal szárnyból álló kiegészítőnél ettől csak az egyik szárny mozgott.
+  //
+  // A kliens (és ez az előnézet) azóta a TELJES kiegészítőt is egyetlen,
+  // összefüggő testként hajlítja: a távolságot a kiegészítő egészén, a
+  // részek illesztésén átvive méri, és csúcsonként deformál. Egy közös
+  // forgásponttól mindkét szárnyhegy azonos távolságot kap, tehát a két
+  // szárny EGYÜTT csap - épp ezt akarta a felhasználó. Ezért az
+  // átirányításnak nincs többé se oka, se értelme; csak modell meglétét
+  // ellenőrizzük.
   if (wavy && cosmeticTarget < 0) {
-    const withModel = cosmeticParts.findIndex((p) => Array.isArray(p.elements) && p.elements.length);
-    if (withModel < 0) {
+    const hasAnyModel = cosmeticParts.some((p) => Array.isArray(p.elements) && p.elements.length);
+    if (!hasAnyModel) {
       showToast('Előbb tölts fel modellt, utána állítható be a mozgás.', true);
       return;
     }
-    const partCount = cosmeticParts.filter((p) => Array.isArray(p.elements) && p.elements.length).length;
-    setCosmeticTarget(withModel);
-    showToast(partCount > 1
-      ? 'A szárnycsapás RÉSZENKÉNT állítható - az 1. részre került. A másikra válaszd a tükrözött változatot.'
-      : 'A mozgás a részre került (a teljes kiegészítő szintjén nem tudna hullámozni).');
+    // A forgáspont a hullámnál a LEGFONTOSABB beállítás: ha a kiegészítő
+    // közepén marad, a szárny nem csuklik, hanem billeg. Ha az admin még nem
+    // állította be, itt magától a tőre kerül (ugyanaz a heurisztika, mint a
+    // "Forgáspont a tőre" gombé), hogy a kész mozgás ELSŐ kattintásra jól
+    // nézzen ki.
+    const existing = currentAnim();
+    if (!existing || !Array.isArray(existing.pivot)) {
+      const pivot = suggestRootPivot(-1);
+      if (pivot) {
+        ensureAnim().pivot = pivot;
+        showToast('A forgáspont a kiegészítő tövére került - a hullám innen indul.');
+      }
+    }
   }
 
   const anim = ensureAnim();
