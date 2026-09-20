@@ -1719,11 +1719,73 @@ a { color: inherit; }
   background: linear-gradient(90deg, var(--gold-2), var(--gold), var(--gold-2));
 }
 
-/* Mítikus: a legendás FÖLÖTT álló, legritkább fokozat. A megkülönböztetést
-   nem egy újabb szín adja (az arany az oldal saját identitása), hanem egy
-   lassan végigfutó izzás - így a legendás mellett is azonnal kiugrik, de nem
-   lóg ki a paletta hangulatából. */
-.cosmetic-card.rarity-mythic::before {
+/* ── MÍTIKUS: a legendás FÖLÖTT álló, legritkább fokozat ──────────────────
+
+   A felhasználó kérésére ez a fokozat kapott egy "démoni" megjelenést: ezt
+   kapják azok a kiegészítők, amikhez Aura vagy in-game effekt tartozik,
+   tehát a katalógusban is azonnal ki kell ugraniuk.
+
+   MIÉRT PARÁZS, ÉS MIÉRT NEM EGY ÚJ SZÍN: az oldal identitása az arany/
+   narancs (ld. a "vibecoded" ellenőrzőlistát - lila-kék gradiens KIZÁRVA).
+   A démoni hatást ezért nem egy idegen szín adja, hanem a MOZGÁS és a
+   MÉLYSÉG: egy lassan lélegző, mélyvörös parázs a kártya alján, fölötte
+   felszálló szikrákkal, és egy körbefutó izzás a szegélyen.
+
+   MINDEN CSS - nincs se JS, se kép. Egy katalógus-oldalon több tucat ilyen
+   kártya lehet egyszerre; egy JS-es részecske-rendszer ott mérhető
+   FPS-veszteség lenne, ezt viszont a böngésző a kompozitorban futtatja.
+   A "ránéz" állapot (hover/fókusz) felerősíti: mélyebb izzás, gyorsabb
+   szikrák - ez az, amit a felhasználó "amikor ránéznek"-ként kért. */
+.cosmetic-card.rarity-mythic,
+.cosmetic-admin-card.rarity-mythic {
+  position: relative;
+  isolation: isolate;
+  border-color: rgba(214, 64, 42, .45);
+  /* A lélegző parázs-fény: kifelé egy mély vörös derengés, befelé egy
+     finom, meleg perem. A box-shadow SZÁNDÉKOSAN nem blur-os háttér
+     (backdrop-filter) - az a listában scrollozáskor akadna. */
+  animation: mythic-breathe 5.5s ease-in-out infinite;
+}
+
+/* A kártya ALJÁN parázsló köd + fölötte felszálló szikrák. A ::after azért
+   jó ide, mert a ::before-t a felső ritkaság-sáv már használja. */
+.cosmetic-card.rarity-mythic::after,
+.cosmetic-admin-card.rarity-mythic::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: -1;
+  background:
+    /* szikrák - négy, eltérő méretű és fázisú pont */
+    radial-gradient(2px 2px at 18% 88%, rgba(255, 176, 92, .95), transparent 60%),
+    radial-gradient(1.6px 1.6px at 42% 94%, rgba(255, 120, 60, .85), transparent 60%),
+    radial-gradient(2.4px 2.4px at 68% 90%, rgba(255, 205, 120, .9), transparent 60%),
+    radial-gradient(1.4px 1.4px at 85% 96%, rgba(226, 88, 48, .8), transparent 60%),
+    /* a parázs maga: a kártya alján ülő, meleg derengés */
+    radial-gradient(120% 60% at 50% 118%, rgba(214, 64, 42, .38), transparent 70%);
+  background-repeat: no-repeat;
+  animation: mythic-embers 6s linear infinite;
+}
+
+@keyframes mythic-breathe {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(214, 64, 42, .18), 0 6px 26px -12px rgba(214, 64, 42, .55); }
+  50%      { box-shadow: 0 0 0 1px rgba(255, 138, 76, .34), 0 10px 40px -10px rgba(214, 64, 42, .85); }
+}
+
+/* A szikrák FELFELÉ úsznak és közben elhalványulnak. A háttér-pozíció
+   animálása (nem a méreté) azért fontos, mert csak az utóbbi kényszerítene
+   újrarajzolást minden képkockán. */
+@keyframes mythic-embers {
+  0%   { background-position: 0 0, 0 0, 0 0, 0 0, 0 0; opacity: .35; }
+  50%  { opacity: .9; }
+  100% { background-position: 0 -34px, 0 -52px, 0 -42px, 0 -60px, 0 0; opacity: .35; }
+}
+
+/* A felső ritkaság-sáv: parázs-színek, gyorsabban futva, mint a legendásé. */
+.cosmetic-card.rarity-mythic::before,
+.cosmetic-admin-card.rarity-mythic::before {
   background: linear-gradient(90deg, var(--danger), var(--gold), var(--orange-2), var(--danger));
   background-size: 250% 100%;
   animation: cosmetic-mythic-sheen 4s linear infinite;
@@ -1732,8 +1794,58 @@ a { color: inherit; }
   from { background-position: 0% 0; }
   to   { background-position: 250% 0; }
 }
+
+/* "AMIKOR RÁNÉZNEK": a hatás felerősödik - a parázs feljebb kúszik, a
+   szikrák gyorsulnak, a szegély izzik. Fókuszra ugyanez, hogy billentyűzettel
+   navigálva se vesszen el. */
+.cosmetic-card.rarity-mythic:hover,
+.cosmetic-card.rarity-mythic:focus-within,
+.cosmetic-admin-card.rarity-mythic:hover,
+.cosmetic-admin-card.rarity-mythic:focus-within {
+  border-color: rgba(255, 138, 76, .75);
+  animation-duration: 2.4s;
+}
+.cosmetic-card.rarity-mythic:hover::after,
+.cosmetic-card.rarity-mythic:focus-within::after,
+.cosmetic-admin-card.rarity-mythic:hover::after,
+.cosmetic-admin-card.rarity-mythic:focus-within::after {
+  animation-duration: 2.6s;
+  background:
+    radial-gradient(2.4px 2.4px at 18% 88%, rgba(255, 196, 120, 1), transparent 60%),
+    radial-gradient(2px 2px at 42% 94%, rgba(255, 140, 70, .95), transparent 60%),
+    radial-gradient(2.8px 2.8px at 68% 90%, rgba(255, 220, 150, 1), transparent 60%),
+    radial-gradient(1.8px 1.8px at 85% 96%, rgba(240, 104, 56, .9), transparent 60%),
+    radial-gradient(140% 78% at 50% 116%, rgba(214, 64, 42, .6), transparent 72%);
+  background-repeat: no-repeat;
+}
+.cosmetic-card.rarity-mythic:hover::before,
+.cosmetic-admin-card.rarity-mythic:hover::before {
+  animation-duration: 1.6s;
+}
+
+/* A mítikus NÉV is parázslik - egy statikus arany szövegnél ez adja meg,
+   hogy "nem csak egy újabb ritkaság". */
+.cosmetic-card.rarity-mythic .cosmetic-card-name,
+.cosmetic-admin-card.rarity-mythic .cosmetic-admin-card-name {
+  color: #ffd9a8;
+  text-shadow: 0 0 10px rgba(214, 64, 42, .55);
+}
+
+/* Csökkentett mozgás: MINDEN animáció áll, de a megkülönböztetés megmarad -
+   a parázs és a szegély statikusan is ott van. */
 @media (prefers-reduced-motion: reduce) {
-  .cosmetic-card.rarity-mythic::before { animation: none; }
+  .cosmetic-card.rarity-mythic,
+  .cosmetic-admin-card.rarity-mythic,
+  .cosmetic-card.rarity-mythic::before,
+  .cosmetic-admin-card.rarity-mythic::before,
+  .cosmetic-card.rarity-mythic::after,
+  .cosmetic-admin-card.rarity-mythic::after {
+    animation: none;
+  }
+  .cosmetic-card.rarity-mythic,
+  .cosmetic-admin-card.rarity-mythic {
+    box-shadow: 0 0 0 1px rgba(255, 138, 76, .3), 0 8px 32px -12px rgba(214, 64, 42, .7);
+  }
 }
 
 /* A bélyegkép a nyers textúra - pixelesen élesen kell megjelenjen, mert
@@ -2283,3 +2395,44 @@ a { color: inherit; }
 @media (max-width: 720px) {
   .staff-stats-grid { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ── Kiegészítők: szerver-hatókör ────────────────────────────────────────
+   A jelölőnégyzetek SORBAN, nem rácsban: a szerverek száma egy hálózaton
+   néhány darab, és a nevük rövid - egy rács itt csak üres helyet hagyna. */
+.cosmetic-server-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.cosmetic-server-list label {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 7px 11px; border-radius: 999px;
+  background: var(--panel-2); border: 1px solid var(--line);
+  font-size: 12.5px; cursor: pointer;
+}
+.cosmetic-server-list label:hover { border-color: var(--gold-2); }
+.cosmetic-server-list input { margin: 0; }
+.cosmetic-server-list .cosmetic-file-note { width: 100%; margin: 0; }
+
+.cosmetic-servers-card { margin-bottom: 14px; }
+.cosmetic-servers-card > summary { cursor: pointer; list-style: none; }
+.cosmetic-servers-card > summary::-webkit-details-marker { display: none; }
+.cosmetic-servers-card > summary::after { content: ' ▾'; color: var(--text-faint); }
+.cosmetic-servers-card[open] > summary::after { content: ' ▴'; }
+.cosmetic-server-admin-list { display: grid; gap: 8px; margin-top: 10px; }
+.cosmetic-server-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; border-radius: 11px;
+  background: var(--panel-2); border: 1px solid var(--line);
+}
+.cosmetic-server-row-id { font-family: ui-monospace, monospace; font-size: 12px; color: var(--text-faint); }
+.cosmetic-server-row-label { font-weight: 700; font-size: 13.5px; flex: 1; }
+
+/* Egy effekt-sor: típus + erősség + törlés. */
+.cosmetic-effect-row { display: flex; align-items: flex-end; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+.cosmetic-effect-row label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--text-dim); }
+.cosmetic-effect-row select, .cosmetic-effect-row input {
+  padding: 8px 10px; border-radius: 9px; background: var(--bg);
+  border: 1px solid var(--line); color: var(--text); font-family: inherit; font-size: 13px;
+}
+.cosmetic-effect-remove {
+  background: transparent; border: 1px solid var(--line); color: var(--text-faint);
+  border-radius: 9px; width: 34px; height: 34px; cursor: pointer; font-size: 16px; line-height: 1;
+}
+.cosmetic-effect-remove:hover { color: var(--danger); border-color: var(--danger); }

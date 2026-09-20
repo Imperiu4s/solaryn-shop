@@ -12,7 +12,7 @@
 // számot látsz, a böngésző MÉG A RÉGI app.js-t futtatja (a webtárhely
 // cache-e miatt egy feltöltés nem feltétlenül ér ki azonnal). MINDEN
 // kiadásnál emelni kell, az index.html ?v= paramétereivel EGYÜTT.
-const CENTER_VERSION = '20260919a';
+const CENTER_VERSION = '20260920b';
 
 const BACKEND_URL = 'https://api.overclockgame.hu:8908';
 
@@ -7293,6 +7293,9 @@ function resetCosmeticForm() {
   cosmeticPetMeta = null;
   petSkinFile = null;
   petSkinIsLegacy = false;
+  cosmeticAura = null;
+  cosmeticGameEffects = [];
+  cosmeticEffectServers = [];
   cosmeticAssembly = emptyAssembly();
   cosmeticParts = [emptyPart(0)];
   cosmeticTarget = -1;
@@ -7326,6 +7329,8 @@ function resetCosmeticForm() {
   cosmeticEditorTexture = null;
   renderCosmeticPartsBar();
   renderCosmeticAnimEditor();
+  renderCosmeticAuraEditor();
+  renderCosmeticEffectEditor();
   queueEditorRefresh();
 }
 
@@ -7769,6 +7774,242 @@ $('#petGenerateBtn')?.addEventListener('click', async () => {
     : 'A figura elkészült - nézd meg az előnézetben, és állíts rajta, ha kell.');
 });
 
+// ── AURA + JÁTÉKBELI EFFEKTEK + SZERVER-HATÓKÖR ─────────────────────────
+//
+// A választók tartalmát MIND a backend adja (GET /api/admin/cosmetics
+// "meta.auraTypes" / "meta.gameEffects" és "servers") - ld. a backend
+// AURA_PRESETS-jének indoklását arról, miért ott élnek a típusok. Enélkül egy
+// új aura-típushoz a Centert is ki kellene adni, és a két lista előbb-utóbb
+// szétcsúszna.
+let cosmeticAuraTypes = [];
+let cosmeticEffectTypes = [];
+let cosmeticServers = [];
+
+/** A NYITOTT űrlap aura-beállítása (a tárolt, nem a feloldott alak). */
+let cosmeticAura = null;
+/** A NYITOTT űrlap játékbeli effektjei: [{effect, amplifier}]. */
+let cosmeticGameEffects = [];
+/** A hatókör: szerver-azonosítók. Üres tömb = MINDEN szerveren hat. */
+let cosmeticEffectServers = [];
+
+function renderCosmeticAuraEditor() {
+  const sel = $('#cosmeticAuraTypeSelect');
+  if (!sel) return;
+  const current = cosmeticAura && cosmeticAura.type ? cosmeticAura.type : 'none';
+  sel.innerHTML = '<option value="none">- nincs aura -</option>'
+    + cosmeticAuraTypes.map((a) => `<option value="${escapeHtml(a.id)}">${escapeHtml(a.label)}</option>`).join('');
+  sel.value = current;
+
+  const fields = $('#cosmeticAuraFields');
+  if (fields) fields.classList.toggle('hidden', current === 'none');
+  if (current === 'none') return;
+
+  const a = cosmeticAura || {};
+  $('#cosmeticAuraRateInput').value = Number.isFinite(a.rate) ? a.rate : '';
+  $('#cosmeticAuraSizeInput').value = Number.isFinite(a.size) ? a.size : '';
+  $('#cosmeticAuraLifeInput').value = Number.isFinite(a.life) ? a.life : '';
+  $('#cosmeticAuraSpeedInput').value = Number.isFinite(a.speed) ? a.speed : '';
+  // A színválasztónak MINDIG kell érték (üres string esetén feketét mutatna,
+  // ami azt hazudná, hogy fekete aurát állítottunk be). Ha nincs felülírás, a
+  // mező a semleges fehéret mutatja, de nem kerül be a mentésbe - ezt a
+  // readCosmeticAura() dönti el a "dirty" jelölőből.
+  $('#cosmeticAuraColorAInput').value = a.colorA || '#ffffff';
+  $('#cosmeticAuraColorBInput').value = a.colorB || '#ffffff';
+  $('#cosmeticAuraColorAInput').dataset.set = a.colorA ? '1' : '';
+  $('#cosmeticAuraColorBInput').dataset.set = a.colorB ? '1' : '';
+  $('#cosmeticAuraReactSelect').value = a.react || 'none';
+}
+
+/** A mezőkből összeállított aura-beállítás, vagy null. */
+function readCosmeticAura() {
+  const type = $('#cosmeticAuraTypeSelect')?.value || 'none';
+  if (type === 'none') return null;
+  const out = { type };
+  const num = (id, key) => {
+    const raw = $(id)?.value.trim();
+    if (raw === '' || raw === undefined) return;
+    const n = Number(raw);
+    if (Number.isFinite(n)) out[key] = n;
+  };
+  num('#cosmeticAuraRateInput', 'rate');
+  num('#cosmeticAuraSizeInput', 'size');
+  num('#cosmeticAuraLifeInput', 'life');
+  num('#cosmeticAuraSpeedInput', 'speed');
+  const ca = $('#cosmeticAuraColorAInput');
+  const cb = $('#cosmeticAuraColorBInput');
+  if (ca && ca.dataset.set) out.colorA = ca.value;
+  if (cb && cb.dataset.set) out.colorB = cb.value;
+  const react = $('#cosmeticAuraReactSelect')?.value;
+  if (react && react !== 'none') out.react = react;
+  return out;
+}
+
+function renderCosmeticEffectEditor() {
+  const wrap = $('#cosmeticEffectRows');
+  if (!wrap) return;
+  if (!cosmeticGameEffects.length) {
+    wrap.innerHTML = '<p class="cosmetic-file-note">Ehhez a kiegészítőhöz nincs játékbeli effekt.</p>';
+  } else {
+    wrap.innerHTML = cosmeticGameEffects.map((e, i) => `
+      <div class="cosmetic-effect-row" data-effect-index="${i}">
+        <label>Effekt
+          <select data-effect-field="effect">${cosmeticEffectTypes.map((t) =>
+            `<option value="${escapeHtml(t.id)}"${t.id === e.effect ? ' selected' : ''}>${escapeHtml(t.label)}</option>`).join('')}</select>
+        </label>
+        <label>Erősség
+          <input type="number" data-effect-field="amplifier" min="0" max="4" step="1" value="${Number(e.amplifier) || 0}" />
+        </label>
+        <button type="button" class="cosmetic-effect-remove" data-effect-remove="${i}" title="Effekt törlése">&times;</button>
+      </div>`).join('');
+  }
+
+  const servers = $('#cosmeticEffectServers');
+  if (servers) {
+    servers.innerHTML = cosmeticServers.length
+      ? cosmeticServers.map((s) => `
+        <label><input type="checkbox" data-effect-server="${escapeHtml(s.id)}"${
+          cosmeticEffectServers.includes(s.id) ? ' checked' : ''} /> ${escapeHtml(s.label)}</label>`).join('')
+      : '<p class="cosmetic-file-note">Még nincs felvett szerver &ndash; a lenti listában tudsz hozzáadni. Szerver nélkül az effekt mindenhol hat.</p>';
+  }
+}
+
+$('#cosmeticAuraTypeSelect')?.addEventListener('change', () => {
+  const type = $('#cosmeticAuraTypeSelect').value;
+  // Típusváltáskor a finomhangolást ELDOBJUK: a számok az előző típus
+  // léptékéhez voltak hangolva (egy 26 db/mp-es láng és egy 8 db/mp-es rúna
+  // nem ugyanaz a nagyságrend), átvinni őket félrevezető lenne.
+  cosmeticAura = type === 'none' ? null : { type };
+  renderCosmeticAuraEditor();
+});
+
+$('#cosmeticAuraResetBtn')?.addEventListener('click', () => {
+  if (!cosmeticAura || !cosmeticAura.type) return;
+  cosmeticAura = { type: cosmeticAura.type };
+  renderCosmeticAuraEditor();
+  showToast('A finomhangolás törölve - a típus alapértékei érvényesek.');
+});
+
+// A finomhangoló mezők bármelyikének változása azonnal beíródik az
+// állapotba, hogy egy fülváltás ne dobja el.
+['#cosmeticAuraRateInput', '#cosmeticAuraSizeInput', '#cosmeticAuraLifeInput',
+ '#cosmeticAuraSpeedInput', '#cosmeticAuraReactSelect'].forEach((id) => {
+  $(id)?.addEventListener('change', () => { cosmeticAura = readCosmeticAura(); });
+});
+['#cosmeticAuraColorAInput', '#cosmeticAuraColorBInput'].forEach((id) => {
+  $(id)?.addEventListener('input', (e) => {
+    // Amint hozzányúlnak, a szín FELÜLÍRÁSNAK számít - ld. a
+    // renderCosmeticAuraEditor() megjegyzését a "set" jelölőről.
+    e.target.dataset.set = '1';
+    cosmeticAura = readCosmeticAura();
+  });
+});
+
+$('#cosmeticEffectAddBtn')?.addEventListener('click', () => {
+  if (!cosmeticEffectTypes.length) { showToast('A backend nem adott effekt-listát.', true); return; }
+  if (cosmeticGameEffects.length >= 4) { showToast('Egy kiegészítő legfeljebb 4 effektet adhat.', true); return; }
+  // Az első OLYAN effektet ajánljuk fel, ami még nincs a listában - ugyanazt
+  // kétszer felvenni a backend úgyis elutasítaná.
+  const used = new Set(cosmeticGameEffects.map((e) => e.effect));
+  const next = cosmeticEffectTypes.find((t) => !used.has(t.id));
+  if (!next) { showToast('Minden effekt szerepel már a listában.', true); return; }
+  cosmeticGameEffects.push({ effect: next.id, amplifier: 0 });
+  renderCosmeticEffectEditor();
+});
+
+document.addEventListener('click', (e) => {
+  const rm = e.target.closest('[data-effect-remove]');
+  if (rm) {
+    cosmeticGameEffects.splice(Number(rm.dataset.effectRemove), 1);
+    renderCosmeticEffectEditor();
+  }
+});
+
+document.addEventListener('change', (e) => {
+  const field = e.target.closest('[data-effect-field]');
+  if (field) {
+    const row = field.closest('[data-effect-index]');
+    const idx = Number(row.dataset.effectIndex);
+    const entry = cosmeticGameEffects[idx];
+    if (!entry) return;
+    if (field.dataset.effectField === 'effect') entry.effect = field.value;
+    else entry.amplifier = Math.max(0, Math.min(4, Number(field.value) || 0));
+    return;
+  }
+  const server = e.target.closest('[data-effect-server]');
+  if (server) {
+    const id = server.dataset.effectServer;
+    if (server.checked) { if (!cosmeticEffectServers.includes(id)) cosmeticEffectServers.push(id); }
+    else cosmeticEffectServers = cosmeticEffectServers.filter((x) => x !== id);
+  }
+});
+
+// ── Szerver-katalógus ───────────────────────────────────────────────────
+function renderCosmeticServerList() {
+  const wrap = $('#cosmeticServerList');
+  if (!wrap) return;
+  wrap.innerHTML = cosmeticServers.length
+    ? cosmeticServers.map((s) => `
+      <div class="cosmetic-server-row">
+        <span class="cosmetic-server-row-label">${escapeHtml(s.label)}</span>
+        <span class="cosmetic-server-row-id">${escapeHtml(s.id)}</span>
+        <button type="button" class="cosmetic-effect-remove" data-server-remove="${escapeHtml(s.id)}" title="Szerver törlése">&times;</button>
+      </div>`).join('')
+    : '<p class="cosmetic-file-note">Még nincs felvett szerver.</p>';
+}
+
+$('#cosmeticServerAddBtn')?.addEventListener('click', async () => {
+  const resultEl = $('#cosmeticServerResult');
+  const id = $('#cosmeticServerIdInput').value.trim().toLowerCase();
+  const label = $('#cosmeticServerLabelInput').value.trim();
+  resultEl.className = 'redeem-result';
+  if (!id || !label) { resultEl.textContent = 'Az azonosító és a név is kell.'; resultEl.classList.add('error'); return; }
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/cosmetic-servers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ id, label })
+    });
+    const data = await res.json();
+    if (!data.ok) { resultEl.textContent = data.message || 'Nem sikerült.'; resultEl.classList.add('error'); return; }
+    cosmeticServers.push(data.server);
+    cosmeticServers.sort((a, b) => a.label.localeCompare(b.label, 'hu'));
+    $('#cosmeticServerIdInput').value = '';
+    $('#cosmeticServerLabelInput').value = '';
+    renderCosmeticServerList();
+    renderCosmeticEffectEditor();
+    showToast('Szerver hozzáadva.');
+  } catch {
+    resultEl.textContent = 'Nem sikerült elérni a szervert.';
+    resultEl.classList.add('error');
+  }
+});
+
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-server-remove]');
+  if (!btn) return;
+  const id = btn.dataset.serverRemove;
+  confirmModal('Szerver törlése',
+    `Biztosan törlöd a(z) "${id}" szervert? A kiegészítők hatóköréből is kikerül, tehát ahol EDDIG csak ezen a szerveren hatott az effekt, ott ezután MINDEN szerveren hatni fog.`,
+    'Igen, törlés').then(async (confirmed) => {
+    if (!confirmed) return;
+    try {
+      const res = await fetch(BACKEND_URL + '/api/admin/cosmetic-servers/' + encodeURIComponent(id), {
+        method: 'DELETE',
+        headers: { Authorization: 'Bearer ' + session.token }
+      });
+      const data = await res.json();
+      if (!data.ok) { showToast('Nem sikerült törölni.', true); return; }
+      cosmeticServers = cosmeticServers.filter((s) => s.id !== id);
+      cosmeticEffectServers = cosmeticEffectServers.filter((s) => s !== id);
+      renderCosmeticServerList();
+      renderCosmeticEffectEditor();
+      showToast('Szerver törölve.');
+    } catch {
+      showToast('Nem sikerült elérni a szervert.', true);
+    }
+  });
+});
+
 async function loadCosmeticsAdmin() {
   if (!session || !session.token) return;
   if (hasPerm('global.cosmeticsManage')) {
@@ -7778,6 +8019,16 @@ async function loadCosmeticsAdmin() {
       });
       const data = await res.json();
       cosmeticsAdminItems = data.ok ? (data.cosmetics || []) : [];
+      if (data.ok) {
+        // A választók tartalma a BACKENDTŐL jön - ld. a fenti magyarázatot.
+        // A "limits" a backend meglévő, minden korlátot és választható
+        // listát tartalmazó blokkja - az aura- és effekt-típusok is oda
+        // kerültek, hogy ne legyen két párhuzamos meta-mező.
+        cosmeticAuraTypes = data.limits?.auraTypes || [];
+        cosmeticEffectTypes = data.limits?.gameEffects || [];
+        cosmeticServers = data.servers || [];
+        renderCosmeticServerList();
+      }
       if (data.ok && Array.isArray(data.slots)) {
         const sel = $('#cosmeticSlotSelect');
         if (sel && !sel.options.length) {
@@ -7884,6 +8135,8 @@ function renderCosmeticsAdminList() {
         <span class="cosmetic-tag rarity">${escapeHtml(RARITY_LABELS[c.rarity] || c.rarity)}</span>
         ${cosmeticAnimatedTag(c)}
         ${c.petMeta ? '<span class="cosmetic-tag">figura</span>' : ''}
+        ${c.aura ? '<span class="cosmetic-tag">aura</span>' : ''}
+        ${(c.gameEffects && c.gameEffects.length) ? '<span class="cosmetic-tag">effekt</span>' : ''}
         ${c.enabled ? '' : '<span class="cosmetic-badge-off">kikapcsolva</span>'}
         ${c.hasModel ? '' : '<span class="cosmetic-badge-warn">nincs modell</span>'}
       </div>
@@ -8966,6 +9219,12 @@ $('#cosmeticSaveBtn')?.addEventListener('click', async () => {
   // ezt a backend a mező TÖRLÉSEKÉNT értelmezi (ld. validatePetMeta); a
   // hiányzó mező viszont a meglévőt hagyná érintetlenül.
   formData.append('petMeta', cosmeticPetMeta ? JSON.stringify(cosmeticPetMeta) : '');
+  // Aura / játékbeli effektek / hatókör. Az üres string itt is TÖRLÉST
+  // jelent (ld. a backend három-állapotú szabályát).
+  const auraToSave = readCosmeticAura();
+  formData.append('aura', auraToSave ? JSON.stringify(auraToSave) : '');
+  formData.append('gameEffects', cosmeticGameEffects.length ? JSON.stringify(cosmeticGameEffects) : '');
+  formData.append('effectServers', cosmeticEffectServers.length ? JSON.stringify(cosmeticEffectServers) : '');
   // Az ELSŐ rész modellje a kiegészítő-végponton megy fel (a backend oda
   // teszi, ld. src/cosmetics.js) - a többi részé a saját végpontján.
   if (firstPart && firstPart.file) formData.append('model', firstPart.file);
@@ -9108,6 +9367,13 @@ async function openCosmeticForEdit(id) {
   // amivel létrehozták, a MENTETT beállításaival - így a "legyen kisebb",
   // "üljön a másik vállra", "más skinnel" kérések egy gombnyomásból mennek,
   // nem kell nulláról újra felvenni a kiegészítőt.
+  cosmeticAura = (item.aura && typeof item.aura === 'object') ? { ...item.aura } : null;
+  cosmeticGameEffects = Array.isArray(item.gameEffects) ? item.gameEffects.map((e) => ({ ...e })) : [];
+  // null = MINDEN szerveren hat; a felületen ez "egy sincs bejelölve".
+  cosmeticEffectServers = Array.isArray(item.effectServers) ? item.effectServers.slice() : [];
+  renderCosmeticAuraEditor();
+  renderCosmeticEffectEditor();
+
   cosmeticPetMeta = (item.petMeta && typeof item.petMeta === 'object') ? item.petMeta : null;
   if (cosmeticPetMeta) {
     $('#cosmeticPetBox')?.classList.remove('hidden');

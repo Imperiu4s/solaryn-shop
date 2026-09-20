@@ -54,11 +54,11 @@
   <!-- A téma minél korábban, a stíluslap ELŐTT alkalmazódjon (ld.
        theme.js), hogy az első kirajzolás már a mentett témával történjen,
        ne legyen látható "villanás" az alap témáról. -->
-  <script src="theme.js?v=20260919a"></script>
-  <link rel="stylesheet" href="style.css?v=20260919a" />
+  <script src="theme.js?v=20260920b"></script>
+  <link rel="stylesheet" href="style.css?v=20260920b" />
   <!-- A vizuális réteg SZÁNDÉKOSAN a style.css UTÁN: csak ráépít az ottani
        osztályokra, és a kaszkádban felülír, ahol kell (ld. ui.css eleje). -->
-  <link rel="stylesheet" href="ui.css?v=20260919a" />
+  <link rel="stylesheet" href="ui.css?v=20260920b" />
 
   <!-- Strukturált adat a keresőknek/megosztásoknak (schema.org). -->
   <script type="application/ld+json">
@@ -1471,6 +1471,22 @@
               <input type="search" id="cosmeticAdminSearch" class="cosmetic-filter-input admin-toolbar-search" placeholder="Keresés név vagy azonosító szerint..." aria-label="Keresés a kiegészítők között" />
             </div>
 
+            <!-- SZERVER-KATALÓGUS: ebből lehet a kiegészítőknél kiválasztani,
+                 hogy a játékbeli effektjük mely szervereken hasson. Azért van
+                 itt (a lista fölött, összecsukva), mert ritkán változik - de
+                 amikor kell, itt keresi az ember. -->
+            <details class="card cosmetic-servers-card" data-perm="global.cosmeticsManage">
+              <summary class="card-title">Szerverek (a játékbeli effektek hatóköréhez)</summary>
+              <p class="cosmetic-file-note">Vedd fel ide azokat a szervereket, ahol a <strong>SolarCosmeticEffects</strong> plugin fut. Az <em>azonosítónak</em> pontosan egyeznie kell a plugin <code>config.yml</code>-jében megadott <code>server-id</code> értékkel.</p>
+              <div id="cosmeticServerList" class="cosmetic-server-admin-list"></div>
+              <div class="cosmetic-transform-grid" style="margin-top:10px;">
+                <label>Azonosító<input type="text" id="cosmeticServerIdInput" placeholder="pl. bedwars" maxlength="32" /></label>
+                <label>Megjelenő név<input type="text" id="cosmeticServerLabelInput" placeholder="pl. Bedwars" maxlength="48" /></label>
+              </div>
+              <button type="button" class="btn-outline" id="cosmeticServerAddBtn" style="margin-top:10px;">+ Szerver hozzáadása</button>
+              <p class="redeem-result" id="cosmeticServerResult"></p>
+            </details>
+
             <div id="cosmeticsAdminList" data-perm="global.cosmeticsManage"></div>
 
             <div class="admin-subsection-title" data-perm="global.cosmeticsMarketManage">Piaci hirdetések</div>
@@ -1496,6 +1512,7 @@
                   <button type="button" class="cosmetic-tab active" data-cosmetic-tab="basics">Alapadatok</button>
                   <button type="button" class="cosmetic-tab" data-cosmetic-tab="model">Modell és illesztés</button>
                   <button type="button" class="cosmetic-tab" data-cosmetic-tab="anim">Animáció</button>
+                  <button type="button" class="cosmetic-tab" data-cosmetic-tab="effects">Aura és effektek</button>
                 </div>
 
                 <!-- ── FÜL: ALAPADATOK ─────────────────────────────────── -->
@@ -1670,6 +1687,60 @@
                       <p class="cosmetic-file-note">Üresen hagyva a modell közepe körül forog. Egy szárny a TÖVÉNÉL csuklik &ndash; ott állítsd be a forgáspontot, különben a közepén hajlik, nem a tövénél. (A modell saját, Blockbench-koordinátáiban.) A kész mozgások ezt automatikusan beállítják.</p>
                       <button type="button" class="btn-outline" id="cosmeticAnimRootPivotBtn" title="A forgáspontot a kiválasztott rész (vagy a teljes kiegészítő) TÖVÉHEZ teszi. Egy jobb+bal szárnypárnál - ahol a modell a test mindkét oldalára átnyúlik - a KÖZEPÉRE, mert ott ér a két fél a háthoz; enélkül a közeli szárny a forgáspontra esne, és meg sem mozdulna.">Forgáspont a tőre</button>
                       <button type="button" class="btn-outline" id="cosmeticAnimClearBtn">Animáció törlése</button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- ── AURA + JÁTÉKBELI EFFEKTEK ──────────────────────────
+                     A kettő SZÁNDÉKOSAN egy fülön, de KÉT külön dobozban van:
+                     a nevük és a hatásuk teljesen más (az egyik látvány a
+                     kliensben, a másik játékmenet a szerveren), viszont
+                     mindkettő ugyanahhoz a kérdéshez tartozik: "mit ad ez a
+                     kiegészítő azon felül, hogy látszik". -->
+                <div class="cosmetic-tab-pane" data-cosmetic-pane="effects">
+                  <div class="cosmetic-transform-box">
+                    <div class="cosmetic-transform-title">Aura &ndash; részecskék a kiegészítő körül</div>
+                    <p class="cosmetic-file-note" style="margin-bottom:10px;">A játékban a kiegészítő körül megjelenő részecske-effekt. A <strong>típus</strong> hozza a teljes hangulatot (sebesség, élettartam, színek, örvénylés) &ndash; alatta csak finomhangolsz. Az aura a kiegészítővel együtt mozog, tehát követi az animációt is. A <em>Mikor</em> mező ugyanúgy működik, mint az animációnál: beállíthatod, hogy csak mozgás vagy repülés közben legyen sűrű.</p>
+
+                    <label class="gift-modal-label" style="margin-top:0;">Típus</label>
+                    <select id="cosmeticAuraTypeSelect" class="gift-modal-input"></select>
+
+                    <div id="cosmeticAuraFields" class="hidden">
+                      <div class="cosmetic-transform-grid" style="margin-top:12px;">
+                        <label>Sűrűség (db/mp)<input type="number" id="cosmeticAuraRateInput" step="1" min="1" max="60" placeholder="alap" /></label>
+                        <label>Méret<input type="number" id="cosmeticAuraSizeInput" step="0.05" min="0.05" max="4" placeholder="alap" /></label>
+                        <label>Élettartam (mp)<input type="number" id="cosmeticAuraLifeInput" step="0.1" min="0.2" max="6" placeholder="alap" /></label>
+                        <label>Sebesség-szorzó<input type="number" id="cosmeticAuraSpeedInput" step="0.1" min="0.1" max="4" placeholder="1" /></label>
+                      </div>
+                      <div class="cosmetic-transform-grid" style="margin-top:10px;">
+                        <label>Szín (születés)<input type="color" id="cosmeticAuraColorAInput" /></label>
+                        <label>Szín (elmúlás)<input type="color" id="cosmeticAuraColorBInput" /></label>
+                        <label>Mikor
+                          <select id="cosmeticAuraReactSelect">
+                            <option value="none">Mindig</option>
+                            <option value="move">Mozgás közben</option>
+                            <option value="air">Levegőben</option>
+                            <option value="sneak">Lopakodva</option>
+                            <option value="ground">Földön</option>
+                          </select>
+                        </label>
+                      </div>
+                      <p class="cosmetic-file-note">A számokat üresen hagyva a típus saját, behangolt értéke marad &ndash; érdemes így kezdeni. A színeket a típus adja; csak akkor írd felül, ha tényleg más árnyalatot akarsz.</p>
+                      <button type="button" class="btn-outline" id="cosmeticAuraResetBtn" title="Törli a finomhangolást, és visszaadja a típus alapértékeit.">Finomhangolás törlése</button>
+                    </div>
+                  </div>
+
+                  <div class="cosmetic-transform-box" style="margin-top:14px;">
+                    <div class="cosmetic-transform-title">Játékbeli effektek</div>
+                    <p class="cosmetic-file-note" style="margin-bottom:10px;">Ezeket <strong>nem a kliens adja, hanem a szerver</strong> (SolarCosmeticEffects plugin): amíg a játékos viseli a kiegészítőt, megkapja az itt felsorolt effekteket. Ha ugyanazt az effektet két viselt kiegészítő is adja, az <strong>erősebb</strong> érvényesül. Az erősség 0 = I. szint, 1 = II. szint, és így tovább.</p>
+
+                    <div id="cosmeticEffectRows"></div>
+                    <button type="button" class="btn-outline" id="cosmeticEffectAddBtn">+ Effekt hozzáadása</button>
+
+                    <div style="margin-top:14px;">
+                      <label class="gift-modal-label">Mely szervereken hasson</label>
+                      <div id="cosmeticEffectServers" class="cosmetic-server-list"></div>
+                      <p class="cosmetic-file-note">Ha egyet sem jelölsz be, az effekt <strong>minden</strong> szerveren hat. A lista a lenti szerver-katalógusból jön; a plugin <code>config.yml</code>-jében ugyanezt az azonosítót kell beállítani <code>server-id</code> néven.</p>
                     </div>
                   </div>
                 </div>
@@ -2699,8 +2770,8 @@
        ez utóbbi itt lényeges, mert a ui.js az app.js globális
        switchView()/showToast() függvényeit csomagolja be, tehát csak
        azok létrejötte után futhat. -->
-  <script src="skin3d.js?v=20260919a" defer></script>
-  <script src="app.js?v=20260919a" defer></script>
-  <script src="ui.js?v=20260919a" defer></script>
+  <script src="skin3d.js?v=20260920b" defer></script>
+  <script src="app.js?v=20260920b" defer></script>
+  <script src="ui.js?v=20260920b" defer></script>
 </body>
 </html>

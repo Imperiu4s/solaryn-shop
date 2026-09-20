@@ -220,7 +220,12 @@ const SkinPreview = (() => {
     back:      [0, 0, 0],
     tail:      [0, 0, 0],
     left_arm:  [5, 2, 0],
-    right_arm: [-5, 2, 0]
+    right_arm: [-5, 2, 0],
+    // A KÉZBEN tartott kiegészítő ugyanahhoz a csonthoz (jobb kar) kötődik,
+    // mint a "right_arm", de a KÉZFEJNÉL, nem a vállnál - ezért a kar teljes
+    // hosszával (12 egység) lejjebb van a forgáspontja. A kliens ugyanezt az
+    // eltolást alkalmazza (ld. MixinCosmeticFeature "main_hand" ágát).
+    main_hand: [-5, 10, 0]
   };
 
   // ── KIEGÉSZÍTŐK: RÉSZEK ÉS ANIMÁCIÓ ──────────────────────────────────
@@ -834,10 +839,11 @@ const SkinPreview = (() => {
       // illeszkedő csúcsai UGYANAZT a szöget kapják (azonos a távolságuk),
       // ezért a felület folytonos marad. A kliens ugyanígy működik.
       //
-      // A normalizálás a KOCKAKÖZÉPPONTOK legnagyobb távolságával történik,
-      // hogy a meglévő beállítások kitérése ne változzon - a hegyen lévő
-      // kocka külső csúcsai emiatt 1 fölé kerülnének, ezt levágjuk. A skála
-      // a forgáspont KÉT OLDALÁRA KÜLÖN készül, ld. makeSideNormalizer().
+      // A normalizálás a CSÚCSOK legnagyobb távolságával történik (ld.
+      // makeSideNormalizer): a kockaközéppontokkal egy 10 egység SZÉLES
+      // szárny-kocka fele kilógna a levágott tartományba, ott a hullám
+      // befagyna, és a határon megtörne a felület. A skála a forgáspont KÉT
+      // OLDALÁRA KÜLÖN készül.
       let elementDistance = null;
       let vertexDistance = null;
       let waveAxis = 0;
@@ -845,9 +851,13 @@ const SkinPreview = (() => {
       let waveStraddles = false;
       if (wave && elementRanges.length) {
         const axis = animAlongAxis(anim, raw.elements);
-        const signedCenters = elementRanges.map((r) => r.center[axis] - animPivot[axis]);
-        const normalize = makeSideNormalizer(signedCenters);
-        elementDistance = signedCenters.map(normalize);
+        // A SKÁLA a csúcsokból, az ELEMENT-értékek a kockaközéppontokból: a
+        // normálvektorok a kocka közepének szögével fordulnak, de ugyanabban
+        // a skálában kell lenniük, mint a csúcsoknak.
+        const signedVerts = [];
+        for (let i = 0; i < positions.length / 3; i++) signedVerts.push(positions[i * 3 + axis] - animPivot[axis]);
+        const normalize = makeSideNormalizer(signedVerts);
+        elementDistance = elementRanges.map((r) => normalize(r.center[axis] - animPivot[axis]));
         waveAxis = axis;
         waveStraddles = normalize.straddles;
         // ELŐJELES: a negatív érték a forgáspont túloldalát jelenti, ahol a
@@ -931,14 +941,18 @@ const SkinPreview = (() => {
         for (let k = 1; k < 3; k++) { if (mx[k] - mn[k] > best) { best = mx[k] - mn[k]; axis = k; } }
       }
 
-      // Normalizálás a KOCKAKÖZÉPPONTOK legnagyobb távolságával, a forgáspont
-      // KÉT OLDALÁRA KÜLÖN (ld. makeSideNormalizer) - ez az a pont, ahol a
+      // Normalizálás a CSÚCSOK legnagyobb távolságával, a forgáspont KÉT
+      // OLDALÁRA KÜLÖN (ld. makeSideNormalizer) - ez az a pont, ahol a
       // "jobb+bal szárny" esetnél eldől, hogy a két szárny egyformán csap-e.
-      const signedCenters = [];
-      for (const p of parts) for (const r of p.elementRanges) {
-        signedCenters.push(inAssembly(p, r.center[0], r.center[1], r.center[2])[axis] - assemblyPivot0[axis]);
+      // A kockaközéppontokkal a szárny külső fele a levágott tartományba
+      // esne, és ott megtörne a felület (ld. a kliens SideScale-jét).
+      const signedVerts = [];
+      for (const p of parts) {
+        for (let i = 0; i < p.positions.length / 3; i++) {
+          signedVerts.push(inAssembly(p, p.positions[i * 3], p.positions[i * 3 + 1], p.positions[i * 3 + 2])[axis] - assemblyPivot0[axis]);
+        }
       }
-      const normalize = makeSideNormalizer(signedCenters);
+      const normalize = makeSideNormalizer(signedVerts);
       assemblyWaveAxis = axis;
       assemblyWaveStraddles = normalize.straddles;
       for (const p of parts) {
