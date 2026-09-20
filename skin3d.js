@@ -1447,6 +1447,14 @@ const SkinPreview = (() => {
     // A kiegészítők - mindegyik SAJÁT geometriával és SAJÁT textúrával
     // (ellentétben a testrészekkel, amik egyetlen skin-képet osztanak).
     let cosmeticDrawables = [];
+    // Az aura részecskéi a KIEGÉSZÍTŐ textúráját mintázzák - itt jegyezzük
+    // meg az elsőt (a részek úgyis közös textúrán osztoznak).
+    //
+    // A DEKLARÁCIÓ ITT VAN, nem lejjebb az aura-blokkban: a buildCosmetics()
+    // már ezt írja, és egy "let" a hívása UTÁN temporal dead zone-t okozna -
+    // a hibát pedig a geometria-építés try/catch-e elnyelné, vagyis a
+    // kiegészítő NÉMÁN eltűnne az előnézetből. (Pontosan ez történt.)
+    let auraTex = null;
 
     function buildCosmetics(list) {
       // A régi puffereket/textúrákat KÖTELEZŐ felszabadítani: a szerkesztőben
@@ -1511,9 +1519,6 @@ const SkinPreview = (() => {
     const uMVP = gl.getUniformLocation(program, 'uMVP');
     const uTint = gl.getUniformLocation(program, 'uTint');
     const uAlphaCut = gl.getUniformLocation(program, 'uAlphaCut');
-    // Az aura részecskéi a KIEGÉSZÍTŐ textúráját mintázzák - az első
-    // kiegészítő textúrája (a részek úgyis közös textúrán osztoznak).
-    let auraTex = null;
 
     // ── AURA: a részecske-felhő kirajzolása ─────────────────────────────
     //
