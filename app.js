@@ -12,7 +12,7 @@
 // számot látsz, a böngésző MÉG A RÉGI app.js-t futtatja (a webtárhely
 // cache-e miatt egy feltöltés nem feltétlenül ér ki azonnal). MINDEN
 // kiadásnál emelni kell, az index.html ?v= paramétereivel EGYÜTT.
-const CENTER_VERSION = '20260920d';
+const CENTER_VERSION = '20260920e';
 
 const BACKEND_URL = 'https://api.overclockgame.hu:8908';
 
@@ -2136,6 +2136,10 @@ function switchView(view) {
   if (view === 'market') loadMarket();
   if (view === 'trades') loadTrades();
   if (view === 'cosmeticsAdmin') { closeCosmeticEditor(); resetCosmeticForm(); loadCosmeticsAdmin(); }
+  // ÚJ: mobok (ld. SolarBackend src/mobs.js + a SolarMobs plugin). Minden
+  // megnyitáskor frissül: a lista forrása a SZERVER szinkronja, ami két
+  // megnyitás között is hozhatott új mobot vagy kapcsolhatott ki egyet.
+  if (view === 'mobsAdmin') { closeMobEditor(); loadMobsAdmin(); }
 }
 $$('.app-nav-item[data-view]').forEach((btn) => {
   btn.addEventListener('click', () => switchView(btn.dataset.view));
@@ -6288,6 +6292,15 @@ function cosmeticThumbHtml(c) {
   return `<div class="cosmetic-thumb cosmetic-thumb-empty" data-cosmetic-thumb="${c.id}" data-cosmetic-name="${escapeHtml(c.name || '')}"></div>`;
 }
 
+// A KÁRTYÁKON a bélyegkép ritkaság-színű gyűrűt kap (a kártya tetején futó
+// sáv felvett állapotban az arany keret alatt elveszett). A gyűrű külön elem,
+// mert a legendás/mítikus fokozat gradienst kap - ld. style.css. A
+// replaceThumb() ezzel is működik: a helyőrzőt a szülőjében cseréli ki, ami
+// innentől a gyűrű.
+function cosmeticCardThumbHtml(c) {
+  return `<div class="cosmetic-thumb-ring">${cosmeticThumbHtml(c)}</div>`;
+}
+
 function loadImage(src) {
   return new Promise((resolve) => {
     const img = new Image();
@@ -6600,7 +6613,7 @@ function renderOwnedCosmetics() {
   }
   wrap.innerHTML = `<div class="cosmetic-grid">${visible.map((c) => `
     <div class="cosmetic-card ${c.equipped ? 'equipped' : ''} rarity-${escapeHtml(c.rarity)}">
-      ${cosmeticThumbHtml(c)}
+      ${cosmeticCardThumbHtml(c)}
       <div class="cosmetic-card-name">${escapeHtml(c.name)}</div>
       <div class="cosmetic-card-tags">
         <span class="cosmetic-tag">${escapeHtml(c.slotLabel)}</span>
@@ -6649,7 +6662,7 @@ function renderCosmeticShopGrid() {
   }
   wrap.innerHTML = `<div class="cosmetic-grid">${buyable.map((c) => `
     <div class="cosmetic-card rarity-${escapeHtml(c.rarity)}">
-      ${cosmeticThumbHtml(c)}
+      ${cosmeticCardThumbHtml(c)}
       <div class="cosmetic-card-name">${escapeHtml(c.name)}</div>
       <div class="cosmetic-card-tags">
         <span class="cosmetic-tag">${escapeHtml(c.slotLabel)}</span>
@@ -6821,7 +6834,7 @@ async function loadMarketListings() {
     const alreadyOwned = ownedIds.has(l.cosmetic.id);
     return `
     <div class="cosmetic-card rarity-${escapeHtml(l.cosmetic.rarity)}">
-      ${cosmeticThumbHtml(l.cosmetic)}
+      ${cosmeticCardThumbHtml(l.cosmetic)}
       <div class="cosmetic-card-name">${escapeHtml(l.cosmetic.name)}</div>
       <div class="cosmetic-card-tags">
         <span class="cosmetic-tag">${escapeHtml(l.cosmetic.slotLabel)}</span>
@@ -8134,7 +8147,7 @@ function renderCosmeticsAdminList() {
 
   wrap.innerHTML = `<div class="cosmetic-admin-grid">${visible.map((c) => `
     <div class="cosmetic-admin-card rarity-${escapeHtml(c.rarity)}${c.enabled ? '' : ' is-off'}">
-      ${cosmeticThumbHtml(c)}
+      ${cosmeticCardThumbHtml(c)}
       <div class="cosmetic-admin-card-name">${escapeHtml(c.name)}</div>
       <div class="cosmetic-admin-card-slug">${escapeHtml(c.slug)}</div>
       <div class="cosmetic-admin-card-tags">
@@ -9805,5 +9818,1263 @@ document.addEventListener('keydown', (e) => {
 
 const versionEl = document.querySelector('#centerVersion');
 if (versionEl) versionEl.textContent = 'v' + CENTER_VERSION;
+
+
+
+// ═════════════════════════════════════════════════════════════════════════
+//  MOBOK (admin) - a SolarMobs plugin mobjainak MEGJELENÉSE
+//
+//  A mobok DEFINÍCIÓJA (élet, sebzés, képességek, drop, spawner) a szerveren,
+//  a plugin YAML-jeiben él, és INGAME szerkeszthető (/solarmob ...). Ide csak
+//  az kerül, amit ott láthatóra kapcsoltak - a felhasználó kifejezett kérése
+//  szerint. Itt KIZÁRÓLAG a megjelenést állítjuk: modell, textúra, illesztés,
+//  animáció, aura, hitbox.
+//
+//  MIÉRT UGYANAZOK A FÜGGVÉNYEK, MINT A KIEGÉSZÍTŐKNÉL: a modell-, animáció-
+//  és aura-formátum bitre azonos (ld. SolarBackend src/mobs.js fejlécét), és
+//  az előnézet is a közös skin3d.js-t hívja. Ami itt új, az csak a MOB-ra
+//  jellemző rész: a talpponthoz illesztés és a hitbox.
+// ═════════════════════════════════════════════════════════════════════════
+
+let mobsAdminItems = [];
+let mobAuraTypes = [];
+let mobLimits = { maxElements: 256, maxParts: 8 };
+
+let mobEditingId = null;
+/** A mob EGÉSZÉRE vonatkozó mezők (a részeké a mobParts-ban). */
+let mobAssembly = null;
+let mobParts = [];
+/** -1 = a teljes mob, 0.. = a kijelölt rész (ugyanaz a minta, mint a kiegészítőknél). */
+let mobTarget = -1;
+let mobTextureFile = null;
+let mobTextureImg = null;
+let mobPreviewStop = null;
+let mobPreviewQueued = false;
+let mobPreviewDirty = false;
+/** Gyorsítótár-törő: mentés után a böngésző különben a RÉGI modellt szolgálná ki. */
+let mobAssetBust = 0;
+const mobThumbCache = new Map();
+const mobModelCache = new Map();
+
+function mobsAdminSection() {
+  return document.querySelector('.view[data-view="mobsAdmin"]');
+}
+
+function mobModelUrl(id) {
+  return BACKEND_URL + '/api/mobs/model/' + id + (mobAssetBust ? ('?v=' + mobAssetBust) : '');
+}
+
+function mobTextureUrl(id) {
+  return BACKEND_URL + '/api/mobs/texture/' + id + (mobAssetBust ? ('?v=' + mobAssetBust) : '');
+}
+
+async function loadMobsAdmin() {
+  const wrap = $('#mobsAdminList');
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="card"><p class="redeem-result">Betöltés...</p></div>';
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/mobs', {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      wrap.innerHTML = `<div class="card"><p class="redeem-result error">${escapeHtml(data.message || 'Nem sikerült betölteni a mobokat.')}</p></div>`;
+      return;
+    }
+    mobsAdminItems = data.mobs || [];
+    mobAuraTypes = data.auraTypes || [];
+    mobLimits = data.limits || mobLimits;
+    if (window.SkinPreview && SkinPreview.setAuraPresets) SkinPreview.setAuraPresets(mobAuraTypes);
+    renderMobsAdmin();
+  } catch {
+    wrap.innerHTML = '<div class="card"><p class="redeem-result error">Hálózati hiba a mobok betöltésekor.</p></div>';
+  }
+}
+
+function renderMobsAdmin() {
+  const wrap = $('#mobsAdminList');
+  if (!wrap) return;
+  const query = ($('#mobAdminSearch')?.value || '').trim().toLowerCase();
+  const showHidden = !!$('#mobShowHiddenCheckbox')?.checked;
+
+  let list = mobsAdminItems.filter((m) => showHidden || m.centerVisible);
+  if (query) {
+    list = list.filter((m) => (m.name || '').toLowerCase().includes(query)
+      || (m.slug || '').toLowerCase().includes(query));
+  }
+
+  if (!list.length) {
+    const why = mobsAdminItems.length === 0
+      ? 'Még egyetlen mob sem szinkronizált ide. Indítsd el a szerveren a <strong>SolarMobs</strong> plugint, majd kapcsold láthatóra a mobot: <code>/solarmob center &lt;azonosító&gt; on</code>.'
+      : (query
+        ? 'Nincs a keresésnek megfelelő mob.'
+        : 'Egyetlen mob sincs láthatóra kapcsolva a szerveren. Kapcsold be ingame: <code>/solarmob center &lt;azonosító&gt; on</code> &ndash; vagy pipáld be fent a rejtettek mutatását.');
+    wrap.innerHTML = `<div class="card"><p class="redeem-result">${why}</p></div>`;
+    return;
+  }
+
+  wrap.innerHTML = `<div class="mob-admin-grid">${list.map((m) => {
+    const hb = m.effectiveHitbox || {};
+    const hbText = hb.mode === 'vanilla' || !hb.width
+      ? 'vanilla méret'
+      : `${hb.width} &times; ${hb.height} blokk`;
+    return `
+    <div class="mob-admin-card${m.enabled ? '' : ' is-off'}${m.centerVisible ? '' : ' is-hidden-server'}">
+      ${mobThumbHtml(m)}
+      <div class="mob-admin-card-name">${escapeHtml(m.name || m.slug)}</div>
+      <div class="mob-admin-card-slug">${escapeHtml(m.slug)}</div>
+      <div class="mob-admin-card-tags">
+        ${m.baseType ? `<span class="cosmetic-tag">${escapeHtml(m.baseType.toLowerCase())}</span>` : ''}
+        ${m.animated ? '<span class="cosmetic-tag">animált</span>' : ''}
+        ${m.aura ? '<span class="cosmetic-tag">aura</span>' : ''}
+        ${m.centerVisible ? '' : '<span class="mob-badge-warn">a szerveren rejtett</span>'}
+        ${m.enabled ? '' : '<span class="mob-badge-warn">kikapcsolva</span>'}
+        ${m.hasModel ? '' : '<span class="mob-badge-warn">nincs modell</span>'}
+        ${m.hasModel && !m.hasTexture ? '<span class="mob-badge-warn">nincs textúra</span>' : ''}
+      </div>
+      <div class="mob-admin-card-meta">
+        Hitbox: ${hbText}<br />
+        ${m.stats && Number.isFinite(m.stats.health) ? `Élet: ${m.stats.health}` : ''}
+        ${m.servers && m.servers.length ? `<br />Szerver: ${escapeHtml(m.servers.join(', '))}` : ''}
+      </div>
+      <div class="mob-admin-card-actions">
+        <button type="button" class="btn-glow" data-mob-edit="${m.id}">Szerkesztés</button>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+  hydrateMobThumbs(wrap);
+}
+
+function mobThumbHtml(m) {
+  if (!m.hasModel || !m.hasTexture) {
+    return '<div class="mob-thumb mob-thumb-empty"></div>';
+  }
+  const cached = mobThumbCache.get(m.id);
+  if (cached) return `<img class="mob-thumb" src="${cached}" alt="${escapeHtml(m.name || m.slug)} előnézeti képe" />`;
+  return `<div class="mob-thumb mob-thumb-empty" data-mob-thumb="${m.id}" data-mob-name="${escapeHtml(m.name || m.slug)}"></div>`;
+}
+
+/**
+ * A bélyegképek SOROSAN készülnek - ugyanaz az indok, mint a kiegészítőknél:
+ * a megosztott, rejtett WebGL-kontextus egyszerre egy modellt tud kirajzolni.
+ */
+async function hydrateMobThumbs(root) {
+  const slots = [...(root || document).querySelectorAll('[data-mob-thumb]')];
+  for (const el of slots) {
+    const id = Number(el.dataset.mobThumb);
+    if (!Number.isInteger(id)) continue;
+    if (mobThumbCache.has(id)) { replaceMobThumb(el, mobThumbCache.get(id)); continue; }
+    const [model, img] = await Promise.all([fetchMobModel(id), loadImage(mobTextureUrl(id))]);
+    if (!model || !img) continue;
+    const url = SkinPreview.renderCosmeticThumbnail(model, img, 170);
+    if (!url) continue;
+    mobThumbCache.set(id, url);
+    replaceMobThumb(el, url);
+  }
+}
+
+function replaceMobThumb(el, url) {
+  if (!el.parentNode) return;
+  const img = document.createElement('img');
+  img.className = 'mob-thumb';
+  img.src = url;
+  img.alt = (el.dataset.mobName || 'Mob') + ' előnézeti képe';
+  el.parentNode.replaceChild(img, el);
+}
+
+async function fetchMobModel(id, opts) {
+  const fresh = !!(opts && opts.fresh);
+  if (!fresh && mobModelCache.has(id)) return mobModelCache.get(id);
+  try {
+    const res = await fetch(mobModelUrl(id), fresh ? { cache: 'no-store' } : undefined);
+    if (!res.ok) return null;
+    const model = await res.json();
+    mobModelCache.set(id, model);
+    return model;
+  } catch {
+    return null;
+  }
+}
+
+// ── Szerkesztő ──────────────────────────────────────────────────────────
+
+function emptyMobPart(idx) {
+  return {
+    id: null, idx, name: null,
+    offsetX: 0, offsetY: 0, offsetZ: 0,
+    rotationX: 0, rotationY: 0, rotationZ: 0,
+    scale: 1, anim: null,
+    hasModel: false,
+    elements: null, textureSize: null,
+    dirty: false
+  };
+}
+
+function mobCurrentRecord() {
+  if (mobTarget < 0) return mobAssembly;
+  return mobParts[mobTarget] || mobAssembly;
+}
+
+async function openMobEditor(id) {
+  const mob = mobsAdminItems.find((m) => String(m.id) === String(id));
+  if (!mob) return;
+
+  mobEditingId = mob.id;
+  mobTextureFile = null;
+  mobTextureImg = null;
+  mobTarget = -1;
+
+  mobAssembly = {
+    offsetX: mob.offsetX, offsetY: mob.offsetY, offsetZ: mob.offsetZ,
+    rotationX: mob.rotationX, rotationY: mob.rotationY, rotationZ: mob.rotationZ,
+    scale: mob.scale,
+    itemModelSpace: mob.itemModelSpace !== false,
+    anim: mob.anim ? JSON.parse(JSON.stringify(mob.anim)) : null,
+    aura: mob.aura ? JSON.parse(JSON.stringify(mob.aura)) : null,
+    hideVanilla: mob.hideVanilla !== false,
+    enabled: mob.enabled !== false,
+    hitboxMode: mob.hitboxMode || 'auto',
+    hitboxWidth: mob.hitboxWidth,
+    hitboxHeight: mob.hitboxHeight,
+    nameOffset: mob.nameOffset || 0
+  };
+
+  mobParts = (mob.parts || []).map((p) => ({
+    id: p.id, idx: p.idx, name: p.name,
+    offsetX: p.offsetX, offsetY: p.offsetY, offsetZ: p.offsetZ,
+    rotationX: p.rotationX, rotationY: p.rotationY, rotationZ: p.rotationZ,
+    scale: p.scale, anim: p.anim ? JSON.parse(JSON.stringify(p.anim)) : null,
+    hasModel: p.hasModel, elements: null, textureSize: null, dirty: false
+  }));
+  if (!mobParts.length) mobParts = [emptyMobPart(0)];
+
+  $('#mobEditorTitle').textContent = (mob.name || mob.slug) + '  (' + mob.slug + ')';
+  $('#mobFormResult').textContent = '';
+  $('#mobTextureNote').textContent = mob.hasTexture ? 'Jelenleg van feltöltött textúra.' : 'Még nincs textúra.';
+  renderMobStats(mob);
+  renderMobAuraSelect();
+  writeMobAuraToInputs();
+  writeMobDisplayFields();
+  setMobTab('model');
+  mobsAdminSection()?.classList.add('editing');
+
+  // A geometriát a modell-végpontról töltjük vissza: a szerkesztőnek a
+  // KOCKÁK is kellenek (előnézet), amiket a katalógus-lista nem hoz le.
+  // cache: no-store - ld. a kiegészítőknél leírt, élesben előjött hibát:
+  // mentés után a böngésző a max-age=60 miatt a RÉGI modellt adná vissza.
+  if (mob.hasModel) {
+    const model = await fetchMobModel(mob.id, { fresh: true });
+    if (model && Array.isArray(model.parts)) {
+      model.parts.forEach((raw, i) => {
+        if (!mobParts[i]) return;
+        mobParts[i].elements = raw.elements;
+        mobParts[i].textureSize = Array.isArray(raw.texture_size) ? raw.texture_size : null;
+      });
+    }
+  }
+  if (mob.hasTexture) {
+    mobTextureImg = await loadImage(mobTextureUrl(mob.id) + (mobAssetBust ? '' : '?t=' + Date.now()));
+    const wrapEl = $('#mobTexturePreviewWrap');
+    if (mobTextureImg && wrapEl) {
+      $('#mobTexturePreview').src = mobTextureImg.src;
+      wrapEl.hidden = false;
+    }
+  } else {
+    $('#mobTexturePreviewWrap').hidden = true;
+  }
+
+  setMobTarget(-1, true);
+  restartMobPreview();
+}
+
+function closeMobEditor() {
+  mobsAdminSection()?.classList.remove('editing');
+  if (mobPreviewStop) { mobPreviewStop(); mobPreviewStop = null; }
+  mobEditingId = null;
+  mobTextureFile = null;
+  mobTextureImg = null;
+  mobParts = [];
+  mobAssembly = null;
+}
+
+function renderMobStats(mob) {
+  const card = $('#mobStatsCard');
+  if (!card) return;
+  const st = mob.stats || {};
+  const rows = [];
+  if (mob.baseType) rows.push(['Alap entitás', mob.baseType.toLowerCase()]);
+  if (Number.isFinite(st.health)) rows.push(['Élet', String(st.health)]);
+  if (Number.isFinite(st.damage)) rows.push(['Sebzés', String(st.damage)]);
+  if (Number.isFinite(st.armor)) rows.push(['Páncél', String(st.armor)]);
+  if (Number.isFinite(st.drops)) rows.push(['Zsákmány-sorok', String(st.drops)]);
+  if (st.bossBar) rows.push(['Boss sáv', 'van']);
+  const vh = mob.vanillaHitbox || {};
+  if (vh.width) rows.push(['Vanilla hitbox', vh.width + ' × ' + vh.height]);
+  rows.push(['Utolsó szinkron', mobSyncAgo(mob.lastSyncAt)]);
+
+  const abilities = Array.isArray(st.abilities) ? st.abilities : [];
+  card.innerHTML = `
+    <div class="card-title">A szerverről</div>
+    ${rows.map(([k, v]) => `<div class="mob-stats-row"><span>${escapeHtml(k)}</span><strong>${escapeHtml(v)}</strong></div>`).join('')}
+    ${abilities.length ? `<ul class="mob-stats-abilities">${abilities.map((a) => `<li>${escapeHtml(a)}</li>`).join('')}</ul>` : ''}
+    <p class="cosmetic-file-note" style="margin-top:8px;">Ezek a mob VISELKEDÉSÉNEK adatai, és csak tájékoztatásul látszanak &ndash; a szerveren, a <code>/solarmob</code> paranccsal állíthatók.</p>`;
+}
+
+// ── Rész-sáv és a cél kijelölése ────────────────────────────────────────
+
+function renderMobPartsBar() {
+  const bar = $('#mobPartsBar');
+  if (!bar) return;
+  const chips = [`<button type="button" class="cosmetic-part-chip${mobTarget < 0 ? ' active' : ''}" data-mob-target="-1">Teljes mob</button>`];
+  mobParts.forEach((p, i) => {
+    chips.push(`<button type="button" class="cosmetic-part-chip${mobTarget === i ? ' active' : ''}" data-mob-target="${i}">${i + 1}. rész${p.hasModel ? '' : ' ⚠'}</button>`);
+  });
+  if (mobParts.length < (mobLimits.maxParts || 8)) {
+    chips.push('<button type="button" class="cosmetic-part-chip cosmetic-part-add" data-mob-add-part="1">+ rész</button>');
+  }
+  bar.innerHTML = chips.join('');
+
+  const panel = $('#mobPartPanel');
+  if (!panel) return;
+  if (mobTarget < 0) {
+    panel.innerHTML = '<p class="cosmetic-file-note">A teljes mob illesztése és animációja. A részek beállításai EZEN BELÜL értendők.</p>';
+    return;
+  }
+  const part = mobParts[mobTarget];
+  panel.innerHTML = `
+    <p class="cosmetic-file-note">${part.hasModel ? 'Ehhez a részhez van feltöltött modell.' : 'Ehhez a részhez MÉG NINCS modell &ndash; tölts fel egyet.'}</p>
+    <div class="cosmetic-editor-controls">
+      <button type="button" class="btn-outline" id="mobPartModelBtn">${part.hasModel ? 'Modell cseréje' : 'Modell feltöltése'}</button>
+      ${mobParts.length > 1 ? '<button type="button" class="btn-outline" id="mobPartDeleteBtn">Rész törlése</button>' : ''}
+    </div>`;
+  $('#mobPartModelBtn')?.addEventListener('click', () => $('#mobModelInput')?.click());
+  $('#mobPartDeleteBtn')?.addEventListener('click', () => deleteMobPart(mobTarget));
+}
+
+/**
+ * @param skipRead IGAZ a szerkesztő MEGNYITÁSAKOR. Ilyenkor a beviteli
+ *   mezőkben még az ELŐZŐ mob (vagy a HTML alapértékei) állnak, és a
+ *   beolvasásuk felülírná a most betöltött értékeket nullákkal.
+ *   ÉLESBEN PONTOSAN EZ TÖRTÉNT: az elmentett illesztés a szerkesztő
+ *   újranyitásakor 0-ra ugrott vissza, miközben az adatbázisban helyesen
+ *   ott volt (a böngészős próba fogta meg).
+ */
+function setMobTarget(index, skipRead) {
+  if (!skipRead) readMobTargetFromInputs();
+  mobTarget = index;
+  const label = index < 0 ? 'teljes mob' : (index + 1) + '. rész';
+  $('#mobTargetLabel').textContent = label;
+  $('#mobAnimTargetLabel').textContent = label;
+  // A tér-konvenció a MODELL egészére vonatkozik (a részek ugyanabban a
+  // térben vannak), ezért résznél elrejtjük - különben azt sugallná, hogy
+  // részenként más lehet.
+  const itemRow = $('#mobItemSpaceRow');
+  if (itemRow) itemRow.style.display = index < 0 ? '' : 'none';
+  writeMobTargetToInputs();
+  renderMobPartsBar();
+  renderMobAnimEditor();
+  queueMobPreview();
+}
+
+function writeMobTargetToInputs() {
+  const rec = mobCurrentRecord();
+  if (!rec) return;
+  $('#mobOffsetXInput').value = rec.offsetX;
+  $('#mobOffsetYInput').value = rec.offsetY;
+  $('#mobOffsetZInput').value = rec.offsetZ;
+  $('#mobRotXInput').value = rec.rotationX;
+  $('#mobRotYInput').value = rec.rotationY;
+  $('#mobRotZInput').value = rec.rotationZ;
+  $('#mobScaleInput').value = rec.scale;
+  $('#mobItemSpaceCheckbox').checked = mobAssembly.itemModelSpace !== false;
+}
+
+function readMobTargetFromInputs() {
+  const rec = mobCurrentRecord();
+  if (!rec) return;
+  const num = (sel, def) => {
+    const v = Number($(sel)?.value);
+    return Number.isFinite(v) ? v : def;
+  };
+  rec.offsetX = num('#mobOffsetXInput', 0);
+  rec.offsetY = num('#mobOffsetYInput', 0);
+  rec.offsetZ = num('#mobOffsetZInput', 0);
+  rec.rotationX = num('#mobRotXInput', 0);
+  rec.rotationY = num('#mobRotYInput', 0);
+  rec.rotationZ = num('#mobRotZInput', 0);
+  rec.scale = num('#mobScaleInput', 1);
+  if (mobTarget >= 0) rec.dirty = true;
+  mobAssembly.itemModelSpace = !!$('#mobItemSpaceCheckbox')?.checked;
+}
+
+function writeMobDisplayFields() {
+  $('#mobHideVanillaCheckbox').checked = mobAssembly.hideVanilla !== false;
+  $('#mobEnabledCheckbox').checked = mobAssembly.enabled !== false;
+  $('#mobNameOffsetInput').value = mobAssembly.nameOffset || 0;
+  $('#mobHitboxModeSelect').value = mobAssembly.hitboxMode || 'auto';
+  $('#mobHitboxWidthInput').value = mobAssembly.hitboxWidth ?? '';
+  $('#mobHitboxHeightInput').value = mobAssembly.hitboxHeight ?? '';
+  updateMobHitboxUi();
+}
+
+// ── HITBOX ──────────────────────────────────────────────────────────────
+//
+// A számítás SZÁNDÉKOSAN a backend modelBounds() függvényének pontos mása
+// (SolarBackend src/mobs.js). MIÉRT MÁSOLAT, ÉS NEM KÉRDEZZÜK MEG A SZERVERT:
+// az admin mentés ELŐTT állítgatja az eltolást és a méretet, és azonnal
+// látnia kell, mekkora lesz a találati doboz - egy mentésenkénti kérdezés
+// használhatatlanná tenné a hangolást. A mentés válasza utána úgyis a
+// SZERVER által számolt értéket írja vissza, tehát egy elcsúszás azonnal
+// látszana.
+
+function mobRotatePoint(p, deg) {
+  const rx = deg[0] * Math.PI / 180, ry = deg[1] * Math.PI / 180, rz = deg[2] * Math.PI / 180;
+  let x = p[0], y = p[1], z = p[2];
+  let y1 = y * Math.cos(rx) - z * Math.sin(rx);
+  let z1 = y * Math.sin(rx) + z * Math.cos(rx);
+  y = y1; z = z1;
+  let x1 = x * Math.cos(ry) + z * Math.sin(ry);
+  z1 = -x * Math.sin(ry) + z * Math.cos(ry);
+  x = x1; z = z1;
+  x1 = x * Math.cos(rz) - y * Math.sin(rz);
+  y1 = x * Math.sin(rz) + y * Math.cos(rz);
+  return [x1, y1, z];
+}
+
+function mobPartPoints(part) {
+  const out = [];
+  if (!Array.isArray(part.elements)) return out;
+  for (const el of part.elements) {
+    if (!Array.isArray(el.from) || !Array.isArray(el.to)) continue;
+    const corners = [];
+    for (const x of [el.from[0], el.to[0]]) {
+      for (const y of [el.from[1], el.to[1]]) {
+        for (const z of [el.from[2], el.to[2]]) corners.push([x, y, z]);
+      }
+    }
+    if (el.rotation && Number.isFinite(el.rotation.angle) && Array.isArray(el.rotation.origin)) {
+      const a = el.rotation.angle;
+      const deg = el.rotation.axis === 'x' ? [a, 0, 0] : el.rotation.axis === 'y' ? [0, a, 0] : [0, 0, a];
+      const o = el.rotation.origin;
+      for (const c of corners) {
+        const r = mobRotatePoint([c[0] - o[0], c[1] - o[1], c[2] - o[2]], deg);
+        out.push([r[0] + o[0], r[1] + o[1], r[2] + o[2]]);
+      }
+    } else {
+      for (const c of corners) out.push(c);
+    }
+  }
+  return out;
+}
+
+function computeMobBounds() {
+  const perPart = [];
+  let min = [Infinity, Infinity, Infinity];
+  let max = [-Infinity, -Infinity, -Infinity];
+  const add = (b, p) => {
+    for (let i = 0; i < 3; i++) {
+      if (p[i] < b.min[i]) b.min[i] = p[i];
+      if (p[i] > b.max[i]) b.max[i] = p[i];
+    }
+  };
+  const whole = { min, max };
+
+  for (const part of mobParts) {
+    const pts = mobPartPoints(part);
+    if (!pts.length) continue;
+    const pb = { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] };
+    for (const p of pts) add(pb, p);
+    const pc = [(pb.min[0] + pb.max[0]) / 2, (pb.min[1] + pb.max[1]) / 2, (pb.min[2] + pb.max[2]) / 2];
+    const deg = [part.rotationX, part.rotationY, part.rotationZ];
+    const moved = [];
+    for (const p of pts) {
+      const rel = [(p[0] - pc[0]) * part.scale, (p[1] - pc[1]) * part.scale, (p[2] - pc[2]) * part.scale];
+      const r = mobRotatePoint(rel, deg);
+      moved.push([r[0] + pc[0] + part.offsetX, r[1] + pc[1] + part.offsetY, r[2] + pc[2] + part.offsetZ]);
+    }
+    perPart.push(moved);
+    for (const p of moved) add(whole, p);
+  }
+  if (!perPart.length || !Number.isFinite(whole.min[0])) return null;
+
+  const wc = [(whole.min[0] + whole.max[0]) / 2, (whole.min[1] + whole.max[1]) / 2, (whole.min[2] + whole.max[2]) / 2];
+  const deg = [mobAssembly.rotationX, mobAssembly.rotationY, mobAssembly.rotationZ];
+  const fin = { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] };
+  for (const pts of perPart) {
+    for (const p of pts) {
+      const rel = [(p[0] - wc[0]) * mobAssembly.scale, (p[1] - wc[1]) * mobAssembly.scale, (p[2] - wc[2]) * mobAssembly.scale];
+      const r = mobRotatePoint(rel, deg);
+      add(fin, [r[0] + wc[0] + mobAssembly.offsetX, r[1] + wc[1] + mobAssembly.offsetY, r[2] + wc[2] + mobAssembly.offsetZ]);
+    }
+  }
+  return fin;
+}
+
+function currentMobHitbox() {
+  const mode = mobAssembly ? mobAssembly.hitboxMode : 'auto';
+  if (mode === 'vanilla') return null;
+  if (mode === 'manual') {
+    const w = Number(mobAssembly.hitboxWidth);
+    const h = Number(mobAssembly.hitboxHeight);
+    return (w > 0 && h > 0) ? { width: w, height: h } : null;
+  }
+  const b = computeMobBounds();
+  if (!b) return null;
+  const width = Math.round(Math.max(b.max[0] - b.min[0], b.max[2] - b.min[2]) / 16 * 100) / 100;
+  const height = Math.round((b.max[1] - b.min[1]) / 16 * 100) / 100;
+  return (width > 0 && height > 0) ? { width, height } : null;
+}
+
+function updateMobHitboxUi() {
+  const mode = $('#mobHitboxModeSelect')?.value || 'auto';
+  const manual = $('#mobHitboxManualFields');
+  if (manual) manual.style.display = mode === 'manual' ? '' : 'none';
+  const info = $('#mobHitboxInfo');
+  if (!info) return;
+  if (mode === 'vanilla') {
+    info.textContent = 'A mob a vanilla entitás méretét tartja meg.';
+    return;
+  }
+  const hb = currentMobHitbox();
+  if (!hb) {
+    info.textContent = mode === 'manual'
+      ? 'Add meg a szélességet és a magasságot.'
+      : 'Modell nélkül nincs mit kiszámolni - a hitbox vanilla méretű marad.';
+    return;
+  }
+  const mob = mobsAdminItems.find((m) => m.id === mobEditingId);
+  const vh = mob && mob.vanillaHitbox ? mob.vanillaHitbox : null;
+  const ratio = vh && vh.height > 0 ? (hb.height / vh.height) : null;
+  info.innerHTML = `Eredmény: <strong>${hb.width} &times; ${hb.height} blokk</strong>`
+    + (ratio ? ` &ndash; a vanilla ${vh.width} &times; ${vh.height} méret <strong>${Math.round(ratio * 100)}%</strong>-a.` : '')
+    + (ratio && (ratio < 0.0625 || ratio > 16) ? ' <span style="color:var(--danger)">A szorzó a megengedett tartományon kívül esik, a szerver levágja.</span>' : '');
+}
+
+// ── Animáció ────────────────────────────────────────────────────────────
+
+function mobCurrentAnim() {
+  const rec = mobCurrentRecord();
+  return rec ? rec.anim : null;
+}
+
+function ensureMobAnim() {
+  const rec = mobCurrentRecord();
+  if (!rec) return null;
+  if (!rec.anim) rec.anim = { tracks: [], pivot: null };
+  if (!Array.isArray(rec.anim.tracks)) rec.anim.tracks = [];
+  if (mobTarget >= 0) rec.dirty = true;
+  return rec.anim;
+}
+
+function renderMobAnimEditor() {
+  const presetsWrap = $('#mobAnimPresets');
+  const tracksWrap = $('#mobAnimTracks');
+  if (!presetsWrap || !tracksWrap) return;
+
+  presetsWrap.innerHTML = ANIM_PRESETS
+    .map((preset, i) => `<button type="button" class="cosmetic-anim-preset" data-mob-anim-preset="${i}">${escapeHtml(preset.label)}</button>`)
+    .join('');
+
+  const anim = mobCurrentAnim();
+  const tracks = anim && Array.isArray(anim.tracks) ? anim.tracks : [];
+  if (!tracks.length) {
+    tracksWrap.innerHTML = '<p class="cosmetic-file-note">Ehhez még nincs mozgás beállítva. Válassz egy kész mozgást fent, vagy vegyél fel egyet kézzel.</p>';
+  } else {
+    tracksWrap.innerHTML = tracks.map((t, i) => {
+      const isScale = t.type === 'scale';
+      const step = isScale ? '0.02' : (t.type === 'translate' ? '0.2' : '1');
+      return `
+      <div class="cosmetic-anim-track" data-mob-anim-index="${i}">
+        <div class="cosmetic-anim-row">
+          ${animField('Mit', animSelect('type', ANIM_TYPE_LABELS, t.type))}
+          ${animField('Tengely', `<select data-anim-field="axis"${isScale ? ' disabled' : ''}>${['x', 'y', 'z'].map((v) => `<option value="${v}"${t.axis === v ? ' selected' : ''}>${v.toUpperCase()}</option>`).join('')}</select>`)}
+          ${animField('Kitérés', `<input type="number" data-anim-field="amp" step="${step}" value="${Number(t.amp) || 0}" />`)}
+          ${animField('Sebesség', `<input type="number" data-anim-field="speed" step="0.05" min="0" max="8" value="${Number(t.speed) || 0}" />`, 'Teljes ciklus másodpercenként.')}
+          ${animField('Fázis°', `<input type="number" data-anim-field="phase" step="15" min="-360" max="360" value="${Number(t.phase) || 0}" />`)}
+          ${animField('Jelleg', animSelect('wave', ANIM_WAVE_LABELS, t.wave))}
+          <button type="button" class="cosmetic-anim-remove" data-mob-anim-remove="${i}" title="Sáv törlése">&times;</button>
+        </div>
+        ${isScale ? '' : `
+        <div class="cosmetic-anim-row cosmetic-anim-wave-row">
+          <span class="cosmetic-anim-rowlabel">Hullám</span>
+          ${animField('Hajlás', `<input type="range" data-anim-field="falloff" min="0" max="1" step="0.05" value="${Number(t.falloff) || 0}" /><output>${(Number(t.falloff) || 0).toFixed(2)}</output>`, '0 = merev test. 1 = a forgáspontnál nem mozdul, a hegyénél teljes a kitérés.')}
+          ${animField('Késés°', `<input type="number" data-anim-field="spread" step="10" min="-720" max="720" value="${Number(t.spread) || 0}" />`, 'Ettől fut végig a mozgás a részen.')}
+          ${animField('Mentén', animSelect('along', ANIM_ALONG_LABELS, t.along || 'auto'))}
+        </div>`}
+      </div>`;
+    }).join('');
+  }
+
+  const pivot = anim && Array.isArray(anim.pivot) ? anim.pivot : null;
+  $('#mobAnimPivotXInput').value = pivot ? pivot[0] : '';
+  $('#mobAnimPivotYInput').value = pivot ? pivot[1] : '';
+  $('#mobAnimPivotZInput').value = pivot ? pivot[2] : '';
+}
+
+function readMobAnimPivot() {
+  const xs = $('#mobAnimPivotXInput').value.trim();
+  const ys = $('#mobAnimPivotYInput').value.trim();
+  const zs = $('#mobAnimPivotZInput').value.trim();
+  // MIND A HÁROM kell - egy fél-megadott forgáspont csendben rossz tengelyt
+  // adna (ugyanaz az indoklás, mint a kiegészítőknél).
+  if (!xs || !ys || !zs) return null;
+  const v = [Number(xs), Number(ys), Number(zs)];
+  return v.every(Number.isFinite) ? v : null;
+}
+
+// ── Aura ────────────────────────────────────────────────────────────────
+
+function renderMobAuraSelect() {
+  const sel = $('#mobAuraTypeSelect');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Nincs aura</option>'
+    + mobAuraTypes.map((a) => `<option value="${escapeHtml(a.id)}">${escapeHtml(a.label || a.id)}</option>`).join('');
+}
+
+function writeMobAuraToInputs() {
+  const aura = mobAssembly ? mobAssembly.aura : null;
+  const sel = $('#mobAuraTypeSelect');
+  if (sel) sel.value = aura && aura.type ? aura.type : '';
+  $('#mobAuraRateInput').value = aura && Number.isFinite(aura.rate) ? aura.rate : '';
+  $('#mobAuraSizeInput').value = aura && Number.isFinite(aura.size) ? aura.size : '';
+  $('#mobAuraLifeInput').value = aura && Number.isFinite(aura.life) ? aura.life : '';
+  $('#mobAuraSpeedInput').value = aura && Number.isFinite(aura.speed) ? aura.speed : '';
+  if (aura && typeof aura.colorA === 'string') $('#mobAuraColorAInput').value = aura.colorA;
+  if (aura && typeof aura.colorB === 'string') $('#mobAuraColorBInput').value = aura.colorB;
+  const fields = $('#mobAuraFields');
+  if (fields) fields.classList.toggle('hidden', !(aura && aura.type));
+}
+
+function readMobAura() {
+  const type = $('#mobAuraTypeSelect')?.value || '';
+  if (!type) return null;
+  const out = { type };
+  const num = (sel, key) => {
+    const raw = $(sel)?.value.trim();
+    if (raw === '' || raw === undefined) return;
+    const v = Number(raw);
+    if (Number.isFinite(v)) out[key] = v;
+  };
+  num('#mobAuraRateInput', 'rate');
+  num('#mobAuraSizeInput', 'size');
+  num('#mobAuraLifeInput', 'life');
+  num('#mobAuraSpeedInput', 'speed');
+  const ca = $('#mobAuraColorAInput')?.value;
+  const cb = $('#mobAuraColorBInput')?.value;
+  if (ca) out.colorA = ca;
+  if (cb) out.colorB = cb;
+  return out;
+}
+
+// ── Előnézet ────────────────────────────────────────────────────────────
+
+function buildMobEditorModel() {
+  readMobTargetFromInputs();
+  const parts = mobParts
+    .filter((p) => Array.isArray(p.elements) && p.elements.length)
+    .map((p) => ({
+      texture_size: p.textureSize || [64, 64],
+      elements: p.elements,
+      transform: {
+        offset: [p.offsetX, p.offsetY, p.offsetZ],
+        rotation: [p.rotationX, p.rotationY, p.rotationZ],
+        scale: p.scale
+      },
+      anim: p.anim
+    }));
+  if (!parts.length) return null;
+  return {
+    assembly: {
+      offset: [mobAssembly.offsetX, mobAssembly.offsetY, mobAssembly.offsetZ],
+      rotation: [mobAssembly.rotationX, mobAssembly.rotationY, mobAssembly.rotationZ],
+      scale: mobAssembly.scale,
+      itemModelSpace: mobAssembly.itemModelSpace !== false,
+      anim: mobAssembly.anim,
+      aura: readMobAura()
+    },
+    parts
+  };
+}
+
+function restartMobPreview() {
+  const canvas = $('#mobEditorPreview');
+  if (!canvas) return;
+  if (mobPreviewStop) { mobPreviewStop(); mobPreviewStop = null; }
+  const model = mobTextureImg ? buildMobEditorModel() : null;
+  const empty = $('#mobEditorEmpty');
+  if (!model || !mobTextureImg) {
+    canvas.style.display = 'none';
+    if (empty) empty.style.display = '';
+    return;
+  }
+  canvas.style.display = '';
+  if (empty) empty.style.display = 'none';
+  mobPreviewStop = SkinPreview.startMob(canvas, {
+    model, img: mobTextureImg, hitbox: currentMobHitbox()
+  });
+}
+
+/**
+ * Az előnézet frissítése a GL-kontextus újraindítása NÉLKÜL, ha lehet.
+ * Ugyanaz az indok, mint a kiegészítő-szerkesztőnél: egy teljes újraindítás
+ * elvágná a folyamatban lévő húzást és elvesztené a kamera-állást.
+ */
+function queueMobPreview() {
+  if (mobPreviewQueued) { mobPreviewDirty = true; return; }
+  mobPreviewQueued = true;
+  requestAnimationFrame(() => {
+    mobPreviewQueued = false;
+    // A MEZŐK BEOLVASÁSA ELŐSZÖR. A hitbox-kiírás a mobAssembly/mobParts
+    // értékeiből számol, a mezőket viszont a buildMobEditorModel() olvassa
+    // be - ha az utána futna, a hitbox EGY SZERKESZTÉSSEL LEMARADNA.
+    // (Élesben pontosan ez történt: a méret 2x-re állítása után a kiírt
+    // hitbox változatlan maradt.)
+    readMobTargetFromInputs();
+    updateMobHitboxUi();
+    const model = mobTextureImg ? buildMobEditorModel() : null;
+    if (mobPreviewStop && mobPreviewStop.update && model) {
+      mobPreviewStop.update({ model, img: mobTextureImg, hitbox: currentMobHitbox() });
+    } else {
+      restartMobPreview();
+    }
+    if (mobPreviewDirty) { mobPreviewDirty = false; queueMobPreview(); }
+  });
+}
+
+// ── Mentés / részek ─────────────────────────────────────────────────────
+
+function mobAnimField(anim) {
+  // Üres animációnál ÜRES sztring - a backend ezt "nincs animáció"-ként
+  // értelmezi (ld. validateAnim), így a törlés is működik.
+  if (!anim || !Array.isArray(anim.tracks) || (!anim.tracks.length && !anim.pivot)) return '';
+  return JSON.stringify({ tracks: anim.tracks, pivot: anim.pivot || null });
+}
+
+async function saveMob() {
+  if (!mobEditingId || !mobAssembly) return;
+  readMobTargetFromInputs();
+  if (mobTarget < 0) {
+    const pivot = readMobAnimPivot();
+    if (mobAssembly.anim) mobAssembly.anim.pivot = pivot;
+  } else if (mobParts[mobTarget] && mobParts[mobTarget].anim) {
+    mobParts[mobTarget].anim.pivot = readMobAnimPivot();
+  }
+
+  mobAssembly.hideVanilla = !!$('#mobHideVanillaCheckbox')?.checked;
+  mobAssembly.enabled = !!$('#mobEnabledCheckbox')?.checked;
+  mobAssembly.nameOffset = Number($('#mobNameOffsetInput')?.value) || 0;
+  mobAssembly.hitboxMode = $('#mobHitboxModeSelect')?.value || 'auto';
+  mobAssembly.hitboxWidth = $('#mobHitboxWidthInput')?.value;
+  mobAssembly.hitboxHeight = $('#mobHitboxHeightInput')?.value;
+  mobAssembly.aura = readMobAura();
+
+  const result = $('#mobFormResult');
+  const btn = $('#mobSaveBtn');
+  if (btn) btn.disabled = true;
+  if (result) { result.className = 'redeem-result'; result.textContent = 'Mentés...'; }
+
+  try {
+    const fd = new FormData();
+    fd.append('enabled', mobAssembly.enabled ? 'true' : 'false');
+    fd.append('offsetX', mobAssembly.offsetX);
+    fd.append('offsetY', mobAssembly.offsetY);
+    fd.append('offsetZ', mobAssembly.offsetZ);
+    fd.append('scale', mobAssembly.scale);
+    fd.append('rotationX', mobAssembly.rotationX);
+    fd.append('rotationY', mobAssembly.rotationY);
+    fd.append('rotationZ', mobAssembly.rotationZ);
+    fd.append('itemModelSpace', mobAssembly.itemModelSpace ? 'true' : 'false');
+    fd.append('hideVanilla', mobAssembly.hideVanilla ? 'true' : 'false');
+    fd.append('hitboxMode', mobAssembly.hitboxMode);
+    if (mobAssembly.hitboxMode === 'manual') {
+      fd.append('hitboxWidth', mobAssembly.hitboxWidth);
+      fd.append('hitboxHeight', mobAssembly.hitboxHeight);
+    }
+    fd.append('nameOffset', mobAssembly.nameOffset);
+    fd.append('anim', mobAnimField(mobAssembly.anim));
+    fd.append('aura', mobAssembly.aura ? JSON.stringify(mobAssembly.aura) : '');
+    if (mobTextureFile) fd.append('texture', mobTextureFile);
+
+    const res = await fetch(BACKEND_URL + '/api/admin/mobs/' + mobEditingId, {
+      method: 'PUT',
+      headers: { Authorization: 'Bearer ' + session.token },
+      body: fd
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      if (result) { result.className = 'redeem-result error'; result.textContent = data.message || 'Nem sikerült menteni.'; }
+      return;
+    }
+
+    // A RÉSZEK külön kérésekben mennek (ld. a backend indoklását: egy
+    // multipart kérésben nem lehet több, egyenként megnevezett modellfájlt
+    // megbízhatóan a saját mezőihez párosítani).
+    for (const part of mobParts) {
+      if (!part.id) continue;
+      const pf = new FormData();
+      pf.append('name', part.name || '');
+      pf.append('offsetX', part.offsetX);
+      pf.append('offsetY', part.offsetY);
+      pf.append('offsetZ', part.offsetZ);
+      pf.append('rotationX', part.rotationX);
+      pf.append('rotationY', part.rotationY);
+      pf.append('rotationZ', part.rotationZ);
+      pf.append('scale', part.scale);
+      pf.append('anim', mobAnimField(part.anim));
+      const pres = await fetch(`${BACKEND_URL}/api/admin/mobs/${mobEditingId}/parts/${part.id}`, {
+        method: 'PUT',
+        headers: { Authorization: 'Bearer ' + session.token },
+        body: pf
+      });
+      const pdata = await pres.json();
+      if (!pdata.ok) {
+        if (result) { result.className = 'redeem-result error'; result.textContent = pdata.message || 'A rész mentése nem sikerült.'; }
+        return;
+      }
+      part.dirty = false;
+    }
+
+    // GYORSÍTÓTÁR-TÖRÉS: enélkül a böngésző a modell-végpont max-age=60-ja
+    // miatt a RÉGI geometriát adná vissza, és úgy tűnne, "nem változott
+    // semmi" (ez a kiegészítőknél élesben elő is jött).
+    mobAssetBust++;
+    mobThumbCache.delete(mobEditingId);
+    mobModelCache.delete(mobEditingId);
+    mobTextureFile = null;
+
+    if (result) { result.className = 'redeem-result success'; result.textContent = 'Mentve.'; }
+    showToast('A mob megjelenése mentve.');
+    await loadMobsAdmin();
+    const fresh = mobsAdminItems.find((m) => m.id === mobEditingId);
+    if (fresh) {
+      // A SZERVER által számolt hitboxot írjuk vissza - ha a helyi becslés
+      // elcsúszna tőle, ez azonnal látszik.
+      mobAssembly.hitboxWidth = fresh.hitboxWidth;
+      mobAssembly.hitboxHeight = fresh.hitboxHeight;
+      renderMobStats(fresh);
+      updateMobHitboxUi();
+    }
+  } catch {
+    if (result) { result.className = 'redeem-result error'; result.textContent = 'Hálózati hiba mentés közben.'; }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function parseMobModelFile(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result));
+        if (!parsed || !Array.isArray(parsed.elements) || !parsed.elements.length) {
+          resolve({ error: 'A fájlban nincs "elements" tömb - Blockbench JSON exportot várunk.' });
+          return;
+        }
+        resolve({ model: parsed });
+      } catch (e) {
+        resolve({ error: 'A fájl nem érvényes JSON: ' + e.message });
+      }
+    };
+    reader.onerror = () => resolve({ error: 'A fájlt nem sikerült beolvasni.' });
+    reader.readAsText(file);
+  });
+}
+
+async function uploadMobPartModel(file) {
+  if (mobTarget < 0 || !mobParts[mobTarget]) {
+    showToast('Előbb válaszd ki, melyik részhez tartozik a modell.', true);
+    return;
+  }
+  const parsed = await parseMobModelFile(file);
+  if (parsed.error) { showToast(parsed.error, true); return; }
+
+  const part = mobParts[mobTarget];
+  const fd = new FormData();
+  fd.append('name', part.name || '');
+  fd.append('offsetX', part.offsetX);
+  fd.append('offsetY', part.offsetY);
+  fd.append('offsetZ', part.offsetZ);
+  fd.append('rotationX', part.rotationX);
+  fd.append('rotationY', part.rotationY);
+  fd.append('rotationZ', part.rotationZ);
+  fd.append('scale', part.scale);
+  fd.append('anim', mobAnimField(part.anim));
+  fd.append('model', file);
+
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/admin/mobs/${mobEditingId}/parts/${part.id}`, {
+      method: 'PUT',
+      headers: { Authorization: 'Bearer ' + session.token },
+      body: fd
+    });
+    const data = await res.json();
+    if (!data.ok) { showToast(data.message || 'Nem sikerült feltölteni a modellt.', true); return; }
+    part.hasModel = true;
+    part.elements = parsed.model.elements;
+    part.textureSize = Array.isArray(parsed.model.texture_size) ? parsed.model.texture_size : null;
+    mobAssetBust++;
+    mobThumbCache.delete(mobEditingId);
+    mobModelCache.delete(mobEditingId);
+    renderMobPartsBar();
+    queueMobPreview();
+    showToast('Modell feltöltve.');
+  } catch {
+    showToast('Hálózati hiba a modell feltöltésekor.', true);
+  }
+}
+
+async function addMobPart(file) {
+  const parsed = await parseMobModelFile(file);
+  if (parsed.error) { showToast(parsed.error, true); return; }
+  const fd = new FormData();
+  fd.append('name', '');
+  fd.append('scale', '1');
+  fd.append('model', file);
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/admin/mobs/${mobEditingId}/parts`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + session.token },
+      body: fd
+    });
+    const data = await res.json();
+    if (!data.ok) { showToast(data.message || 'Nem sikerült hozzáadni a részt.', true); return; }
+    const part = emptyMobPart(data.part.idx);
+    part.id = data.part.id;
+    part.hasModel = true;
+    part.elements = parsed.model.elements;
+    part.textureSize = Array.isArray(parsed.model.texture_size) ? parsed.model.texture_size : null;
+    mobParts.push(part);
+    mobAssetBust++;
+    mobThumbCache.delete(mobEditingId);
+    mobModelCache.delete(mobEditingId);
+    setMobTarget(mobParts.length - 1);
+    showToast('Rész hozzáadva.');
+  } catch {
+    showToast('Hálózati hiba a rész hozzáadásakor.', true);
+  }
+}
+
+async function deleteMobPart(index) {
+  const part = mobParts[index];
+  if (!part || !part.id) return;
+  if (!confirm('Biztosan törlöd ezt a részt? A geometriája elvész.')) return;
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/admin/mobs/${mobEditingId}/parts/${part.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    if (!data.ok) { showToast(data.message || 'Nem sikerült törölni a részt.', true); return; }
+    mobParts.splice(index, 1);
+    mobParts.forEach((p, i) => { p.idx = i; });
+    mobAssetBust++;
+    mobThumbCache.delete(mobEditingId);
+    mobModelCache.delete(mobEditingId);
+    setMobTarget(-1);
+    showToast('Rész törölve.');
+  } catch {
+    showToast('Hálózati hiba a rész törlésekor.', true);
+  }
+}
+
+async function deleteMobAppearance() {
+  if (!mobEditingId) return;
+  const mob = mobsAdminItems.find((m) => m.id === mobEditingId);
+  if (!confirm('Biztosan törlöd a MEGJELENÉST (modell, textúra, beállítások)?\n\n'
+    + 'A mob a szerveren megmarad, és a következő szinkronnál újra megjelenik itt - üresen.')) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/mobs/' + mobEditingId, {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    if (!data.ok) { showToast(data.message || 'Nem sikerült törölni.', true); return; }
+    mobThumbCache.delete(mobEditingId);
+    mobModelCache.delete(mobEditingId);
+    showToast('A megjelenés törölve' + (mob ? (': ' + mob.slug) : '') + '.');
+    closeMobEditor();
+    loadMobsAdmin();
+  } catch {
+    showToast('Hálózati hiba törlés közben.', true);
+  }
+}
+
+// ── Események ───────────────────────────────────────────────────────────
+
+function setMobTab(name) {
+  $$('[data-mob-tab]').forEach((b) => b.classList.toggle('active', b.dataset.mobTab === name));
+  $$('[data-mob-pane]').forEach((p) => p.classList.toggle('active', p.dataset.mobPane === name));
+}
+
+$$('[data-mob-tab]').forEach((btn) => {
+  btn.addEventListener('click', () => setMobTab(btn.dataset.mobTab));
+});
+
+$('#mobAdminSearch')?.addEventListener('input', renderMobsAdmin);
+$('#mobShowHiddenCheckbox')?.addEventListener('change', renderMobsAdmin);
+$('#mobRefreshBtn')?.addEventListener('click', loadMobsAdmin);
+$('#mobBackBtn')?.addEventListener('click', () => { closeMobEditor(); loadMobsAdmin(); });
+$('#mobSaveBtn')?.addEventListener('click', saveMob);
+$('#mobDeleteBtn')?.addEventListener('click', deleteMobAppearance);
+
+$('#mobsAdminList')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-mob-edit]');
+  if (btn) openMobEditor(btn.dataset.mobEdit);
+});
+
+$('#mobPartsBar')?.addEventListener('click', (e) => {
+  const chip = e.target.closest('[data-mob-target]');
+  if (chip) { setMobTarget(Number(chip.dataset.mobTarget)); return; }
+  if (e.target.closest('[data-mob-add-part]')) $('#mobNewPartInput')?.click();
+});
+
+$('#mobModelInput')?.addEventListener('change', (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (file) uploadMobPartModel(file);
+});
+
+$('#mobNewPartInput')?.addEventListener('change', (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (file) addMobPart(file);
+});
+
+$('#mobTexturePickBtn')?.addEventListener('click', () => $('#mobTextureInput')?.click());
+$('#mobTextureInput')?.addEventListener('change', async (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  if (file.size > 8 * 1024 * 1024) { showToast('A textúra túl nagy (max 8 MB).', true); return; }
+  mobTextureFile = file;
+  const url = URL.createObjectURL(file);
+  const img = await loadImage(url);
+  if (!img) { showToast('A képet nem sikerült beolvasni.', true); return; }
+  mobTextureImg = img;
+  $('#mobTexturePreview').src = url;
+  $('#mobTexturePreviewWrap').hidden = false;
+  $('#mobTextureNote').textContent = `Kiválasztva: ${file.name} (${img.naturalWidth}×${img.naturalHeight}) - mentésre vár.`;
+  restartMobPreview();
+});
+
+['#mobOffsetXInput', '#mobOffsetYInput', '#mobOffsetZInput',
+ '#mobRotXInput', '#mobRotYInput', '#mobRotZInput',
+ '#mobScaleInput', '#mobItemSpaceCheckbox'].forEach((sel) => {
+  $(sel)?.addEventListener('input', queueMobPreview);
+  $(sel)?.addEventListener('change', queueMobPreview);
+});
+
+$('#mobHitboxModeSelect')?.addEventListener('change', () => {
+  if (mobAssembly) mobAssembly.hitboxMode = $('#mobHitboxModeSelect').value;
+  updateMobHitboxUi();
+  queueMobPreview();
+});
+['#mobHitboxWidthInput', '#mobHitboxHeightInput'].forEach((sel) => {
+  $(sel)?.addEventListener('input', () => {
+    if (!mobAssembly) return;
+    mobAssembly.hitboxWidth = $('#mobHitboxWidthInput').value;
+    mobAssembly.hitboxHeight = $('#mobHitboxHeightInput').value;
+    updateMobHitboxUi();
+    queueMobPreview();
+  });
+});
+
+$('#mobAuraTypeSelect')?.addEventListener('change', () => {
+  if (mobAssembly) mobAssembly.aura = readMobAura();
+  writeMobAuraToInputs();
+  queueMobPreview();
+});
+['#mobAuraRateInput', '#mobAuraSizeInput', '#mobAuraLifeInput', '#mobAuraSpeedInput',
+ '#mobAuraColorAInput', '#mobAuraColorBInput'].forEach((sel) => {
+  $(sel)?.addEventListener('change', () => {
+    if (mobAssembly) mobAssembly.aura = readMobAura();
+    queueMobPreview();
+  });
+});
+$('#mobAuraResetBtn')?.addEventListener('click', () => {
+  if (!mobAssembly || !mobAssembly.aura) return;
+  mobAssembly.aura = { type: mobAssembly.aura.type };
+  writeMobAuraToInputs();
+  queueMobPreview();
+});
+
+// Animáció-vezérlők
+$('#mobAnimPresets')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-mob-anim-preset]');
+  if (!btn) return;
+  const preset = ANIM_PRESETS[Number(btn.dataset.mobAnimPreset)];
+  if (!preset) return;
+  const anim = ensureMobAnim();
+  if (!anim) return;
+  anim.tracks = JSON.parse(JSON.stringify(preset.tracks));
+  // A FORGÁSPONT a rész TÖVÉRE: egy közepén csukló szárny a legjobb
+  // mozgással is "hajló deszkának" látszik (ld. a kiegészítőknél tanultakat).
+  const pivot = suggestMobRootPivot(mobTarget);
+  if (pivot) anim.pivot = pivot;
+  renderMobAnimEditor();
+  queueMobPreview();
+});
+
+$('#mobAnimTracks')?.addEventListener('input', (e) => {
+  const track = e.target.closest('[data-mob-anim-index]');
+  const field = e.target.dataset.animField;
+  if (!track || !field) return;
+  const anim = ensureMobAnim();
+  const t = anim.tracks[Number(track.dataset.mobAnimIndex)];
+  if (!t) return;
+  const value = e.target.type === 'number' || e.target.type === 'range' ? Number(e.target.value) : e.target.value;
+  t[field] = value;
+  if (field === 'falloff') {
+    const out = e.target.parentElement.querySelector('output');
+    if (out) out.textContent = Number(value).toFixed(2);
+  }
+  if (field === 'type') renderMobAnimEditor();
+  queueMobPreview();
+});
+$('#mobAnimTracks')?.addEventListener('change', (e) => {
+  if (e.target.dataset.animField === 'type' || e.target.dataset.animField === 'wave'
+    || e.target.dataset.animField === 'axis' || e.target.dataset.animField === 'along') {
+    const track = e.target.closest('[data-mob-anim-index]');
+    if (!track) return;
+    const anim = ensureMobAnim();
+    const t = anim.tracks[Number(track.dataset.mobAnimIndex)];
+    if (t) t[e.target.dataset.animField] = e.target.value;
+    renderMobAnimEditor();
+    queueMobPreview();
+  }
+});
+$('#mobAnimTracks')?.addEventListener('click', (e) => {
+  const rm = e.target.closest('[data-mob-anim-remove]');
+  if (!rm) return;
+  const anim = ensureMobAnim();
+  anim.tracks.splice(Number(rm.dataset.mobAnimRemove), 1);
+  renderMobAnimEditor();
+  queueMobPreview();
+});
+$('#mobAnimAddBtn')?.addEventListener('click', () => {
+  const anim = ensureMobAnim();
+  anim.tracks.push({ type: 'rotate', axis: 'z', amp: 15, speed: 0.6, phase: 0, wave: 'sine', react: 'none', falloff: 0, spread: 0, along: 'auto' });
+  renderMobAnimEditor();
+  queueMobPreview();
+});
+$('#mobAnimClearBtn')?.addEventListener('click', () => {
+  const rec = mobCurrentRecord();
+  if (!rec) return;
+  rec.anim = null;
+  if (mobTarget >= 0) rec.dirty = true;
+  renderMobAnimEditor();
+  queueMobPreview();
+});
+['#mobAnimPivotXInput', '#mobAnimPivotYInput', '#mobAnimPivotZInput'].forEach((sel) => {
+  $(sel)?.addEventListener('input', () => {
+    const anim = ensureMobAnim();
+    if (anim) anim.pivot = readMobAnimPivot();
+    queueMobPreview();
+  });
+});
+
+/**
+ * "A talpára állítás": a modellt úgy tolja el, hogy az ALJA a 0 szintre
+ * kerüljön, vízszintesen pedig a talppont fölé.
+ *
+ * MIÉRT KELL: a Blockbench item-modellek a (8, 8, 8) blokk-középpont köré
+ * épülnek, ezért nulla eltolással a mob a FÖLDBE SÜLLYEDVE és oldalra
+ * csúszva jelenne meg. Ugyanez a probléma jött elő a kiegészítőknél is -
+ * ott a csontra centrálás volt a megoldás, itt a talppont.
+ */
+$('#mobAutoFitBtn')?.addEventListener('click', () => {
+  if (!mobAssembly) return;
+  // A MEZŐK BEOLVASÁSA ELŐSZÖR: az előnézet frissítése egy rAF-ban fut, ami
+  // még nem biztos, hogy lefutott, amikor a felhasználó gépelés UTÁN azonnal
+  // ide kattint. Enélkül a beillesztés a KORÁBBI méretből számolna.
+  readMobTargetFromInputs();
+  // Az eltolást előbb nullázzuk: a befoglaló doboz így a modell SAJÁT
+  // helyzetét mutatja, nem a korábbi igazítással együtt.
+  const savedX = mobAssembly.offsetX, savedY = mobAssembly.offsetY, savedZ = mobAssembly.offsetZ;
+  mobAssembly.offsetX = 0; mobAssembly.offsetY = 0; mobAssembly.offsetZ = 0;
+  const b = computeMobBounds();
+  if (!b) {
+    mobAssembly.offsetX = savedX; mobAssembly.offsetY = savedY; mobAssembly.offsetZ = savedZ;
+    showToast('Előbb tölts fel modellt.', true);
+    return;
+  }
+  mobAssembly.offsetX = round2(-(b.min[0] + b.max[0]) / 2);
+  mobAssembly.offsetY = round2(-b.min[1]);
+  mobAssembly.offsetZ = round2(-(b.min[2] + b.max[2]) / 2);
+  writeMobTargetToInputs();
+  queueMobPreview();
+  showToast('A modell a talpára állítva.');
+});
+
+$('#mobFitResetBtn')?.addEventListener('click', () => {
+  const rec = mobCurrentRecord();
+  if (!rec) return;
+  readMobTargetFromInputs();
+  rec.offsetX = 0; rec.offsetY = 0; rec.offsetZ = 0;
+  rec.rotationX = 0; rec.rotationY = 0; rec.rotationZ = 0;
+  rec.scale = 1;
+  if (mobTarget >= 0) rec.dirty = true;
+  writeMobTargetToInputs();
+  queueMobPreview();
+});
+
+
+/**
+ * "Mennyivel ezelőtt szinkronizált" - a backend UTC-ben adja, szóközzel
+ * elválasztva ("2026-09-20 18:12:03"). A Date ezt böngészőnként MÁSKÉNT
+ * értelmezné (a Safari NaN-t ad), ezért alakítjuk át ISO-ra, és tesszük ki a
+ * "Z"-t - ugyanaz a csapda, mint a kiegészítők lejáratánál.
+ */
+function mobSyncAgo(raw) {
+  if (!raw) return 'ismeretlen';
+  const ms = Date.parse(String(raw).replace(' ', 'T') + 'Z');
+  if (!Number.isFinite(ms)) return 'ismeretlen';
+  const diff = Math.max(0, Date.now() - ms) / 1000;
+  if (diff < 90) return Math.round(diff) + ' mp-e';
+  if (diff < 5400) return Math.round(diff / 60) + ' perce';
+  if (diff < 172800) return Math.round(diff / 3600) + ' órája';
+  return Math.round(diff / 86400) + ' napja';
+}
+
+/**
+ * A forgáspont a KIJELÖLT cél TÖVÉRE.
+ *
+ * Ugyanaz a szabály, mint a kiegészítőknél (ld. suggestRootPivot): a hullám
+ * tengelye mentén az a vég, amelyik közelebb van a modell-tér középpontjához
+ * (item-modellnél 8, entitás-modellnél 0) - egy szárny ugyanis a testtől
+ * KIFELÉ nyúlik. A többi tengelyen a befoglaló doboz közepe marad.
+ *
+ * MIÉRT KELL: a forgáspont alapértéke a doboz KÖZEPE, ott viszont a rész a
+ * közepén csuklana, és a legjobb mozgás is "hajló deszkának" látszana. Ez a
+ * kiegészítőknél élesben derült ki - itt ugyanaz a geometria, ugyanaz a hiba.
+ */
+function suggestMobRootPivot(partIndex) {
+  const source = partIndex < 0
+    ? mobParts.filter((p) => Array.isArray(p.elements) && p.elements.length)
+    : [mobParts[partIndex]].filter((p) => p && Array.isArray(p.elements) && p.elements.length);
+  if (!source.length) return null;
+
+  const all = [];
+  for (const p of source) for (const el of p.elements) all.push(el);
+  const rec = partIndex < 0 ? mobAssembly : mobParts[partIndex];
+  const axis = SkinPreview.animAlongAxis(rec ? rec.anim : null, all);
+
+  let mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
+  for (const el of all) {
+    if (!Array.isArray(el.from) || !Array.isArray(el.to)) continue;
+    for (let k = 0; k < 3; k++) {
+      mn[k] = Math.min(mn[k], el.from[k], el.to[k]);
+      mx[k] = Math.max(mx[k], el.from[k], el.to[k]);
+    }
+  }
+  if (!Number.isFinite(mn[0])) return null;
+
+  const ref = mobAssembly && mobAssembly.itemModelSpace !== false ? 8 : 0;
+  const pivot = [(mn[0] + mx[0]) / 2, (mn[1] + mx[1]) / 2, (mn[2] + mx[2]) / 2];
+  pivot[axis] = rootPivotCoord(mn[axis], mx[axis], ref);
+  return pivot.map((n) => Math.round(n * 100) / 100);
+}
+
 
 tryAutoLogin();

@@ -1839,7 +1839,9 @@ a { color: inherit; }
   .cosmetic-card.rarity-mythic::before,
   .cosmetic-admin-card.rarity-mythic::before,
   .cosmetic-card.rarity-mythic::after,
-  .cosmetic-admin-card.rarity-mythic::after {
+  .cosmetic-admin-card.rarity-mythic::after,
+  .cosmetic-card.rarity-mythic .cosmetic-thumb-ring,
+  .cosmetic-admin-card.rarity-mythic .cosmetic-thumb-ring {
     animation: none;
   }
   .cosmetic-card.rarity-mythic,
@@ -1855,6 +1857,56 @@ a { color: inherit; }
   background: var(--panel-2); image-rendering: pixelated; flex-shrink: 0;
 }
 .cosmetic-thumb-empty { border: 1px dashed var(--line); background: transparent; }
+
+/* ── A RITKASÁG SZÍNE A BÉLYEGKÉP KÖRÜL ───────────────────────────────────
+
+   A ritkaságot eddig CSAK a kártya tetején futó vékony sáv mutatta. Felvett
+   állapotban viszont a kártya arany keretet és belső arany vonalat kap, ami
+   elnyomja azt a sávot – a felhasználó jelezte, hogy így alig látszik,
+   melyik ritkaságról van szó.
+
+   Ezért a szín ODA is kerül, ahova a szem amúgy is néz: a kirajzolt
+   kiegészítő KÖRÉ, gyűrűként. A gyűrű KÜLÖN ELEM (nem box-shadow a képen),
+   mert a legendás és a mítikus fokozat GRADIENST kap – azt csak háttérrel
+   lehet megadni. A --rarity-ring / --rarity-halo a kártyán ül, így a kétféle
+   kártya (saját és admin) ugyanazt az egy szabályt használja. */
+.cosmetic-card,
+.cosmetic-admin-card {
+  --rarity-ring: var(--line);
+  --rarity-halo: rgba(0, 0, 0, 0);
+}
+.cosmetic-card.rarity-rare,
+.cosmetic-admin-card.rarity-rare {
+  --rarity-ring: var(--discord);
+  --rarity-halo: color-mix(in srgb, var(--discord) 55%, transparent);
+}
+.cosmetic-card.rarity-epic,
+.cosmetic-admin-card.rarity-epic {
+  --rarity-ring: var(--orange);
+  --rarity-halo: var(--orange-glow);
+}
+.cosmetic-card.rarity-legendary,
+.cosmetic-admin-card.rarity-legendary {
+  --rarity-ring: linear-gradient(135deg, var(--gold-2), var(--gold), var(--gold-2));
+  --rarity-halo: var(--gold-glow);
+}
+.cosmetic-card.rarity-mythic,
+.cosmetic-admin-card.rarity-mythic {
+  --rarity-ring: linear-gradient(135deg, var(--danger), var(--gold), var(--orange-2), var(--danger));
+  --rarity-halo: rgba(214, 64, 42, .75);
+}
+/* Az általános (common) fokozat SZÁNDÉKOSAN halvány szegély: ha minden gyűrű
+   világít, egyik sem jelent semmit. */
+.cosmetic-thumb-ring {
+  padding: 3px; border-radius: 15px; line-height: 0; flex-shrink: 0;
+  background: var(--rarity-ring);
+  box-shadow: 0 0 16px -4px var(--rarity-halo);
+}
+.cosmetic-card.rarity-mythic .cosmetic-thumb-ring,
+.cosmetic-admin-card.rarity-mythic .cosmetic-thumb-ring {
+  background-size: 250% 250%;
+  animation: cosmetic-mythic-sheen 4s linear infinite;
+}
 .badges-admin-item > .cosmetic-thumb { width: 40px; height: 40px; border-radius: 10px; }
 
 .cosmetic-card-name { font-size: 14px; font-weight: 800; line-height: 1.3; }
@@ -2043,6 +2095,111 @@ a { color: inherit; }
    köztük (ld. index.html indoklását és app.js openCosmeticEditor-át). Azért
    osztály és nem a "hidden", mert azt az applyPermVisibility() kezeli a
    data-perm attribútumok alapján - a kettő felülírná egymást. */
+
+/* ── MOBOK (admin) ────────────────────────────────────────────────────────
+
+   A nézet SZÁNDÉKOSAN a kiegészítő-szerkesztő osztályait használja újra
+   (.cosmetic-admin-layout, .cosmetic-tab*, .cosmetic-transform-grid,
+   .cosmetic-editor-stage): a két felület ugyanaz a fajta munka - modell
+   feltöltése, illesztés, animáció -, és ha külön stíluskészletet kapnának,
+   a kettő előbb-utóbb elcsúszna egymástól. Itt csak az van, ami TÉNYLEG
+   más: a lista-kártya és a hitbox-előnézet jelmagyarázata. */
+.mob-admin-editor { display: none; }
+.view[data-view="mobsAdmin"].editing .mob-admin-list { display: none; }
+.view[data-view="mobsAdmin"].editing .mob-admin-editor { display: block; }
+
+.mob-filter-toggle { margin: 0; white-space: nowrap; }
+
+/* A mob-előnézet oszlopa: a vászon ALATT jelmagyarázat, súgó és a szerverről
+   érkező statisztika. Az örökölt .cosmetic-editor-stage egyetlen, középre
+   igazított gyereket feltételez (flex SOR) - itt ezért kell oszlop. */
+.mob-editor-stage {
+  flex-direction: column; justify-content: flex-start; align-items: stretch;
+  padding: 14px; gap: 4px;
+}
+/* A vászon saját, RELATÍV dobozt kap: az "üres" felirat abszolút pozíciójú,
+   és enélkül a teljes oszlopot takarná le. */
+.mob-preview-canvas-wrap {
+  position: relative; align-self: center;
+  display: flex; align-items: center; justify-content: center;
+  min-height: 340px;
+}
+
+.mob-admin-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 16px; margin-top: 16px;
+}
+.mob-admin-card {
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+  padding: 16px 14px; position: relative; overflow: hidden;
+  transition: transform .12s, box-shadow .16s, border-color .16s;
+}
+.mob-admin-card:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(0,0,0,.35); }
+/* A kikapcsolt megjelenés HALVÁNY, de nem eltüntetett: az admin lássa, hogy
+   ott van, csak épp nem rajzolódik ki. */
+.mob-admin-card.is-off { opacity: .6; }
+/* A "nincs a Centerben" mobokat csak kérésre listázzuk - ott egy bal oldali
+   sáv jelzi, hogy nem a szokásos eset. NEM csak szín: a szaggatott keret
+   színtévesztéssel is látszik. */
+.mob-admin-card.is-hidden-server { border-style: dashed; }
+
+.mob-admin-card-name { margin-top: 10px; font-size: 14.5px; font-weight: 800; }
+.mob-admin-card-slug {
+  margin-top: 2px; font-size: 11.5px; color: var(--text-faint);
+  font-family: ui-monospace, Consolas, monospace;
+}
+.mob-admin-card-tags { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; margin-top: 10px; }
+.mob-admin-card-meta { margin-top: 10px; font-size: 11.5px; color: var(--text-faint); line-height: 1.6; }
+.mob-admin-card-actions {
+  display: flex; gap: 6px; flex-wrap: wrap; justify-content: center;
+  margin-top: auto; padding-top: 14px; width: 100%;
+}
+.mob-admin-card-actions button { flex: 1 1 auto; }
+
+.mob-thumb {
+  width: 84px; height: 84px; border-radius: 12px; object-fit: contain;
+  background: var(--panel-2); image-rendering: pixelated; flex-shrink: 0;
+}
+.mob-thumb-empty { border: 1px dashed var(--line); background: transparent; }
+
+.mob-badge-on {
+  font-size: 10.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+  border-radius: 999px; padding: 3px 8px;
+  color: var(--gold); border: 1px solid color-mix(in srgb, var(--gold) 35%, var(--line));
+}
+.mob-badge-warn {
+  font-size: 10.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+  border-radius: 999px; padding: 3px 8px;
+  color: var(--orange); border: 1px solid color-mix(in srgb, var(--orange) 35%, var(--line));
+}
+
+/* Az előnézet jelmagyarázata. A két doboz szín-kódolt, ezért a SZÖVEG is ott
+   van mellette - egy pusztán színes négyzet színtévesztéssel semmit nem mond. */
+.mob-preview-legend {
+  display: flex; gap: 14px; justify-content: center; flex-wrap: wrap;
+  margin-top: 8px; font-size: 11.5px; color: var(--text-dim);
+}
+.mob-preview-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.mob-legend-swatch {
+  width: 12px; height: 12px; border-radius: 3px; display: inline-block;
+  border: 1px solid var(--line);
+}
+.mob-legend-player { background: rgba(90, 190, 255, .45); }
+.mob-legend-hitbox { background: rgba(255, 198, 46, .45); }
+
+/* A plugin felől érkező statisztika: CSAK olvasható. Ezért nincs benne
+   egyetlen beviteli mező sem - a mob viselkedése a szerveren állítható. */
+.mob-stats-card { margin-top: 14px; text-align: left; }
+.mob-stats-row {
+  display: flex; justify-content: space-between; gap: 10px;
+  font-size: 12px; padding: 3px 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
+}
+.mob-stats-row:last-child { border-bottom: 0; }
+.mob-stats-row span { color: var(--text-faint); }
+.mob-stats-row strong { font-weight: 800; }
+.mob-stats-abilities { margin: 6px 0 0; padding-left: 16px; font-size: 11.5px; color: var(--text-dim); line-height: 1.6; }
+
 .cosmetic-admin-editor { display: none; }
 .view[data-view="cosmeticsAdmin"].editing .cosmetic-admin-list { display: none; }
 .view[data-view="cosmeticsAdmin"].editing .cosmetic-admin-editor { display: block; }

@@ -54,11 +54,11 @@
   <!-- A téma minél korábban, a stíluslap ELŐTT alkalmazódjon (ld.
        theme.js), hogy az első kirajzolás már a mentett témával történjen,
        ne legyen látható "villanás" az alap témáról. -->
-  <script src="theme.js?v=20260920d"></script>
-  <link rel="stylesheet" href="style.css?v=20260920d" />
+  <script src="theme.js?v=20260920e"></script>
+  <link rel="stylesheet" href="style.css?v=20260920e" />
   <!-- A vizuális réteg SZÁNDÉKOSAN a style.css UTÁN: csak ráépít az ottani
        osztályokra, és a kaszkádban felülír, ahol kell (ld. ui.css eleje). -->
-  <link rel="stylesheet" href="ui.css?v=20260920d" />
+  <link rel="stylesheet" href="ui.css?v=20260920e" />
 
   <!-- Strukturált adat a keresőknek/megosztásoknak (schema.org). -->
   <script type="application/ld+json">
@@ -354,6 +354,7 @@
             <button class="app-nav-item admin-nav-item hidden" data-view="newsAdmin" data-permission="global.newsManage"><span>Felhívások</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="badges" data-permission="global.badgesManage"><span>Jelvények</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="cosmeticsAdmin" data-permission="global.cosmeticsManage,global.cosmeticsMarketManage"><span>Kiegészítők</span></button>
+            <button class="app-nav-item admin-nav-item hidden" data-view="mobsAdmin" data-permission="global.mobsManage"><span>Mobok</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="discounts" data-permission="global.discountsManage"><span>Akciók</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="coupons" data-permission="global.couponsManage"><span>Kuponok</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="creatorCodes" data-permission="global.creatorCodesManage"><span>Creator kódok</span></button>
@@ -1770,6 +1771,196 @@
           </div>
         </section>
 
+        <!-- ── MOBOK (admin) ──────────────────────────────────────────
+
+             A SolarMobs plugin szinkronizál ide. Az a mob jelenik meg itt,
+             amit a szerveren LÁTHATÓRA kapcsoltak (/solarmob center <id> on) -
+             ez a felhasználó kifejezett kérése volt: a mobokat ingame állítja
+             be az admin, és csak azt hozza ide, amihez modellt akar tölteni.
+
+             MIÉRT NINCS ITT "ÚJ MOB" GOMB: a mob DEFINÍCIÓJA (élet, sebzés,
+             képességek, drop) a szerveren él, nem itt. Egy weboldalról
+             létrehozott mob a plugin YAML-jeiben nem létezne, tehát soha nem
+             jelenne meg a játékban - a gomb csak becsapná az admint. Itt
+             kizárólag a MEGJELENÉS állítható. -->
+        <section class="view" data-view="mobsAdmin">
+          <h1 class="page-title">Mobok</h1>
+
+          <div class="mob-admin-list">
+            <p class="page-note">Itt a <strong>SolarMobs</strong> plugin mobjainak a <strong>megjelenését</strong> állítod be: egyedi modell, textúra, illesztés, animáció és hitbox. A modellt a SolarClient rajzolja ki, <strong>resource pack nélkül</strong> &ndash; a Blockbench natív JSON exportját várjuk (<code>elements</code> tömbbel) a hozzá tartozó PNG textúrával.<br />Egy mob akkor kerül ide, ha a szerveren bekapcsoltad: <code>/solarmob center &lt;azonosító&gt; on</code>.</p>
+
+            <div class="admin-toolbar">
+              <input type="search" id="mobAdminSearch" class="cosmetic-filter-input admin-toolbar-search" placeholder="Keresés név vagy azonosító szerint..." aria-label="Keresés a mobok között" />
+              <label class="check-row mob-filter-toggle">
+                <input type="checkbox" id="mobShowHiddenCheckbox" />
+                A szerveren rejtettek is
+              </label>
+              <button type="button" class="btn-outline" id="mobRefreshBtn">Frissítés</button>
+            </div>
+
+            <div id="mobsAdminList"></div>
+          </div>
+
+          <!-- ── SZERKESZTŐ ───────────────────────────────────────────── -->
+          <div class="mob-admin-editor">
+            <div class="admin-editor-head">
+              <button type="button" class="btn-outline admin-back-btn" id="mobBackBtn">&larr; Vissza a listához</button>
+              <div class="admin-editor-title" id="mobEditorTitle">Mob</div>
+            </div>
+
+            <div class="cosmetic-admin-layout">
+              <div class="cosmetic-admin-main">
+                <div class="cosmetic-tabbar">
+                  <button type="button" class="cosmetic-tab active" data-mob-tab="model">Modell és illesztés</button>
+                  <button type="button" class="cosmetic-tab" data-mob-tab="anim">Animáció</button>
+                  <button type="button" class="cosmetic-tab" data-mob-tab="hitbox">Hitbox és megjelenés</button>
+                  <button type="button" class="cosmetic-tab" data-mob-tab="aura">Aura</button>
+                </div>
+
+                <!-- FÜL: MODELL -->
+                <div class="cosmetic-tab-pane active" data-mob-pane="model">
+                  <div class="card">
+                    <div class="card-title">Textúra</div>
+                    <p class="cosmetic-file-note">A modell ÖSSZES része ezt az egy PNG-t használja &ndash; pont úgy, ahogy a Blockbench exportálja. Legfeljebb 512&times;512.</p>
+                    <input type="file" id="mobTextureInput" accept=".png,image/png" hidden />
+                    <button type="button" class="btn-outline file-picker-btn" id="mobTexturePickBtn">Textúra kiválasztása</button>
+                    <p class="cosmetic-file-note" id="mobTextureNote"></p>
+                    <div class="news-image-preview-wrap" id="mobTexturePreviewWrap" hidden>
+                      <img id="mobTexturePreview" class="news-image-preview cosmetic-texture-preview" alt="A mob textúrája" />
+                    </div>
+                  </div>
+
+                  <div class="card">
+                    <div class="card-title">Részek</div>
+                    <p class="cosmetic-file-note">Egy mob több modellből is állhat (pl. test + külön mozgó szárny). A részek KÖZÖS textúrán osztoznak, de mindegyiknek saját illesztése és animációja van.</p>
+                    <div class="cosmetic-parts-bar" id="mobPartsBar"></div>
+                    <div class="cosmetic-part-panel" id="mobPartPanel"></div>
+                    <input type="file" id="mobModelInput" accept=".json,application/json" hidden />
+                    <input type="file" id="mobNewPartInput" accept=".json,application/json" hidden />
+                  </div>
+
+                  <div class="card">
+                    <div class="cosmetic-transform-title">Illesztés &ndash; <span id="mobTargetLabel">teljes mob</span></div>
+                    <p class="cosmetic-file-note">A <strong>(0, 0, 0)</strong> pont a mob TALPA (az entitás pozíciója). Az előnézetben a szürke lap a talaj, a kék doboz egy játékos mérete (0,6 &times; 1,8 blokk).</p>
+                    <div class="cosmetic-transform-grid">
+                      <label>Eltolás X<input type="number" id="mobOffsetXInput" step="0.5" value="0" /></label>
+                      <label>Eltolás Y<input type="number" id="mobOffsetYInput" step="0.5" value="0" /></label>
+                      <label>Eltolás Z<input type="number" id="mobOffsetZInput" step="0.5" value="0" /></label>
+                      <label>Méret<input type="number" id="mobScaleInput" step="0.05" value="1" /></label>
+                      <label>Forgatás X<input type="number" id="mobRotXInput" step="5" min="-360" max="360" value="0" /></label>
+                      <label>Forgatás Y<input type="number" id="mobRotYInput" step="5" min="-360" max="360" value="0" /></label>
+                      <label>Forgatás Z<input type="number" id="mobRotZInput" step="5" min="-360" max="360" value="0" /></label>
+                    </div>
+                    <label class="check-row" id="mobItemSpaceRow">
+                      <input type="checkbox" id="mobItemSpaceCheckbox" checked />
+                      Tárgy-modell tér (Blockbench item export)
+                    </label>
+                    <div class="cosmetic-editor-controls">
+                      <button type="button" class="btn-outline" id="mobAutoFitBtn" title="A modellt a talpára állítja és vízszintesen középre teszi.">A talpára állítás</button>
+                      <button type="button" class="btn-outline" id="mobFitResetBtn">Illesztés nullázása</button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- FÜL: ANIMÁCIÓ -->
+                <div class="cosmetic-tab-pane" data-mob-pane="anim">
+                  <div class="card">
+                    <div class="cosmetic-transform-title">Animáció &ndash; <span id="mobAnimTargetLabel">teljes mob</span></div>
+                    <p class="cosmetic-file-note">Ugyanaz a mozgás-rendszer, mint a kiegészítőknél: a kész mozgások több, egymáshoz rögzített fázisú sávból állnak. A rész kijelölése a &bdquo;Modell&rdquo; fülön lévő rész-sávval történik.</p>
+                    <div class="cosmetic-anim-presets" id="mobAnimPresets"></div>
+                    <div class="cosmetic-anim-tracks" id="mobAnimTracks"></div>
+                    <div class="cosmetic-editor-controls">
+                      <button type="button" class="btn-outline" id="mobAnimAddBtn">+ Mozgás hozzáadása</button>
+                      <button type="button" class="btn-outline" id="mobAnimClearBtn">Animáció törlése</button>
+                    </div>
+                    <div class="cosmetic-transform-grid" style="margin-top:12px;">
+                      <label>Forgáspont X<input type="number" id="mobAnimPivotXInput" step="0.5" placeholder="közép" /></label>
+                      <label>Forgáspont Y<input type="number" id="mobAnimPivotYInput" step="0.5" placeholder="közép" /></label>
+                      <label>Forgáspont Z<input type="number" id="mobAnimPivotZInput" step="0.5" placeholder="közép" /></label>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- FÜL: HITBOX -->
+                <div class="cosmetic-tab-pane" data-mob-pane="hitbox">
+                  <div class="card">
+                    <div class="card-title">Hitbox</div>
+                    <p class="cosmetic-file-note">A hitbox a <strong>szerveren</strong> dönti el, mit lehet eltalálni, és mibe ütközik a mob. A plugin a beállított magassághoz méretezi az entitást &ndash; ehhez <strong>1.20.5 vagy újabb</strong> szerver kell. Régebbi szerveren a modell látszik, de a találati doboz vanilla méretű marad.</p>
+                    <label class="gift-modal-label" for="mobHitboxModeSelect">Mód</label>
+                    <select id="mobHitboxModeSelect" class="gift-modal-input">
+                      <option value="auto">Automatikus &ndash; a modellből számolva</option>
+                      <option value="manual">Kézi &ndash; én adom meg</option>
+                      <option value="vanilla">Vanilla &ndash; ne nyúljunk hozzá</option>
+                    </select>
+                    <div class="cosmetic-transform-grid" id="mobHitboxManualFields">
+                      <label>Szélesség (blokk)<input type="number" id="mobHitboxWidthInput" step="0.1" min="0.1" max="24" /></label>
+                      <label>Magasság (blokk)<input type="number" id="mobHitboxHeightInput" step="0.1" min="0.1" max="24" /></label>
+                    </div>
+                    <p class="cosmetic-file-note" id="mobHitboxInfo"></p>
+                  </div>
+
+                  <div class="card">
+                    <div class="card-title">Megjelenés</div>
+                    <label class="check-row">
+                      <input type="checkbox" id="mobHideVanillaCheckbox" checked />
+                      A vanilla modell elrejtése
+                    </label>
+                    <p class="cosmetic-file-note">Kikapcsolva a saját modell a vanilla entitás MELLETT jelenik meg &ndash; ez páncél/fegyver kiegészítésére jó, teljes lecserélésre nem.</p>
+                    <div class="cosmetic-transform-grid" style="margin-top:10px;">
+                      <label>Névtábla eltolása (blokk)<input type="number" id="mobNameOffsetInput" step="0.1" min="-8" max="8" value="0" /></label>
+                    </div>
+                    <label class="check-row" style="margin-top:10px;">
+                      <input type="checkbox" id="mobEnabledCheckbox" checked />
+                      Bekapcsolva (a kliens kirajzolja)
+                    </label>
+                    <p class="cosmetic-file-note">Kikapcsolva a mob a szerveren változatlanul működik, csak a saját modelljét nem kapja meg &ndash; félkész modellnél ezt érdemes használni, nem a törlést.</p>
+                  </div>
+                </div>
+
+                <!-- FÜL: AURA -->
+                <div class="cosmetic-tab-pane" data-mob-pane="aura">
+                  <div class="card">
+                    <div class="card-title">Aura</div>
+                    <p class="cosmetic-file-note">Részecske-effekt a mob körül, a modell saját textúrájából. Ugyanazok a típusok, mint a kiegészítőknél.</p>
+                    <select id="mobAuraTypeSelect" class="gift-modal-input"></select>
+                    <div id="mobAuraFields" class="hidden">
+                      <div class="cosmetic-transform-grid">
+                        <label>Sűrűség (db/mp)<input type="number" id="mobAuraRateInput" step="1" min="1" max="60" placeholder="alap" /></label>
+                        <label>Méret<input type="number" id="mobAuraSizeInput" step="0.05" min="0.05" max="4" placeholder="alap" /></label>
+                        <label>Élettartam (mp)<input type="number" id="mobAuraLifeInput" step="0.1" min="0.2" max="6" placeholder="alap" /></label>
+                        <label>Sebesség-szorzó<input type="number" id="mobAuraSpeedInput" step="0.1" min="0.1" max="4" placeholder="1" /></label>
+                        <label>Szín (születés)<input type="color" id="mobAuraColorAInput" /></label>
+                        <label>Szín (elmúlás)<input type="color" id="mobAuraColorBInput" /></label>
+                      </div>
+                      <button type="button" class="btn-outline" id="mobAuraResetBtn" style="margin-top:10px;">Finomhangolás törlése</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ELŐNÉZET -->
+              <div class="cosmetic-editor-stage mob-editor-stage">
+                <div class="mob-preview-canvas-wrap">
+                  <canvas id="mobEditorPreview" width="280" height="340"></canvas>
+                  <p class="cosmetic-editor-empty" id="mobEditorEmpty">Tölts fel modellt és textúrát</p>
+                </div>
+                <div class="mob-preview-legend">
+                  <span><i class="mob-legend-swatch mob-legend-player"></i> játékos (0,6 &times; 1,8)</span>
+                  <span><i class="mob-legend-swatch mob-legend-hitbox"></i> hitbox</span>
+                </div>
+                <p class="cosmetic-file-note" style="text-align:center;">Húzás: forgatás &middot; görgő: nagyítás</p>
+                <div class="mob-stats-card card" id="mobStatsCard"></div>
+              </div>
+            </div>
+
+            <div class="cosmetic-editor-controls" style="margin-top:14px;">
+              <button type="button" class="btn-glow" id="mobSaveBtn">Mentés</button>
+              <button type="button" class="btn-outline" id="mobDeleteBtn" title="Csak a MEGJELENÉST törli. A mob a szerveren megmarad, és a következő szinkronnál újra megjelenik itt - üresen.">Megjelenés törlése</button>
+            </div>
+            <p class="redeem-result" id="mobFormResult"></p>
+          </div>
+        </section>
+
         <section class="view" data-view="discounts">
           <h1 class="page-title">Akciók</h1>
           <p class="page-note">A létrehozott akciók automatikusan érvényesülnek vásárláskor a beállított érvényességi körben - több egyidejűleg illeszkedő akció (és az egyéni, játékosonkénti kedvezmény, ld. Játékosok admin panel) ÖSSZEADÓDIK.</p>
@@ -2786,8 +2977,8 @@
        ez utóbbi itt lényeges, mert a ui.js az app.js globális
        switchView()/showToast() függvényeit csomagolja be, tehát csak
        azok létrejötte után futhat. -->
-  <script src="skin3d.js?v=20260920d" defer></script>
-  <script src="app.js?v=20260920d" defer></script>
-  <script src="ui.js?v=20260920d" defer></script>
+  <script src="skin3d.js?v=20260920e" defer></script>
+  <script src="app.js?v=20260920e" defer></script>
+  <script src="ui.js?v=20260920e" defer></script>
 </body>
 </html>

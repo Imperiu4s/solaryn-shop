@@ -829,6 +829,12 @@ const SkinPreview = (() => {
    */
   function buildCosmeticParts(model, slot, opts) {
     const standalone = !!(opts && opts.standalone);
+    // MOB-ELŐNÉZET: az önálló (karakter nélküli) rajzolás alapból NULLÁZZA a
+    // kiegészítő eltolását, mert egy bélyegképen a modellt középre akarjuk.
+    // Egy MOBNÁL viszont pont az eltolás a lényeg: az mondja meg, hol áll a
+    // modell a saját talppontjához (az entitás origójához) képest - enélkül
+    // az admin nem látná, hogy a modell a földbe süllyed-e.
+    const keepOffset = !!(opts && opts.keepOffset);
 
     // A kiegészítő-szintű illesztés: az ÚJ válaszban "assembly", a régiben
     // "transform". Ha van assembly, az az elsődleges - a "transform" ott már
@@ -1122,7 +1128,7 @@ const SkinPreview = (() => {
         return out;
       })(),
       assembly: {
-        offset: standalone ? [0, 0, 0] : off,
+        offset: (standalone && !keepOffset) ? [0, 0, 0] : off,
         scale: mScale,
         rotation: rot,
         center: allCenter,
@@ -1975,6 +1981,372 @@ const SkinPreview = (() => {
    * Enyhén elforgatott, "termékfotó" nézet - így a lapos (sík) modellek is
    * térbelinek látszanak, nem egyetlen vonalnak.
    */
+
+  /**
+   * MOB-ELŐNÉZET a Center admin "Mobok" fülére.
+   *
+   * ── MIÉRT KELL KÜLÖN ELŐNÉZET, ÉS MIÉRT NEM A KIEGÉSZÍTŐ-BÉLYEGKÉP ────
+   * Egy kiegészítőnél a kérdés az, hogy "jól áll-e a karakteren". Egy mobnál
+   * három EGÉSZEN MÁS kérdés van, és mindháromra ez a nézet felel:
+   *   1. A FÖLDÖN áll-e? (a modell origója = az entitás talppontja)
+   *   2. MEKKORA valójában? - ezért van benne egy játékos-méretű (0,6 x 1,8
+   *      blokkos) viszonyítási doboz. Szám formájában a "2,4 blokk magas"
+   *      semmit nem mond; egymás mellett azonnal látszik.
+   *   3. Illeszkedik-e a HITBOX? A szerveren ez dönti el, mit lehet
+   *      eltalálni - ezért a kiszámolt dobozt rá is rajzoljuk a modellre.
+   *
+   * A modell rajzolása BITRE ugyanaz a matek, mint a kiegészítőknél (közös
+   * buildCosmeticParts / cosmeticPartMatrix / waveElementPositions), tehát az
+   * animáció is ugyanúgy néz ki, mint a játékban.
+   *
+   * @param opts { model, img, hitbox: {width, height} | null, reference: bool }
+   */
+  function startMob(canvas, opts) {
+    const gl = canvas.getContext('webgl', { alpha: true, antialias: false });
+    if (!gl) return () => {};
+    opts = opts || {};
+
+    const program = gl.createProgram();
+    gl.attachShader(program, compile(gl, gl.VERTEX_SHADER, VERT_SRC));
+    gl.attachShader(program, compile(gl, gl.FRAGMENT_SHADER, FRAG_SRC));
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return () => {};
+    gl.useProgram(program);
+
+    const uMVP = gl.getUniformLocation(program, 'uMVP');
+    const uTint = gl.getUniformLocation(program, 'uTint');
+    const uAlphaCut = gl.getUniformLocation(program, 'uAlphaCut');
+    // A uniformok alapból NULLÁK - ha nem állítjuk be, minden rajzolás fekete
+    // és áttetsző lenne (ez a hiba a kiegészítő-előnézetnél egyszer már
+    // előjött, ld. az ottani megjegyzést).
+    gl.uniform4f(uTint, 1, 1, 1, 1);
+    gl.uniform1f(uAlphaCut, 0.05);
+
+    const aPos = gl.getAttribLocation(program, 'aPos');
+    const aUV = gl.getAttribLocation(program, 'aUV');
+    gl.enableVertexAttribArray(aPos);
+    gl.enableVertexAttribArray(aUV);
+
+    gl.enable(gl.DEPTH_TEST);
+    gl.disable(gl.CULL_FACE);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.clearColor(0, 0, 0, 0);
+
+    // Egy 1x1-es fehér textúra a segéd-dobozokhoz: így ugyanaz a (textúrás)
+    // shader tudja kirajzolni a rácsot és a hitboxot is, a színt a uTint adja.
+    const whiteTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, whiteTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
+      new Uint8Array([255, 255, 255, 255]));
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+    // A doboz sarok-indexelése SZÁNDÉKOSAN ugyanaz, mint az aura-kockáé
+    // (bit0 = z, bit1 = y, bit2 = x) - egy hely, egy konvenció.
+    const BOX_FACES = [
+      [0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1],
+      [2, 3, 7, 6], [0, 2, 6, 4], [1, 5, 7, 3]
+    ];
+
+    function boxGeometry(x0, y0, z0, x1, y1, z1) {
+      const c = [
+        [x0, y0, z0], [x0, y0, z1], [x0, y1, z0], [x0, y1, z1],
+        [x1, y0, z0], [x1, y0, z1], [x1, y1, z0], [x1, y1, z1]
+      ];
+      const positions = [], uvs = [], indices = [];
+      for (let f = 0; f < 6; f++) {
+        const o = positions.length / 3;
+        for (const idx of BOX_FACES[f]) positions.push(c[idx][0], c[idx][1], c[idx][2]);
+        uvs.push(0, 0, 1, 0, 1, 1, 0, 1);
+        indices.push(o, o + 1, o + 2, o, o + 2, o + 3);
+      }
+      return { positions, uvs, indices };
+    }
+
+    function makeStatic(geom) {
+      const posBuf = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(geom.positions), gl.STATIC_DRAW);
+      const uvBuf = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, uvBuf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(geom.uvs), gl.STATIC_DRAW);
+      const idxBuf = gl.createBuffer();
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf);
+      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(geom.indices), gl.STATIC_DRAW);
+      return { posBuf, uvBuf, idxBuf, count: geom.indices.length };
+    }
+
+    function freeStatic(d) {
+      if (!d) return;
+      gl.deleteBuffer(d.posBuf); gl.deleteBuffer(d.uvBuf); gl.deleteBuffer(d.idxBuf);
+    }
+
+    function drawHelper(d, tint) {
+      if (!d) return;
+      gl.uniform4f(uTint, tint[0], tint[1], tint[2], tint[3]);
+      gl.bindTexture(gl.TEXTURE_2D, whiteTex);
+      gl.bindBuffer(gl.ARRAY_BUFFER, d.posBuf);
+      gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
+      gl.bindBuffer(gl.ARRAY_BUFFER, d.uvBuf);
+      gl.vertexAttribPointer(aUV, 2, gl.FLOAT, false, 0, 0);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, d.idxBuf);
+      gl.drawElements(gl.TRIANGLES, d.count, gl.UNSIGNED_SHORT, 0);
+      gl.uniform4f(uTint, 1, 1, 1, 1);
+    }
+
+    // 1 blokk = 16 előnézeti egység (ugyanaz a tér, amiben a karakter-modell
+    // is épül) - ld. cosmeticPartMatrix m2p tényezőjét.
+    const U = 16;
+
+    // Talaj: egy lapos négyzet az entitás talppontjának magasságában.
+    const ground = makeStatic(boxGeometry(-3 * U, -0.4, -3 * U, 3 * U, 0, 3 * U));
+    // Viszonyítás: egy JÁTÉKOS-méretű doboz (0,6 x 1,8 blokk) a modell MELLÉ.
+    // A helye SZÁNDÉKOSAN a modell szélességétől függ: egy fix távolság vagy
+    // belelógna egy nagy mobba, vagy kicsúszna a képből egy kicsinél.
+    const PLAYER_HALF = 0.3 * U;
+    const PLAYER_HEIGHT = 1.8 * U;
+    let reference = null;
+    let referenceX = 2.2 * U;
+    function rebuildReference(x) {
+      freeStatic(reference);
+      referenceX = x;
+      reference = makeStatic(boxGeometry(
+        x - PLAYER_HALF, 0, -PLAYER_HALF, x + PLAYER_HALF, PLAYER_HEIGHT, PLAYER_HALF));
+    }
+    rebuildReference(referenceX);
+
+    let hitboxDrawable = null;
+    function rebuildHitbox(hitbox) {
+      freeStatic(hitboxDrawable);
+      hitboxDrawable = null;
+      if (!hitbox || !(hitbox.width > 0) || !(hitbox.height > 0)) return;
+      const hw = (hitbox.width / 2) * U;
+      hitboxDrawable = makeStatic(boxGeometry(-hw, 0, -hw, hw, hitbox.height * U, hw));
+    }
+
+    let parts = [];
+    let built = null;
+    let modelHeight = 2 * U;
+    // A modell befoglaló doboza az ELŐNÉZETI térben - ebből jön a kamera
+    // távolsága, a forgás középpontja és a viszonyítási doboz helye.
+    let sceneMin = [0, 0, 0];
+    let sceneMax = [0, 2 * U, 0];
+
+    function freeParts() {
+      for (const d of parts) {
+        gl.deleteBuffer(d.posBuf); gl.deleteBuffer(d.uvBuf); gl.deleteBuffer(d.idxBuf);
+        if (d.ownsTexture) gl.deleteTexture(d.tex);
+      }
+      parts = [];
+    }
+
+    function buildModel(model, img) {
+      freeParts();
+      built = null;
+      if (!model || !img) return;
+      try {
+        // keepOffset: a mob eltolása a talppontjához képest ÉRTELMES adat,
+        // nem középre igazítandó bélyegkép (ld. buildCosmeticParts).
+        built = buildCosmeticParts(model, 'head', { standalone: true, keepOffset: true });
+      } catch (e) {
+        console.warn('[SkinPreview] Mob-geometria hiba:', e);
+        return;
+      }
+      let sharedTex = null;
+      let mn = [Infinity, Infinity, Infinity];
+      let mx = [-Infinity, -Infinity, -Infinity];
+      for (let i = 0; i < built.parts.length; i++) {
+        const part = built.parts[i];
+        if (!part.indices.length) continue;
+        const d = createDrawable(gl, part, img, sharedTex);
+        if (!sharedTex) sharedTex = d.tex;
+        d.built = built;
+        d.partIndex = i;
+        d.wave = !!(part.wave || built.assemblyWave);
+        if (d.wave) {
+          d.scratch = new Float32Array(part.positions.length);
+          gl.bindBuffer(gl.ARRAY_BUFFER, d.posBuf);
+          gl.bufferData(gl.ARRAY_BUFFER, d.scratch, gl.DYNAMIC_DRAW);
+        }
+        parts.push(d);
+        // A kamerához és a viszonyításhoz: a modell KÖZELÍTŐ befoglaló doboza.
+        // A pontos érték képkockánként változhat (animáció), ezért elég a
+        // nyugalmi állapot (t = 0).
+        const m = cosmeticPartMatrix(built, i, 0, d.wave);
+        for (let v = 0; v < part.positions.length; v += 3) {
+          const px = part.positions[v], py = part.positions[v + 1], pz = part.positions[v + 2];
+          const wx = m[0] * px + m[4] * py + m[8] * pz + m[12];
+          const wy = m[1] * px + m[5] * py + m[9] * pz + m[13];
+          const wz = m[2] * px + m[6] * py + m[10] * pz + m[14];
+          if (wx < mn[0]) mn[0] = wx; if (wx > mx[0]) mx[0] = wx;
+          if (wy < mn[1]) mn[1] = wy; if (wy > mx[1]) mx[1] = wy;
+          if (wz < mn[2]) mn[2] = wz; if (wz > mx[2]) mx[2] = wz;
+        }
+      }
+      if (Number.isFinite(mn[0])) {
+        sceneMin = mn;
+        sceneMax = mx;
+        modelHeight = Math.max(mx[1], 1);
+        // A viszonyítás a modell JOBB SZÉLE mellé, negyed blokk hézaggal.
+        rebuildReference(mx[0] + 0.25 * U + PLAYER_HALF);
+      }
+    }
+
+    buildModel(opts.model, opts.img);
+    rebuildHitbox(opts.hitbox);
+
+    // ── Kamera ────────────────────────────────────────────────────────
+    let angle = 0.6, pitch = -0.15;
+    const CAM_NEAR = 30, CAM_FAR = 320;
+    let camDistance = 120;
+    let dragging = false, lastX = 0, lastY = 0;
+
+    /**
+     * A forgás középpontja: a modell vízszintes közepe. A FÜGGŐLEGES
+     * középpont NEM ez, hanem a magasság fele - a mob a talpán áll, tehát a
+     * 0 szint a talaj, és azt mindig látni akarjuk.
+     */
+    function sceneCenterX() { return (sceneMin[0] + sceneMax[0]) / 2; }
+    function sceneCenterZ() { return (sceneMin[2] + sceneMax[2]) / 2; }
+
+    function fitCamera() {
+      const halfHeight = Math.max(modelHeight, 1.8 * U) / 2;
+      const cx = sceneCenterX(), cz = sceneCenterZ();
+      // A jelenet vízszintes sugara a forgás középpontjától: a modell, a
+      // viszonyítási doboz és a talaj-lap közül a legtávolabbi.
+      const halfWidth = Math.max(
+        Math.abs(sceneMax[0] - cx), Math.abs(cx - sceneMin[0]),
+        Math.abs(referenceX + PLAYER_HALF - cx),
+        Math.abs(sceneMax[2] - cz), Math.abs(cz - sceneMin[2]),
+        1.5 * U);
+      const canvasAspect = (canvas.width || 280) / (canvas.height || 340);
+      const tan = Math.tan(Math.PI / 10);
+      // Magasságra ÉS szélességre is illeszteni kell - egy széles, alacsony
+      // mobnál a magasságból számolt távolság levágná az oldalait.
+      const byHeight = halfHeight / tan;
+      const byWidth = halfWidth / (tan * canvasAspect);
+      camDistance = Math.max(CAM_NEAR, Math.min(CAM_FAR, Math.max(byHeight, byWidth) * 1.3));
+    }
+    fitCamera();
+
+    function onDown(e) { dragging = true; lastX = e.clientX; lastY = e.clientY; }
+    function onMove(e) {
+      if (!dragging) return;
+      angle += (e.clientX - lastX) * 0.01;
+      pitch = Math.max(-1.3, Math.min(1.3, pitch + (e.clientY - lastY) * 0.008));
+      lastX = e.clientX; lastY = e.clientY;
+    }
+    function onUp() { dragging = false; }
+    function onWheel(e) {
+      e.preventDefault();
+      camDistance = Math.max(CAM_NEAR, Math.min(CAM_FAR, camDistance * (e.deltaY > 0 ? 1.12 : 1 / 1.12)));
+    }
+    canvas.addEventListener('mousedown', onDown);
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+
+    let stopped = false;
+    function frame() {
+      if (stopped) return;
+      if (!dragging) angle += 0.006;
+
+      const w = canvas.width, h = canvas.height;
+      gl.viewport(0, 0, w, h);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+      const proj = perspective(Math.PI / 5, w / h, 1, 600);
+      // A kamera a modell FÉLMAGASSÁGÁRA néz, nem az origóra: enélkül egy
+      // magas mob teteje kilógna a képből.
+      const focus = Math.max(modelHeight, 1.8 * U) / 2;
+      const view = multiply(translate(0, -focus, -camDistance), rotateX(pitch));
+      // A jelenet a MODELL körül forog, nem a világ origója körül: enélkül
+      // egy oldalra tolt modell körpályán keringene a kép szélén.
+      const scene = multiply(rotateY(angle), translate(-sceneCenterX(), 0, -sceneCenterZ()));
+      const mvp = multiply(proj, multiply(view, scene));
+
+      // 1. talaj + viszonyítás (átlátszó, de MÉLYSÉGET ÍR: ezek mögé
+      //    kerüljön, ami tényleg mögöttük van)
+      gl.uniformMatrix4fv(uMVP, false, mvp);
+      gl.uniform1f(uAlphaCut, 0);
+      drawHelper(ground, [1, 1, 1, 0.07]);
+      if (opts.reference !== false) drawHelper(reference, [0.35, 0.75, 1, 0.22]);
+      gl.uniform1f(uAlphaCut, 0.05);
+
+      // 2. a mob modellje
+      const animTime = (performance.now() % 3600000) / 1000;
+      for (const c of parts) {
+        if (c.wave) {
+          waveElementPositions(c.built, c.partIndex, animTime, c.scratch);
+          gl.bindBuffer(gl.ARRAY_BUFFER, c.posBuf);
+          gl.bufferSubData(gl.ARRAY_BUFFER, 0, c.scratch);
+        }
+        gl.uniformMatrix4fv(uMVP, false,
+          multiply(mvp, cosmeticPartMatrix(c.built, c.partIndex, animTime, c.wave)));
+        gl.bindBuffer(gl.ARRAY_BUFFER, c.posBuf);
+        gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, c.uvBuf);
+        gl.vertexAttribPointer(aUV, 2, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, c.idxBuf);
+        gl.bindTexture(gl.TEXTURE_2D, c.tex);
+        gl.drawElements(gl.TRIANGLES, c.indexCount, gl.UNSIGNED_SHORT, 0);
+      }
+
+      // 3. a hitbox LEGVÉGÜL, mélység-írás NÉLKÜL: így a modellen keresztül
+      //    is látszik, de nem takarja ki azt.
+      if (hitboxDrawable) {
+        gl.uniformMatrix4fv(uMVP, false, mvp);
+        gl.depthMask(false);
+        gl.uniform1f(uAlphaCut, 0);
+        drawHelper(hitboxDrawable, [1, 0.78, 0.18, 0.16]);
+        gl.uniform1f(uAlphaCut, 0.05);
+        gl.depthMask(true);
+      }
+
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+
+    const stop = () => {
+      stopped = true;
+      canvas.removeEventListener('mousedown', onDown);
+      canvas.removeEventListener('wheel', onWheel);
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      freeParts();
+      freeStatic(ground);
+      freeStatic(reference);
+      reference = null;
+      freeStatic(hitboxDrawable);
+      gl.deleteTexture(whiteTex);
+      gl.deleteProgram(program);
+    };
+
+    /**
+     * Frissítés a GL-kontextus ÚJRAINDÍTÁSA NÉLKÜL. Ugyanaz az indok, mint a
+     * kiegészítő-szerkesztőnél: egy teljes újraindítás elvágná a folyamatban
+     * lévő húzást, és a kamera-állás is elveszne minden mezőváltozásnál.
+     */
+    stop.update = (next) => {
+      if (!next) return;
+      if (Object.prototype.hasOwnProperty.call(next, 'model')
+        || Object.prototype.hasOwnProperty.call(next, 'img')) {
+        opts.model = Object.prototype.hasOwnProperty.call(next, 'model') ? next.model : opts.model;
+        opts.img = Object.prototype.hasOwnProperty.call(next, 'img') ? next.img : opts.img;
+        buildModel(opts.model, opts.img);
+        // Az illesztés/méret változásával a befoglaló doboz is változik -
+        // a kamera különben levágná az újonnan kilógó részeket.
+        fitCamera();
+      }
+      if (Object.prototype.hasOwnProperty.call(next, 'hitbox')) rebuildHitbox(next.hitbox);
+    };
+    stop.resetView = () => { angle = 0.6; pitch = -0.15; fitCamera(); };
+    stop.modelHeightBlocks = () => modelHeight / U;
+
+    return stop;
+  }
+
   function renderCosmeticThumbnail(model, img, size) {
     size = size || 160;
     const gl = ensureSharedContext(size);
@@ -2084,6 +2456,7 @@ const SkinPreview = (() => {
   return {
     start,
     startCosmetic,
+    startMob,
     setAuraPresets,
     buildCosmeticGeometry,
     buildCosmeticParts,
