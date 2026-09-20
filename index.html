@@ -54,11 +54,11 @@
   <!-- A téma minél korábban, a stíluslap ELŐTT alkalmazódjon (ld.
        theme.js), hogy az első kirajzolás már a mentett témával történjen,
        ne legyen látható "villanás" az alap témáról. -->
-  <script src="theme.js?v=20260920b"></script>
-  <link rel="stylesheet" href="style.css?v=20260920b" />
+  <script src="theme.js?v=20260920c"></script>
+  <link rel="stylesheet" href="style.css?v=20260920c" />
   <!-- A vizuális réteg SZÁNDÉKOSAN a style.css UTÁN: csak ráépít az ottani
        osztályokra, és a kaszkádban felülír, ahol kell (ld. ui.css eleje). -->
-  <link rel="stylesheet" href="ui.css?v=20260920b" />
+  <link rel="stylesheet" href="ui.css?v=20260920c" />
 
   <!-- Strukturált adat a keresőknek/megosztásoknak (schema.org). -->
   <script type="application/ld+json">
@@ -2110,15 +2110,31 @@
                 <div class="admin-subsection-title">Kiegészítők</div>
                 <div class="ban-panel admin-badges-panel">
                   <p class="redeem-result" id="adminCosmeticGrantStatus"></p>
-                  <label data-perm="player.action.cosmeticGrant">Kiegészítő adása</label>
-                  <div class="admin-badge-grant-row" data-perm="player.action.cosmeticGrant">
-                    <select id="adminCosmeticSelect"></select>
-                    <button type="button" class="device-link" id="adminCosmeticGrantBtn">Adás</button>
+
+                  <!-- ÚJ (a felhasználó kérésére: "legyen egyszerűbben
+                       megoldva, hogy könnyebben lehessen adni, elvenni"):
+                       a korábbi legördülő + "Adás" gomb helyett a TELJES
+                       katalógus látszik egy kereshető rácsban, és minden
+                       tételnél EGY kattintás a művelet. Így egy pillantásra
+                       látszik az is, mije van már meg a játékosnak - korábban
+                       ezt két külön helyen kellett összeolvasni. -->
+                  <div class="admin-cosmetic-toolbar">
+                    <input type="search" id="adminCosmeticSearch" placeholder="Keresés név vagy hely szerint..." aria-label="Keresés a kiegészítők között" />
+                    <select id="adminCosmeticFilter" aria-label="Szűrés">
+                      <option value="all">Mind</option>
+                      <option value="owned">Csak amije megvan</option>
+                      <option value="missing">Csak amije nincs meg</option>
+                    </select>
                   </div>
                   <div class="admin-cosmetic-duration-row" data-perm="player.action.cosmeticGrant">
                     <input type="number" id="adminCosmeticDurationInput" placeholder="Érvényesség napokban (üres = katalógus szerint, 0 = örök)" min="0" step="1" />
                   </div>
-                  <div id="adminPlayerCosmeticsList" class="admin-player-badges-list"></div>
+                  <div class="admin-cosmetic-bulk">
+                    <button type="button" class="btn-outline" id="adminCosmeticGrantAllBtn" data-perm="player.action.cosmeticGrant">Mindet odaadja</button>
+                    <button type="button" class="btn-outline is-danger" id="adminCosmeticRevokeAllBtn" data-perm="player.action.cosmeticRevoke">Mindet elveszi</button>
+                    <span class="admin-cosmetic-count" id="adminCosmeticCount"></span>
+                  </div>
+                  <div id="adminPlayerCosmeticsList" class="admin-cosmetic-picker"></div>
                 </div>
               </div>
 
@@ -2770,8 +2786,8 @@
        ez utóbbi itt lényeges, mert a ui.js az app.js globális
        switchView()/showToast() függvényeit csomagolja be, tehát csak
        azok létrejötte után futhat. -->
-  <script src="skin3d.js?v=20260920b" defer></script>
-  <script src="app.js?v=20260920b" defer></script>
-  <script src="ui.js?v=20260920b" defer></script>
+  <script src="skin3d.js?v=20260920c" defer></script>
+  <script src="app.js?v=20260920c" defer></script>
+  <script src="ui.js?v=20260920c" defer></script>
 </body>
 </html>

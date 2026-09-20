@@ -26,14 +26,25 @@ const SkinPreview = (() => {
       vUV = aUV;
     }
   `;
+  // A "uTint" az AURA részecskéihez kell: azok a kiegészítő textúrájának egy
+  // pontját mintázzák, és a színüket/áttetszőségüket ez a szorzó adja (a
+  // kliens ugyanezt vertex-színnel teszi). Minden más rajzolásnál (1,1,1,1),
+  // tehát a meglévő megjelenés bitre változatlan.
+  //
+  // Az alfa-vágás a részecskéknél KI van kapcsolva (uAlphaCut = 0): egy
+  // elhalványuló részecske éppen a kis alfánál lenne a legfontosabb, a
+  // geometriánál viszont a vágás kell, hogy a szárnyak átlátszó része ne
+  // takarjon.
   const FRAG_SRC = `
     precision mediump float;
     varying vec2 vUV;
     uniform sampler2D uTex;
+    uniform vec4 uTint;
+    uniform float uAlphaCut;
     void main() {
       vec4 c = texture2D(uTex, vUV);
-      if (c.a < 0.05) discard;
-      gl_FragColor = c;
+      if (c.a < uAlphaCut) discard;
+      gl_FragColor = vec4(c.rgb * uTint.rgb, c.a * uTint.a);
     }
   `;
 
@@ -397,6 +408,122 @@ const SkinPreview = (() => {
     return m ? multiply(m, r) : r;
   }
 
+
+  // ── AURA AZ ELŐNÉZETBEN ───────────────────────────────────────────────
+  //
+  // A kliens CosmeticAura osztályának párja. A matematika SZÓRÓL SZÓRA
+  // ugyanaz - ez nem kényelmi kérdés: amit az admin itt beállít, annak
+  // in-game ugyanúgy kell kinéznie, különben a szerkesztő félrevezet.
+  //
+  // ÁLLAPOTMENTES részecskék: mindegyiket a sorszámából és az időből
+  // számoljuk zárt alakban, pont mint a kliensben (ld. ott a részletes
+  // indoklást). Így itt sincs se listakezelés, se képkocka-függés.
+  const AURA_MAX_PARTICLES = 96;
+
+  /**
+   * Az aura-TÍPUSOK (presetek). Ezeket a BACKEND küldi (ld. ott az
+   * auraTypeList() indoklását arról, miért ott élnek), az app.js pedig a
+   * katalógus betöltésekor átadja ide. Amíg üres, az előnézet egyszerűen nem
+   * rajzol aurát - a geometria ettől még látszik.
+   */
+  let auraPresets = [];
+  function setAuraPresets(list) {
+    auraPresets = Array.isArray(list) ? list : [];
+  }
+
+  /** A kliens CosmeticAura.rand()-jával AZONOS keverő. */
+  function auraRand(i, cycle, channel) {
+    let h = (Math.imul(i, 374761393) + Math.imul(cycle, 668265263) + Math.imul(channel, 2147483647)) | 0;
+    h = Math.imul(h ^ (h >>> 13), 1274126177) | 0;
+    h = (h ^ (h >>> 16)) | 0;
+    return (h & 0x00FFFFFF) / 0x01000000;
+  }
+  function auraRandSigned(i, cycle, channel) { return auraRand(i, cycle, channel) * 2 - 1; }
+
+  function hexToRgb(hex, fallback) {
+    if (typeof hex !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(hex)) return fallback;
+    const v = parseInt(hex.slice(1), 16);
+    return [((v >> 16) & 255) / 255, ((v >> 8) & 255) / 255, (v & 255) / 255];
+  }
+
+  /**
+   * A TÁROLT aura-beállítás (típus + felülírások) feloldása a teljes
+   * paraméterkészletté - a backend resolveAura()-jának párja.
+   *
+   * MIÉRT KELL ITT IS: a szerkesztőben MENTÉS ELŐTT is látni kell az
+   * eredményt, tehát nem várhatunk a szerver által feloldott válaszra. A
+   * PRESETEK viszont NEM itt élnek: azokat a backend küldi (ld. ott az
+   * auraTypeList() indoklását), ez a függvény csak összeolvasztja őket a
+   * felülírásokkal - így a típusok forrása egyetlen helyen marad.
+   */
+  function resolveAura(stored, presets) {
+    if (!stored || !stored.type || !Array.isArray(presets)) return null;
+    const preset = presets.find((p) => p.id === stored.type);
+    if (!preset) return null;
+    const speed = Number.isFinite(stored.speed) ? stored.speed : 1;
+    const out = Object.assign({}, preset);
+    if (Number.isFinite(stored.rate)) out.rate = stored.rate;
+    if (Number.isFinite(stored.size)) { out.sizeB = preset.sizeB * (stored.size / preset.size); out.size = stored.size; }
+    if (Number.isFinite(stored.life)) out.life = stored.life;
+    if (stored.colorA) out.colorA = stored.colorA;
+    if (stored.colorB) out.colorB = stored.colorB;
+    out.rise = preset.rise * speed;
+    out.drift = preset.drift * speed;
+    out.swirl = preset.swirl * speed;
+    out.gravity = preset.gravity * speed;
+    return out;
+  }
+
+  /**
+   * Egy részecske állapota az adott időpillanatban, a kiegészítő SZERZŐI
+   * terében. A kliens renderAura()-jának számításaival azonos.
+   *
+   * @returns {null} ha a részecske ebben a pillanatban láthatatlan
+   */
+  function auraParticle(aura, i, count, time, center, halfExtent) {
+    const phase = time / aura.life + i / count;
+    const cycle = Math.floor(phase);
+    const age = (phase - cycle) * aura.life;
+    const t = age / aura.life;
+
+    let dx = auraRandSigned(i, cycle, 3) * aura.drift * age;
+    let dz = auraRandSigned(i, cycle, 4) * aura.drift * age;
+    if (aura.swirl) {
+      const ang = aura.swirl * age * 2 * Math.PI + auraRand(i, cycle, 5) * 6.2831853;
+      const rad = 0.6 + auraRand(i, cycle, 6) * 1.4;
+      dx += Math.cos(ang) * rad;
+      dz += Math.sin(ang) * rad;
+    }
+    const up = aura.rise * age + 0.5 * aura.gravity * age * age;
+
+    const size = aura.size + (aura.sizeB - aura.size) * t;
+    if (size <= 0) return null;
+
+    let flick = 1;
+    if (aura.flicker > 0) {
+      const fr = auraRand(i, cycle, 7);
+      flick = 1 - aura.flicker * (0.5 + 0.5 * Math.sin(age * 18 + fr * 6.2831853));
+    }
+    const ca = hexToRgb(aura.colorA, [1, 1, 1]);
+    const cb = hexToRgb(aura.colorB, ca);
+    const alpha = (aura.alphaA + (aura.alphaB - aura.alphaA) * t);
+    if (alpha <= 0.004) return null;
+
+    return {
+      // A SZERZŐI térben: a "rise" a játékos szemszögéből felfelé mutat, ami
+      // itt a +Y (az előnézetben nincs a kliens tükrözése).
+      x: center[0] + auraRandSigned(i, cycle, 0) * halfExtent[0] + dx,
+      y: center[1] + auraRandSigned(i, cycle, 1) * halfExtent[1] + up,
+      z: center[2] + auraRandSigned(i, cycle, 2) * halfExtent[2] + dz,
+      size,
+      spin: aura.spin * age * (auraRand(i, cycle, 8) < 0.5 ? -1 : 1),
+      r: (ca[0] + (cb[0] - ca[0]) * t) * flick,
+      g: (ca[1] + (cb[1] - ca[1]) * t) * flick,
+      b: (ca[2] + (cb[2] - ca[2]) * t) * flick,
+      a: alpha,
+      faceSeed: auraRand(i, cycle, 9)
+    };
+  }
 
   // ── Hullám-sávok (a kliens CosmeticWave.Bands párja) ────────────────
   // MIÉRT SÁVOK: a hullám mostantól CSÚCSONKÉNT deformál, nem kockánként
@@ -971,6 +1098,29 @@ const SkinPreview = (() => {
       assemblyWave,
       assemblyWaveAxis,
       assemblyWaveStraddles,
+      // AURA: a nyers (tárolt) beállítás, plusz a kibocsátáshoz szükséges
+      // befoglaló doboz és néhány textúra-minta. A feloldás (preset +
+      // felülírások) a rajzoláskor történik, hogy a szerkesztőben MENTÉS
+      // ELŐTT is látszódjon a változás.
+      aura: (t.aura && typeof t.aura === 'object') ? t.aura : null,
+      auraCenter: allCenter,
+      // Ráhagyással, mint a kliensben: a részecskék ne pontosan a felületről
+      // induljanak.
+      auraHalfExtent: Number.isFinite(allMin[0])
+        ? [(allMax[0] - allMin[0]) / 2 + 1, (allMax[1] - allMin[1]) / 2 + 1, (allMax[2] - allMin[2]) / 2 + 1]
+        : [1, 1, 1],
+      // A részecske a kiegészítő SAJÁT textúrájának egy pontját mintázza
+      // (mint a kliensben) - néhány UV-minta a lapok közepéről.
+      auraUVs: (() => {
+        const out = [];
+        for (const p of parts) {
+          for (let i = 0; i + 5 < p.uvs.length && out.length < 48; i += 8) {
+            out.push([(p.uvs[i] + p.uvs[i + 4]) / 2, (p.uvs[i + 1] + p.uvs[i + 5]) / 2]);
+          }
+          if (out.length >= 48) break;
+        }
+        return out;
+      })(),
       assembly: {
         offset: standalone ? [0, 0, 0] : off,
         scale: mScale,
@@ -1019,6 +1169,31 @@ const SkinPreview = (() => {
     if (pAnim) m = multiply(m, pAnim);
 
     // szerzői tér -> kliens modell-tér
+    const a2m = scaleMat3(f / 16, f / 16, 1 / 16);
+    return multiply(m2p, multiply(m, a2m));
+  }
+
+  /**
+   * Az AURA mátrixa: a kiegészítő EGÉSZÉNEK illesztése (és merev animációja),
+   * a részek saját illesztése NÉLKÜL - a részecske-felhő a teljes
+   * kiegészítőt veszi körül, nem az egyes részeit. Pontosan ezen a ponton
+   * rajzol a kliens is (ld. CosmeticRenderer.renderAura()).
+   */
+  function cosmeticAuraMatrix(built, timeSec) {
+    const f = built.f;
+    const a = built.assembly;
+    let m2p = scaleMat3(16, -16, -16);
+    if (!built.standalone) {
+      const bp = built.bonePivot;
+      m2p = multiply(translate(bp[0], 6 - bp[1], -bp[2]), m2p);
+    }
+    let m = placementMatrix(a.offset, a.scale, a.rotation, a.center, f);
+    // A HULLÁMZÓ kiegészítő-animáció a csúcsokon hat, nem mátrixként - az
+    // aurára ezért (mint a kliensben) csak a merev rész vonatkozik.
+    if (!built.assemblyWave) {
+      const aAnim = animMatrix(a.anim, a.animPivot, f, timeSec, 1);
+      if (aAnim) m = multiply(m, aAnim);
+    }
     const a2m = scaleMat3(f / 16, f / 16, 1 / 16);
     return multiply(m2p, multiply(m, a2m));
   }
@@ -1249,6 +1424,11 @@ const SkinPreview = (() => {
       throw new Error('Program hiba: ' + gl.getProgramInfoLog(program));
     }
     gl.useProgram(program);
+    // Az aura-színezés alapállapota: semleges szorzó + a megszokott
+    // alfa-vágás. Enélkül a uniformok nullák lennének, és minden
+    // rajzolás fekete/áttetsző lenne.
+    gl.uniform4f(gl.getUniformLocation(program, 'uTint'), 1, 1, 1, 1);
+    gl.uniform1f(gl.getUniformLocation(program, 'uAlphaCut'), 0.05);
 
     const aPos = gl.getAttribLocation(program, 'aPos');
     const aUV = gl.getAttribLocation(program, 'aUV');
@@ -1291,6 +1471,7 @@ const SkinPreview = (() => {
             if (!part.indices.length) continue;
             const d = createDrawable(gl, part, c.img, sharedTex);
             if (!sharedTex) sharedTex = d.tex;
+            if (!auraTex) auraTex = d.tex;
             d.built = built;
             d.partIndex = i;
             // A csúcsokat akkor is képkockánként újra kell számolni, ha nem
@@ -1328,6 +1509,109 @@ const SkinPreview = (() => {
     }
 
     const uMVP = gl.getUniformLocation(program, 'uMVP');
+    const uTint = gl.getUniformLocation(program, 'uTint');
+    const uAlphaCut = gl.getUniformLocation(program, 'uAlphaCut');
+    // Az aura részecskéi a KIEGÉSZÍTŐ textúráját mintázzák - az első
+    // kiegészítő textúrája (a részek úgyis közös textúrán osztoznak).
+    let auraTex = null;
+
+    // ── AURA: a részecske-felhő kirajzolása ─────────────────────────────
+    //
+    // Részecskénként EGY draw call. A kliensben ez elfogadhatatlan lenne (ott
+    // több tucat viselő is lehet a képernyőn), egy előnézetben viszont
+    // legfeljebb néhány tucat hívás képkockánként - cserébe nem kell
+    // vertex-szín-puffer, elég a "uTint" uniform.
+    //
+    // A részecske ugyanaz a kis KOCKA, mint a kliensben, és a kiegészítő
+    // saját textúrájának egy pontját mintázza.
+    const auraCubeVerts = new Float32Array(72);   // 6 lap x 4 csúcs x 3
+    const auraCubeUVs = new Float32Array(48);     // 6 lap x 4 csúcs x 2
+    const auraCubeIdx = new Uint16Array(36);
+    for (let f = 0; f < 6; f++) {
+      const o = f * 4;
+      auraCubeIdx.set([o, o + 1, o + 2, o, o + 2, o + 3], f * 6);
+    }
+    const auraPosBuf = gl.createBuffer();
+    const auraUvBuf = gl.createBuffer();
+    const auraIdxBuf = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, auraIdxBuf);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, auraCubeIdx, gl.STATIC_DRAW);
+
+    // A kocka 8 sarka és a hat lap - ugyanaz a sarok-indexelés, mint a
+    // kliens solaryn$cube()-jában (bit0 = z, bit1 = y, bit2 = x).
+    const AURA_FACES = [
+      [0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1],
+      [2, 3, 7, 6], [0, 2, 6, 4], [1, 5, 7, 3]
+    ];
+
+    function drawAura(built, mvp, timeSec) {
+      const spec = resolveAura(built.aura, auraPresets);
+      if (!spec || !built.auraUVs || !built.auraUVs.length) return;
+      let count = Math.round(spec.rate * spec.life);
+      if (count <= 0) return;
+      if (count > AURA_MAX_PARTICLES) count = AURA_MAX_PARTICLES;
+
+      // Az aura a kiegészítő EGÉSZÉT veszi körül - a részek illesztése nélkül.
+      const auraMvp = multiply(mvp, cosmeticAuraMatrix(built, timeSec));
+      gl.uniformMatrix4fv(uMVP, false, auraMvp);
+      // A részecskéknél NINCS alfa-vágás: az elhalványulás épp a kis alfánál
+      // a lényeg (ld. a fragment shader megjegyzését).
+      gl.uniform1f(uAlphaCut, 0);
+
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, auraIdxBuf);
+      gl.bindTexture(gl.TEXTURE_2D, auraTex);
+
+      for (let i = 0; i < count; i++) {
+        const p = auraParticle(spec, i, count, timeSec, built.auraCenter, built.auraHalfExtent);
+        if (!p) continue;
+
+        const s = p.size * 0.5;
+        const cs = Math.cos(p.spin * 2 * Math.PI);
+        const sn = Math.sin(p.spin * 2 * Math.PI);
+        const xs = [], ys = [], zs = [];
+        for (let sx = -1; sx <= 1; sx += 2) {
+          for (let sy = -1; sy <= 1; sy += 2) {
+            for (let sz = -1; sz <= 1; sz += 2) {
+              const lx = sx * s, lz = sz * s;
+              xs.push(p.x + lx * cs - lz * sn);
+              ys.push(p.y + sy * s);
+              zs.push(p.z + lx * sn + lz * cs);
+            }
+          }
+        }
+        const uv = built.auraUVs[Math.min(built.auraUVs.length - 1,
+          Math.floor(p.faceSeed * built.auraUVs.length))];
+        for (let f = 0; f < 6; f++) {
+          const face = AURA_FACES[f];
+          for (let k = 0; k < 4; k++) {
+            const c = face[k];
+            const o = (f * 4 + k) * 3;
+            auraCubeVerts[o] = xs[c];
+            auraCubeVerts[o + 1] = ys[c];
+            auraCubeVerts[o + 2] = zs[c];
+            const uo = (f * 4 + k) * 2;
+            auraCubeUVs[uo] = uv[0];
+            auraCubeUVs[uo + 1] = uv[1];
+          }
+        }
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, auraPosBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, auraCubeVerts, gl.DYNAMIC_DRAW);
+        gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, auraUvBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, auraCubeUVs, gl.DYNAMIC_DRAW);
+        gl.vertexAttribPointer(aUV, 2, gl.FLOAT, false, 0, 0);
+
+        gl.uniform4f(uTint, p.r, p.g, p.b, p.a);
+        gl.drawElements(gl.TRIANGLES, 36, gl.UNSIGNED_SHORT, 0);
+      }
+
+      // Vissza az alapállapotba, különben a KÖVETKEZŐ képkocka geometriája is
+      // színezve és vágás nélkül rajzolódna.
+      gl.uniform4f(uTint, 1, 1, 1, 1);
+      gl.uniform1f(uAlphaCut, 0.05);
+    }
+
     gl.enable(gl.DEPTH_TEST);
     gl.disable(gl.CULL_FACE); // egyszerűbb, mint a lap-sorrendeket pontosan kiszámolni
     gl.clearColor(0, 0, 0, 0);
@@ -1473,6 +1757,17 @@ const SkinPreview = (() => {
           multiply(mvp, cosmeticPartMatrix(c.built, c.partIndex, animTime, c.wave)));
         drawDrawable(c);
       }
+      // Az aurát a geometria UTÁN rajzoljuk, kiegészítőnként EGYSZER (nem
+      // részenként) - a "drawnAura" ezért figyeli, melyik "built"-et
+      // intéztük már el ebben a képkockában.
+      if (auraPresets.length) {
+        const drawnAura = new Set();
+        for (const c of cosmeticDrawables) {
+          if (!c.built.aura || drawnAura.has(c.built)) continue;
+          drawnAura.add(c.built);
+          drawAura(c.built, mvp, animTime);
+        }
+      }
       requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
@@ -1555,6 +1850,11 @@ const SkinPreview = (() => {
     gl.linkProgram(program);
     if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return () => {};
     gl.useProgram(program);
+    // Az aura-színezés alapállapota: semleges szorzó + a megszokott
+    // alfa-vágás. Enélkül a uniformok nullák lennének, és minden
+    // rajzolás fekete/áttetsző lenne.
+    gl.uniform4f(gl.getUniformLocation(program, 'uTint'), 1, 1, 1, 1);
+    gl.uniform1f(gl.getUniformLocation(program, 'uAlphaCut'), 0.05);
 
     const aPos = gl.getAttribLocation(program, 'aPos');
     const aUV = gl.getAttribLocation(program, 'aUV');
@@ -1646,6 +1946,11 @@ const SkinPreview = (() => {
       sharedGl.attachShader(sharedProgram, compile(sharedGl, sharedGl.FRAGMENT_SHADER, FRAG_SRC));
       sharedGl.linkProgram(sharedProgram);
       sharedGl.useProgram(sharedProgram);
+      // Az aura-színezés alapállapota: semleges szorzó + a megszokott
+      // alfa-vágás. Enélkül a uniformok nullák lennének, és minden
+      // rajzolás fekete/áttetsző lenne.
+      sharedGl.uniform4f(sharedGl.getUniformLocation(sharedProgram, 'uTint'), 1, 1, 1, 1);
+      sharedGl.uniform1f(sharedGl.getUniformLocation(sharedProgram, 'uAlphaCut'), 0.05);
       sharedAttribs = {
         pos: sharedGl.getAttribLocation(sharedProgram, 'aPos'),
         uv: sharedGl.getAttribLocation(sharedProgram, 'aUV'),
@@ -1774,6 +2079,7 @@ const SkinPreview = (() => {
   return {
     start,
     startCosmetic,
+    setAuraPresets,
     buildCosmeticGeometry,
     buildCosmeticParts,
     cosmeticPartMatrix,

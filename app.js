@@ -12,7 +12,7 @@
 // számot látsz, a böngésző MÉG A RÉGI app.js-t futtatja (a webtárhely
 // cache-e miatt egy feltöltés nem feltétlenül ér ki azonnal). MINDEN
 // kiadásnál emelni kell, az index.html ?v= paramétereivel EGYÜTT.
-const CENTER_VERSION = '20260920b';
+const CENTER_VERSION = '20260920c';
 
 const BACKEND_URL = 'https://api.overclockgame.hu:8908';
 
@@ -7880,12 +7880,14 @@ $('#cosmeticAuraTypeSelect')?.addEventListener('change', () => {
   // nem ugyanaz a nagyságrend), átvinni őket félrevezető lenne.
   cosmeticAura = type === 'none' ? null : { type };
   renderCosmeticAuraEditor();
+  queueEditorRefresh();
 });
 
 $('#cosmeticAuraResetBtn')?.addEventListener('click', () => {
   if (!cosmeticAura || !cosmeticAura.type) return;
   cosmeticAura = { type: cosmeticAura.type };
   renderCosmeticAuraEditor();
+  queueEditorRefresh();
   showToast('A finomhangolás törölve - a típus alapértékei érvényesek.');
 });
 
@@ -7893,7 +7895,7 @@ $('#cosmeticAuraResetBtn')?.addEventListener('click', () => {
 // állapotba, hogy egy fülváltás ne dobja el.
 ['#cosmeticAuraRateInput', '#cosmeticAuraSizeInput', '#cosmeticAuraLifeInput',
  '#cosmeticAuraSpeedInput', '#cosmeticAuraReactSelect'].forEach((id) => {
-  $(id)?.addEventListener('change', () => { cosmeticAura = readCosmeticAura(); });
+  $(id)?.addEventListener('change', () => { cosmeticAura = readCosmeticAura(); queueEditorRefresh(); });
 });
 ['#cosmeticAuraColorAInput', '#cosmeticAuraColorBInput'].forEach((id) => {
   $(id)?.addEventListener('input', (e) => {
@@ -7901,6 +7903,7 @@ $('#cosmeticAuraResetBtn')?.addEventListener('click', () => {
     // renderCosmeticAuraEditor() megjegyzését a "set" jelölőről.
     e.target.dataset.set = '1';
     cosmeticAura = readCosmeticAura();
+    queueEditorRefresh();
   });
 });
 
@@ -8026,6 +8029,10 @@ async function loadCosmeticsAdmin() {
         // kerültek, hogy ne legyen két párhuzamos meta-mező.
         cosmeticAuraTypes = data.limits?.auraTypes || [];
         cosmeticEffectTypes = data.limits?.gameEffects || [];
+        // Az előnézet ugyanezekből a presetekből rajzolja az aurát - így a
+        // szerkesztőben látott kép és az in-game kép ugyanabból a forrásból
+        // származik.
+        SkinPreview.setAuraPresets(cosmeticAuraTypes);
         cosmeticServers = data.servers || [];
         renderCosmeticServerList();
       }
@@ -8711,7 +8718,10 @@ function buildEditorModel() {
       rotation: [cosmeticAssembly.rotationX, cosmeticAssembly.rotationY, cosmeticAssembly.rotationZ],
       scale: cosmeticAssembly.scale,
       itemModelSpace: cosmeticAssembly.itemModelSpace !== false,
-      anim: cosmeticAssembly.anim
+      anim: cosmeticAssembly.anim,
+      // Az AURA a mezők PILLANATNYI állásából, nem a mentett értékből: a
+      // szerkesztőben mentés előtt is látni kell, mit csinál a beállítás.
+      aura: readCosmeticAura()
     },
     parts
   };
@@ -9554,7 +9564,22 @@ document.addEventListener('click', async (e) => {
 });
 
 // ── Admin: kiegészítő adása/elvétele egy játékostól ──────────────────────
+//
+// ÚJRAÍRVA (a felhasználó kérésére: "legyen egyszerűbben megoldva, hogy
+// könnyebben lehessen adni, elvenni, és lehessen 1 gombbal az összeset
+// elvenni meg odaadni is").
+//
+// A korábbi felület egy legördülő + "Adás" gomb volt, alatta külön listával
+// arról, mije van meg a játékosnak. Két gond volt vele: a legördülőben egy
+// nagyobb katalógusban nem lehetett megtalálni semmit, és a "mi van meg" meg
+// a "mit adhatok" két külön helyen állt, tehát fejben kellett összevetni.
+//
+// Most EGY rács van: a teljes katalógus, keresővel és szűrővel, ahol a
+// birtokolt tételek meg vannak jelölve, és egy kattintás a művelet (megvan ->
+// elvétel, nincs meg -> adás).
 let currentAdminPlayerCosmetics = [];
+let adminCosmeticSearch = '';
+let adminCosmeticFilter = 'all';
 
 // A választó a katalógus TELJES listájából épül (a kikapcsoltakat is
 // beleértve - egy admin adhat olyat is, ami épp nincs élesítve), ezért kell
@@ -9576,15 +9601,7 @@ async function ensureAllCosmeticsLoaded() {
 
 async function loadAdminPlayerCosmetics(username) {
   if (!hasPerm('player.action.cosmeticGrant') && !hasPerm('player.action.cosmeticRevoke')) return;
-
-  const all = await ensureAllCosmeticsLoaded();
-  const select = $('#adminCosmeticSelect');
-  if (select) {
-    select.innerHTML = all.length
-      ? all.map((c) => `<option value="${c.id}">${escapeHtml(c.name)} (${escapeHtml(c.slotLabel)})</option>`).join('')
-      : '<option value="">Nincs létrehozott kiegészítő</option>';
-  }
-
+  await ensureAllCosmeticsLoaded();
   try {
     const res = await fetch(BACKEND_URL + '/api/admin/player/' + encodeURIComponent(username) + '/cosmetics', {
       headers: { Authorization: 'Bearer ' + session.token }
@@ -9598,67 +9615,173 @@ async function loadAdminPlayerCosmetics(username) {
 
 function renderAdminPlayerCosmeticsList(owned) {
   currentAdminPlayerCosmetics = Array.isArray(owned) ? owned : [];
-  const canRevoke = hasPerm('player.action.cosmeticRevoke');
   const el = $('#adminPlayerCosmeticsList');
   if (!el) return;
-  el.innerHTML = currentAdminPlayerCosmetics.map((c) => `
-    <span class="admin-player-badge-chip">
-      ${escapeHtml(c.name)}
-      <span class="admin-cosmetic-chip-meta">${c.expiresAt ? formatLedgerDate(c.expiresAt) + '-ig' : 'örök'}</span>
-      ${canRevoke ? `<button type="button" data-revoke-cosmetic-id="${c.id}" title="Elvétel">×</button>` : ''}
-    </span>
-  `).join('') || '<p class="redeem-result">Ennek a játékosnak még nincs egyetlen kiegészítője sem.</p>';
-}
 
-$('#adminCosmeticGrantBtn')?.addEventListener('click', async () => {
-  const statusEl = $('#adminCosmeticGrantStatus');
-  const cosmeticId = Number($('#adminCosmeticSelect').value);
-  if (!Number.isInteger(cosmeticId)) {
-    statusEl.textContent = 'Nincs kiválasztható kiegészítő.';
-    statusEl.className = 'redeem-result error';
+  const canGrant = hasPerm('player.action.cosmeticGrant');
+  const canRevoke = hasPerm('player.action.cosmeticRevoke');
+  // A birtoklás a kiegészítő AZONOSÍTÓJA szerint, nem név szerint: két
+  // kiegészítő neve lehet ugyanaz, az azonosítójuk sosem.
+  const ownedById = new Map(currentAdminPlayerCosmetics.map((c) => [String(c.id), c]));
+
+  const q = adminCosmeticSearch;
+  const visible = allCosmeticsCache.filter((c) => {
+    const isOwned = ownedById.has(String(c.id));
+    if (adminCosmeticFilter === 'owned' && !isOwned) return false;
+    if (adminCosmeticFilter === 'missing' && isOwned) return false;
+    if (!q) return true;
+    return (c.name || '').toLowerCase().includes(q)
+      || (c.slotLabel || '').toLowerCase().includes(q)
+      || (c.slug || '').toLowerCase().includes(q);
+  });
+
+  const count = $('#adminCosmeticCount');
+  if (count) {
+    count.textContent = allCosmeticsCache.length
+      ? `${ownedById.size} / ${allCosmeticsCache.length} megvan`
+      : '';
+  }
+
+  if (!allCosmeticsCache.length) {
+    el.innerHTML = '<p class="redeem-result">Még nincs egyetlen kiegészítő sem a katalógusban.</p>';
     return;
   }
-  const durationRaw = $('#adminCosmeticDurationInput').value.trim();
-  try {
-    const res = await fetch(BACKEND_URL + '/api/admin/player/' + encodeURIComponent(lastAdminPlayerUsername) + '/cosmetics', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
-      body: JSON.stringify({ cosmeticId, durationDays: durationRaw === '' ? undefined : Number(durationRaw) })
-    });
-    const data = await res.json();
-    if (!data.ok) {
-      statusEl.textContent = data.message || 'Nem sikerült kiosztani.';
+  if (!visible.length) {
+    el.innerHTML = '<p class="redeem-result">Nincs a szűrésnek megfelelő kiegészítő.</p>';
+    return;
+  }
+
+  el.innerHTML = visible.map((c) => {
+    const own = ownedById.get(String(c.id));
+    const isOwned = !!own;
+    // A gomb letiltva marad, ha a staffnak épp az ADOTT irányhoz nincs joga -
+    // a kettő két külön jogosultság (adás / elvétel).
+    const disabled = isOwned ? !canRevoke : !canGrant;
+    const meta = isOwned
+      ? (own.expiresAt ? formatLedgerDate(own.expiresAt) + '-ig' : 'örök')
+      : (c.slotLabel || '');
+    const title = isOwned
+      ? (canRevoke ? 'Kattints az elvételhez' : 'Nincs jogod elvenni')
+      : (canGrant ? 'Kattints az odaadáshoz' : 'Nincs jogod odaadni');
+    return `
+      <button type="button" class="admin-cosmetic-item${isOwned ? ' is-owned' : ''}"
+              data-admin-cosmetic-id="${c.id}" data-owned="${isOwned ? '1' : ''}"
+              title="${escapeHtml(title)}"${disabled ? ' disabled' : ''}>
+        ${c.hasTexture
+          ? `<img class="admin-cosmetic-item-thumb" src="${cosmeticTextureUrl(c.id)}" alt="" loading="lazy" />`
+          : '<span class="admin-cosmetic-item-thumb"></span>'}
+        <span class="admin-cosmetic-item-main">
+          <span class="admin-cosmetic-item-name">${escapeHtml(c.name)}</span>
+          <span class="admin-cosmetic-item-meta">${escapeHtml(meta)}</span>
+        </span>
+        <span class="admin-cosmetic-item-action">${isOwned ? '&times;' : '+'}</span>
+      </button>`;
+  }).join('');
+}
+
+$('#adminCosmeticSearch')?.addEventListener('input', (e) => {
+  adminCosmeticSearch = e.target.value.trim().toLowerCase();
+  renderAdminPlayerCosmeticsList(currentAdminPlayerCosmetics);
+});
+$('#adminCosmeticFilter')?.addEventListener('change', (e) => {
+  adminCosmeticFilter = e.target.value;
+  renderAdminPlayerCosmeticsList(currentAdminPlayerCosmetics);
+});
+
+/** A művelet eredményének egységes kiírása + a lista frissítése. */
+function adminCosmeticResult(data, okText) {
+  const statusEl = $('#adminCosmeticGrantStatus');
+  if (!data || !data.ok) {
+    if (statusEl) {
+      statusEl.textContent = (data && data.message) || 'Nem sikerült.';
       statusEl.className = 'redeem-result error';
-      return;
     }
-    statusEl.textContent = 'Kiegészítő kiosztva.';
+    return false;
+  }
+  if (statusEl) {
+    statusEl.textContent = okText;
     statusEl.className = 'redeem-result success';
-    $('#adminCosmeticDurationInput').value = '';
-    renderAdminPlayerCosmeticsList(data.owned);
+  }
+  renderAdminPlayerCosmeticsList(data.owned);
+  return true;
+}
+
+// EGY kattintás = egy művelet. Az elvételnél SZÁNDÉKOSAN nincs megerősítés:
+// a művelet egyetlen kattintással visszavonható (a tétel ott marad a
+// rácsban, csak "+"-ra vált), tehát egy párbeszédablak itt csak lassítana.
+// A TÖMEGES műveletek viszont kérnek megerősítést - azok nem vonhatók vissza
+// egy kattintással.
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-admin-cosmetic-id]');
+  if (!btn || btn.disabled) return;
+  const id = btn.dataset.adminCosmeticId;
+  const isOwned = !!btn.dataset.owned;
+  btn.disabled = true;
+  try {
+    let data;
+    if (isOwned) {
+      const res = await fetch(
+        BACKEND_URL + '/api/admin/player/' + encodeURIComponent(lastAdminPlayerUsername) + '/cosmetics/' + id,
+        { method: 'DELETE', headers: { Authorization: 'Bearer ' + session.token } });
+      data = await res.json();
+      adminCosmeticResult(data, 'Kiegészítő elvéve.');
+    } else {
+      const durationRaw = $('#adminCosmeticDurationInput').value.trim();
+      const res = await fetch(
+        BACKEND_URL + '/api/admin/player/' + encodeURIComponent(lastAdminPlayerUsername) + '/cosmetics',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+          body: JSON.stringify({ cosmeticId: Number(id), durationDays: durationRaw === '' ? undefined : Number(durationRaw) })
+        });
+      data = await res.json();
+      adminCosmeticResult(data, 'Kiegészítő kiosztva.');
+    }
   } catch {
-    statusEl.textContent = 'Nem sikerült elérni a szervert.';
-    statusEl.className = 'redeem-result error';
+    const statusEl = $('#adminCosmeticGrantStatus');
+    if (statusEl) {
+      statusEl.textContent = 'Nem sikerült elérni a szervert.';
+      statusEl.className = 'redeem-result error';
+    }
+    btn.disabled = false;
   }
 });
 
-document.addEventListener('click', async (e) => {
-  const btn = e.target.closest('[data-revoke-cosmetic-id]');
-  if (!btn) return;
+$('#adminCosmeticGrantAllBtn')?.addEventListener('click', async () => {
+  const durationRaw = $('#adminCosmeticDurationInput').value.trim();
   const confirmed = await confirmModal(
-    'Kiegészítő elvétele',
-    'Biztosan elveszed ezt a kiegészítőt a játékostól? Ha épp viseli, azonnal lekerül róla.',
-    'Igen, elveszem'
-  );
+    'Az összes kiegészítő odaadása',
+    `Biztosan odaadod ${lastAdminPlayerUsername} játékosnak a katalógus ÖSSZES bekapcsolt kiegészítőjét${
+      durationRaw === '' ? '' : durationRaw === '0' ? ' (örökre)' : ` (${durationRaw} napra)`}? A már meglévőknél az érvényesség is erre frissül.`,
+    'Igen, mindet odaadom');
   if (!confirmed) return;
   try {
     const res = await fetch(
-      BACKEND_URL + '/api/admin/player/' + encodeURIComponent(lastAdminPlayerUsername) + '/cosmetics/' + btn.dataset.revokeCosmeticId,
-      { method: 'DELETE', headers: { Authorization: 'Bearer ' + session.token } }
-    );
+      BACKEND_URL + '/api/admin/player/' + encodeURIComponent(lastAdminPlayerUsername) + '/cosmetics/all',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+        body: JSON.stringify({ durationDays: durationRaw === '' ? undefined : Number(durationRaw) })
+      });
     const data = await res.json();
-    if (!data.ok) { showToast(data.message || 'Nem sikerült elvenni.', true); return; }
-    showToast('Kiegészítő elvéve.');
-    renderAdminPlayerCosmeticsList(data.owned);
+    if (adminCosmeticResult(data, `${data.granted} kiegészítő kiosztva.`)) showToast('Mind kiosztva.');
+  } catch {
+    showToast('Nem sikerült elérni a szervert.', true);
+  }
+});
+
+$('#adminCosmeticRevokeAllBtn')?.addEventListener('click', async () => {
+  const confirmed = await confirmModal(
+    'Az összes kiegészítő elvétele',
+    `Biztosan elveszed ${lastAdminPlayerUsername} játékos ÖSSZES kiegészítőjét? Amit épp visel, az azonnal lekerül róla. Ez nem vonható vissza - a megvásárolt tételek is elvesznek.`,
+    'Igen, mindet elveszem');
+  if (!confirmed) return;
+  try {
+    const res = await fetch(
+      BACKEND_URL + '/api/admin/player/' + encodeURIComponent(lastAdminPlayerUsername) + '/cosmetics',
+      { method: 'DELETE', headers: { Authorization: 'Bearer ' + session.token } });
+    const data = await res.json();
+    if (adminCosmeticResult(data, `${data.revoked} kiegészítő elvéve.`)) showToast('Mind elvéve.');
   } catch {
     showToast('Nem sikerült elérni a szervert.', true);
   }
