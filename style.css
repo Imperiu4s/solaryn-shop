@@ -2733,3 +2733,8 @@ a { color: inherit; }
 .mob-rig-anim-hint {
   margin-top: 8px;
 }
+
+/* Figyelmeztetés a régi, hibás feldolgozással készült csontvázra. */
+.mob-rig-stale {
+  margin: 0 0 10px;
+}

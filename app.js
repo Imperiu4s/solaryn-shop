@@ -12,7 +12,7 @@
 // számot látsz, a böngésző MÉG A RÉGI app.js-t futtatja (a webtárhely
 // cache-e miatt egy feltöltés nem feltétlenül ér ki azonnal). MINDEN
 // kiadásnál emelni kell, az index.html ?v= paramétereivel EGYÜTT.
-const CENTER_VERSION = '20260921c';
+const CENTER_VERSION = '20260921d';
 
 const BACKEND_URL = 'https://api.overclockgame.hu:8908';
 
@@ -10590,6 +10590,29 @@ function ensureMobAnim() {
  * való. A kettő nem ugyanaz, és a legkönnyebben úgy lehet összekeverni
  * őket, ha egy felületen jelennek meg.
  */
+/**
+ * A RÉGI, HIBÁS IMPORTÁLÓVAL készült csontváz felismerése.
+ *
+ * MIÉRT KELL: a Blockbench 5.0-s projektformátumában a csontok forgáspontja
+ * egy külön "groups" tömbbe került, amit a korábbi feldolgozó nem olvasott -
+ * így MINDEN csont forgáspontja a világ origójába esett, és az animációk a
+ * modell origója körül kaszáltak. A hiba a feltöltéskor keletkezett, tehát a
+ * MÁR ELTÁROLT csontvázakat a javítás nem gyógyítja meg: azokat újra fel kell
+ * tölteni.
+ *
+ * A jel egyértelmű: több csont van, van animáció, és MINDEGYIK csont
+ * forgáspontja pontosan a nulla pont. Egy valódi, több csontos rigben ez
+ * gyakorlatilag lehetetlen (a fej, a váll, a csípő mind máshol van).
+ */
+function mobRigLooksStale(rig) {
+  if (!rig || !Array.isArray(rig.bones) || rig.bones.length < 2) return false;
+  if (!Array.isArray(rig.animations) || !rig.animations.length) return false;
+  return rig.bones.every((b) => {
+    const p = Array.isArray(b.pivot) ? b.pivot : [0, 0, 0];
+    return !p[0] && !p[1] && !p[2];
+  });
+}
+
 function renderMobRigAnimations() {
   const wrap = $('#mobRigAnimList');
   if (!wrap) return;
@@ -10629,7 +10652,14 @@ function renderMobRigAnimations() {
     return null;
   };
 
-  wrap.innerHTML = '<ul class="mob-rig-anim-list">'
+  const stale = mobRigLooksStale(mobRigData)
+    ? '<p class="redeem-result error mob-rig-stale">A modell csontjainak <strong>nincs '
+      + 'forgáspontjuk</strong> &ndash; ez a régi, hibás feldolgozás nyoma, és emiatt az '
+      + 'animációk nem a csuklóknál forognak. <strong>Töltsd fel újra ugyanazt a .bbmodel '
+      + 'fájlt</strong>, és rendbe jön.</p>'
+    : '';
+
+  wrap.innerHTML = stale + '<ul class="mob-rig-anim-list">'
     + anims.map((name, i) => {
       const role = roleOf(name);
       const playing = mobRigPlaying === i;
