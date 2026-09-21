@@ -2687,3 +2687,49 @@ a { color: inherit; }
   color: #8fe0ab;
   white-space: nowrap;
 }
+
+/* A .bbmodel animációinak lejátszó- és törlő-gombja. */
+.mob-rig-anim-list li.is-playing {
+  border-color: rgba(255, 190, 60, 0.55);
+  background: rgba(255, 190, 60, 0.10);
+}
+.mob-rig-anim-play,
+.mob-rig-anim-del {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text, #e8e8ec);
+  font-size: 0.8rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.mob-rig-anim-play:hover {
+  background: rgba(255, 190, 60, 0.18);
+  border-color: rgba(255, 190, 60, 0.5);
+}
+.mob-rig-anim-list li.is-playing .mob-rig-anim-play {
+  background: rgba(255, 190, 60, 0.22);
+  border-color: rgba(255, 190, 60, 0.6);
+}
+/* A törlés a sor VÉGÉRE kerül, hogy ne essen a lejátszás mellé: a kettő
+   következménye nagyon eltérő, és egy elgépelt kattintás itt visszavonhatatlan. */
+.mob-rig-anim-del {
+  margin-left: auto;
+  font-size: 1.05rem;
+  color: rgba(255, 255, 255, 0.45);
+}
+.mob-rig-anim-del:hover {
+  background: rgba(255, 90, 90, 0.16);
+  border-color: rgba(255, 90, 90, 0.5);
+  color: #ff8a8a;
+}
+.mob-rig-anim-hint {
+  margin-top: 8px;
+}

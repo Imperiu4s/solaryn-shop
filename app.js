@@ -12,7 +12,7 @@
 // számot látsz, a böngésző MÉG A RÉGI app.js-t futtatja (a webtárhely
 // cache-e miatt egy feltöltés nem feltétlenül ér ki azonnal). MINDEN
 // kiadásnál emelni kell, az index.html ?v= paramétereivel EGYÜTT.
-const CENTER_VERSION = '20260921b';
+const CENTER_VERSION = '20260921c';
 
 const BACKEND_URL = 'https://api.overclockgame.hu:8908';
 
@@ -9849,6 +9849,17 @@ let mobTarget = -1;
 let mobTextureFile = null;
 let mobTextureImg = null;
 let mobPreviewStop = null;
+/**
+ * A szerverre MENTETT csontváz (a .bbmodel animációival) - pontosan az, amit
+ * a kliens is letölt. Ebből játszik le az előnézet.
+ *
+ * MIÉRT KÜLÖN A SZERKESZTŐI MODELLTŐL: a szerkesztő a LAPOS alakon dolgozik,
+ * és minden mezőváltozásnál újraépíti - a csontváz viszont a mentett
+ * állapot, és csak feltöltéskor/törléskor változik.
+ */
+let mobRigData = null;
+/** Melyik animáció megy épp az előnézetben (-1 = a szerkesztői nézet). */
+let mobRigPlaying = -1;
 let mobPreviewQueued = false;
 let mobPreviewDirty = false;
 /** Gyorsítótár-törő: mentés után a böngésző különben a RÉGI modellt szolgálná ki. */
@@ -10126,6 +10137,25 @@ function replaceMobThumb(el, url) {
   el.parentNode.replaceChild(img, el);
 }
 
+/**
+ * A mentett csontváz letöltése a szerkesztőhöz.
+ *
+ * Ugyanazt a választ kéri, amit a kliens is megkap - ez teszi az előnézetet
+ * hitelessé: nem egy "hasonló" alakot rajzolunk, hanem UGYANAZT.
+ */
+async function fetchMobRig(id) {
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/mobs/' + id + '/rig', {
+      headers: { Authorization: 'Bearer ' + session.token },
+      cache: 'no-store'
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
 async function fetchMobModel(id, opts) {
   const fresh = !!(opts && opts.fresh);
   if (!fresh && mobModelCache.has(id)) return mobModelCache.get(id);
@@ -10230,8 +10260,15 @@ async function openMobEditor(id) {
     $('#mobTexturePreviewWrap').hidden = true;
   }
 
+  // A MENTETT csontváz: ebből játssza le az előnézet az animációkat.
+  // A modell UTÁN töltjük, mert a lista-kártyák és a kamera a lapos alakból
+  // állnak be - a csontváz csak akkor kell, ha lejátszásra kattintanak.
+  mobRigPlaying = -1;
+  mobRigData = mob.hasRig ? await fetchMobRig(mob.id) : null;
+
   setMobTarget(-1, true);
   restartMobPreview();
+  renderMobRigAnimations();
 }
 
 function closeMobEditor() {
@@ -10242,6 +10279,8 @@ function closeMobEditor() {
   mobTextureImg = null;
   mobParts = [];
   mobAssembly = null;
+  mobRigData = null;
+  mobRigPlaying = -1;
 }
 
 function renderMobStats(mob) {
@@ -10591,18 +10630,87 @@ function renderMobRigAnimations() {
   };
 
   wrap.innerHTML = '<ul class="mob-rig-anim-list">'
-    + anims.map((name) => {
+    + anims.map((name, i) => {
       const role = roleOf(name);
-      return '<li><code>' + escapeHtml(name) + '</code>'
+      const playing = mobRigPlaying === i;
+      return '<li class="' + (playing ? 'is-playing' : '') + '">'
+        + '<button type="button" class="mob-rig-anim-play" data-mob-anim-play="' + i + '" '
+        + 'title="' + (playing ? 'Vissza a szerkesztői nézethez' : 'Lejátszás az előnézetben') + '">'
+        + (playing ? '&#9632;' : '&#9654;') + '</button>'
+        + '<code>' + escapeHtml(name) + '</code>'
         + (role ? '<span class="mob-rig-anim-role">' + role + ' &ndash; magától indul</span>' : '')
+        + '<button type="button" class="mob-rig-anim-del" data-mob-anim-del="' + i + '" '
+        + 'title="Az animáció törlése a modellből">&times;</button>'
         + '</li>';
     }).join('')
     + '</ul>'
+    + (mobRigPlaying >= 0
+      ? '<p class="cosmetic-file-note mob-rig-anim-hint">Az előnézet a <strong>mentett</strong> '
+        + 'modellt játssza le &ndash; pontosan azt a mozgást, amit a játékban látsz. '
+        + 'A leállításhoz nyomd meg újra a gombot.</p>'
+      : '')
     + '<p class="cosmetic-file-note">Kiváltás a pluginból: <code>'
     + escapeHtml('animation name=' + anims[0] + ' duration=40')
     + '</code> &ndash; vagy próbaként ingame: <code>'
     + escapeHtml('/solarmob anim play ' + (mob.slug || '<id>') + ' ' + anims[0])
     + '</code></p>';
+}
+
+/**
+ * Egy animáció lejátszása (vagy leállítása) az előnézetben.
+ *
+ * A LEÁLLÍTÁS visszakapcsol a szerkesztői (lapos) modellre, mert az mutatja
+ * AZONNAL a mezőkön végzett változtatásokat - a csontváz a mentett állapot.
+ */
+function toggleMobAnimation(index) {
+  if (!mobPreviewStop || !mobPreviewStop.playAnimation) return;
+  if (mobRigPlaying === index) {
+    mobRigPlaying = -1;
+    mobPreviewStop.stopAnimation();
+  } else if (mobPreviewStop.playAnimation(index)) {
+    mobRigPlaying = index;
+  } else {
+    showToast('Ehhez a mobhoz nincs lejátszható csontváz - tölts fel .bbmodel fájlt.', true);
+    return;
+  }
+  renderMobRigAnimations();
+}
+
+/** Egy animáció VÉGLEGES törlése a modellből. */
+async function deleteMobAnimation(index) {
+  const mob = mobsAdminItems.find((m) => m.id === mobEditingId);
+  if (!mob || !Array.isArray(mob.animations) || !mob.animations[index]) return;
+  const name = mob.animations[index];
+  if (!confirm('Biztosan törlöd ezt az animációt a modellből?\n\n  ' + name
+    + '\n\nA geometria és a többi animáció megmarad. Ha később mégis kell, '
+    + 'töltsd fel újra a .bbmodel fájlt.')) return;
+
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/mobs/' + mobEditingId + '/animations/' + index, {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    if (!data.ok) { showToast(data.message || 'Nem sikerült törölni az animációt.', true); return; }
+
+    // A SORSZÁMOK ELTOLÓDNAK a törlés után: ami utána jött, eggyel előrébb
+    // kerül. Ezért a lejátszást leállítjuk, nem "igazítjuk" - egy elcsúszott
+    // sorszám csendben MÁS animációt játszana le, mint amit a lista mutat.
+    if (mobRigPlaying >= 0) {
+      mobRigPlaying = -1;
+      if (mobPreviewStop && mobPreviewStop.stopAnimation) mobPreviewStop.stopAnimation();
+    }
+
+    const idx = mobsAdminItems.findIndex((m) => m.id === data.mob.id);
+    if (idx >= 0) mobsAdminItems[idx] = data.mob;
+    mobAssetBust++;
+    mobRigData = await fetchMobRig(mobEditingId);
+    if (mobPreviewStop && mobPreviewStop.update) mobPreviewStop.update({ rig: mobRigData });
+    renderMobRigAnimations();
+    showToast('Törölve: ' + data.removed);
+  } catch {
+    showToast('Hálózati hiba az animáció törlésekor.', true);
+  }
 }
 
 function renderMobAnimEditor() {
@@ -10752,8 +10860,11 @@ function restartMobPreview() {
   canvas.style.display = '';
   if (empty) empty.style.display = 'none';
   mobPreviewStop = SkinPreview.startMob(canvas, {
-    model, img: mobTextureImg, hitbox: currentMobHitbox()
+    model, img: mobTextureImg, hitbox: currentMobHitbox(), rig: mobRigData
   });
+  // A GL-kontextus újraindulásakor az animáció-lejátszás is elölről kezdődik -
+  // ha épp ment egy, folytatjuk, hogy egy mezőváltozás ne állítsa le.
+  if (mobRigPlaying >= 0) mobPreviewStop.playAnimation(mobRigPlaying);
 }
 
 /**
@@ -11039,7 +11150,10 @@ async function reloadMobEditorAssets(freshMob) {
 
   if (mobTarget >= mobParts.length) mobTarget = -1;
   renderMobPartsBar();
-  // Az animáció-lista is a friss mobból jön (a .bbmodel most hozhatott újakat).
+  // A CSONTVÁZ IS ÚJ: a feltöltött .bbmodel hozhatott új animációkat, és a
+  // régiek sorszáma is eltolódhatott - a lejátszást ezért leállítjuk.
+  mobRigPlaying = -1;
+  mobRigData = mob.hasRig ? await fetchMobRig(mob.id) : null;
   renderMobRigAnimations();
   restartMobPreview();
   updateMobHitboxUi();
@@ -11190,6 +11304,14 @@ $('#mobsAdminList')?.addEventListener('click', (e) => {
 });
 
 $('#mobPruneBtn')?.addEventListener('click', deleteMobOrphans);
+
+// A .bbmodel SAJÁT animációi: lejátszás az előnézetben, illetve törlés.
+$('#mobRigAnimList')?.addEventListener('click', (e) => {
+  const play = e.target.closest('[data-mob-anim-play]');
+  if (play) { toggleMobAnimation(Number(play.dataset.mobAnimPlay)); return; }
+  const del = e.target.closest('[data-mob-anim-del]');
+  if (del) deleteMobAnimation(Number(del.dataset.mobAnimDel));
+});
 
 /**
  * Egy mob megjelenésének törlése a LISTÁBÓL (nem csak a szerkesztőből).

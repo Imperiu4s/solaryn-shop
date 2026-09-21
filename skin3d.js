@@ -2042,6 +2042,451 @@ const SkinPreview = (() => {
    *
    * @param opts { model, img, hitbox: {width, height} | null, reference: bool }
    */
+  // ── CSONTVÁZAS MOB-MODELL (a .bbmodel animációi) ──────────────────────
+  //
+  // Ez a szakasz a SolarClient `MobRig` osztályának HŰ átültetése JavaScriptbe.
+  //
+  // MIÉRT ÁTÜLTETÉS, ÉS NEM EGY EGYSZERŰBB, "elég jó" ELŐNÉZET:
+  // az előnézetnek egyetlen dolga van - megmutatni, mi lesz a JÁTÉKBAN. Egy
+  // külön, "nagyjából ilyen" animáció-motor pontosan azt a kérdést hagyná
+  // nyitva, amiért az előnézet létezik. Ezért minden lépés ugyanaz, ugyanabban
+  // a sorrendben, ugyanazokkal az ELŐJELEKKEL, mint a kliensben:
+  //   - a koordináták beolvasáskor 1/16-ra zsugorodnak, és item-modell
+  //     konvenciónál az X és az Y előjelet vált (a vanilla renderer
+  //     scale(-1,-1,1)-e miatt);
+  //   - ebből következik, hogy a FORGATÁSNÁL az X és Y SZÖG negálódik, a Z
+  //     viszont nem (S·R·S konjugálás);
+  //   - a forgatás a ponton X -> Y -> Z sorrendben hat;
+  //   - a Blockbench a csont NYUGALMI állásához ADJA a kulcskocka szögét
+  //     (a forgatás additív), az eltolás és a méret viszont abszolút.
+  // Ha ezek közül bármelyik elcsúszik, az előnézet és a játék eltér - és
+  // semmi nem hibázik közben.
+  //
+  // A mátrixok itt SOR-FOLYTONOS 4x4-esek (mint a kliensben), NEM a fájl
+  // többi részében használt, oszlop-folytonos GL-alak. A kettő egy helyen
+  // találkozik: a rajzoláskor, ahol a csúcsok már készen állnak.
+
+  const RIG_SCALE = 1 / 16;
+
+  function rigVec3(obj, key, fallback) {
+    const a = obj && obj[key];
+    if (!Array.isArray(a) || a.length !== 3) return fallback.slice();
+    return [Number(a[0]) || 0, Number(a[1]) || 0, Number(a[2]) || 0];
+  }
+
+  /** X -> Y -> Z sorrendben forgat egy vektort (fok). */
+  function rigRotateVector(v, angles) {
+    const rx = angles[0] * Math.PI / 180;
+    const ry = angles[1] * Math.PI / 180;
+    const rz = angles[2] * Math.PI / 180;
+    let x = v[0], y = v[1], z = v[2];
+    if (rx) {
+      const c = Math.cos(rx), s = Math.sin(rx);
+      const ny = y * c - z * s, nz = y * s + z * c;
+      y = ny; z = nz;
+    }
+    if (ry) {
+      const c = Math.cos(ry), s = Math.sin(ry);
+      const nx = x * c + z * s, nz = -x * s + z * c;
+      x = nx; z = nz;
+    }
+    if (rz) {
+      const c = Math.cos(rz), s = Math.sin(rz);
+      const nx = x * c - y * s, ny = x * s + y * c;
+      x = nx; y = ny;
+    }
+    v[0] = x; v[1] = y; v[2] = z;
+  }
+
+  /** Egy lap 4 UV-párja, a lap-forgatással előre kiszámolva (ld. MobRig.Face). */
+  function rigFaceUv(u1, v1, u2, v2, rotationDegrees) {
+    const su = [u1, u2, u2, u1];
+    const sv = [v1, v1, v2, v2];
+    const steps = (((rotationDegrees / 90) % 4) + 4) % 4;
+    const out = [];
+    for (let i = 0; i < 4; i++) {
+      // A forgatás iránya a kiegészítőknél kimért körüljárásból jön - ott a
+      // vanilla ELLENTÉTES sarok-sorrendje miatt kell kivonni.
+      const src = (i + 4 - steps) % 4;
+      out.push(su[src], sv[src]);
+    }
+    return out;
+  }
+
+  const RIG_CORNER = (x, y, z) => (x * 4 + y * 2 + z) * 3;
+  // A lapok sarkai a SZERZŐI körüljárás szerint (north, south, east, west, up, down).
+  const RIG_FACE_CORNERS = [
+    [RIG_CORNER(1, 1, 0), RIG_CORNER(0, 1, 0), RIG_CORNER(0, 0, 0), RIG_CORNER(1, 0, 0)],
+    [RIG_CORNER(0, 1, 1), RIG_CORNER(1, 1, 1), RIG_CORNER(1, 0, 1), RIG_CORNER(0, 0, 1)],
+    [RIG_CORNER(1, 1, 1), RIG_CORNER(1, 1, 0), RIG_CORNER(1, 0, 0), RIG_CORNER(1, 0, 1)],
+    [RIG_CORNER(0, 1, 0), RIG_CORNER(0, 1, 1), RIG_CORNER(0, 0, 1), RIG_CORNER(0, 0, 0)],
+    [RIG_CORNER(0, 1, 0), RIG_CORNER(1, 1, 0), RIG_CORNER(1, 1, 1), RIG_CORNER(0, 1, 1)],
+    [RIG_CORNER(0, 0, 1), RIG_CORNER(1, 0, 1), RIG_CORNER(1, 0, 0), RIG_CORNER(0, 0, 0)]
+  ];
+  const RIG_DIRS = ['north', 'south', 'east', 'west', 'up', 'down'];
+
+  function rigParseCube(el, f, texW, texH) {
+    const from = Array.isArray(el.from) && el.from.length === 3 ? el.from.map(Number) : null;
+    const to = Array.isArray(el.to) && el.to.length === 3 ? el.to.map(Number) : null;
+    if (!from || !to) return null;
+
+    const inflate = Number(el.inflate) || 0;
+    const x1 = Math.min(from[0], to[0]) - inflate, x2 = Math.max(from[0], to[0]) + inflate;
+    const y1 = Math.min(from[1], to[1]) - inflate, y2 = Math.max(from[1], to[1]) + inflate;
+    const z1 = Math.min(from[2], to[2]) - inflate, z2 = Math.max(from[2], to[2]) + inflate;
+
+    let rotAngles = null, rotOrigin = null;
+    if (el.rotation && typeof el.rotation === 'object'
+      && Array.isArray(el.rotation.angles) && Array.isArray(el.rotation.origin)) {
+      rotAngles = el.rotation.angles.map(Number);
+      rotOrigin = el.rotation.origin.map(Number);
+    }
+
+    // A 8 sarok a SZERZŐI térben, a kocka saját forgatásával, MAJD modell-térbe.
+    const corners = new Float32Array(24);
+    for (let xi = 0; xi < 2; xi++) {
+      for (let yi = 0; yi < 2; yi++) {
+        for (let zi = 0; zi < 2; zi++) {
+          const o = (xi * 4 + yi * 2 + zi) * 3;
+          let px = xi === 0 ? x1 : x2;
+          let py = yi === 0 ? y1 : y2;
+          let pz = zi === 0 ? z1 : z2;
+          if (rotAngles) {
+            const v = [px - rotOrigin[0], py - rotOrigin[1], pz - rotOrigin[2]];
+            rigRotateVector(v, rotAngles);
+            px = v[0] + rotOrigin[0];
+            py = v[1] + rotOrigin[1];
+            pz = v[2] + rotOrigin[2];
+          }
+          corners[o] = px * RIG_SCALE * f;
+          corners[o + 1] = py * RIG_SCALE * f;
+          corners[o + 2] = pz * RIG_SCALE;
+        }
+      }
+    }
+
+    const faces = el.faces && typeof el.faces === 'object' ? el.faces : null;
+    if (!faces) return null;
+
+    const vertices = new Float32Array(72);
+    const uvs = [];
+    const present = [];
+    for (let i = 0; i < 6; i++) {
+      const face = faces[RIG_DIRS[i]];
+      if (!face || !Array.isArray(face.uv) || face.uv.length !== 4) continue;
+      const c = RIG_FACE_CORNERS[i];
+      for (let k = 0; k < 4; k++) {
+        const o = i * 12 + k * 3;
+        vertices[o] = corners[c[k]];
+        vertices[o + 1] = corners[c[k] + 1];
+        vertices[o + 2] = corners[c[k] + 2];
+      }
+      uvs[i] = rigFaceUv(
+        Number(face.uv[0]) / texW, Number(face.uv[1]) / texH,
+        Number(face.uv[2]) / texW, Number(face.uv[3]) / texH,
+        Number(face.rotation) || 0);
+      present.push(i);
+    }
+    if (!present.length) return null;
+    return { vertices, uvs, present };
+  }
+
+  function rigParseAnimations(raw, boneCount, f) {
+    const out = [];
+    if (!Array.isArray(raw)) return out;
+    for (const a of raw) {
+      if (!a || typeof a !== 'object') continue;
+      const loop = typeof a.loop === 'string' ? a.loop : (a.loop === true ? 'loop' : 'once');
+      const anim = {
+        name: typeof a.name === 'string' ? a.name : '',
+        loop: loop === 'loop',
+        hold: loop === 'hold',
+        length: Math.max(0.05, Number(a.length) || 1),
+        tracks: []
+      };
+      for (const t of (Array.isArray(a.tracks) ? a.tracks : [])) {
+        if (!t || typeof t !== 'object') continue;
+        const bone = Number(t.bone);
+        if (!Number.isInteger(bone) || bone < 0 || bone >= boneCount) continue;
+        const channel = t.channel === 'position' ? 1 : (t.channel === 'scale' ? 2 : (t.channel === 'rotation' ? 0 : -1));
+        if (channel < 0 || !Array.isArray(t.keys) || !t.keys.length) continue;
+
+        const times = [], values = [], step = [];
+        for (const k of t.keys) {
+          if (!k || !Array.isArray(k.v) || k.v.length !== 3) continue;
+          let vx = Number(k.v[0]) || 0, vy = Number(k.v[1]) || 0, vz = Number(k.v[2]) || 0;
+          // A MODELL-tér tükrözése: forgatásnál az X/Y SZÖG negálódik,
+          // eltolásnál az X/Y KOORDINÁTA - két különböző dolog, ugyanabból
+          // a tükrözésből.
+          if (channel === 0 && f < 0) { vx = -vx; vy = -vy; }
+          if (channel === 1) { vx *= RIG_SCALE * f; vy *= RIG_SCALE * f; vz *= RIG_SCALE; }
+          times.push(Number(k.t) || 0);
+          values.push(vx, vy, vz);
+          step.push(k.i === 'step');
+        }
+        if (!times.length) continue;
+        anim.tracks.push({ bone, channel, times, values, step });
+      }
+      if (!anim.tracks.length) continue;
+      out.push(anim);
+    }
+    return out;
+  }
+
+  /**
+   * A backend csontvázas válaszának beolvasása. Null, ha nem az.
+   * A kimenet csúcsai MÁR MODELL-TÉRBEN vannak (mint a kliensben).
+   */
+  function parseMobRig(json) {
+    if (!json || typeof json !== 'object' || !Array.isArray(json.bones) || !json.bones.length) return null;
+
+    const assembly = json.assembly && typeof json.assembly === 'object' ? json.assembly : {};
+    const itemModelSpace = assembly.itemModelSpace === undefined ? true : !!assembly.itemModelSpace;
+    const f = itemModelSpace ? -1 : 1;
+
+    const rawOffset = rigVec3(assembly, 'offset', [0, 0, 0]);
+    const rawRotation = rigVec3(assembly, 'rotation', [0, 0, 0]);
+    let assemblyScale = Number(assembly.scale);
+    if (!(assemblyScale > 0)) assemblyScale = 1;
+
+    const rig = {
+      f,
+      itemModelSpace,
+      assemblyOffset: [rawOffset[0] * RIG_SCALE * f, rawOffset[1] * RIG_SCALE * f, rawOffset[2] * RIG_SCALE],
+      assemblyRotation: f < 0 ? [-rawRotation[0], -rawRotation[1], rawRotation[2]] : rawRotation.slice(),
+      assemblyScale,
+      center: [0, 0, 0],
+      bones: [],
+      animations: []
+    };
+
+    let texW = 16, texH = 16;
+    if (Array.isArray(json.texture_size) && json.texture_size.length === 2) {
+      if (Number(json.texture_size[0]) > 0) texW = Number(json.texture_size[0]);
+      if (Number(json.texture_size[1]) > 0) texH = Number(json.texture_size[1]);
+    }
+
+    let mnx = Infinity, mny = Infinity, mnz = Infinity;
+    let mxx = -Infinity, mxy = -Infinity, mxz = -Infinity;
+
+    for (let i = 0; i < json.bones.length; i++) {
+      const b = json.bones[i];
+      if (!b || typeof b !== 'object') return null;
+      let parent = Number.isInteger(b.parent) ? b.parent : -1;
+      // A hivatkozásnak MINDIG visszafelé kell mutatnia: egy körkörös
+      // szülő-lánc végtelen ciklust okozna a mátrix-számításban.
+      if (parent >= i || parent < -1) parent = -1;
+
+      const pivot = rigVec3(b, 'pivot', [0, 0, 0]);
+      const rest = rigVec3(b, 'rotation', [0, 0, 0]);
+      const bone = {
+        name: typeof b.name === 'string' ? b.name : ('bone' + i),
+        parent,
+        pivot: [pivot[0] * RIG_SCALE * f, pivot[1] * RIG_SCALE * f, pivot[2] * RIG_SCALE],
+        rest: f < 0 ? [-rest[0], -rest[1], rest[2]] : rest.slice(),
+        cubes: []
+      };
+
+      for (const c of (Array.isArray(b.cubes) ? b.cubes : [])) {
+        const cube = rigParseCube(c, f, texW, texH);
+        if (!cube) continue;
+        bone.cubes.push(cube);
+        for (let v = 0; v < 72; v += 3) {
+          // A befoglaló doboz a NYUGALMI állásban - az illesztés pontja ez.
+          if (cube.vertices[v] < mnx) mnx = cube.vertices[v];
+          if (cube.vertices[v] > mxx) mxx = cube.vertices[v];
+          if (cube.vertices[v + 1] < mny) mny = cube.vertices[v + 1];
+          if (cube.vertices[v + 1] > mxy) mxy = cube.vertices[v + 1];
+          if (cube.vertices[v + 2] < mnz) mnz = cube.vertices[v + 2];
+          if (cube.vertices[v + 2] > mxz) mxz = cube.vertices[v + 2];
+        }
+      }
+      rig.bones.push(bone);
+    }
+
+    if (mnx <= mxx) {
+      rig.center = [(mnx + mxx) / 2, (mny + mxy) / 2, (mnz + mxz) / 2];
+    }
+    rig.animations = rigParseAnimations(json.animations, rig.bones.length, f);
+    return rig;
+  }
+
+  /** out[oo..] = a[ao..] * b[bo..] (4x4, SOR-folytonos) */
+  function rigMultiply(out, oo, a, ao, b, bo) {
+    const tmp = RIG_TMP16;
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 4; c++) {
+        let sum = 0;
+        for (let k = 0; k < 4; k++) sum += a[ao + r * 4 + k] * b[bo + k * 4 + c];
+        tmp[r * 4 + c] = sum;
+      }
+    }
+    for (let i = 0; i < 16; i++) out[oo + i] = tmp[i];
+  }
+  const RIG_TMP16 = new Float32Array(16);
+
+  /** local = T(pivot + pos) * Rz * Ry * Rx * S * T(-pivot) */
+  function rigBuildLocal(out, pivot, rot, pos, scl) {
+    const rx = rot[0] * Math.PI / 180, ry = rot[1] * Math.PI / 180, rz = rot[2] * Math.PI / 180;
+    const cx = Math.cos(rx), sx = Math.sin(rx);
+    const cy = Math.cos(ry), sy = Math.sin(ry);
+    const cz = Math.cos(rz), sz = Math.sin(rz);
+
+    // R = Rz * Ry * Rx (a ponton X -> Y -> Z sorrendben hat)
+    let m00 = cz * cy;
+    let m01 = cz * sy * sx - sz * cx;
+    let m02 = cz * sy * cx + sz * sx;
+    let m10 = sz * cy;
+    let m11 = sz * sy * sx + cz * cx;
+    let m12 = sz * sy * cx - cz * sx;
+    let m20 = -sy;
+    let m21 = cy * sx;
+    let m22 = cy * cx;
+
+    // A méretezés a forgatás UTÁN, a csont saját terében.
+    m00 *= scl[0]; m01 *= scl[1]; m02 *= scl[2];
+    m10 *= scl[0]; m11 *= scl[1]; m12 *= scl[2];
+    m20 *= scl[0]; m21 *= scl[1]; m22 *= scl[2];
+
+    const tx = pivot[0] + pos[0];
+    const ty = pivot[1] + pos[1];
+    const tz = pivot[2] + pos[2];
+
+    out[0] = m00; out[1] = m01; out[2] = m02;
+    out[3] = tx - (m00 * pivot[0] + m01 * pivot[1] + m02 * pivot[2]);
+    out[4] = m10; out[5] = m11; out[6] = m12;
+    out[7] = ty - (m10 * pivot[0] + m11 * pivot[1] + m12 * pivot[2]);
+    out[8] = m20; out[9] = m21; out[10] = m22;
+    out[11] = tz - (m20 * pivot[0] + m21 * pivot[1] + m22 * pivot[2]);
+    out[12] = 0; out[13] = 0; out[14] = 0; out[15] = 1;
+  }
+
+  /**
+   * Egy sáv értéke az adott időpontban.
+   * @param additive igaz a FORGATÁSNÁL: a Blockbench a nyugalmi álláshoz ADJA
+   *        a kulcskocka szögét. Eltolásnál/méretnél a kulcskocka az abszolút.
+   */
+  function rigSample(track, time, out, additive) {
+    const n = track.times.length;
+    let i = 0;
+    while (i < n - 1 && track.times[i + 1] <= time) i++;
+
+    let vx, vy, vz;
+    if (n === 1 || time <= track.times[0]) {
+      vx = track.values[0]; vy = track.values[1]; vz = track.values[2];
+    } else if (time >= track.times[n - 1]) {
+      vx = track.values[(n - 1) * 3];
+      vy = track.values[(n - 1) * 3 + 1];
+      vz = track.values[(n - 1) * 3 + 2];
+    } else {
+      const t0 = track.times[i], t1 = track.times[i + 1];
+      const span = t1 - t0;
+      const k = (span <= 0 || track.step[i]) ? 0 : (time - t0) / span;
+      vx = track.values[i * 3] + (track.values[(i + 1) * 3] - track.values[i * 3]) * k;
+      vy = track.values[i * 3 + 1] + (track.values[(i + 1) * 3 + 1] - track.values[i * 3 + 1]) * k;
+      vz = track.values[i * 3 + 2] + (track.values[(i + 1) * 3 + 2] - track.values[i * 3 + 2]) * k;
+    }
+
+    if (additive) { out[0] += vx; out[1] += vy; out[2] += vz; }
+    else { out[0] = vx; out[1] = vy; out[2] = vz; }
+  }
+
+  /**
+   * A csontok mátrixai (a mob illesztésével együtt), 16 szám csontonként.
+   * @param animIndex -1 = nyugalmi állás
+   */
+  function mobRigBoneMatrices(rig, animIndex, timeSec, out) {
+    const anim = (animIndex >= 0 && animIndex < rig.animations.length) ? rig.animations[animIndex] : null;
+    let time = 0;
+    if (anim) {
+      if (anim.loop) {
+        time = timeSec % anim.length;
+        if (time < 0) time += anim.length;
+      } else {
+        time = Math.min(timeSec, anim.length);
+      }
+    }
+
+    const local = RIG_LOCAL16;
+    const rot = RIG_ROT3, pos = RIG_POS3, scl = RIG_SCL3;
+
+    // A mob illesztése: minden csontra hat, ezért a gyökér elé kerül.
+    rigBuildLocal(RIG_ASSEMBLY16, rig.center, rig.assemblyRotation, rig.assemblyOffset,
+      [rig.assemblyScale, rig.assemblyScale, rig.assemblyScale]);
+
+    for (let i = 0; i < rig.bones.length; i++) {
+      const bone = rig.bones[i];
+      rot[0] = bone.rest[0]; rot[1] = bone.rest[1]; rot[2] = bone.rest[2];
+      pos[0] = 0; pos[1] = 0; pos[2] = 0;
+      scl[0] = 1; scl[1] = 1; scl[2] = 1;
+
+      if (anim) {
+        for (const track of anim.tracks) {
+          if (track.bone !== i) continue;
+          const target = track.channel === 0 ? rot : (track.channel === 1 ? pos : scl);
+          rigSample(track, time, target, track.channel === 0);
+        }
+      }
+
+      rigBuildLocal(local, bone.pivot, rot, pos, scl);
+      if (bone.parent >= 0) rigMultiply(out, i * 16, out, bone.parent * 16, local, 0);
+      else rigMultiply(out, i * 16, RIG_ASSEMBLY16, 0, local, 0);
+    }
+  }
+  const RIG_LOCAL16 = new Float32Array(16);
+  const RIG_ASSEMBLY16 = new Float32Array(16);
+  const RIG_ROT3 = new Float32Array(3);
+  const RIG_POS3 = new Float32Array(3);
+  const RIG_SCL3 = new Float32Array(3);
+
+  /**
+   * A csontváz kirajzolható alakja: EGY csúcs-tömb, EGY index-tömb.
+   *
+   * MIÉRT EGY DARABBAN, ÉS NEM CSONTONKÉNT: csontonként külön draw call egy
+   * 64 csontos modellnél képkockánként 64 hívás lenne. A csúcsokat úgyis a
+   * processzoron mozgatjuk (ahogy a kliens is), tehát egyben is mehetnek.
+   */
+  function buildMobRigGeometry(rig) {
+    const positions = [], uvs = [], indices = [];
+    // Csúcsonként megjegyezzük, MELYIK csonthoz és a kocka MELYIK csúcsához
+    // tartozik - ebből tölti fel a rigFillPositions() a képkockánkénti alakot.
+    const boneOf = [], srcOf = [];
+
+    for (let b = 0; b < rig.bones.length; b++) {
+      for (const cube of rig.bones[b].cubes) {
+        for (const faceIndex of cube.present) {
+          const base = positions.length / 3;
+          for (let k = 0; k < 4; k++) {
+            const o = faceIndex * 12 + k * 3;
+            positions.push(cube.vertices[o], cube.vertices[o + 1], cube.vertices[o + 2]);
+            uvs.push(cube.uvs[faceIndex][k * 2], cube.uvs[faceIndex][k * 2 + 1]);
+            boneOf.push(b);
+            srcOf.push(cube.vertices[o], cube.vertices[o + 1], cube.vertices[o + 2]);
+          }
+          indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+        }
+      }
+    }
+    return {
+      positions, uvs, indices,
+      boneOf: new Uint16Array(boneOf),
+      srcOf: new Float32Array(srcOf)
+    };
+  }
+
+  /** A csúcsok helyre mozgatása az adott képkockán (a csont-mátrixokkal). */
+  function fillMobRigPositions(geom, matrices, out) {
+    const n = geom.boneOf.length;
+    for (let i = 0; i < n; i++) {
+      const mo = geom.boneOf[i] * 16;
+      const o = i * 3;
+      const x = geom.srcOf[o], y = geom.srcOf[o + 1], z = geom.srcOf[o + 2];
+      out[o] = matrices[mo] * x + matrices[mo + 1] * y + matrices[mo + 2] * z + matrices[mo + 3];
+      out[o + 1] = matrices[mo + 4] * x + matrices[mo + 5] * y + matrices[mo + 6] * z + matrices[mo + 7];
+      out[o + 2] = matrices[mo + 8] * x + matrices[mo + 9] * y + matrices[mo + 10] * z + matrices[mo + 11];
+    }
+  }
+
   function startMob(canvas, opts) {
     const gl = canvas.getContext('webgl', { alpha: true, antialias: false });
     if (!gl) return () => {};
@@ -2169,6 +2614,32 @@ const SkinPreview = (() => {
     let parts = [];
     let built = null;
     let modelHeight = 2 * U;
+
+    // ── CSONTVÁZ-MÓD ──────────────────────────────────────────────────
+    //
+    // Amikor az admin lejátszat egy animációt, a LAPOS modell helyett a
+    // csontvázasat rajzoljuk - mert a JÁTÉKBAN is az megy. A kettő ugyanabból
+    // a .bbmodel fájlból származik, tehát a geometria azonos; a különbség
+    // csak annyi, hogy a csontvázas tud mozogni.
+    //
+    // A lapos marad az alapértelmezés, mert a szerkesztő azon dolgozik:
+    // a rész eltolása/mérete AZONNAL látszik rajta, míg a csontváz a
+    // szerverre MENTETT állapotot mutatja.
+    let rig = null;
+    let rigGeom = null;
+    let rigDrawable = null;
+    let rigMatrices = null;
+    let rigScratch = null;
+    let rigAnim = -1;
+    let rigPlaying = false;
+    let rigStartMs = 0;
+    let rigPausedAt = 0;
+    // A lapos modell kamera-adatai, hogy a módváltás ne rántsa el a nézetet.
+    let flatBounds = null;
+    let rigBounds = null;
+    // Csontváz-módban a lapos részeket NEM rajzoljuk. Egy előre lefoglalt üres
+    // tömb, hogy a rajzoló ciklus képkockánként ne allokáljon.
+    const EMPTY_PARTS = [];
     // A modell befoglaló doboza az ELŐNÉZETI térben - ebből jön a kamera
     // távolsága, a forgás középpontja és a viszonyítási doboz helye.
     let sceneMin = [0, 0, 0];
@@ -2237,15 +2708,73 @@ const SkinPreview = (() => {
         }
       }
       if (Number.isFinite(mn[0])) {
-        sceneMin = mn;
-        sceneMax = mx;
-        modelHeight = Math.max(mx[1], 1);
-        // A viszonyítás a modell JOBB SZÉLE mellé, negyed blokk hézaggal.
-        rebuildReference(mx[0] + 0.25 * U + PLAYER_HALF);
+        flatBounds = { min: mn, max: mx };
+        if (rigAnim < 0) applyBounds(flatBounds);
       }
     }
 
+    /**
+     * A kamera és a viszonyítási doboz igazítása egy befoglaló dobozhoz.
+     * KÜLÖN metódus, mert két forrása van (lapos modell / csontváz), és a
+     * kettő között oda-vissza váltunk.
+     */
+    function applyBounds(b) {
+      if (!b) return;
+      sceneMin = b.min;
+      sceneMax = b.max;
+      modelHeight = Math.max(b.max[1], 1);
+      // A viszonyítás a modell JOBB SZÉLE mellé, negyed blokk hézaggal.
+      rebuildReference(b.max[0] + 0.25 * U + PLAYER_HALF);
+    }
+
+    function freeRigDrawable() {
+      if (!rigDrawable) return;
+      gl.deleteBuffer(rigDrawable.posBuf);
+      gl.deleteBuffer(rigDrawable.uvBuf);
+      gl.deleteBuffer(rigDrawable.idxBuf);
+      if (rigDrawable.ownsTexture) gl.deleteTexture(rigDrawable.tex);
+      rigDrawable = null;
+    }
+
+    function buildRig(rawRig, img) {
+      freeRigDrawable();
+      rig = null; rigGeom = null; rigMatrices = null; rigScratch = null; rigBounds = null;
+      if (!rawRig || !img) return;
+      try {
+        rig = parseMobRig(rawRig);
+      } catch (e) {
+        console.warn('[SkinPreview] Csontváz-hiba:', e);
+        rig = null;
+      }
+      if (!rig) return;
+
+      rigGeom = buildMobRigGeometry(rig);
+      if (!rigGeom.indices.length) { rig = null; rigGeom = null; return; }
+      rigMatrices = new Float32Array(rig.bones.length * 16);
+      rigScratch = new Float32Array(rigGeom.positions.length);
+
+      rigDrawable = createDrawable(gl, rigGeom, img, null);
+      gl.bindBuffer(gl.ARRAY_BUFFER, rigDrawable.posBuf);
+      gl.bufferData(gl.ARRAY_BUFFER, rigScratch, gl.DYNAMIC_DRAW);
+
+      // A befoglaló doboz a NYUGALMI állásból: az animáció közben a modell
+      // ki-be mozog, egy képkockánként újraszámolt kamera pedig pumpálna.
+      mobRigBoneMatrices(rig, -1, 0, rigMatrices);
+      fillMobRigPositions(rigGeom, rigMatrices, rigScratch);
+      const mn = [Infinity, Infinity, Infinity];
+      const mx = [-Infinity, -Infinity, -Infinity];
+      for (let v = 0; v < rigScratch.length; v += 3) {
+        // modell-tér -> előnézeti tér (ld. cosmeticPartMatrix m2p-jét)
+        const wx = rigScratch[v] * U, wy = -rigScratch[v + 1] * U, wz = -rigScratch[v + 2] * U;
+        if (wx < mn[0]) mn[0] = wx; if (wx > mx[0]) mx[0] = wx;
+        if (wy < mn[1]) mn[1] = wy; if (wy > mx[1]) mx[1] = wy;
+        if (wz < mn[2]) mn[2] = wz; if (wz > mx[2]) mx[2] = wz;
+      }
+      if (Number.isFinite(mn[0])) rigBounds = { min: mn, max: mx };
+    }
+
     buildModel(opts.model, opts.img);
+    buildRig(opts.rig, opts.img);
     rebuildHitbox(opts.hitbox);
 
     // ── Kamera ────────────────────────────────────────────────────────
@@ -2328,7 +2857,34 @@ const SkinPreview = (() => {
 
       // 2. a mob modellje
       const animTime = (performance.now() % 3600000) / 1000;
-      for (const c of parts) {
+
+      // CSONTVÁZ-MÓD: a lapos modell helyett a csontvázas megy, a kiválasztott
+      // animációval. Pontosan ugyanaz a számítás, mint a kliensben (ld.
+      // parseMobRig / mobRigBoneMatrices fejlécét).
+      const rigMode = !!(rigDrawable && rigAnim >= 0);
+      if (rigMode) {
+        const t = rigPlaying
+          ? (performance.now() - rigStartMs) / 1000
+          : rigPausedAt;
+        mobRigBoneMatrices(rig, rigAnim, t, rigMatrices);
+        fillMobRigPositions(rigGeom, rigMatrices, rigScratch);
+        gl.bindBuffer(gl.ARRAY_BUFFER, rigDrawable.posBuf);
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, rigScratch);
+
+        // A csúcsok MODELL-térben vannak; az előnézeti térbe ugyanaz a
+        // váltás visz, mint a lapos modellnél (16-szoros nagyítás, Y és Z
+        // tükrözve).
+        gl.uniformMatrix4fv(uMVP, false, multiply(mvp, scaleMat3(U, -U, -U)));
+        gl.bindBuffer(gl.ARRAY_BUFFER, rigDrawable.posBuf);
+        gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, rigDrawable.uvBuf);
+        gl.vertexAttribPointer(aUV, 2, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, rigDrawable.idxBuf);
+        gl.bindTexture(gl.TEXTURE_2D, rigDrawable.tex);
+        gl.drawElements(gl.TRIANGLES, rigDrawable.indexCount, gl.UNSIGNED_SHORT, 0);
+      }
+
+      for (const c of (rigMode ? EMPTY_PARTS : parts)) {
         if (c.wave) {
           waveElementPositions(c.built, c.partIndex, animTime, c.scratch);
           gl.bindBuffer(gl.ARRAY_BUFFER, c.posBuf);
@@ -2367,6 +2923,7 @@ const SkinPreview = (() => {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
       freeParts();
+      freeRigDrawable();
       freeStatic(ground);
       freeStatic(reference);
       reference = null;
@@ -2392,7 +2949,52 @@ const SkinPreview = (() => {
         fitCamera();
       }
       if (Object.prototype.hasOwnProperty.call(next, 'hitbox')) rebuildHitbox(next.hitbox);
+      if (Object.prototype.hasOwnProperty.call(next, 'rig')) {
+        buildRig(next.rig, Object.prototype.hasOwnProperty.call(next, 'img') ? next.img : opts.img);
+        // Ha épp csontváz-módban vagyunk, de az új csontvázban nincs meg ez az
+        // animáció (pl. épp most törölték), visszaállunk a lapos modellre.
+        if (rigAnim >= 0 && (!rig || rigAnim >= rig.animations.length)) stop.stopAnimation();
+        else if (rigAnim >= 0) { applyBounds(rigBounds); fitCamera(); }
+      }
     };
+
+    /**
+     * Egy animáció lejátszása. -1 = vissza a lapos (szerkesztői) modellre.
+     *
+     * A kamera a MÓDDAL EGYÜTT vált: a két alak befoglaló doboza kicsit
+     * eltérhet (a csontváz a szerverre mentett illesztést hordozza), és egy
+     * ottfelejtett kamera-állás levághatná a modell tetejét.
+     */
+    stop.playAnimation = (index) => {
+      if (!rig || !(index >= 0) || index >= rig.animations.length) return false;
+      rigAnim = index;
+      rigPlaying = true;
+      rigStartMs = performance.now();
+      rigPausedAt = 0;
+      applyBounds(rigBounds || flatBounds);
+      fitCamera();
+      return true;
+    };
+    stop.pauseAnimation = () => {
+      if (rigAnim < 0 || !rigPlaying) return;
+      rigPausedAt = (performance.now() - rigStartMs) / 1000;
+      rigPlaying = false;
+    };
+    stop.resumeAnimation = () => {
+      if (rigAnim < 0 || rigPlaying) return;
+      rigStartMs = performance.now() - rigPausedAt * 1000;
+      rigPlaying = true;
+    };
+    stop.stopAnimation = () => {
+      rigAnim = -1;
+      rigPlaying = false;
+      rigPausedAt = 0;
+      applyBounds(flatBounds);
+      fitCamera();
+    };
+    stop.currentAnimation = () => rigAnim;
+    stop.hasRig = () => !!rig;
+    stop.rigAnimationNames = () => (rig ? rig.animations.map((a) => a.name) : []);
     stop.resetView = () => { angle = 0.6; pitch = -0.15; fitCamera(); };
     stop.modelHeightBlocks = () => modelHeight / U;
 
@@ -2512,6 +3114,10 @@ const SkinPreview = (() => {
     setAuraPresets,
     buildCosmeticGeometry,
     buildCosmeticParts,
+    parseMobRig,
+    buildMobRigGeometry,
+    mobRigBoneMatrices,
+    fillMobRigPositions,
     cosmeticPartMatrix,
     waveElementPositions,
     animAlongAxis,
