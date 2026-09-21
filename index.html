@@ -54,11 +54,11 @@
   <!-- A téma minél korábban, a stíluslap ELŐTT alkalmazódjon (ld.
        theme.js), hogy az első kirajzolás már a mentett témával történjen,
        ne legyen látható "villanás" az alap témáról. -->
-  <script src="theme.js?v=20260920e"></script>
-  <link rel="stylesheet" href="style.css?v=20260920e" />
+  <script src="theme.js?v=20260921a"></script>
+  <link rel="stylesheet" href="style.css?v=20260921a" />
   <!-- A vizuális réteg SZÁNDÉKOSAN a style.css UTÁN: csak ráépít az ottani
        osztályokra, és a kaszkádban felülír, ahol kell (ld. ui.css eleje). -->
-  <link rel="stylesheet" href="ui.css?v=20260920e" />
+  <link rel="stylesheet" href="ui.css?v=20260921a" />
 
   <!-- Strukturált adat a keresőknek/megosztásoknak (schema.org). -->
   <script type="application/ld+json">
@@ -1819,25 +1819,52 @@
 
                 <!-- FÜL: MODELL -->
                 <div class="cosmetic-tab-pane active" data-mob-pane="model">
+
+                  <!-- ── A TELJES BLOCKBENCH PROJEKT ─────────────────────
+                       MIÉRT EZ AZ ELSŐDLEGES ÚT, ÉS NEM A KÜLÖN GEOMETRIA +
+                       TEXTÚRA (mint a kiegészítőknél): egy mob-modell nem
+                       "java block/item" formátumban készül, hanem szabad
+                       (Free/Bedrock) projektként - csontokkal, három tengely
+                       körüli forgatásokkal, a textúrával EGYÜTT a fájlban.
+                       A .bbmodel tehát mindent tartalmaz, amit a rendszernek
+                       tudnia kell, és nem lehet elcsúsztatni a geometriát a
+                       textúrától. -->
                   <div class="card">
-                    <div class="card-title">Textúra</div>
-                    <p class="cosmetic-file-note">A modell ÖSSZES része ezt az egy PNG-t használja &ndash; pont úgy, ahogy a Blockbench exportálja. Legfeljebb 512&times;512.</p>
-                    <input type="file" id="mobTextureInput" accept=".png,image/png" hidden />
-                    <button type="button" class="btn-outline file-picker-btn" id="mobTexturePickBtn">Textúra kiválasztása</button>
-                    <p class="cosmetic-file-note" id="mobTextureNote"></p>
-                    <div class="news-image-preview-wrap" id="mobTexturePreviewWrap" hidden>
-                      <img id="mobTexturePreview" class="news-image-preview cosmetic-texture-preview" alt="A mob textúrája" />
-                    </div>
+                    <div class="card-title">Blockbench modell</div>
+                    <p class="cosmetic-file-note">Töltsd fel a <strong>teljes .bbmodel projektfájlt</strong> &ndash; a geometriát és a textúrát is abból vesszük ki. A csontok (csoportok) forgatásai beleégnek a modellbe, tehát a kirajzolt alak pontosan az lesz, amit a Blockbenchben látsz.</p>
+                    <input type="file" id="mobBbmodelInput" accept=".bbmodel,application/json" hidden />
+                    <button type="button" class="btn-glow file-picker-btn" id="mobBbmodelPickBtn">.bbmodel feltöltése</button>
+                    <p class="cosmetic-file-note" id="mobBbmodelNote"></p>
+                    <div id="mobBbmodelWarnings"></div>
                   </div>
 
                   <div class="card">
                     <div class="card-title">Részek</div>
-                    <p class="cosmetic-file-note">Egy mob több modellből is állhat (pl. test + külön mozgó szárny). A részek KÖZÖS textúrán osztoznak, de mindegyiknek saját illesztése és animációja van.</p>
+                    <p class="cosmetic-file-note">Egy mob több modellből is állhat (pl. test + külön mozgó szárny), mert <strong>részenként más animáció</strong> adható. A részek KÖZÖS textúrán osztoznak. Ha egyetlen .bbmodel-t töltesz fel, egy rész is elég.</p>
                     <div class="cosmetic-parts-bar" id="mobPartsBar"></div>
                     <div class="cosmetic-part-panel" id="mobPartPanel"></div>
+                    <input type="file" id="mobPartBbmodelInput" accept=".bbmodel,application/json" hidden />
+                    <input type="file" id="mobNewPartBbmodelInput" accept=".bbmodel,application/json" hidden />
+                  </div>
+
+                  <!-- Haladó: a régi, kétfájlos út. Összecsukva, mert a
+                       normál munkafolyamatban nincs rá szükség - de aki
+                       kézzel állított elő geometriát, annak itt megvan. -->
+                  <details class="card">
+                    <summary class="card-title">Haladó: külön geometria és textúra</summary>
+                    <p class="cosmetic-file-note">Ha nincs .bbmodel fájlod (pl. kész Java item-modellt kaptál), itt a geometriát (<code>elements</code> tömbös JSON) és a PNG textúrát külön is feltöltheted. A geometria a <strong>kijelölt részbe</strong> kerül.</p>
                     <input type="file" id="mobModelInput" accept=".json,application/json" hidden />
                     <input type="file" id="mobNewPartInput" accept=".json,application/json" hidden />
-                  </div>
+                    <input type="file" id="mobTextureInput" accept=".png,image/png" hidden />
+                    <div class="cosmetic-editor-controls">
+                      <button type="button" class="btn-outline file-picker-btn" id="mobJsonPickBtn">Geometria (.json)</button>
+                      <button type="button" class="btn-outline file-picker-btn" id="mobTexturePickBtn">Textúra (.png)</button>
+                    </div>
+                    <p class="cosmetic-file-note" id="mobTextureNote"></p>
+                    <div class="news-image-preview-wrap" id="mobTexturePreviewWrap" hidden>
+                      <img id="mobTexturePreview" class="news-image-preview cosmetic-texture-preview" alt="A mob textúrája" />
+                    </div>
+                  </details>
 
                   <div class="card">
                     <div class="cosmetic-transform-title">Illesztés &ndash; <span id="mobTargetLabel">teljes mob</span></div>
@@ -2977,8 +3004,8 @@
        ez utóbbi itt lényeges, mert a ui.js az app.js globális
        switchView()/showToast() függvényeit csomagolja be, tehát csak
        azok létrejötte után futhat. -->
-  <script src="skin3d.js?v=20260920e" defer></script>
-  <script src="app.js?v=20260920e" defer></script>
-  <script src="ui.js?v=20260920e" defer></script>
+  <script src="skin3d.js?v=20260921a" defer></script>
+  <script src="app.js?v=20260921a" defer></script>
+  <script src="ui.js?v=20260921a" defer></script>
 </body>
 </html>

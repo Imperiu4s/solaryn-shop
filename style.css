@@ -2110,6 +2110,17 @@ a { color: inherit; }
 
 .mob-filter-toggle { margin: 0; white-space: nowrap; }
 
+/* A .bbmodel feldolgozásának figyelmeztetései. NEM hibák (a modell betöltődött),
+   de olyan dolgok, amiket az adminnak látnia kell - pl. hogy a projekt doboz-UV-t
+   használ, vagy hogy nincs benne beágyazott textúra. Ezért figyelmeztetés-színűek,
+   de nem pirosak: egy piros üzenet azt sugallná, hogy valami elromlott. */
+.mob-bbmodel-warning {
+  margin: 8px 0 0; padding: 8px 10px; border-radius: 10px;
+  color: var(--text-dim);
+  background: color-mix(in srgb, var(--orange) 8%, transparent);
+  border-left: 3px solid var(--orange);
+}
+
 /* A mob-előnézet oszlopa: a vászon ALATT jelmagyarázat, súgó és a szerverről
    érkező statisztika. Az örökölt .cosmetic-editor-stage egyetlen, középre
    igazított gyereket feltételez (flex SOR) - itt ezért kell oszlop. */

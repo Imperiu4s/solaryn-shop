@@ -805,6 +805,50 @@ const SkinPreview = (() => {
   // Egy pont elforgatása a megadott tengely körül, az ADOTT (szerzői) térben -
   // a KOCKÁK saját forgatásához (az bele van sütve a geometriába, mert
   // statikus).
+  /**
+   * Egy kocka forgatás-LÁNCA, egységes alakban: [{angles:[x,y,z], origin}].
+   *
+   * A "rotations" a .bbmodel importból jön (a kocka saját forgatása ÉS a
+   * csontjaié, sorrendben - ld. SolarBackend src/bbmodel.js), a régi
+   * "rotation" pedig ennek az egyelemű, egy tengelyes esete.
+   */
+  function elementRotationChain(el) {
+    if (Array.isArray(el.rotations) && el.rotations.length) {
+      const out = [];
+      for (const r of el.rotations) {
+        if (!r || !Array.isArray(r.angles) || !Array.isArray(r.origin)) continue;
+        if (!r.angles[0] && !r.angles[1] && !r.angles[2]) continue;
+        out.push(r);
+      }
+      if (out.length) return out;
+    }
+    if (el.rotation && typeof el.rotation.angle === 'number' && el.rotation.angle !== 0
+        && Array.isArray(el.rotation.origin)) {
+      const a = el.rotation.angle;
+      return [{
+        angles: el.rotation.axis === 'x' ? [a, 0, 0] : el.rotation.axis === 'y' ? [0, a, 0] : [0, 0, a],
+        origin: el.rotation.origin
+      }];
+    }
+    return null;
+  }
+
+  /**
+   * A lánc alkalmazása egy pontra. A tengely-sorrend X -> Y -> Z, pontosan
+   * úgy, ahogy a kliens (CosmeticModel.applyRotationChain) és a backend
+   * hitbox-számítása - ha a három eltérne, a szerkesztőben beállított modell
+   * in-game máshogy állna.
+   */
+  function applyRotationChain(point, chain) {
+    let pt = point;
+    for (const r of chain) {
+      if (r.angles[0]) pt = rotatePoint(pt, r.origin, 'x', r.angles[0]);
+      if (r.angles[1]) pt = rotatePoint(pt, r.origin, 'y', r.angles[1]);
+      if (r.angles[2]) pt = rotatePoint(pt, r.origin, 'z', r.angles[2]);
+    }
+    return pt;
+  }
+
   function rotatePoint(p, origin, axis, angleDeg) {
     const rad = angleDeg * Math.PI / 180;
     const c = Math.cos(rad), s = Math.sin(rad);
@@ -890,13 +934,10 @@ const SkinPreview = (() => {
 
         // A 8 sarok a SZERZŐI térben, a kocka saját forgatásával (az statikus,
         // ezért bele lehet sütni a geometriába).
+        const rotChain = elementRotationChain(el);
         function corner(x, y, z) {
-          let pt = [x, y, z];
-          if (el.rotation && typeof el.rotation.angle === 'number' && el.rotation.angle !== 0
-              && Array.isArray(el.rotation.origin)) {
-            pt = rotatePoint(pt, el.rotation.origin, el.rotation.axis, el.rotation.angle);
-          }
-          return pt;
+          const pt = [x, y, z];
+          return rotChain ? applyRotationChain(pt, rotChain) : pt;
         }
 
         // A lapok sarkai a SZERZŐI tér irányai szerint (a "north" a -Z felé néz).
@@ -2173,9 +2214,20 @@ const SkinPreview = (() => {
         // A kamerához és a viszonyításhoz: a modell KÖZELÍTŐ befoglaló doboza.
         // A pontos érték képkockánként változhat (animáció), ezért elég a
         // nyugalmi állapot (t = 0).
+        //
+        // HULLÁMZÓ RÉSZNÉL A RAJZOLÁS ÚTJÁT KELL KÖVETNI: ott a csúcsokat a
+        // waveElementPositions() adja, MÁR modell-térben, és a mátrix ezért
+        // nem tartalmazza a szerzői->modell váltást. A nyers, szerzői
+        // csúcsokat ezzel a mátrixszal szorozva 16-szor kisebb dobozt kapnánk
+        // - élesben pontosan ez történt: egy hullámos mozgás beállítása után
+        // a modell "magassága" 2,13 blokkról 0,06-ra ugrott, és a kamera
+        // teljesen rossz távolságra állt.
+        const positions = d.wave
+          ? (waveElementPositions(built, i, 0, d.scratch), d.scratch)
+          : part.positions;
         const m = cosmeticPartMatrix(built, i, 0, d.wave);
-        for (let v = 0; v < part.positions.length; v += 3) {
-          const px = part.positions[v], py = part.positions[v + 1], pz = part.positions[v + 2];
+        for (let v = 0; v < positions.length; v += 3) {
+          const px = positions[v], py = positions[v + 1], pz = positions[v + 2];
           const wx = m[0] * px + m[4] * py + m[8] * pz + m[12];
           const wy = m[1] * px + m[5] * py + m[9] * pz + m[13];
           const wz = m[2] * px + m[6] * py + m[10] * pz + m[14];

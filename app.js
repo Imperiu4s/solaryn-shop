@@ -12,7 +12,7 @@
 // számot látsz, a böngésző MÉG A RÉGI app.js-t futtatja (a webtárhely
 // cache-e miatt egy feltöltés nem feltétlenül ér ki azonnal). MINDEN
 // kiadásnál emelni kell, az index.html ?v= paramétereivel EGYÜTT.
-const CENTER_VERSION = '20260920e';
+const CENTER_VERSION = '20260921a';
 
 const BACKEND_URL = 'https://api.overclockgame.hu:8908';
 
@@ -9856,6 +9856,125 @@ let mobAssetBust = 0;
 const mobThumbCache = new Map();
 const mobModelCache = new Map();
 
+
+// ── KÉSZ MOZGÁSOK MOBOKRA ───────────────────────────────────────────────
+//
+// MIÉRT KÜLÖN KÉSZLET A KIEGÉSZÍTŐKÉTŐL: azok SZÁRNYAKRA vannak hangolva -
+// gyors, nagy kitérésű csapások, tővel a testnél. Egy boss ettől
+// bohóckodni látszik. Amitől egy mob fenyegetőnek hat, az épp a fordítottja:
+// LASSÚ, NAGY TÖMEGŰ mozgás, kis kitéréssel, és a súlypont körül.
+//
+// HÁROM DOLOG KÜLÖNBÖZTETI MEG ŐKET:
+//  - SEBESSÉG: 0,15-0,6 ciklus/mp (a szárnyaknál 0,6-1,2). Egy nagy test
+//    lassan mozdul - ez adja a "súlyt".
+//  - FORGÁSPONT: alapból a TALP ("base"), nem a befoglaló doboz közepe. Egy
+//    a közepén billegő mob úgy néz ki, mintha lebegne; a talpánál dőlő
+//    viszont áll a földön.
+//  - RÉTEGZÉS: 2-3 sáv, EGÉSZ SZÁMÚ arányú sebességekkel. Nem egész arány
+//    mellett a sávok lassan szétcsúsznak, és a mozgás "dülöngélni" kezd -
+//    ugyanaz a hiba, amit a szárny-mozgásoknál is ki kellett mérni.
+//
+// A "pivot" mező mondja meg, hova tegyük a forgáspontot az alkalmazáskor:
+//   base   - a modell talpa (álló, földön lévő mobok)
+//   center - a befoglaló doboz közepe (lebegő, repülő mobok)
+//   root   - a rész TÖVE (szárny/csáp jellegű részek)
+const MOB_ANIM_PRESETS = [
+  { label: 'Légzés', pivot: 'base',
+    hint: 'Alig látható, lassú mozgás - ettől nem néz ki élettelen szobornak egy álló boss.',
+    tracks: [
+      { type: 'scale', axis: 'y', amp: 0.025, speed: 0.3, phase: 0, wave: 'sine', react: 'none', falloff: 0, spread: 0, along: 'auto' },
+      { type: 'translate', axis: 'y', amp: 0.35, speed: 0.3, phase: 90, wave: 'sine', react: 'none', falloff: 0, spread: 0, along: 'auto' }
+    ] },
+
+  { label: 'Fenyegető ringás', pivot: 'base',
+    hint: 'Súlyos, lassú oldalirányú dőlés a talp körül. Nagy, humanoid bossokra.',
+    tracks: [
+      { type: 'rotate', axis: 'z', amp: 4.5, speed: 0.18, phase: 0, wave: 'sine', react: 'none', falloff: 0.35, spread: 15, along: 'y' },
+      { type: 'rotate', axis: 'x', amp: 2.5, speed: 0.36, phase: 60, wave: 'sine', react: 'none', falloff: 0.35, spread: 0, along: 'y' }
+    ] },
+
+  { label: 'Lebegés', pivot: 'center',
+    hint: 'Levegőben álló mobokra (szellem, kristály, koponya): fel-le úszás enyhe billegéssel.',
+    tracks: [
+      { type: 'translate', axis: 'y', amp: 1.6, speed: 0.22, phase: 0, wave: 'sine', react: 'none', falloff: 0, spread: 0, along: 'auto' },
+      { type: 'rotate', axis: 'z', amp: 3, speed: 0.11, phase: 90, wave: 'sine', react: 'none', falloff: 0, spread: 0, along: 'auto' },
+      { type: 'rotate', axis: 'x', amp: 2, speed: 0.22, phase: 45, wave: 'sine', react: 'none', falloff: 0, spread: 0, along: 'auto' }
+    ] },
+
+  { label: 'Nehéz léptek (járás közben)', pivot: 'base',
+    hint: 'Csak mozgás közben: minden lépésnél megdől és lehuppan. A dőlés fele olyan gyors, mint a huppanás - egy lépésre egy dőlés jut.',
+    tracks: [
+      { type: 'translate', axis: 'y', amp: 0.7, speed: 1.2, phase: 0, wave: 'sine', react: 'move', falloff: 0, spread: 0, along: 'auto' },
+      { type: 'rotate', axis: 'z', amp: 3.5, speed: 0.6, phase: 0, wave: 'sine', react: 'move', falloff: 0.3, spread: 10, along: 'y' }
+    ] },
+
+  { label: 'Támadó előredőlés (járás közben)', pivot: 'base',
+    hint: 'Rohamozó mobokra: a test előrebillen, mintha nekifeszülne.',
+    tracks: [
+      { type: 'rotate', axis: 'x', amp: 9, speed: 0.5, phase: 0, wave: 'flap', react: 'move', falloff: 0.5, spread: 25, along: 'y' },
+      { type: 'translate', axis: 'y', amp: 0.4, speed: 1.0, phase: 30, wave: 'sine', react: 'move', falloff: 0, spread: 0, along: 'auto' }
+    ] },
+
+  { label: 'Dühroham', pivot: 'base',
+    hint: 'Gyors, apró rázkódás - fázisváltáshoz, megidézéshez, "felébred a boss" pillanathoz.',
+    tracks: [
+      { type: 'translate', axis: 'x', amp: 0.45, speed: 6, phase: 0, wave: 'tri', react: 'none', falloff: 0, spread: 0, along: 'auto' },
+      { type: 'translate', axis: 'z', amp: 0.45, speed: 6, phase: 90, wave: 'tri', react: 'none', falloff: 0, spread: 0, along: 'auto' },
+      { type: 'rotate', axis: 'y', amp: 2, speed: 12, phase: 0, wave: 'tri', react: 'none', falloff: 0, spread: 0, along: 'auto' }
+    ] },
+
+  { label: 'Forgó támadás', pivot: 'base',
+    hint: 'Folyamatos körbeforgás a függőleges tengely körül (fűrész-hullám = egyenletes pörgés, nem oda-vissza).',
+    tracks: [
+      { type: 'rotate', axis: 'y', amp: 180, speed: 1.1, phase: 0, wave: 'saw', react: 'none', falloff: 0, spread: 0, along: 'auto' },
+      { type: 'translate', axis: 'y', amp: 0.5, speed: 2.2, phase: 0, wave: 'sine', react: 'none', falloff: 0, spread: 0, along: 'auto' }
+    ] },
+
+  { label: 'Lassú lebegő pörgés', pivot: 'center',
+    hint: 'Kristályokra, koponyákra, lebegő gépezetekre: méltóságteljes körbefordulás.',
+    tracks: [
+      { type: 'rotate', axis: 'y', amp: 180, speed: 0.12, phase: 0, wave: 'saw', react: 'none', falloff: 0, spread: 0, along: 'auto' },
+      { type: 'translate', axis: 'y', amp: 1.0, speed: 0.24, phase: 0, wave: 'sine', react: 'none', falloff: 0, spread: 0, along: 'auto' }
+    ] },
+
+  { label: 'Pulzálás', pivot: 'center',
+    hint: 'Energia-lüktetés: a modell ritmusra kicsit nagyobb és kisebb lesz.',
+    tracks: [
+      { type: 'scale', axis: 'y', amp: 0.07, speed: 0.9, phase: 0, wave: 'sine', react: 'none', falloff: 0, spread: 0, along: 'auto' }
+    ] },
+
+  { label: 'Szárnycsapás (nagy test)', pivot: 'root',
+    hint: 'Sárkány-léptékű szárnyra: lassabb és kisebb kitérésű, mint a kiegészítő-szárnyaké. A rész TÖVÉRE teszi a forgáspontot.',
+    tracks: [
+      { type: 'rotate', axis: 'z', amp: 26, speed: 0.4, phase: 0, wave: 'flap', react: 'none', falloff: 0.85, spread: 45, along: 'auto' },
+      { type: 'rotate', axis: 'x', amp: 7, speed: 0.4, phase: 30, wave: 'sine', react: 'none', falloff: 0.7, spread: 30, along: 'auto' },
+      { type: 'translate', axis: 'y', amp: 0.5, speed: 0.4, phase: 180, wave: 'sine', react: 'none', falloff: 0, spread: 0, along: 'auto' }
+    ] },
+
+  { label: 'Farok-söprés', pivot: 'root',
+    hint: 'Farokra, csápra: a mozgás VÉGIGFUT a részen (a hegy késve követi a tövet).',
+    tracks: [
+      { type: 'rotate', axis: 'y', amp: 20, speed: 0.35, phase: 0, wave: 'sine', react: 'none', falloff: 0.95, spread: 80, along: 'auto' }
+    ] },
+
+  { label: 'Tekergő csáp', pivot: 'root',
+    hint: 'Hosszú, lógó részekre (csáp, lánc, láng): két tengelyen futó hullám.',
+    tracks: [
+      { type: 'rotate', axis: 'x', amp: 12, speed: 0.55, phase: 0, wave: 'sine', react: 'none', falloff: 1, spread: 130, along: 'auto' },
+      { type: 'rotate', axis: 'z', amp: 12, speed: 0.55, phase: 90, wave: 'sine', react: 'none', falloff: 1, spread: 130, along: 'auto' }
+    ] },
+
+  { label: 'Roskadás', pivot: 'base',
+    hint: 'Sérült/haldokló állapothoz: lassú, egyenetlen előredőlés és visszaemelkedés.',
+    tracks: [
+      { type: 'rotate', axis: 'x', amp: 7, speed: 0.16, phase: 0, wave: 'flap', react: 'none', falloff: 0.6, spread: 20, along: 'y' },
+      { type: 'translate', axis: 'y', amp: -0.6, speed: 0.16, phase: 0, wave: 'flap', react: 'none', falloff: 0, spread: 0, along: 'auto' }
+    ] },
+
+  { label: 'Nincs mozgás', pivot: 'center', clear: true,
+    hint: 'Törli a kijelölt cél összes sávját.', tracks: [] }
+];
+
 function mobsAdminSection() {
   return document.querySelector('.view[data-view="mobsAdmin"]');
 }
@@ -10144,10 +10263,10 @@ function renderMobPartsBar() {
   panel.innerHTML = `
     <p class="cosmetic-file-note">${part.hasModel ? 'Ehhez a részhez van feltöltött modell.' : 'Ehhez a részhez MÉG NINCS modell &ndash; tölts fel egyet.'}</p>
     <div class="cosmetic-editor-controls">
-      <button type="button" class="btn-outline" id="mobPartModelBtn">${part.hasModel ? 'Modell cseréje' : 'Modell feltöltése'}</button>
+      <button type="button" class="btn-outline" id="mobPartBbmodelBtn">${part.hasModel ? '.bbmodel cseréje' : '.bbmodel feltöltése'}</button>
       ${mobParts.length > 1 ? '<button type="button" class="btn-outline" id="mobPartDeleteBtn">Rész törlése</button>' : ''}
     </div>`;
-  $('#mobPartModelBtn')?.addEventListener('click', () => $('#mobModelInput')?.click());
+  $('#mobPartBbmodelBtn')?.addEventListener('click', () => $('#mobPartBbmodelInput')?.click());
   $('#mobPartDeleteBtn')?.addEventListener('click', () => deleteMobPart(mobTarget));
 }
 
@@ -10241,6 +10360,25 @@ function mobRotatePoint(p, deg) {
   return [x1, y1, z];
 }
 
+/**
+ * Egy kocka forgatásai EGYSÉGES alakban. Pontos mása a backend
+ * elementRotations()-jének (src/mobs.js) - a kettőnek EGYEZNIE kell, mert a
+ * szerkesztőben kiírt hitbox mentés után a szerver által számolt értékre vált.
+ */
+function mobElementRotations(el) {
+  if (Array.isArray(el.rotations) && el.rotations.length) {
+    return el.rotations.filter((r) => r && Array.isArray(r.angles) && Array.isArray(r.origin));
+  }
+  if (el.rotation && Number.isFinite(el.rotation.angle) && Array.isArray(el.rotation.origin)) {
+    const a = el.rotation.angle;
+    return [{
+      angles: el.rotation.axis === 'x' ? [a, 0, 0] : el.rotation.axis === 'y' ? [0, a, 0] : [0, 0, a],
+      origin: el.rotation.origin
+    }];
+  }
+  return [];
+}
+
 function mobPartPoints(part) {
   const out = [];
   if (!Array.isArray(part.elements)) return out;
@@ -10252,13 +10390,18 @@ function mobPartPoints(part) {
         for (const z of [el.from[2], el.to[2]]) corners.push([x, y, z]);
       }
     }
-    if (el.rotation && Number.isFinite(el.rotation.angle) && Array.isArray(el.rotation.origin)) {
-      const a = el.rotation.angle;
-      const deg = el.rotation.axis === 'x' ? [a, 0, 0] : el.rotation.axis === 'y' ? [0, a, 0] : [0, 0, a];
-      const o = el.rotation.origin;
+    // A kocka forgatás-lánca (ld. mobElementRotations): a .bbmodel importból
+    // érkező modelleknél a kocka saját forgatása ÉS a csontjaié is benne van.
+    const chain = mobElementRotations(el);
+    if (chain.length) {
       for (const c of corners) {
-        const r = mobRotatePoint([c[0] - o[0], c[1] - o[1], c[2] - o[2]], deg);
-        out.push([r[0] + o[0], r[1] + o[1], r[2] + o[2]]);
+        let p = c;
+        for (const r of chain) {
+          const o = r.origin;
+          const v = mobRotatePoint([p[0] - o[0], p[1] - o[1], p[2] - o[2]], r.angles);
+          p = [v[0] + o[0], v[1] + o[1], v[2] + o[2]];
+        }
+        out.push(p);
       }
     } else {
       for (const c of corners) out.push(c);
@@ -10371,8 +10514,8 @@ function renderMobAnimEditor() {
   const tracksWrap = $('#mobAnimTracks');
   if (!presetsWrap || !tracksWrap) return;
 
-  presetsWrap.innerHTML = ANIM_PRESETS
-    .map((preset, i) => `<button type="button" class="cosmetic-anim-preset" data-mob-anim-preset="${i}">${escapeHtml(preset.label)}</button>`)
+  presetsWrap.innerHTML = MOB_ANIM_PRESETS
+    .map((preset, i) => `<button type="button" class="cosmetic-anim-preset" data-mob-anim-preset="${i}" title="${escapeHtml(preset.hint || '')}">${escapeHtml(preset.label)}</button>`)
     .join('');
 
   const anim = mobCurrentAnim();
@@ -10681,6 +10824,126 @@ function parseMobModelFile(file) {
   });
 }
 
+/**
+ * A TELJES Blockbench-projekt feltöltése.
+ *
+ * MIÉRT EGY KÉRÉSBEN A GEOMETRIA ÉS A TEXTÚRA: a .bbmodel mindkettőt
+ * tartalmazza, és két külön kérésből felemás állapot maradhatna (új
+ * geometria, régi textúra). A szerver egyben dolgozza fel - ld. a backend
+ * /api/admin/mobs/:id/bbmodel végpontját.
+ *
+ * @param target  a rész azonosítója, 'new' (új rész), vagy null (az első rész)
+ */
+async function uploadMobBbmodel(file, target) {
+  if (!mobEditingId) return;
+  const note = $('#mobBbmodelNote');
+  const warnBox = $('#mobBbmodelWarnings');
+  if (note) note.textContent = `Feldolgozás: ${file.name} ...`;
+  if (warnBox) warnBox.innerHTML = '';
+
+  const fd = new FormData();
+  fd.append('bbmodel', file);
+  if (target) fd.append('partId', String(target));
+
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/admin/mobs/${mobEditingId}/bbmodel`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + session.token },
+      body: fd
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      if (note) note.textContent = '';
+      if (warnBox) warnBox.innerHTML = `<p class="redeem-result error">${escapeHtml(data.message || 'Nem sikerült feldolgozni a .bbmodel fájlt.')}</p>`;
+      showToast(data.message || 'Nem sikerült feldolgozni a .bbmodel fájlt.', true);
+      return;
+    }
+
+    // GYORSÍTÓTÁR-TÖRÉS: a modell- és textúra-végpont is gyorsítótárazható,
+    // enélkül a böngésző a RÉGIT adná vissza, és úgy tűnne, nem történt semmi.
+    mobAssetBust++;
+    mobThumbCache.delete(mobEditingId);
+    mobModelCache.delete(mobEditingId);
+
+    const info = data.info || {};
+    if (note) {
+      note.textContent = `${file.name} - ${info.elementCount} kocka`
+        + (info.format ? `, ${info.format} formátum` : '')
+        + (info.groupRotations ? `, ${info.groupRotations} forgatott csont beleégetve` : '')
+        + (Array.isArray(info.resolution) ? `, textúra-tér ${info.resolution[0]}x${info.resolution[1]}` : '');
+    }
+    if (warnBox) {
+      warnBox.innerHTML = (data.warnings || [])
+        .map((w) => `<p class="cosmetic-file-note mob-bbmodel-warning">${escapeHtml(w)}</p>`).join('');
+    }
+
+    // A szerkesztő állapotának újratöltése: a geometria és a textúra is a
+    // szerveren változott meg, tehát onnan kell visszaolvasni.
+    await reloadMobEditorAssets(data.mob);
+    showToast('A Blockbench modell betöltve.');
+  } catch {
+    if (note) note.textContent = '';
+    showToast('Hálózati hiba a .bbmodel feltöltésekor.', true);
+  }
+}
+
+/**
+ * A szerkesztő geometriájának és textúrájának újraolvasása a szerverről.
+ * A mezőket (illesztés, animáció) SZÁNDÉKOSAN nem írjuk felül: az admin
+ * épp azokat hangolja, egy modell-csere nem dobhatja el a munkáját.
+ */
+async function reloadMobEditorAssets(freshMob) {
+  const mob = freshMob || mobsAdminItems.find((m) => m.id === mobEditingId);
+  if (!mob) return;
+
+  // A lista-beli példány frissítése, hogy a rész-sáv és a jelvények stimmeljenek.
+  const idx = mobsAdminItems.findIndex((m) => m.id === mob.id);
+  if (idx >= 0) mobsAdminItems[idx] = mob;
+
+  // A részek listája változhatott (új rész), az illesztésüket viszont a
+  // szerkesztőben tartjuk - a szerver oldali értéket csak az ÚJ résznél vesszük át.
+  const known = new Map(mobParts.filter((pp) => pp.id).map((pp) => [pp.id, pp]));
+  mobParts = (mob.parts || []).map((pp) => {
+    const existing = known.get(pp.id);
+    if (existing) { existing.hasModel = pp.hasModel; existing.idx = pp.idx; return existing; }
+    return {
+      id: pp.id, idx: pp.idx, name: pp.name,
+      offsetX: pp.offsetX, offsetY: pp.offsetY, offsetZ: pp.offsetZ,
+      rotationX: pp.rotationX, rotationY: pp.rotationY, rotationZ: pp.rotationZ,
+      scale: pp.scale, anim: pp.anim ? JSON.parse(JSON.stringify(pp.anim)) : null,
+      hasModel: pp.hasModel, elements: null, textureSize: null, dirty: false
+    };
+  });
+  if (!mobParts.length) mobParts = [emptyMobPart(0)];
+
+  const model = await fetchMobModel(mob.id, { fresh: true });
+  if (model && Array.isArray(model.parts)) {
+    const withModel = mobParts.filter((pp) => pp.hasModel);
+    model.parts.forEach((raw, i) => {
+      const slot = withModel[i];
+      if (!slot) return;
+      slot.elements = raw.elements;
+      slot.textureSize = Array.isArray(raw.texture_size) ? raw.texture_size : null;
+    });
+  }
+
+  if (mob.hasTexture) {
+    mobTextureFile = null;
+    mobTextureImg = await loadImage(mobTextureUrl(mob.id));
+    const wrapEl = $('#mobTexturePreviewWrap');
+    if (mobTextureImg && wrapEl) {
+      $('#mobTexturePreview').src = mobTextureImg.src;
+      wrapEl.hidden = false;
+      $('#mobTextureNote').textContent = `A modellből kicsomagolt textúra (${mobTextureImg.naturalWidth}x${mobTextureImg.naturalHeight}).`;
+    }
+  }
+
+  if (mobTarget >= mobParts.length) mobTarget = -1;
+  renderMobPartsBar();
+  restartMobPreview();
+  updateMobHitboxUi();
+}
+
 async function uploadMobPartModel(file) {
   if (mobTarget < 0 || !mobParts[mobTarget]) {
     showToast('Előbb válaszd ki, melyik részhez tartozik a modell.', true);
@@ -10826,8 +11089,31 @@ $('#mobsAdminList')?.addEventListener('click', (e) => {
 $('#mobPartsBar')?.addEventListener('click', (e) => {
   const chip = e.target.closest('[data-mob-target]');
   if (chip) { setMobTarget(Number(chip.dataset.mobTarget)); return; }
-  if (e.target.closest('[data-mob-add-part]')) $('#mobNewPartInput')?.click();
+  if (e.target.closest('[data-mob-add-part]')) $('#mobNewPartBbmodelInput')?.click();
 });
+
+$('#mobBbmodelPickBtn')?.addEventListener('click', () => $('#mobBbmodelInput')?.click());
+$('#mobBbmodelInput')?.addEventListener('change', (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  // A KIJELÖLT részbe tölt (alapból az elsőbe) - így egy több részes mobnál
+  // is egyértelmű, melyiket cseréljük.
+  if (file) uploadMobBbmodel(file, mobTarget >= 0 && mobParts[mobTarget] ? mobParts[mobTarget].id : null);
+});
+
+$('#mobPartBbmodelInput')?.addEventListener('change', (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (file) uploadMobBbmodel(file, mobTarget >= 0 && mobParts[mobTarget] ? mobParts[mobTarget].id : null);
+});
+
+$('#mobNewPartBbmodelInput')?.addEventListener('change', (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (file) uploadMobBbmodel(file, 'new');
+});
+
+$('#mobJsonPickBtn')?.addEventListener('click', () => $('#mobModelInput')?.click());
 
 $('#mobModelInput')?.addEventListener('change', (e) => {
   const file = e.target.files && e.target.files[0];
@@ -10903,15 +11189,29 @@ $('#mobAuraResetBtn')?.addEventListener('click', () => {
 $('#mobAnimPresets')?.addEventListener('click', (e) => {
   const btn = e.target.closest('[data-mob-anim-preset]');
   if (!btn) return;
-  const preset = ANIM_PRESETS[Number(btn.dataset.mobAnimPreset)];
+  const preset = MOB_ANIM_PRESETS[Number(btn.dataset.mobAnimPreset)];
   if (!preset) return;
+  const rec = mobCurrentRecord();
+  if (!rec) return;
+  if (preset.clear) {
+    rec.anim = null;
+    if (mobTarget >= 0) rec.dirty = true;
+    renderMobAnimEditor();
+    queueMobPreview();
+    return;
+  }
   const anim = ensureMobAnim();
   if (!anim) return;
   anim.tracks = JSON.parse(JSON.stringify(preset.tracks));
-  // A FORGÁSPONT a rész TÖVÉRE: egy közepén csukló szárny a legjobb
-  // mozgással is "hajló deszkának" látszik (ld. a kiegészítőknél tanultakat).
-  const pivot = suggestMobRootPivot(mobTarget);
-  if (pivot) anim.pivot = pivot;
+  // A FORGÁSPONT a mozgás JELLEGÉHEZ igazodik (ld. MOB_ANIM_PRESETS):
+  // egy álló boss a TALPA körül dől, egy lebegő szellem a KÖZEPE körül
+  // forog, egy szárny pedig a TÖVÉNÉL csuklik. Rossz forgáspont mellett a
+  // legjobb mozgás is hibásnak látszik - ezt a kiegészítőknél már egyszer
+  // meg kellett tanulni.
+  const pivot = preset.pivot === 'root'
+    ? suggestMobRootPivot(mobTarget)
+    : mobPresetPivot(preset.pivot, mobTarget);
+  anim.pivot = pivot || null;
   renderMobAnimEditor();
   queueMobPreview();
 });
@@ -11049,6 +11349,40 @@ function mobSyncAgo(raw) {
  * közepén csuklana, és a legjobb mozgás is "hajló deszkának" látszana. Ez a
  * kiegészítőknél élesben derült ki - itt ugyanaz a geometria, ugyanaz a hiba.
  */
+/**
+ * A kijelölt cél befoglaló doboza a SZERZŐI térben, vagy null.
+ * A hitbox-számítástól eltérően ITT nincs illesztés/méretezés: a forgáspont
+ * a modell saját koordinátáiban értendő (a renderer is ott alkalmazza).
+ */
+function mobTargetBounds(partIndex) {
+  const source = partIndex < 0
+    ? mobParts.filter((p) => Array.isArray(p.elements) && p.elements.length)
+    : [mobParts[partIndex]].filter((p) => p && Array.isArray(p.elements) && p.elements.length);
+  if (!source.length) return null;
+  let mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
+  for (const part of source) {
+    for (const pt of mobPartPoints(part)) {
+      for (let k = 0; k < 3; k++) {
+        if (pt[k] < mn[k]) mn[k] = pt[k];
+        if (pt[k] > mx[k]) mx[k] = pt[k];
+      }
+    }
+  }
+  return Number.isFinite(mn[0]) ? { min: mn, max: mx } : null;
+}
+
+/** "base" = a talp közepe, "center" = a doboz közepe (null: az alapértelmezett). */
+function mobPresetPivot(kind, partIndex) {
+  if (kind !== 'base') return null;
+  const b = mobTargetBounds(partIndex);
+  if (!b) return null;
+  return [
+    round2((b.min[0] + b.max[0]) / 2),
+    round2(b.min[1]),
+    round2((b.min[2] + b.max[2]) / 2)
+  ];
+}
+
 function suggestMobRootPivot(partIndex) {
   const source = partIndex < 0
     ? mobParts.filter((p) => Array.isArray(p.elements) && p.elements.length)
