@@ -2154,6 +2154,9 @@ a { color: inherit; }
    sáv jelzi, hogy nem a szokásos eset. NEM csak szín: a szaggatott keret
    színtévesztéssel is látszik. */
 .mob-admin-card.is-hidden-server { border-style: dashed; }
+/* ELHAGYOTT: egyetlen szerver sem jelenti már. Nem hiba-állapot (a modell
+   megvan), de takarítani kell - ezért figyelmeztetés-színű a kerete. */
+.mob-admin-card.is-orphan { border-color: color-mix(in srgb, var(--orange) 45%, var(--line)); }
 
 .mob-admin-card-name { margin-top: 10px; font-size: 14.5px; font-weight: 800; }
 .mob-admin-card-slug {
@@ -2653,3 +2656,34 @@ a { color: inherit; }
 .admin-cosmetic-item-action { font-size: 15px; line-height: 1; color: var(--text-faint); flex: 0 0 auto; }
 .admin-cosmetic-item.is-owned .admin-cosmetic-item-action { color: var(--danger); }
 .admin-cosmetic-item:not(.is-owned) .admin-cosmetic-item-action { color: var(--gold); }
+
+
+/* A .bbmodel saját animációinak listája a mob-szerkesztőben. */
+.mob-rig-anim-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.mob-rig-anim-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+.mob-rig-anim-list code {
+  font-size: 0.92rem;
+}
+.mob-rig-anim-role {
+  font-size: 0.78rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(120, 220, 150, 0.14);
+  color: #8fe0ab;
+  white-space: nowrap;
+}

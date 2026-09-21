@@ -12,7 +12,7 @@
 // számot látsz, a böngésző MÉG A RÉGI app.js-t futtatja (a webtárhely
 // cache-e miatt egy feltöltés nem feltétlenül ér ki azonnal). MINDEN
 // kiadásnál emelni kell, az index.html ?v= paramétereivel EGYÜTT.
-const CENTER_VERSION = '20260921a';
+const CENTER_VERSION = '20260921b';
 
 const BACKEND_URL = 'https://api.overclockgame.hu:8908';
 
@@ -9979,8 +9979,19 @@ function mobsAdminSection() {
   return document.querySelector('.view[data-view="mobsAdmin"]');
 }
 
+/**
+ * A SZERKESZTŐ geometriája: az ADMIN végpont, ami MINDIG a lapos modellt
+ * adja vissza.
+ *
+ * MIÉRT NEM A NYILVÁNOS /api/mobs/model/:id: az a kliensnek szól, és ha a
+ * mobnak van csontvázas (.bbmodel-ből származó) modellje, AZT küldi -
+ * abban csontok vannak, nem "parts". A szerkesztő viszont részenként,
+ * kockánként dolgozik, tehát tőle üres előnézet lenne. Ráadásul a
+ * nyilvános végpont csak bekapcsolt mobot ad ki, az admin pedig épp egy
+ * kikapcsoltat hangol.
+ */
 function mobModelUrl(id) {
-  return BACKEND_URL + '/api/mobs/model/' + id + (mobAssetBust ? ('?v=' + mobAssetBust) : '');
+  return BACKEND_URL + '/api/admin/mobs/' + id + '/model' + (mobAssetBust ? ('?v=' + mobAssetBust) : '');
 }
 
 function mobTextureUrl(id) {
@@ -10016,7 +10027,10 @@ function renderMobsAdmin() {
   const query = ($('#mobAdminSearch')?.value || '').trim().toLowerCase();
   const showHidden = !!$('#mobShowHiddenCheckbox')?.checked;
 
-  let list = mobsAdminItems.filter((m) => showHidden || m.centerVisible);
+  // Az ELHAGYOTT mobok mindig látszanak: azokat épp azért kell megtalálni,
+  // hogy törölni lehessen őket (a "centerVisible" náluk már nem mond semmit,
+  // hiszen nincs szerver, ami frissítené).
+  let list = mobsAdminItems.filter((m) => showHidden || m.centerVisible || m.orphan);
   if (query) {
     list = list.filter((m) => (m.name || '').toLowerCase().includes(query)
       || (m.slug || '').toLowerCase().includes(query));
@@ -10032,13 +10046,22 @@ function renderMobsAdmin() {
     return;
   }
 
+  // A takarító gomb CSAK akkor látszik, ha tényleg van elhagyott mob -
+  // egy mindig kint lévő "töröl mindent" gomb fölösleges kockázat.
+  const orphans = mobsAdminItems.filter((m) => m.orphan).length;
+  const pruneBtn = $('#mobPruneBtn');
+  if (pruneBtn) {
+    pruneBtn.classList.toggle('hidden', orphans === 0);
+    pruneBtn.textContent = `Nem létező mobok törlése (${orphans})`;
+  }
+
   wrap.innerHTML = `<div class="mob-admin-grid">${list.map((m) => {
     const hb = m.effectiveHitbox || {};
     const hbText = hb.mode === 'vanilla' || !hb.width
       ? 'vanilla méret'
       : `${hb.width} &times; ${hb.height} blokk`;
     return `
-    <div class="mob-admin-card${m.enabled ? '' : ' is-off'}${m.centerVisible ? '' : ' is-hidden-server'}">
+    <div class="mob-admin-card${m.enabled ? '' : ' is-off'}${m.centerVisible && !m.orphan ? '' : ' is-hidden-server'}${m.orphan ? ' is-orphan' : ''}">
       ${mobThumbHtml(m)}
       <div class="mob-admin-card-name">${escapeHtml(m.name || m.slug)}</div>
       <div class="mob-admin-card-slug">${escapeHtml(m.slug)}</div>
@@ -10046,7 +10069,8 @@ function renderMobsAdmin() {
         ${m.baseType ? `<span class="cosmetic-tag">${escapeHtml(m.baseType.toLowerCase())}</span>` : ''}
         ${m.animated ? '<span class="cosmetic-tag">animált</span>' : ''}
         ${m.aura ? '<span class="cosmetic-tag">aura</span>' : ''}
-        ${m.centerVisible ? '' : '<span class="mob-badge-warn">a szerveren rejtett</span>'}
+        ${m.orphan ? '<span class="mob-badge-warn">a szerveren már nincs</span>' : ''}
+        ${m.centerVisible || m.orphan ? '' : '<span class="mob-badge-warn">a szerveren rejtett</span>'}
         ${m.enabled ? '' : '<span class="mob-badge-warn">kikapcsolva</span>'}
         ${m.hasModel ? '' : '<span class="mob-badge-warn">nincs modell</span>'}
         ${m.hasModel && !m.hasTexture ? '<span class="mob-badge-warn">nincs textúra</span>' : ''}
@@ -10058,6 +10082,7 @@ function renderMobsAdmin() {
       </div>
       <div class="mob-admin-card-actions">
         <button type="button" class="btn-glow" data-mob-edit="${m.id}">Szerkesztés</button>
+        <button type="button" class="btn-outline" data-mob-remove="${m.id}" title="A megjelenés (modell, textúra, beállítások) törlése. A mob a szerveren megmarad, ha a plugin még ismeri.">Törlés</button>
       </div>
     </div>`;
   }).join('')}</div>`;
@@ -10105,7 +10130,10 @@ async function fetchMobModel(id, opts) {
   const fresh = !!(opts && opts.fresh);
   if (!fresh && mobModelCache.has(id)) return mobModelCache.get(id);
   try {
-    const res = await fetch(mobModelUrl(id), fresh ? { cache: 'no-store' } : undefined);
+    const res = await fetch(mobModelUrl(id), {
+      headers: { Authorization: 'Bearer ' + session.token },
+      cache: fresh ? 'no-store' : 'default'
+    });
     if (!res.ok) return null;
     const model = await res.json();
     mobModelCache.set(id, model);
@@ -10509,10 +10537,81 @@ function ensureMobAnim() {
   return rec.anim;
 }
 
+/**
+ * A .BBMODEL SAJÁT ANIMÁCIÓINAK LISTÁJA.
+ *
+ * MIÉRT KELL EZ A LISTA: a pluginban NÉV szerint lehet animációt kiváltani
+ * ("animation name=slam"), a nevet viszont a Blockbench-projekt adja - az
+ * adminnak semmi más módja nem lenne megtudni, mi került be a feltöltéskor,
+ * csak ha visszanyitja a .bbmodel fájlt. Így viszont itt látja, és a
+ * bemásolható parancsrészletet is megkapja.
+ *
+ * MIÉRT KÜLÖN A LENTI MOZGÁS-SÁVOKTÓL: azok a Center saját, egyszerű
+ * lengető rendszere (a kiegészítőkből), ami a CSONTOK NÉLKÜLI modellekhez
+ * való. A kettő nem ugyanaz, és a legkönnyebben úgy lehet összekeverni
+ * őket, ha egy felületen jelennek meg.
+ */
+function renderMobRigAnimations() {
+  const wrap = $('#mobRigAnimList');
+  if (!wrap) return;
+  const mob = mobsAdminItems.find((m) => m.id === mobEditingId);
+  const anims = mob && Array.isArray(mob.animations) ? mob.animations : [];
+
+  if (!mob || !mob.hasRig) {
+    wrap.innerHTML = '<p class="cosmetic-file-note">Ehhez a mobhoz még nincs csontvázas modell. '
+      + 'Tölts fel egy <strong>.bbmodel</strong> fájlt a &bdquo;Modell&rdquo; fülön &ndash; '
+      + 'az abban lévő animációk automatikusan idekerülnek.</p>';
+    return;
+  }
+  if (!anims.length) {
+    wrap.innerHTML = '<p class="cosmetic-file-note">A feltöltött modellnek van csontváza, de '
+      + '<strong>nincs benne animáció</strong>. A Blockbench &bdquo;Animate&rdquo; fülén készíts '
+      + 'egyet, mentsd újra a .bbmodel fájlt, és töltsd fel ismét.</p>';
+    return;
+  }
+
+  // A kliens ugyanezekből a kulcsszavakból ismeri fel az ÁLLAPOT-animációkat
+  // (ld. SolarClient MobRig.resolveStates) - itt ugyanazt mutatjuk meg, hogy
+  // az admin lássa, melyik animáció indul majd magától.
+  const STATE_HINTS = [
+    { label: 'nyugalom', words: ['idle', 'stand', 'nyugalom'] },
+    { label: 'járás', words: ['walk', 'move', 'jaras'] },
+    { label: 'futás', words: ['run', 'sprint', 'charge', 'futas'] },
+    { label: 'támadás', words: ['attack', 'swing', 'slam', 'strike', 'hit', 'tamadas'] },
+    { label: 'halál', words: ['death', 'die', 'halal'] }
+  ];
+  const used = new Set();
+  const roleOf = (name) => {
+    const lower = String(name).toLowerCase();
+    for (const s of STATE_HINTS) {
+      if (used.has(s.label)) continue;
+      if (s.words.some((w) => lower.includes(w))) { used.add(s.label); return s.label; }
+    }
+    return null;
+  };
+
+  wrap.innerHTML = '<ul class="mob-rig-anim-list">'
+    + anims.map((name) => {
+      const role = roleOf(name);
+      return '<li><code>' + escapeHtml(name) + '</code>'
+        + (role ? '<span class="mob-rig-anim-role">' + role + ' &ndash; magától indul</span>' : '')
+        + '</li>';
+    }).join('')
+    + '</ul>'
+    + '<p class="cosmetic-file-note">Kiváltás a pluginból: <code>'
+    + escapeHtml('animation name=' + anims[0] + ' duration=40')
+    + '</code> &ndash; vagy próbaként ingame: <code>'
+    + escapeHtml('/solarmob anim play ' + (mob.slug || '<id>') + ' ' + anims[0])
+    + '</code></p>';
+}
+
 function renderMobAnimEditor() {
   const presetsWrap = $('#mobAnimPresets');
   const tracksWrap = $('#mobAnimTracks');
   if (!presetsWrap || !tracksWrap) return;
+
+  // A .bbmodel saját animációi külön kártyán - ld. renderMobRigAnimations().
+  renderMobRigAnimations();
 
   presetsWrap.innerHTML = MOB_ANIM_PRESETS
     .map((preset, i) => `<button type="button" class="cosmetic-anim-preset" data-mob-anim-preset="${i}" title="${escapeHtml(preset.hint || '')}">${escapeHtml(preset.label)}</button>`)
@@ -10940,6 +11039,8 @@ async function reloadMobEditorAssets(freshMob) {
 
   if (mobTarget >= mobParts.length) mobTarget = -1;
   renderMobPartsBar();
+  // Az animáció-lista is a friss mobból jön (a .bbmodel most hozhatott újakat).
+  renderMobRigAnimations();
   restartMobPreview();
   updateMobHitboxUi();
 }
@@ -11082,9 +11183,66 @@ $('#mobSaveBtn')?.addEventListener('click', saveMob);
 $('#mobDeleteBtn')?.addEventListener('click', deleteMobAppearance);
 
 $('#mobsAdminList')?.addEventListener('click', (e) => {
-  const btn = e.target.closest('[data-mob-edit]');
-  if (btn) openMobEditor(btn.dataset.mobEdit);
+  const edit = e.target.closest('[data-mob-edit]');
+  if (edit) { openMobEditor(edit.dataset.mobEdit); return; }
+  const remove = e.target.closest('[data-mob-remove]');
+  if (remove) deleteMobById(Number(remove.dataset.mobRemove));
 });
+
+$('#mobPruneBtn')?.addEventListener('click', deleteMobOrphans);
+
+/**
+ * Egy mob megjelenésének törlése a LISTÁBÓL (nem csak a szerkesztőből).
+ *
+ * MIÉRT KELL IDE IS: a felhasználó jelezte, hogy "ami egyszer már hozzá volt
+ * adva, az ottmarad, és nem lehet eltávolítani" - a törlés ugyanis csak a
+ * szerkesztőn belül volt elérhető, egy modell nélküli mobnál viszont oda be
+ * sem igazán érdemes menni.
+ */
+async function deleteMobById(id) {
+  const mob = mobsAdminItems.find((m) => m.id === id);
+  if (!mob) return;
+  const extra = mob.orphan
+    ? 'Ezt a mobot egyetlen szerver sem jelenti már, tehát véglegesen eltűnik.'
+    : 'A mob a SZERVEREN megmarad, és a következő szinkronnál újra megjelenik itt - üresen.';
+  if (!confirm(`Törlöd a(z) "${mob.name}" (${mob.slug}) megjelenését?\n\n${extra}`)) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/mobs/' + id, {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    if (!data.ok) { showToast(data.message || 'Nem sikerült törölni.', true); return; }
+    mobThumbCache.delete(id);
+    mobModelCache.delete(id);
+    showToast('Törölve: ' + mob.slug);
+    loadMobsAdmin();
+  } catch {
+    showToast('Hálózati hiba törlés közben.', true);
+  }
+}
+
+/** Az összes olyan mob törlése, amit egyetlen szerver sem jelent már. */
+async function deleteMobOrphans() {
+  const orphans = mobsAdminItems.filter((m) => m.orphan);
+  if (!orphans.length) return;
+  if (!confirm(`${orphans.length} olyan mob van, amit egyetlen szerver sem jelent már:\n\n`
+    + orphans.map((m) => '  - ' + m.slug).join('\n')
+    + '\n\nTörlöd mindet a modelljükkel együtt? Ez nem vonható vissza.')) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/mobs/orphans', {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    if (!data.ok) { showToast(data.message || 'Nem sikerült törölni.', true); return; }
+    for (const m of orphans) { mobThumbCache.delete(m.id); mobModelCache.delete(m.id); }
+    showToast((data.removed || []).length + ' mob törölve.');
+    loadMobsAdmin();
+  } catch {
+    showToast('Hálózati hiba a takarítás közben.', true);
+  }
+}
 
 $('#mobPartsBar')?.addEventListener('click', (e) => {
   const chip = e.target.closest('[data-mob-target]');

@@ -1787,7 +1787,7 @@
           <h1 class="page-title">Mobok</h1>
 
           <div class="mob-admin-list">
-            <p class="page-note">Itt a <strong>SolarMobs</strong> plugin mobjainak a <strong>megjelenését</strong> állítod be: egyedi modell, textúra, illesztés, animáció és hitbox. A modellt a SolarClient rajzolja ki, <strong>resource pack nélkül</strong> &ndash; a Blockbench natív JSON exportját várjuk (<code>elements</code> tömbbel) a hozzá tartozó PNG textúrával.<br />Egy mob akkor kerül ide, ha a szerveren bekapcsoltad: <code>/solarmob center &lt;azonosító&gt; on</code>.</p>
+            <p class="page-note">Itt a <strong>SolarMobs</strong> plugin mobjainak a <strong>megjelenését</strong> állítod be: egyedi modell, textúra, illesztés, animáció és hitbox. A modellt a SolarClient rajzolja ki, <strong>resource pack nélkül</strong> &ndash; töltsd fel a <strong>teljes .bbmodel projektfájlt</strong>, a textúra és a Blockbench &bdquo;Animate&rdquo; fülén készült animációk is abból jönnek.<br />Egy mob akkor kerül ide, ha a szerveren bekapcsoltad: <code>/solarmob center &lt;azonosító&gt; on</code>.</p>
 
             <div class="admin-toolbar">
               <input type="search" id="mobAdminSearch" class="cosmetic-filter-input admin-toolbar-search" placeholder="Keresés név vagy azonosító szerint..." aria-label="Keresés a mobok között" />
@@ -1796,6 +1796,7 @@
                 A szerveren rejtettek is
               </label>
               <button type="button" class="btn-outline" id="mobRefreshBtn">Frissítés</button>
+              <button type="button" class="btn-outline hidden" id="mobPruneBtn" title="Azokat a mobokat törli, amiket egyetlen szerver sem jelent már - pl. mert törölted a definíciójukat a pluginból.">Nem létező mobok törlése</button>
             </div>
 
             <div id="mobsAdminList"></div>
@@ -1891,6 +1892,22 @@
 
                 <!-- FÜL: ANIMÁCIÓ -->
                 <div class="cosmetic-tab-pane" data-mob-pane="anim">
+
+                  <!-- ── A .BBMODEL SAJÁT ANIMÁCIÓI ───────────────────────
+                       Ezek a Blockbench "Animate" fülén készült, valódi
+                       CSONTVÁZ-animációk: a kliens játssza le őket a
+                       játékban. NEM ugyanaz, mint a lentebbi mozgás-sávok,
+                       amik a Center saját, egyszerű lengető rendszere - azok
+                       a csontok nélküli (lapos) modellekhez valók.
+                       A lista azért van itt, mert a NEVEK kellenek a
+                       pluginhoz: azokat kell beírni egy képesség
+                       "animation name=..." mechanikájába. -->
+                  <div class="card">
+                    <div class="card-title">A modell animációi</div>
+                    <p class="cosmetic-file-note">A <strong>.bbmodel &bdquo;Animate&rdquo; füléről</strong> beolvasott animációk. A nyugalom / járás / futás mozgást a kliens <strong>magától</strong> választja ki a nevükből; a többit a plugin váltja ki.</p>
+                    <div id="mobRigAnimList"></div>
+                  </div>
+
                   <div class="card">
                     <div class="cosmetic-transform-title">Animáció &ndash; <span id="mobAnimTargetLabel">teljes mob</span></div>
                     <p class="cosmetic-file-note">Ugyanaz a mozgás-rendszer, mint a kiegészítőknél: a kész mozgások több, egymáshoz rögzített fázisú sávból állnak. A rész kijelölése a &bdquo;Modell&rdquo; fülön lévő rész-sávval történik.</p>
