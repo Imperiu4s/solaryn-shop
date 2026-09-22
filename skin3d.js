@@ -155,11 +155,15 @@ const SkinPreview = (() => {
     // Alap réteg
     addBox(positions, uvs, indices, 0, 10, 0, 8, 8, 8, [0, 0], texW, texH, 0, uvScale); // fej
     addBox(positions, uvs, indices, 0, 0, 0, 8, 12, 4, [16, 16], texW, texH, 0, uvScale); // törzs
-    addBox(positions, uvs, indices, -(4 + armW / 2), 0, 0, armW, 12, 4, [40, 16], texW, texH, 0, uvScale); // jobb kar
+    // A SLIM kar fél egységgel LEJJEBB van (pivot 2.5 a klasszikus 2.0
+    // helyett - PlayerEntityModel, remappelt forrásból). Az előnézeti Y
+    // felfelé mutat, a modell-tér Y lefelé, ezért itt MÍNUSZ fél egység.
+    const armY = slim ? -ARM_SLIM_DROP : 0;
+    addBox(positions, uvs, indices, -(4 + armW / 2), armY, 0, armW, 12, 4, [40, 16], texW, texH, 0, uvScale); // jobb kar
     // JAVÍTVA: korábban itt is [40,16]-ot (a jobb kar UV-ját) használtuk, azaz a
     // bal kart a jobb kar textúrájával tükrözve rajzoltuk ki - modern formátumban
     // a bal karnak saját, külön UV-régiója van ([32,48]).
-    addBox(positions, uvs, indices, (4 + armW / 2), 0, 0, armW, 12, 4, modern ? [32, 48] : [40, 16], texW, texH, 0, uvScale); // bal kar
+    addBox(positions, uvs, indices, (4 + armW / 2), armY, 0, armW, 12, 4, modern ? [32, 48] : [40, 16], texW, texH, 0, uvScale); // bal kar
     addBox(positions, uvs, indices, -2, -12, 0, 4, 12, 4, [0, 16], texW, texH, 0, uvScale); // jobb láb
     // JAVÍTVA: ugyanaz a hiba, mint a karnál - a bal lábnak modern formátumban
     // saját UV-régiója van ([16,48]), nem a jobb láb tükrözése.
@@ -171,8 +175,8 @@ const SkinPreview = (() => {
     addBox(positions, uvs, indices, 0, 10, 0, 8, 8, 8, [32, 0], texW, texH, PAD, uvScale); // fej overlay (kalap) - mindkét formátumban létezik
     if (modern) {
       addBox(positions, uvs, indices, 0, 0, 0, 8, 12, 4, [16, 32], texW, texH, PAD, uvScale); // törzs overlay (zakó)
-      addBox(positions, uvs, indices, -(4 + armW / 2), 0, 0, armW, 12, 4, [40, 32], texW, texH, PAD, uvScale); // jobb kar overlay
-      addBox(positions, uvs, indices, (4 + armW / 2), 0, 0, armW, 12, 4, [48, 48], texW, texH, PAD, uvScale); // bal kar overlay
+      addBox(positions, uvs, indices, -(4 + armW / 2), armY, 0, armW, 12, 4, [40, 32], texW, texH, PAD, uvScale); // jobb kar overlay
+      addBox(positions, uvs, indices, (4 + armW / 2), armY, 0, armW, 12, 4, [48, 48], texW, texH, PAD, uvScale); // bal kar overlay
       addBox(positions, uvs, indices, -2, -12, 0, 4, 12, 4, [0, 32], texW, texH, PAD, uvScale); // jobb láb overlay
       addBox(positions, uvs, indices, 2, -12, 0, 4, 12, 4, [0, 48], texW, texH, PAD, uvScale); // bal láb overlay
     }
@@ -225,6 +229,35 @@ const SkinPreview = (() => {
   // középpontja 10) és a törzzsel (vanilla y 0..12 -> előnézet 6..-6, közép 0).
   //
   // A csont-pivotok a vanilla BipedEntityModel-ből (ModelTransform.pivot):
+  /**
+   * Mennyivel van LEJJEBB a slim (Alex) kar a klasszikusnál.
+   * PlayerEntityModel: slim pivot 2.5, klasszikus 2.0.
+   */
+  const ARM_SLIM_DROP = 0.5;
+
+  /**
+   * A TÁRGYAT TARTÓ kar előre dőlése, RADIÁNBAN.
+   *
+   * BipedEntityModel.setAngles(), "case ITEM":
+   *     rightArm.pitch = rightArm.pitch * 0.5f - 0.31415927f;
+   * A kéz-slotos kiegészítő KIZÁRÓLAG fegyver tartása közben látszik (ld. a
+   * kliens CosmeticHandRule-ját), tehát a játékban MINDIG ez a póz van
+   * érvényben - az előnézetnek is ezt kell mutatnia.
+   *
+   * MIÉRT VIHETŐ ÁT ELŐJELVÁLTÁS NÉLKÜL: a modell-térből az előnézetibe a
+   * váltás az Y-t ÉS a Z-t is negálja, ami egy 180 fokos X körüli forgatás -
+   * az pedig FELCSERÉLHETŐ egy másik X körüli forgatással. A szög tehát
+   * ugyanaz marad.
+   */
+  const ITEM_ARM_PITCH = -0.31415927;
+
+  /**
+   * A VÁLLTÓL a kézfejig, modell-egységben. A kliens ugyanezt használja
+   * (CosmeticHandRule.HAND_OFFSET) - a két szám EGYÜTT mozog, ezért van
+   * mindkét oldalon megnevezve.
+   */
+  const HAND_OFFSET = 8;
+
   const COSMETIC_PIVOTS = {
     head:      [0, 0, 0],
     body:      [0, 0, 0],
@@ -238,6 +271,22 @@ const SkinPreview = (() => {
     // eltolást alkalmazza (ld. MixinCosmeticFeature "main_hand" ágát).
     main_hand: [-5, 10, 0]
   };
+
+  /**
+   * A csont forgáspontja a VISELŐ modelljéhez igazítva.
+   *
+   * A karok forgáspontja slim (Alex) skinnél fél egységgel lejjebb van - és
+   * ez a kéz-slotnál a legfeltűnőbb, mert ott a kiegészítő egy hosszú kar
+   * VÉGÉN ül, nem magán a karon.
+   */
+  function bonePivotFor(slot, slim) {
+    const base = COSMETIC_PIVOTS[slot] || [0, 0, 0];
+    if (!slim) return base;
+    if (slot === 'left_arm' || slot === 'right_arm' || slot === 'main_hand') {
+      return [base[0], base[1] + ARM_SLIM_DROP, base[2]];
+    }
+    return base;
+  }
 
   // ── KIEGÉSZÍTŐK: RÉSZEK ÉS ANIMÁCIÓ ──────────────────────────────────
   //
@@ -265,6 +314,10 @@ const SkinPreview = (() => {
   function rotateZ(angle) {
     const c = Math.cos(angle), s = Math.sin(angle);
     return new Float32Array([c, s, 0, 0, -s, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  }
+  function rotateX(angle) {
+    const c = Math.cos(angle), s = Math.sin(angle);
+    return new Float32Array([1, 0, 0, 0, 0, c, s, 0, 0, -s, c, 0, 0, 0, 0, 1]);
   }
   function scaleMat3(x, y, z) {
     return new Float32Array([x, 0, 0, 0, 0, y, 0, 0, 0, 0, z, 0, 0, 0, 0, 1]);
@@ -471,6 +524,14 @@ const SkinPreview = (() => {
     out.drift = preset.drift * speed;
     out.swirl = preset.swirl * speed;
     out.gravity = preset.gravity * speed;
+    // ILLESZTÉS - a kliens CosmeticAura.Spec offset/extent mezőinek párja.
+    // MINDIG szerepel az eredményben (alapértelmezéssel is), pontosan úgy,
+    // ahogy a backend resolveAura()-ja küldi: egy helyen élő alapértelmezés
+    // nem tud szétcsúszni a klienssel.
+    out.offsetX = Number.isFinite(stored.offsetX) ? stored.offsetX : 0;
+    out.offsetY = Number.isFinite(stored.offsetY) ? stored.offsetY : 0;
+    out.offsetZ = Number.isFinite(stored.offsetZ) ? stored.offsetZ : 0;
+    out.extent = Number.isFinite(stored.extent) ? stored.extent : 1;
     return out;
   }
 
@@ -481,6 +542,11 @@ const SkinPreview = (() => {
    * @returns {null} ha a részecske ebben a pillanatban láthatatlan
    */
   function auraParticle(aura, i, count, time, center, halfExtent) {
+    // Az admin által beállított ILLESZTÉS (ld. resolveAura).
+    const ox = Number.isFinite(aura.offsetX) ? aura.offsetX : 0;
+    const oy = Number.isFinite(aura.offsetY) ? aura.offsetY : 0;
+    const oz = Number.isFinite(aura.offsetZ) ? aura.offsetZ : 0;
+    const ext = Number.isFinite(aura.extent) ? aura.extent : 1;
     const phase = time / aura.life + i / count;
     const cycle = Math.floor(phase);
     const age = (phase - cycle) * aura.life;
@@ -512,9 +578,9 @@ const SkinPreview = (() => {
     return {
       // A SZERZŐI térben: a "rise" a játékos szemszögéből felfelé mutat, ami
       // itt a +Y (az előnézetben nincs a kliens tükrözése).
-      x: center[0] + auraRandSigned(i, cycle, 0) * halfExtent[0] + dx,
-      y: center[1] + auraRandSigned(i, cycle, 1) * halfExtent[1] + up,
-      z: center[2] + auraRandSigned(i, cycle, 2) * halfExtent[2] + dz,
+      x: center[0] + ox + auraRandSigned(i, cycle, 0) * halfExtent[0] * ext + dx,
+      y: center[1] + oy + auraRandSigned(i, cycle, 1) * halfExtent[1] * ext + up,
+      z: center[2] + oz + auraRandSigned(i, cycle, 2) * halfExtent[2] * ext + dz,
       size,
       spin: aura.spin * age * (auraRand(i, cycle, 8) < 0.5 ? -1 : 1),
       r: (ca[0] + (cb[0] - ca[0]) * t) * flick,
@@ -1060,7 +1126,8 @@ const SkinPreview = (() => {
     const allCenter = Number.isFinite(allMin[0])
       ? [(allMin[0] + allMax[0]) / 2, (allMin[1] + allMax[1]) / 2, (allMin[2] + allMax[2]) / 2]
       : [0, 0, 0];
-    const bonePivot = COSMETIC_PIVOTS[slot] || [0, 0, 0];
+    const slim = !!(opts && opts.slim);
+    const bonePivot = bonePivotFor(slot, slim);
     const assemblyAnim = (t.anim && typeof t.anim === 'object') ? t.anim : null;
 
     // A TELJES kiegészítőre rakott hullám CSÚCSONKÉNTI távolságai, MINDEN
@@ -1177,7 +1244,8 @@ const SkinPreview = (() => {
         animPivot: (assemblyAnim && Array.isArray(assemblyAnim.pivot) && assemblyAnim.pivot.length === 3)
           ? assemblyAnim.pivot : allCenter
       },
-      bonePivot
+      bonePivot,
+      slot,
     };
   }
 
@@ -1188,16 +1256,43 @@ const SkinPreview = (() => {
    *        KOCKÁNKÉNT, a csúcsokon érvényesül (ld. waveElementPositions), mert
    *        egyetlen mátrix nem tud kockánként eltérő szöget adni.
    */
+  /**
+   * A CSONT teréből az előnézeti térbe: eltolás a forgásponthoz + a
+   * modell->előnézet váltás.
+   *
+   * MIÉRT KÜLÖN FÜGGVÉNY: két helyen kell (a geometria és az aura
+   * mátrixában), és a KÉZ-SLOT egy harmadik lépést is igényel - ha a kettő
+   * külön-külön épülne, az aura és a geometria elcsúszhatna egymástól.
+   *
+   * ── A KÉZ-SLOT KÜLÖN ÚTJA ─────────────────────────────────────────
+   * A kézben tartott kiegészítő KIZÁRÓLAG fegyver tartása közben látszik
+   * (ld. a kliens CosmeticHandRule-ját), a fegyvert tartó kar pedig a
+   * játékban MINDIG előre dől (ld. ITEM_ARM_PITCH). Ezért itt nem elég a
+   * kézfej forgáspontjára ugrani: a VÁLLTÓL indulunk, megdöntjük a kart,
+   * és UTÁNA megyünk le a kézfejig - pontosan úgy, ahogy a játékban a
+   * csont-transzformáció után jön a kézfej-eltolás.
+   */
+  function boneToPreviewMatrix(built) {
+    let m2p = scaleMat3(16, -16, -16);
+    if (built.standalone) return m2p;
+    const bp = built.bonePivot;
+    if (built.slot === 'main_hand') {
+      // A VÁLL forgáspontja: a kéz-slot forgáspontja mínusz a kar hossza.
+      const shoulderY = bp[1] - HAND_OFFSET;
+      m2p = multiply(translate(0, -HAND_OFFSET, 0), m2p);
+      m2p = multiply(rotateX(ITEM_ARM_PITCH), m2p);
+      m2p = multiply(translate(bp[0], 6 - shoulderY, -bp[2]), m2p);
+      return m2p;
+    }
+    return multiply(translate(bp[0], 6 - bp[1], -bp[2]), m2p);
+  }
+
   function cosmeticPartMatrix(built, index, timeSec, skipPartAnim) {
     const f = built.f;
     const a = built.assembly;
     const part = built.parts[index];
 
-    let m2p = scaleMat3(16, -16, -16);
-    if (!built.standalone) {
-      const bp = built.bonePivot;
-      m2p = multiply(translate(bp[0], 6 - bp[1], -bp[2]), m2p);
-    }
+    const m2p = boneToPreviewMatrix(built);
 
     // HULLÁMZÓ TELJES KIEGÉSZÍTŐ: a részek illesztése, a részek animációja és
     // a kiegészítő hulláma MIND a csúcsokon történt már (ld.
@@ -1229,11 +1324,7 @@ const SkinPreview = (() => {
   function cosmeticAuraMatrix(built, timeSec) {
     const f = built.f;
     const a = built.assembly;
-    let m2p = scaleMat3(16, -16, -16);
-    if (!built.standalone) {
-      const bp = built.bonePivot;
-      m2p = multiply(translate(bp[0], 6 - bp[1], -bp[2]), m2p);
-    }
+    const m2p = boneToPreviewMatrix(built);
     let m = placementMatrix(a.offset, a.scale, a.rotation, a.center, f);
     // A HULLÁMZÓ kiegészítő-animáció a csúcsokon hat, nem mátrixként - az
     // aurára ezért (mint a kliensben) csak a merev rész vonatkozik.
@@ -1519,7 +1610,7 @@ const SkinPreview = (() => {
         try {
           // RÉSZENKÉNT külön rajzolás: minden résznek saját (képkockánként
           // újraszámolt) mátrixa van, mert saját animációja lehet.
-          const built = buildCosmeticParts(c.model, c.slot);
+          const built = buildCosmeticParts(c.model, c.slot, { slim: !!slim });
           let sharedTex = null;
           for (let i = 0; i < built.parts.length; i++) {
             const part = built.parts[i];
@@ -2256,6 +2347,9 @@ const SkinPreview = (() => {
       assemblyRotation: f < 0 ? [-rawRotation[0], -rawRotation[1], rawRotation[2]] : rawRotation.slice(),
       assemblyScale,
       center: [0, 0, 0],
+      // AURA: ugyanabból az 'assembly' blokkból, ugyanabban a FELOLDOTT
+      // alakban, mint a lapos modellnél - a kliens MobRig.aura párja.
+      aura: (assembly.aura && typeof assembly.aura === 'object') ? assembly.aura : null,
       bones: [],
       animations: []
     };
@@ -2637,6 +2731,10 @@ const SkinPreview = (() => {
     // A lapos modell kamera-adatai, hogy a módváltás ne rántsa el a nézetet.
     let flatBounds = null;
     let rigBounds = null;
+    // A CSONTVÁZ aura-térfogata, SZERZŐI egységben - pontosan úgy számolva,
+    // ahogy a kliens MobRig.buildAuraVolume()-ja. Egy "elég jó" közelítés itt
+    // pont azt a kérdést hagyná nyitva, amiért az előnézet létezik.
+    let rigAura = null;
     // Csontváz-módban a lapos részeket NEM rajzoljuk. Egy előre lefoglalt üres
     // tömb, hogy a rajzoló ciklus képkockánként ne allokáljon.
     const EMPTY_PARTS = [];
@@ -2771,6 +2869,153 @@ const SkinPreview = (() => {
         if (wz < mn[2]) mn[2] = wz; if (wz > mx[2]) mx[2] = wz;
       }
       if (Number.isFinite(mn[0])) rigBounds = { min: mn, max: mx };
+
+      // AZ AURA KIBOCSÁTÁSI TÉRFOGATA. A nyugalmi állásból, a csont-
+      // mátrixokkal együtt (azok már fent lefutottak a rigScratch-re) -
+      // ugyanaz, amit a kliens MobRig.buildAuraVolume()-ja csinál.
+      rigAura = null;
+      if (rig.aura) {
+        let amn = [Infinity, Infinity, Infinity];
+        let amx = [-Infinity, -Infinity, -Infinity];
+        for (let v = 0; v < rigScratch.length; v += 3) {
+          for (let k = 0; k < 3; k++) {
+            const val = rigScratch[v + k];
+            if (val < amn[k]) amn[k] = val;
+            if (val > amx[k]) amx[k] = val;
+          }
+        }
+        if (Number.isFinite(amn[0])) {
+          // A textúra-minták: minden lap KÖZEPE (mint a kliensnél).
+          const uvs = [];
+          for (const bone of rig.bones) {
+            for (const cube of bone.cubes) {
+              for (const fi of cube.present) {
+                if (uvs.length >= 48) break;
+                const uv = cube.uvs[fi];
+                uvs.push([(uv[0] + uv[4]) * 0.5, (uv[1] + uv[5]) * 0.5]);
+              }
+            }
+          }
+          // MODELL -> SZERZŐI tér: a kliens (* RIG_SCALE * f) átváltásának
+          // inverze. A FÉL kiterjedés mindig pozitív: az f előjele a
+          // középpontot fordítja, a doboz méretét nem.
+          const f = rig.f;
+          if (uvs.length) {
+            rigAura = {
+              aura: rig.aura,
+              center: [
+                ((amn[0] + amx[0]) * 0.5) / (RIG_SCALE * f),
+                ((amn[1] + amx[1]) * 0.5) / (RIG_SCALE * f),
+                ((amn[2] + amx[2]) * 0.5) / RIG_SCALE
+              ],
+              half: [
+                Math.abs((amx[0] - amn[0]) * 0.5 / (RIG_SCALE * f)) + 1,
+                Math.abs((amx[1] - amn[1]) * 0.5 / (RIG_SCALE * f)) + 1,
+                Math.abs((amx[2] - amn[2]) * 0.5 / RIG_SCALE) + 1
+              ],
+              uvs,
+              // SZERZŐI -> ELŐNÉZETI tér. A geometria útja: szerzői
+              // -> modell (* RIG_SCALE * f) -> előnézeti (* U, -U, -U).
+              // U * RIG_SCALE = 1, tehát a kettő szorzata egyszerűen ez:
+              matrix: scaleMat3(f, -f, -1)
+            };
+          }
+        }
+      }
+    }
+
+    // ── AURA ──────────────────────────────────────────────────────────
+    // A kis részecske-kockák pufferei - egyszer lefoglalva, képkockánként
+    // újratöltve (ugyanaz a minta, mint a kiegészítő-előnézetben).
+    const AURA_FACES = [
+      [0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1],
+      [2, 3, 7, 6], [0, 2, 6, 4], [1, 5, 7, 3]
+    ];
+    const auraVerts = new Float32Array(72);
+    const auraUVsBuf = new Float32Array(48);
+    const auraIdx = new Uint16Array(36);
+    for (let f = 0; f < 6; f++) {
+      const o = f * 4;
+      auraIdx.set([o, o + 1, o + 2, o, o + 2, o + 3], f * 6);
+    }
+    const auraPosBuf = gl.createBuffer();
+    const auraUvBuf = gl.createBuffer();
+    const auraIdxBuf = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, auraIdxBuf);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, auraIdx, gl.STATIC_DRAW);
+
+    /**
+     * A mob körüli részecske-felhő.
+     *
+     * KÉT FORRÁSA VAN, és mindkettő ugyanazt a matekot futtatja:
+     *  - LAPOS modellnél a buildCosmeticParts() "built" objektuma hozza az
+     *    aurát és a befoglaló dobozt (pont úgy, mint egy kiegészítőnél);
+     *  - CSONTVÁZNÁL a rigAura, amit a buildRig() számolt ki.
+     *
+     * A GEOMETRIA UTÁN rajzolunk, mélység-írással: a részecskék áttetszők,
+     * és így a mob teste már ott van mögöttük.
+     */
+    function drawMobAura(mvp, timeSec, source, tex) {
+      if (!source || !tex) return;
+      const spec = resolveAura(source.aura, auraPresets);
+      if (!spec || !source.uvs || !source.uvs.length) return;
+      let count = Math.round(spec.rate * spec.life);
+      if (count <= 0) return;
+      if (count > AURA_MAX_PARTICLES) count = AURA_MAX_PARTICLES;
+
+      gl.uniformMatrix4fv(uMVP, false, multiply(mvp, source.matrix));
+      // A részecskéknél NINCS alfa-vágás: az elhalványulás épp a kis alfánál
+      // a lényeg.
+      gl.uniform1f(uAlphaCut, 0);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, auraIdxBuf);
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+
+      for (let i = 0; i < count; i++) {
+        const pt = auraParticle(spec, i, count, timeSec, source.center, source.half);
+        if (!pt) continue;
+        const sz = pt.size * 0.5;
+        const cs = Math.cos(pt.spin * 2 * Math.PI);
+        const sn = Math.sin(pt.spin * 2 * Math.PI);
+        const xs = [], ys = [], zs = [];
+        for (let sx = -1; sx <= 1; sx += 2) {
+          for (let sy = -1; sy <= 1; sy += 2) {
+            for (let sz2 = -1; sz2 <= 1; sz2 += 2) {
+              const lx = sx * sz, lz = sz2 * sz;
+              xs.push(pt.x + lx * cs - lz * sn);
+              ys.push(pt.y + sy * sz);
+              zs.push(pt.z + lx * sn + lz * cs);
+            }
+          }
+        }
+        const uv = source.uvs[Math.min(source.uvs.length - 1,
+          Math.floor(pt.faceSeed * source.uvs.length))];
+        for (let fi = 0; fi < 6; fi++) {
+          const face = AURA_FACES[fi];
+          for (let k = 0; k < 4; k++) {
+            const c = face[k];
+            const o = (fi * 4 + k) * 3;
+            auraVerts[o] = xs[c];
+            auraVerts[o + 1] = ys[c];
+            auraVerts[o + 2] = zs[c];
+            const uo = (fi * 4 + k) * 2;
+            auraUVsBuf[uo] = uv[0];
+            auraUVsBuf[uo + 1] = uv[1];
+          }
+        }
+        gl.bindBuffer(gl.ARRAY_BUFFER, auraPosBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, auraVerts, gl.DYNAMIC_DRAW);
+        gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, auraUvBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, auraUVsBuf, gl.DYNAMIC_DRAW);
+        gl.vertexAttribPointer(aUV, 2, gl.FLOAT, false, 0, 0);
+        gl.uniform4f(uTint, pt.r, pt.g, pt.b, pt.a);
+        gl.drawElements(gl.TRIANGLES, 36, gl.UNSIGNED_SHORT, 0);
+      }
+
+      // Vissza az alapállapotba, különben a KÖVETKEZŐ képkocka geometriája is
+      // színezve és vágás nélkül rajzolódna.
+      gl.uniform4f(uTint, 1, 1, 1, 1);
+      gl.uniform1f(uAlphaCut, 0.05);
     }
 
     buildModel(opts.model, opts.img);
@@ -2901,6 +3146,22 @@ const SkinPreview = (() => {
         gl.drawElements(gl.TRIANGLES, c.indexCount, gl.UNSIGNED_SHORT, 0);
       }
 
+      // 2b. AZ AURA - a geometria után, a hitbox ELŐTT.
+      if (rigMode) {
+        drawMobAura(mvp, animTime, rigAura, rigDrawable.tex);
+      } else if (built && built.aura && parts.length) {
+        // A LAPOS modellnél a kiegészítőkkel AZONOS úton: a "built" hozza az
+        // aurát, a befoglaló dobozt és a textúra-mintákat, a mátrixot pedig a
+        // közös cosmeticAuraMatrix() adja.
+        drawMobAura(mvp, animTime, {
+          aura: built.aura,
+          center: built.auraCenter,
+          half: built.auraHalfExtent,
+          uvs: built.auraUVs,
+          matrix: cosmeticAuraMatrix(built, animTime)
+        }, parts[0].tex);
+      }
+
       // 3. a hitbox LEGVÉGÜL, mélység-írás NÉLKÜL: így a modellen keresztül
       //    is látszik, de nem takarja ki azt.
       if (hitboxDrawable) {
@@ -2924,6 +3185,9 @@ const SkinPreview = (() => {
       window.removeEventListener('mouseup', onUp);
       freeParts();
       freeRigDrawable();
+      gl.deleteBuffer(auraPosBuf);
+      gl.deleteBuffer(auraUvBuf);
+      gl.deleteBuffer(auraIdxBuf);
       freeStatic(ground);
       freeStatic(reference);
       reference = null;

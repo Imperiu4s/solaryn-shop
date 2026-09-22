@@ -12,7 +12,7 @@
 // számot látsz, a böngésző MÉG A RÉGI app.js-t futtatja (a webtárhely
 // cache-e miatt egy feltöltés nem feltétlenül ér ki azonnal). MINDEN
 // kiadásnál emelni kell, az index.html ?v= paramétereivel EGYÜTT.
-const CENTER_VERSION = '20260921d';
+const CENTER_VERSION = '20260922a';
 
 const BACKEND_URL = 'https://api.overclockgame.hu:8908';
 
@@ -6314,12 +6314,23 @@ function loadImage(src) {
 const cosmeticModelCache = new Map();
 async function fetchCosmeticModel(id, opts) {
   const fresh = !!(opts && opts.fresh);
-  if (!fresh && cosmeticModelCache.has(id)) return cosmeticModelCache.get(id);
+  // A SZERKESZTŐ mindig a LAPOS alakot kéri (admin végpont). A nyilvános
+  // végpont a csontvázat adná, amiben nincs 'parts' tömb - a szerkesztő
+  // előnézete attól NÉMÁN üres maradna.
+  const flat = !!(opts && opts.flat);
+  if (!fresh && !flat && cosmeticModelCache.has(id)) return cosmeticModelCache.get(id);
   try {
-    const res = await fetch(cosmeticModelUrl(id), fresh ? { cache: 'no-store' } : undefined);
+    const url = flat
+      ? BACKEND_URL + '/api/admin/cosmetics/' + id + '/model' + cosmeticAssetSuffix()
+      : cosmeticModelUrl(id);
+    const res = await fetch(url, flat
+      ? { cache: 'no-store', headers: { Authorization: 'Bearer ' + session.token } }
+      : (fresh ? { cache: 'no-store' } : undefined));
     if (!res.ok) return null;
     const model = await res.json();
-    cosmeticModelCache.set(id, model);
+    // A LAPOS (admin) válasz NEM kerül a közös gyorsítótárba: azt a
+    // kártyák bélyegképei is használják, és ott a nyilvános alak kell.
+    if (!flat) cosmeticModelCache.set(id, model);
     return model;
   } catch {
     return null;
@@ -7311,6 +7322,9 @@ function resetCosmeticForm() {
   cosmeticEffectServers = [];
   cosmeticAssembly = emptyAssembly();
   cosmeticParts = [emptyPart(0)];
+  $('#cosmeticRigBox')?.classList.add('hidden');
+  $('#cosmeticBbmodelNote') && ($('#cosmeticBbmodelNote').textContent = '');
+  $('#cosmeticBbmodelWarnings') && ($('#cosmeticBbmodelWarnings').innerHTML = '');
   cosmeticTarget = -1;
   const t = $('#cosmeticFormTitle');
   if (!t) return;
@@ -7831,6 +7845,13 @@ function renderCosmeticAuraEditor() {
   $('#cosmeticAuraColorAInput').dataset.set = a.colorA ? '1' : '';
   $('#cosmeticAuraColorBInput').dataset.set = a.colorB ? '1' : '';
   $('#cosmeticAuraReactSelect').value = a.react || 'none';
+  // ILLESZTÉS: a meg nem adott mező ÜRESEN marad (nem 0-t mutat), mert a
+  // 0 itt érvényes, beállított érték - a kettőt a felületen is meg kell
+  // tudni különböztetni.
+  $('#cosmeticAuraOffsetXInput').value = Number.isFinite(a.offsetX) ? a.offsetX : '';
+  $('#cosmeticAuraOffsetYInput').value = Number.isFinite(a.offsetY) ? a.offsetY : '';
+  $('#cosmeticAuraOffsetZInput').value = Number.isFinite(a.offsetZ) ? a.offsetZ : '';
+  $('#cosmeticAuraExtentInput').value = Number.isFinite(a.extent) ? a.extent : '';
 }
 
 /** A mezőkből összeállított aura-beállítás, vagy null. */
@@ -7848,6 +7869,10 @@ function readCosmeticAura() {
   num('#cosmeticAuraSizeInput', 'size');
   num('#cosmeticAuraLifeInput', 'life');
   num('#cosmeticAuraSpeedInput', 'speed');
+  num('#cosmeticAuraOffsetXInput', 'offsetX');
+  num('#cosmeticAuraOffsetYInput', 'offsetY');
+  num('#cosmeticAuraOffsetZInput', 'offsetZ');
+  num('#cosmeticAuraExtentInput', 'extent');
   const ca = $('#cosmeticAuraColorAInput');
   const cb = $('#cosmeticAuraColorBInput');
   if (ca && ca.dataset.set) out.colorA = ca.value;
@@ -7856,6 +7881,222 @@ function readCosmeticAura() {
   if (react && react !== 'none') out.react = react;
   return out;
 }
+
+
+// ── A kiegészítő .bbmodel feltöltése ─────────────────────────────────────
+//
+// MIÉRT EGY KÉRÉSBEN A GEOMETRIA, A TEXTÚRA ÉS AZ ANIMÁCIÓ: a .bbmodel
+// mindhármat tartalmazza, és külön kérésekben egy megszakadt feltöltés
+// felemás állapotot hagyna (új geometria, régi textúra), amit semmi nem
+// jelezne. Ld. a backend /api/admin/cosmetics/:id/bbmodel végpontját.
+
+$('#cosmeticBbmodelPickBtn')?.addEventListener('click', () => {
+  if (!cosmeticEditingId) {
+    showToast('Előbb mentsd el a kiegészítőt - a .bbmodel egy MEGLÉVŐ kiegészítőhöz tartozik.', true);
+    return;
+  }
+  $('#cosmeticBbmodelInput')?.click();
+});
+
+$('#cosmeticBbmodelInput')?.addEventListener('change', async (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (file) await uploadCosmeticBbmodel(file);
+});
+
+async function uploadCosmeticBbmodel(file) {
+  if (!cosmeticEditingId) return;
+  const note = $('#cosmeticBbmodelNote');
+  const warnBox = $('#cosmeticBbmodelWarnings');
+  if (note) note.textContent = `Feldolgozás: ${file.name} ...`;
+  if (warnBox) warnBox.innerHTML = '';
+
+  const fd = new FormData();
+  fd.append('bbmodel', file);
+
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/admin/cosmetics/${cosmeticEditingId}/bbmodel`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + session.token },
+      body: fd
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      if (note) note.textContent = '';
+      if (warnBox) warnBox.innerHTML = `<p class="redeem-result error">${escapeHtml(data.message || 'Nem sikerült feldolgozni a .bbmodel fájlt.')}</p>`;
+      showToast(data.message || 'Nem sikerült feldolgozni a .bbmodel fájlt.', true);
+      return;
+    }
+
+    const info = data.info || {};
+    if (note) {
+      note.textContent = `${file.name} - ${info.elementCount} kocka`
+        + (info.format ? `, ${info.format} formátum` : '')
+        + (info.groupRotations ? `, ${info.groupRotations} forgatott csont` : '')
+        + (Array.isArray(info.resolution) ? `, textúra-tér ${info.resolution[0]}x${info.resolution[1]}` : '');
+    }
+    if (warnBox) {
+      warnBox.innerHTML = (data.warnings || [])
+        .map((w) => `<p class="cosmetic-file-note mob-bbmodel-warning">${escapeHtml(w)}</p>`).join('');
+    }
+
+    await refreshCosmeticAfterBbmodel(data.cosmetic);
+    showToast('A Blockbench modell betöltve.');
+  } catch {
+    if (note) note.textContent = '';
+    showToast('Hálózati hiba a .bbmodel feltöltésekor.', true);
+  }
+}
+
+/**
+ * A szerkesztő frissítése egy .bbmodel feltöltés után.
+ *
+ * A geometria és a textúra a SZERVEREN változott meg, tehát onnan kell
+ * visszaolvasni. Az ILLESZTÉS mezőit SZÁNDÉKOSAN nem írjuk felül: az admin
+ * épp azokat hangolja, egy modell-csere nem dobhatja el a munkáját.
+ */
+/**
+ * A szerkesztő geometriájának és textúrájának újraolvasása a szerverről.
+ *
+ * A MEZŐKET (illesztés, animáció-sávok, aura) SZÁNDÉKOSAN nem írjuk felül:
+ * az admin épp azokat hangolja, egy modell-csere nem dobhatja el a munkáját.
+ * A GYORSÍTÓTÁRAT viszont törni KELL: a modell- és a textúra-végpont is
+ * gyorsítótárazható, enélkül a böngésző a RÉGIT adná vissza, és úgy tűnne,
+ * hogy nem történt semmi.
+ */
+async function reloadCosmeticEditorAssets() {
+  if (!cosmeticEditingId) return;
+  cosmeticAssetBust++;
+  cosmeticThumbCache.delete(cosmeticEditingId);
+  cosmeticModelCache.delete(cosmeticEditingId);
+
+  const item = cosmeticsAdminItems.find((c) => c.id === cosmeticEditingId);
+  try {
+    const [model, img] = await Promise.all([
+      fetchCosmeticModel(cosmeticEditingId, { fresh: true, flat: true }),
+      loadImage(cosmeticTextureUrl(cosmeticEditingId))
+    ]);
+    if (!model) return;
+    cosmeticEditorTexture = img;
+
+    // A RÉSZEK LISTÁJA is változhatott (egy üres kiegészítőnél a .bbmodel
+    // hozza létre az első részt).
+    if (item && Array.isArray(item.parts) && item.parts.length) {
+      const known = new Map(cosmeticParts.map((pp) => [pp.id, pp]));
+      cosmeticParts = item.parts.map((raw, i) => {
+        const existing = known.get(raw.id);
+        if (existing) { existing.hasModel = !!raw.hasModel; return existing; }
+        const part = emptyPart(i);
+        part.id = raw.id ?? null;
+        part.hasModel = !!raw.hasModel;
+        return part;
+      });
+    }
+
+    const rawParts = (Array.isArray(model.parts) && model.parts.length)
+      ? model.parts
+      : [{ elements: model.elements, texture_size: model.texture_size }];
+    const withModel = cosmeticParts.filter((pp) => pp.hasModel);
+    rawParts.forEach((raw, i) => {
+      const target = withModel[i];
+      if (!target) return;
+      target.elements = raw.elements || null;
+      target.textureSize = Array.isArray(raw.texture_size) ? raw.texture_size : null;
+    });
+    renderCosmeticPartsBar();
+    restartCosmeticEditor();
+  } catch {
+    /* a szerkesztő ilyenkor a korábbi állapotában marad */
+  }
+}
+
+async function refreshCosmeticAfterBbmodel(fresh) {
+  if (fresh) {
+    const idx = cosmeticsAdminItems.findIndex((c) => c.id === fresh.id);
+    if (idx >= 0) cosmeticsAdminItems[idx] = fresh;
+  }
+  renderCosmeticRigBox();
+  await reloadCosmeticEditorAssets();
+}
+
+/**
+ * A csontváz-doboz (kapcsoló + animáció-lista) kirajzolása.
+ */
+function renderCosmeticRigBox() {
+  const box = $('#cosmeticRigBox');
+  if (!box) return;
+  const item = cosmeticsAdminItems.find((c) => c.id === cosmeticEditingId);
+  const hasRig = !!(item && item.hasRig);
+  box.classList.toggle('hidden', !hasRig);
+  if (!hasRig) return;
+
+  const toggle = $('#cosmeticRigEnabledCheckbox');
+  if (toggle) toggle.checked = item.rigEnabled !== false;
+
+  const wrap = $('#cosmeticRigAnimations');
+  if (!wrap) return;
+  const anims = Array.isArray(item.animations) ? item.animations : [];
+  if (!anims.length) {
+    wrap.innerHTML = '<p class="cosmetic-file-note">A feltöltött modellnek van csontváza, de '
+      + '<strong>nincs benne animáció</strong>. A Blockbench &bdquo;Animate&rdquo; fülén készíts '
+      + 'egyet, mentsd újra a .bbmodel fájlt, és töltsd fel ismét.</p>';
+    return;
+  }
+  // A kliens ugyanezekből a kulcsszavakból ismeri fel, melyik animáció
+  // melyik állapothoz tartozik (ld. SolarClient MobRig.resolveStates) - itt
+  // ugyanazt mutatjuk, hogy az admin lássa, mi indul majd magától.
+  const HINTS = [
+    { label: 'nyugalom', words: ['idle', 'stand', 'nyugalom'] },
+    { label: 'járás', words: ['walk', 'move', 'jaras'] },
+    { label: 'futás / repülés', words: ['run', 'sprint', 'fly', 'flap', 'futas'] }
+  ];
+  const roleOf = (name) => {
+    const low = String(name || '').toLowerCase();
+    for (const h of HINTS) if (h.words.some((w) => low.includes(w))) return h.label;
+    return null;
+  };
+  wrap.innerHTML = anims.map((a, i) => {
+    const role = roleOf(a);
+    return `<div class="cosmetic-effect-row">
+      <span><strong>${escapeHtml(a)}</strong>${role ? ` <span class="cosmetic-tag">${role}</span>` : ''}</span>
+      <button type="button" class="cosmetic-effect-remove" data-cosmetic-anim-remove="${i}" title="Animáció törlése">&times;</button>
+    </div>`;
+  }).join('');
+}
+
+$('#cosmeticRigAnimations')?.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-cosmetic-anim-remove]');
+  if (!btn || !cosmeticEditingId) return;
+  const index = Number(btn.dataset.cosmeticAnimRemove);
+  if (!confirm('Biztosan törlöd ezt az animációt? A modell és a többi animáció megmarad.')) return;
+  try {
+    const res = await fetch(
+      `${BACKEND_URL}/api/admin/cosmetics/${cosmeticEditingId}/animations/${index}`,
+      { method: 'DELETE', headers: { Authorization: 'Bearer ' + session.token } });
+    const data = await res.json();
+    if (!data.ok) { showToast(data.message || 'Nem sikerült törölni.', true); return; }
+    await refreshCosmeticAfterBbmodel(data.cosmetic);
+    showToast(`Animáció törölve: ${data.removed}`);
+  } catch {
+    showToast('Hálózati hiba az animáció törlésekor.', true);
+  }
+});
+
+$('#cosmeticRigDeleteBtn')?.addEventListener('click', async () => {
+  if (!cosmeticEditingId) return;
+  if (!confirm('Biztosan eldobod a csontvázat? A kiegészítő ezután a LAPOS modelljét és a '
+    + 'sáv-animációt használja. A geometria és a textúra megmarad.')) return;
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/admin/cosmetics/${cosmeticEditingId}/rig`,
+      { method: 'DELETE', headers: { Authorization: 'Bearer ' + session.token } });
+    const data = await res.json();
+    if (!data.ok) { showToast(data.message || 'Nem sikerült eldobni.', true); return; }
+    await refreshCosmeticAfterBbmodel(data.cosmetic);
+    showToast('A csontváz eldobva.');
+  } catch {
+    showToast('Hálózati hiba.', true);
+  }
+});
 
 function renderCosmeticEffectEditor() {
   const wrap = $('#cosmeticEffectRows');
@@ -7907,7 +8148,9 @@ $('#cosmeticAuraResetBtn')?.addEventListener('click', () => {
 // A finomhangoló mezők bármelyikének változása azonnal beíródik az
 // állapotba, hogy egy fülváltás ne dobja el.
 ['#cosmeticAuraRateInput', '#cosmeticAuraSizeInput', '#cosmeticAuraLifeInput',
- '#cosmeticAuraSpeedInput', '#cosmeticAuraReactSelect'].forEach((id) => {
+ '#cosmeticAuraSpeedInput', '#cosmeticAuraReactSelect',
+ '#cosmeticAuraOffsetXInput', '#cosmeticAuraOffsetYInput', '#cosmeticAuraOffsetZInput',
+ '#cosmeticAuraExtentInput'].forEach((id) => {
   $(id)?.addEventListener('change', () => { cosmeticAura = readCosmeticAura(); queueEditorRefresh(); });
 });
 ['#cosmeticAuraColorAInput', '#cosmeticAuraColorBInput'].forEach((id) => {
@@ -8248,9 +8491,9 @@ function renderCosmeticPartsBar() {
     const anim = (part.anim && part.anim.tracks && part.anim.tracks.length) ? ' <span class="cosmetic-part-chip-anim" title="Van animációja">~</span>' : '';
     chips.push(`<button type="button" class="cosmetic-part-chip${cosmeticTarget === i ? ' active' : ''}" data-cosmetic-target="${i}">${escapeHtml(cosmeticPartLabel(i))}${anim}${warn}</button>`);
   });
-  if (cosmeticParts.length < 8) {
-    chips.push('<button type="button" class="cosmetic-part-chip cosmetic-part-chip-add" data-cosmetic-add-part>+ Rész hozzáadása</button>');
-  }
+  // A "+ Rész hozzáadása" gomb KIVEZETVE: egy kiegészítő EGY modell, és a
+  // .bbmodel úgyis a teljes alakot hordozza. A meglévő, több részes
+  // kiegészítők részei továbbra is látszanak és törölhetők.
   bar.innerHTML = chips.join('');
   renderCosmeticPartPanel();
 }
@@ -9248,6 +9491,13 @@ $('#cosmeticSaveBtn')?.addEventListener('click', async () => {
   formData.append('aura', auraToSave ? JSON.stringify(auraToSave) : '');
   formData.append('gameEffects', cosmeticGameEffects.length ? JSON.stringify(cosmeticGameEffects) : '');
   formData.append('effectServers', cosmeticEffectServers.length ? JSON.stringify(cosmeticEffectServers) : '');
+  // A CSONTVÁZAS mód kapcsolója. Csak akkor küldjük, ha a doboz egyáltalán
+  // látszik (tehát van csontváz) - a backend a hiányzó mezőt érintetlenül
+  // hagyja, egy mindig elküldött érték viszont felülírná.
+  const rigBox = $('#cosmeticRigBox');
+  if (rigBox && !rigBox.classList.contains('hidden')) {
+    formData.append('rigEnabled', $('#cosmeticRigEnabledCheckbox')?.checked ? '1' : '0');
+  }
   // Az ELSŐ rész modellje a kiegészítő-végponton megy fel (a backend oda
   // teszi, ld. src/cosmetics.js) - a többi részé a saját végpontján.
   if (firstPart && firstPart.file) formData.append('model', firstPart.file);
@@ -9439,6 +9689,7 @@ async function openCosmeticForEdit(id) {
   writeTargetToInputs();
   renderCosmeticPartsBar();
   renderCosmeticAnimEditor();
+  renderCosmeticRigBox();
   queueEditorRefresh();
 
   $('#cosmeticFormTitle').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -9449,7 +9700,7 @@ async function openCosmeticForEdit(id) {
   if (!item.hasModel || !item.hasTexture) return;
   try {
     const [model, img] = await Promise.all([
-      fetchCosmeticModel(item.id, { fresh: true }),
+      fetchCosmeticModel(item.id, { fresh: true, flat: true }),
       loadImage(cosmeticTextureUrl(item.id))
     ]);
     if (String(cosmeticEditingId) !== String(item.id)) return;  // közben másra váltottak
@@ -10315,9 +10566,8 @@ function renderMobPartsBar() {
   mobParts.forEach((p, i) => {
     chips.push(`<button type="button" class="cosmetic-part-chip${mobTarget === i ? ' active' : ''}" data-mob-target="${i}">${i + 1}. rész${p.hasModel ? '' : ' ⚠'}</button>`);
   });
-  if (mobParts.length < (mobLimits.maxParts || 8)) {
-    chips.push('<button type="button" class="cosmetic-part-chip cosmetic-part-add" data-mob-add-part="1">+ rész</button>');
-  }
+  // A "+ rész" gomb KIVEZETVE: egy mob EGY modell (ld. a kiegészítőknél
+  // ugyanezt). A .bbmodel a teljes alakot hordozza, csontokkal együtt.
   bar.innerHTML = chips.join('');
 
   const panel = $('#mobPartPanel');
@@ -10821,6 +11071,12 @@ function writeMobAuraToInputs() {
   $('#mobAuraSpeedInput').value = aura && Number.isFinite(aura.speed) ? aura.speed : '';
   if (aura && typeof aura.colorA === 'string') $('#mobAuraColorAInput').value = aura.colorA;
   if (aura && typeof aura.colorB === 'string') $('#mobAuraColorBInput').value = aura.colorB;
+  // ILLESZTÉS: a meg nem adott mező ÜRESEN marad (nem 0-t mutat), mert a 0
+  // itt érvényes, beállított érték.
+  $('#mobAuraOffsetXInput').value = aura && Number.isFinite(aura.offsetX) ? aura.offsetX : '';
+  $('#mobAuraOffsetYInput').value = aura && Number.isFinite(aura.offsetY) ? aura.offsetY : '';
+  $('#mobAuraOffsetZInput').value = aura && Number.isFinite(aura.offsetZ) ? aura.offsetZ : '';
+  $('#mobAuraExtentInput').value = aura && Number.isFinite(aura.extent) ? aura.extent : '';
   const fields = $('#mobAuraFields');
   if (fields) fields.classList.toggle('hidden', !(aura && aura.type));
 }
@@ -10839,6 +11095,10 @@ function readMobAura() {
   num('#mobAuraSizeInput', 'size');
   num('#mobAuraLifeInput', 'life');
   num('#mobAuraSpeedInput', 'speed');
+  num('#mobAuraOffsetXInput', 'offsetX');
+  num('#mobAuraOffsetYInput', 'offsetY');
+  num('#mobAuraOffsetZInput', 'offsetZ');
+  num('#mobAuraExtentInput', 'extent');
   const ca = $('#mobAuraColorAInput')?.value;
   const cb = $('#mobAuraColorBInput')?.value;
   if (ca) out.colorA = ca;
@@ -11482,7 +11742,9 @@ $('#mobAuraTypeSelect')?.addEventListener('change', () => {
   queueMobPreview();
 });
 ['#mobAuraRateInput', '#mobAuraSizeInput', '#mobAuraLifeInput', '#mobAuraSpeedInput',
- '#mobAuraColorAInput', '#mobAuraColorBInput'].forEach((sel) => {
+ '#mobAuraColorAInput', '#mobAuraColorBInput',
+ '#mobAuraOffsetXInput', '#mobAuraOffsetYInput', '#mobAuraOffsetZInput',
+ '#mobAuraExtentInput'].forEach((sel) => {
   $(sel)?.addEventListener('change', () => {
     if (mobAssembly) mobAssembly.aura = readMobAura();
     queueMobPreview();

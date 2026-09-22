@@ -54,11 +54,11 @@
   <!-- A téma minél korábban, a stíluslap ELŐTT alkalmazódjon (ld.
        theme.js), hogy az első kirajzolás már a mentett témával történjen,
        ne legyen látható "villanás" az alap témáról. -->
-  <script src="theme.js?v=20260921d"></script>
-  <link rel="stylesheet" href="style.css?v=20260921d" />
+  <script src="theme.js?v=20260922a"></script>
+  <link rel="stylesheet" href="style.css?v=20260922a" />
   <!-- A vizuális réteg SZÁNDÉKOSAN a style.css UTÁN: csak ráépít az ottani
        osztályokra, és a kaszkádban felülír, ahol kell (ld. ui.css eleje). -->
-  <link rel="stylesheet" href="ui.css?v=20260921d" />
+  <link rel="stylesheet" href="ui.css?v=20260922a" />
 
   <!-- Strukturált adat a keresőknek/megosztásoknak (schema.org). -->
   <script type="application/ld+json">
@@ -1609,9 +1609,34 @@
                 <!-- ── FÜL: MODELL ÉS ILLESZTÉS ────────────────────────── -->
                 <div class="cosmetic-tab-pane" data-cosmetic-pane="model">
 
+                  <!-- AJÁNLOTT ÚT: a teljes .bbmodel projektfájl. Egy
+                       kérésben viszi a geometriát, a textúrát ÉS a Blockbench
+                       "Animate" fülén készült animációkat - a mobokkal
+                       azonos módon (ld. SolarBackend cosmetics.js). -->
                   <div class="card">
-                    <div class="card-title">Fájlok</div>
-                    <label class="gift-modal-label" style="margin-top:0;">Modell (Blockbench .json) - az 1. rész geometriája</label>
+                    <div class="card-title">Modell feltöltése (.bbmodel)</div>
+                    <p class="cosmetic-file-note">Töltsd fel a <strong>teljes .bbmodel projektfájlt</strong> &ndash; a geometria, a textúra és a Blockbench &bdquo;Animate&rdquo; fülén készült <strong>animációk</strong> is abból jönnek. Ez az ajánlott út; a lenti, kétfájlos rendszer változatlanul megmarad.</p>
+                    <input type="file" id="cosmeticBbmodelInput" accept=".bbmodel,application/json" hidden />
+                    <button type="button" class="btn-glow file-picker-btn" id="cosmeticBbmodelPickBtn">.bbmodel feltöltése</button>
+                    <p class="cosmetic-file-note" id="cosmeticBbmodelNote"></p>
+                    <div id="cosmeticBbmodelWarnings"></div>
+
+                    <div id="cosmeticRigBox" class="hidden" style="margin-top:12px;">
+                      <label class="check-row">
+                        <input type="checkbox" id="cosmeticRigEnabledCheckbox" checked />
+                        A .bbmodel animációi legyenek érvényben
+                      </label>
+                      <p class="cosmetic-file-note">Kikapcsolva a kiegészítő a <strong>lapos</strong> modelljét és a lenti sáv-animációt használja &ndash; a csontváz megmarad, bármikor visszakapcsolhatod.</p>
+                      <div class="card-title" style="margin-top:10px;">Animációk</div>
+                      <div id="cosmeticRigAnimations"></div>
+                      <button type="button" class="btn-outline" id="cosmeticRigDeleteBtn" style="margin-top:8px;">Csontváz teljes eldobása</button>
+                    </div>
+                  </div>
+
+                  <details class="card">
+                    <summary class="card-title">Haladó: külön geometria és textúra</summary>
+                    <p class="cosmetic-file-note">Ha nincs .bbmodel fájlod (pl. kész Java item-modellt kaptál), a geometriát (<code>elements</code> tömbös JSON) és a PNG textúrát külön is feltöltheted. <strong>Figyelem:</strong> egy kézi geometria-feltöltés eldobja a .bbmodel csontvázát és vele az animációkat.</p>
+                    <label class="gift-modal-label" style="margin-top:0;">Modell (Blockbench .json)</label>
                     <input type="file" id="cosmeticModelInput" accept=".json,application/json" hidden />
                     <button type="button" class="btn-outline file-picker-btn" id="cosmeticModelPickBtn">Modell kiválasztása</button>
                     <p class="cosmetic-file-note" id="cosmeticModelNote"></p>
@@ -1622,7 +1647,7 @@
                     <div class="news-image-preview-wrap" id="cosmeticTexturePreviewWrap" hidden>
                       <img id="cosmeticTexturePreview" class="news-image-preview cosmetic-texture-preview" alt="" />
                     </div>
-                  </div>
+                  </details>
 
                   <!-- RÉSZEK: egy kiegészítő több modellből állhat, amik EGY
                        KÖZÖS textúrán osztoznak (ld. SolarBackend
@@ -1727,6 +1752,17 @@
                         </label>
                       </div>
                       <p class="cosmetic-file-note">A számokat üresen hagyva a típus saját, behangolt értéke marad &ndash; érdemes így kezdeni. A színeket a típus adja; csak akkor írd felül, ha tényleg más árnyalatot akarsz.</p>
+
+                      <div class="cosmetic-transform-title" style="margin-top:14px;">Illesztés &ndash; hol keletkezzenek a részecskék</div>
+                      <p class="cosmetic-file-note" style="margin-bottom:8px;">Alapból a modell befoglaló dobozának közepéből indulnak. Ha a felhő elcsúszva látszik &ndash; egy kardnál a markolat körül a penge helyett, egy szárnynál a hát mögött &ndash;, itt told a helyére. Ugyanaz az egység, mint a modell eltolásánál.</p>
+                      <div class="cosmetic-transform-grid">
+                        <label>Eltolás X<input type="number" id="cosmeticAuraOffsetXInput" step="0.5" min="-64" max="64" placeholder="0" /></label>
+                        <label>Eltolás Y<input type="number" id="cosmeticAuraOffsetYInput" step="0.5" min="-64" max="64" placeholder="0" /></label>
+                        <label>Eltolás Z<input type="number" id="cosmeticAuraOffsetZInput" step="0.5" min="-64" max="64" placeholder="0" /></label>
+                        <label>Kiterjedés<input type="number" id="cosmeticAuraExtentInput" step="0.1" min="0" max="4" placeholder="1" /></label>
+                      </div>
+                      <p class="cosmetic-file-note">A <strong>kiterjedés</strong> azt mondja meg, mekkora térfogatból szóródnak: 1 = a teljes modell, 0,3 = szűk felhő a megadott pont körül, 0 = mind egyetlen pontból indul.</p>
+
                       <button type="button" class="btn-outline" id="cosmeticAuraResetBtn" title="Törli a finomhangolást, és visszaadja a típus alapértékeit.">Finomhangolás törlése</button>
                     </div>
                   </div>
@@ -1976,6 +2012,17 @@
                         <label>Szín (születés)<input type="color" id="mobAuraColorAInput" /></label>
                         <label>Szín (elmúlás)<input type="color" id="mobAuraColorBInput" /></label>
                       </div>
+
+                      <div class="cosmetic-transform-title" style="margin-top:14px;">Illesztés &ndash; hol keletkezzenek a részecskék</div>
+                      <p class="cosmetic-file-note" style="margin-bottom:8px;">Alapból a modell befoglaló dobozának közepéből indulnak. Egy magas vagy hosszúkás mobnál ez a levegőben lehet &ndash; itt told a helyére. Ugyanaz az egység, mint a modell eltolásánál.</p>
+                      <div class="cosmetic-transform-grid">
+                        <label>Eltolás X<input type="number" id="mobAuraOffsetXInput" step="0.5" min="-64" max="64" placeholder="0" /></label>
+                        <label>Eltolás Y<input type="number" id="mobAuraOffsetYInput" step="0.5" min="-64" max="64" placeholder="0" /></label>
+                        <label>Eltolás Z<input type="number" id="mobAuraOffsetZInput" step="0.5" min="-64" max="64" placeholder="0" /></label>
+                        <label>Kiterjedés<input type="number" id="mobAuraExtentInput" step="0.1" min="0" max="4" placeholder="1" /></label>
+                      </div>
+                      <p class="cosmetic-file-note">A <strong>kiterjedés</strong>: 1 = a teljes modell, 0,3 = szűk felhő a megadott pont körül, 0 = mind egyetlen pontból indul.</p>
+
                       <button type="button" class="btn-outline" id="mobAuraResetBtn" style="margin-top:10px;">Finomhangolás törlése</button>
                     </div>
                   </div>
@@ -3021,8 +3068,8 @@
        ez utóbbi itt lényeges, mert a ui.js az app.js globális
        switchView()/showToast() függvényeit csomagolja be, tehát csak
        azok létrejötte után futhat. -->
-  <script src="skin3d.js?v=20260921d" defer></script>
-  <script src="app.js?v=20260921d" defer></script>
-  <script src="ui.js?v=20260921d" defer></script>
+  <script src="skin3d.js?v=20260922a" defer></script>
+  <script src="app.js?v=20260922a" defer></script>
+  <script src="ui.js?v=20260922a" defer></script>
 </body>
 </html>
