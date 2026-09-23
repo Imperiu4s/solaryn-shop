@@ -1,8 +1,3 @@
-// Téma-váltó - localStorage-alapú, csak a böngészőben tárolt megjelenés-
-// választás (NEM fiókhoz kötött, nincs backend/DB szerepe). Minél korábban
-// fut le (ld. index.html <head>, a style.css <link> ELŐTT beszúrva), hogy
-// az első kirajzolás már a mentett témával történjen, ne legyen látható
-// "villanás" az alap (Solaryn) témáról az elmentettre váltáskor.
 (function () {
   const STORAGE_KEY = 'solarcenter.theme';
   const THEMES = [
@@ -27,13 +22,8 @@
     document.documentElement.setAttribute('data-theme', key);
   }
 
-  // Azonnal, DOM-ready ELŐTT alkalmazzuk - ez a "nincs villanás" trükk
-  // lényege, ld. fenti megjegyzés.
   applyTheme(getSavedTheme());
 
-  // A dropdown-UI bekötése várhat DOMContentLoaded-re (a topbar markupnak
-  // már a DOM-ban kell lennie) - ez nem befolyásolja a villanás-mentességet,
-  // ami kizárólag a data-theme attribútum korai beállításától függ.
   document.addEventListener('DOMContentLoaded', () => {
     const btn = document.getElementById('topbarThemeBtn');
     const dropdown = document.getElementById('topbarThemeDropdown');

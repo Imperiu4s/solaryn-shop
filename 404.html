@@ -2,24 +2,20 @@
 <html lang="hu">
 <head>
   <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://api.overclockgame.hu:8908 https://cdn.discordapp.com https://media.discordapp.net; connect-src 'self' https://api.overclockgame.hu:8908; media-src 'self' blob: https://api.overclockgame.hu:8908; font-src 'self' data:; frame-src https://discord.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>A keresett oldal nem található - SolarCenter</title>
   <meta name="description" content="A keresett oldal nem található a SolarCenteren. Térj vissza a főoldalra, vagy nézd meg a gyakori kérdéseket." />
-  <!-- Hibalapot soha nem indexelünk. -->
   <meta name="robots" content="noindex, follow" />
   <meta name="theme-color" content="#0a0a0d" />
   <link rel="icon" type="image/png" href="/assets/solaryn-icon.png" />
   <link rel="apple-touch-icon" href="/assets/solaryn-icon.png" />
 
-  <!-- A téma a stíluslap ELŐTT, hogy ne legyen "villanás" (ld. theme.js). -->
   <script src="/theme.js?v=20260909b"></script>
   <link rel="stylesheet" href="/style.css?v=20260909b" />
   <link rel="stylesheet" href="/ui.css?v=20260909b" />
   <style>
-    /* A hibalap SZÁNDÉKOSAN önálló, nem az index.html app-héját használja:
-       így akkor is megjelenik teljes értékűen, ha a nagy app.js egyáltalán
-       nem tölt be. Csak a közös tokeneket (style.css) és a mozgás-réteget
-       (ui.css) veszi át, hogy vizuálisan mégis ugyanaz a felület legyen. */
     body { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 40px 20px; }
     .err-wrap { position: relative; z-index: 1; text-align: center; max-width: 520px; width: 100%; }
     .err-brand { display: inline-flex; align-items: center; gap: 11px; margin-bottom: 34px; }
@@ -74,43 +70,6 @@
     <p class="err-path">Kért cím: <span id="errPath"></span></p>
   </main>
 
-  <script>
-    // A kért cím kiírása segít a hibabejelentésnél. textContent-tel írjuk
-    // ki (nem innerHTML), így a címben lévő karakterek nem értelmeződnek
-    // markupként - ez a klasszikus, "visszavert" XSS a hibalapokon.
-    document.getElementById('errPath').textContent = location.pathname + location.search;
-
-    // Ugyanaz a parázs-animáció, mint az index.html-en - itt beágyazva,
-    // mert a hibalap nem tölti be a nagy app.js-t.
-    (function () {
-      var c = document.getElementById('particleCanvas');
-      if (!c || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-      var ctx = c.getContext('2d'), ps = [];
-      function resize() { c.width = window.innerWidth; c.height = window.innerHeight; }
-      window.addEventListener('resize', resize); resize();
-      function spawn() {
-        return {
-          x: Math.random() * c.width, y: -10, r: 1 + Math.random() * 2.2,
-          speed: 0.4 + Math.random() * 0.9, drift: (Math.random() - 0.5) * 0.4,
-          alpha: 0.15 + Math.random() * 0.35,
-          hue: Math.random() < 0.5 ? '255,196,46' : '255,157,23'
-        };
-      }
-      for (var i = 0; i < 55; i++) { var p = spawn(); p.y = Math.random() * c.height; ps.push(p); }
-      (function tick() {
-        ctx.clearRect(0, 0, c.width, c.height);
-        for (var i = 0; i < ps.length; i++) {
-          var p = ps[i];
-          p.y += p.speed; p.x += p.drift;
-          if (p.y > c.height + 10) ps[i] = spawn();
-          ctx.beginPath();
-          ctx.fillStyle = 'rgba(' + p.hue + ',' + p.alpha + ')';
-          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        requestAnimationFrame(tick);
-      })();
-    })();
-  </script>
+  <script src="/404.js?v=20260923a"></script>
 </body>
 </html>

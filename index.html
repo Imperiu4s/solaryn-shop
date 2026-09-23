@@ -2,19 +2,10 @@
 <html lang="hu">
 <head>
   <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://api.overclockgame.hu:8908 https://cdn.discordapp.com https://media.discordapp.net; connect-src 'self' https://api.overclockgame.hu:8908; media-src 'self' blob: https://api.overclockgame.hu:8908; font-src 'self' data:; frame-src https://discord.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 
-  <!-- ── Oldalcím és leírás ──────────────────────────────────────────────
-       A cím mintája: "<Aloldal> - SolarCenter | Solaryn Network". Az
-       aloldal-részt fülváltáskor a ui.js írja át (ld. initViewWrapper) -
-       így a böngésző-fül, a könyvjelző és a megosztott link is elárulja,
-       melyik oldalon jár a felhasználó, nem csak annyit, hogy
-       "SolarCenter". -->
-  <!-- A felhasználó kifejezett kérésére: a böngésző fülre húzott kurzor
-       fölötti buborék (és a fül felirata) egyszerűen csak "SolarCenter"-t
-       mutasson, ne egy hosszabb, fülenként változó címet. A megosztási
-       előnézetek (og:title/twitter:title lentebb) ettől függetlenek - azok
-       más helyzetben (Discord/social share) jelennek meg, nem fül-hoveren. -->
   <title>SolarCenter</title>
   <meta name="description" content="A SolarynNetwork hivatalos játékosportálja: skin és kiegészítők kezelése, PrémiumPont, rangok, egyenleg, szankciók feloldása és fiókbiztonság - egy helyen." />
   <meta name="author" content="SolarynNetwork" />
@@ -23,12 +14,10 @@
   <meta name="robots" content="index, follow, max-image-preview:large" />
   <link rel="canonical" href="https://center.solaryn.hu/" />
 
-  <!-- ── Ikonok ─────────────────────────────────────────────────────── -->
   <link rel="icon" type="image/png" href="assets/solaryn-icon.png" />
   <link rel="apple-touch-icon" href="assets/solaryn-icon.png" />
   <link rel="manifest" href="site.webmanifest" />
 
-  <!-- ── Közösségi megosztás (Open Graph + X/Twitter) ─────────────────── -->
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="SolarynNetwork" />
   <meta property="og:locale" content="hu_HU" />
@@ -42,25 +31,14 @@
   <meta name="twitter:description" content="A SolarynNetwork hivatalos játékosportálja: skin, kiegészítők, PrémiumPont, rangok és fiókbiztonság egy helyen." />
   <meta name="twitter:image" content="https://center.solaryn.hu/assets/solaryn-wordmark.png" />
 
-  <!-- ── Teljesítmény ───────────────────────────────────────────────────
-       A backend egy MÁSIK origón van (api.overclockgame.hu), és a legelső
-       hálózati kérés rögtön a bejelentkezés-ellenőrzés - a preconnect így
-       még a JS futása előtt elindítja a DNS+TLS kézfogást. Az azonnal
-       látható logót preloadoljuk, mert az a legelső kirajzolás része. -->
   <link rel="preconnect" href="https://api.overclockgame.hu:8908" crossorigin />
   <link rel="dns-prefetch" href="https://api.overclockgame.hu" />
   <link rel="preload" as="image" href="assets/solaryn-icon.png" />
 
-  <!-- A téma minél korábban, a stíluslap ELŐTT alkalmazódjon (ld.
-       theme.js), hogy az első kirajzolás már a mentett témával történjen,
-       ne legyen látható "villanás" az alap témáról. -->
   <script src="theme.js?v=20260922a"></script>
   <link rel="stylesheet" href="style.css?v=20260922a" />
-  <!-- A vizuális réteg SZÁNDÉKOSAN a style.css UTÁN: csak ráépít az ottani
-       osztályokra, és a kaszkádban felülír, ahol kell (ld. ui.css eleje). -->
   <link rel="stylesheet" href="ui.css?v=20260922a" />
 
-  <!-- Strukturált adat a keresőknek/megosztásoknak (schema.org). -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -79,15 +57,10 @@
   </script>
 </head>
 <body>
-  <!-- Billentyűzettel navigálóknak: a TAB legelső eleme, csak fókuszban
-       látszik, és átugorja a 25 elemes oldalsávot (WCAG 2.4.1). -->
   <a class="skip-link" href="#appMainContent">Ugrás a tartalomra</a>
 
-  <!-- Hulló parázs-szemcse animáció háttere - ugyanaz, mint a
-       SolarLauncherben. Dekoráció: a képernyőolvasók elől elrejtve. -->
   <canvas id="particleCanvas" class="particle-canvas" aria-hidden="true"></canvas>
 
-  <!-- ── BEJELENTKEZŐ / REGISZTRÁCIÓS KÉPERNYŐ ── -->
   <section id="authScreen" class="auth-screen">
     <div class="auth-split">
       <div class="auth-form-side">
@@ -101,11 +74,6 @@
           <button class="auth-tab" data-tab="register">Regisztráció</button>
         </div>
 
-        <!-- Bejelentkezés -->
-        <!-- JAVÍTVA: a felhasználó kérésére VALÓDI <form> (nem <div>) + helyes
-             autocomplete attribútumok (korábban "off" volt, ami AKTÍVAN
-             megakadályozta a böngésző jelszókezelőjét a mentés-felajánlásban) -
-             a legtöbb jelszókezelő ezt várja a mentés-ajánlathoz. -->
         <form class="auth-form" id="loginForm">
           <label>Felhasználónév</label>
           <input id="authUser" type="text" autocomplete="username" placeholder="Játékosneved" />
@@ -120,15 +88,7 @@
           <a href="#" id="btnForgotPassword" class="auth-forgot-link">Elfelejtett jelszó?</a>
         </form>
 
-        <!-- Regisztráció -->
         <div class="auth-form hidden" id="registerForm">
-          <!-- JAVÍTVA: helyes autocomplete attribútumok (ld. #loginForm
-               megjegyzését) - a jelszó mezők "new-password"-öt kapnak (nem
-               "current-password"-öt), hogy a jelszókezelő tudja: itt egy ÚJ
-               jelszót generálhat/menthet, nem egy meglévőt tölt ki. Az
-               "újra" mezőknél SZÁNDÉKOSAN maradt "off" - ezek elgépelés-
-               ellenőrző duplikátumok, az automatikus kitöltésük épp a
-               céljukat (két FÜGGETLEN begépelés összevetése) hiúsítaná meg. -->
           <label>Játékos név *</label>
           <input id="regUser" type="text" autocomplete="username" placeholder="Játékos név" />
 
@@ -228,7 +188,6 @@
     </div>
   </section>
 
-  <!-- ── ZÁROLT FIÓK KÉPERNYŐ (owner-i zárolás esetén, ld. app.js) ── -->
   <section id="lockedScreen" class="auth-screen hidden">
     <div class="auth-split locked-split">
       <div class="auth-form-side locked-form-side">
@@ -249,7 +208,6 @@
     </div>
   </section>
 
-  <!-- ── APP HÉJ (bejelentkezés után) ── -->
   <div id="appScreen" class="app-shell hidden">
     <nav class="app-sidebar" id="appSidebar" aria-label="Fő navigáció">
       <div class="app-brand">
@@ -257,17 +215,6 @@
         <div class="auth-brand-name">SOLARCENTER<small>Solaryn Network</small></div>
       </div>
 
-      <!-- OLDALSÁV: LENYITHATÓ CSOPORTOK.
-           MIÉRT NEM EGY HOSSZÚ LISTA: a nézetek száma húsz fölé nőtt, és egy
-           sima felsorolásban minden fül egyforma súlyú volt - a "Napló" és a
-           "Főoldal" ugyanúgy nézett ki, a lista pedig egy átlagos laptop-
-           képernyőn már görgetést igényelt, vagyis a legalsó elemek
-           láthatatlanok voltak. A csoportok alapból CSUKVA vannak, és mindig
-           az nyílik ki, amelyikben az aktuális nézet van (ld. app.js
-           syncNavGroups) - így egyszerre legfeljebb egy csoportnyi elem
-           látszik, és a lista elfér görgetés nélkül.
-           A csoportfejek SZÁNDÉKOSAN nem "data-view"-sak: nincs mögöttük
-           saját oldal, kizárólag nyitnak/csuknak. -->
       <div class="app-nav">
         <button class="app-nav-item" data-view="home">
           <svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>
@@ -284,9 +231,6 @@
             <button class="app-nav-item" data-view="skin"><span>Skin / köpeny</span></button>
             <button class="app-nav-item" data-view="cosmetics"><span>Kiegészítők</span></button>
             <button class="app-nav-item" data-view="market"><span>Piac</span></button>
-            <!-- A jelvény a BEÉRKEZETT, még el nem bírált csere ajánlatok
-                 száma (ld. app.js refreshTradeBadge) - enne nélkül egy csukott
-                 csoportban észrevétlen maradna, hogy valaki ajánlatot küldött. -->
             <button class="app-nav-item" data-view="trades">
               <span>Csere ajánlatok</span>
               <span class="app-nav-badge hidden" id="navTradeBadge">0</span>
@@ -335,10 +279,6 @@
           <span>Biztonság</span>
         </button>
 
-        <!-- Az egyes elemek a saját "data-permission" kulcsuk szerint jelennek
-             meg, ld. app.js enterApp()/hasPerm() - NEM egy blanket "isOwner"
-             kapcsolóval. Maga a CSOPORT akkor látszik, ha legalább egy eleme
-             látszik (ld. app.js syncAdminNavGroup). -->
         <div class="app-nav-group admin-nav-item hidden" data-nav-group="admin">
           <button type="button" class="app-nav-item app-nav-group-head">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3l7 3v5.5c0 4.6-3 7.8-7 9.5-4-1.7-7-4.9-7-9.5V6z" stroke-linejoin="round"/><path d="M12 9v4M12 15.6v.1" stroke-linecap="round"/></svg>
@@ -358,9 +298,6 @@
             <button class="app-nav-item admin-nav-item hidden" data-view="discounts" data-permission="global.discountsManage"><span>Akciók</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="coupons" data-permission="global.couponsManage"><span>Kuponok</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="creatorCodes" data-permission="global.creatorCodesManage"><span>Creator kódok</span></button>
-            <!-- Kizárólag a valódi tulajdonosnak látszik (nincs data-permission -
-                 a jog-adás maga nem delegálható, ld. SolarBackend
-                 src/permissions.js megjegyzését). -->
             <button class="app-nav-item admin-nav-item hidden" data-view="permissions" id="navPermissionsBtn"><span>Jogok</span></button>
           </div>
         </div>
@@ -377,18 +314,12 @@
           <svg viewBox="0 0 24 24"><path d="M20 5.5A17 17 0 0 0 15.7 4l-.3.6a13 13 0 0 1 3.6 1.3A15 15 0 0 0 12 4a15 15 0 0 0-7 1.9A13 13 0 0 1 8.6 4.6L8.3 4A17 17 0 0 0 4 5.5C1.8 9 1.2 12.4 1.4 15.8a17 17 0 0 0 4.9 2.4l.8-1.3a10 10 0 0 1-1.6-.7l.4-.3a12 12 0 0 0 10.2 0l.4.3a10 10 0 0 1-1.6.7l.8 1.3a17 17 0 0 0 4.9-2.4c.3-4.2-.6-7.6-2.6-10.3zM8.9 14.3c-.8 0-1.5-.8-1.5-1.7s.6-1.7 1.5-1.7 1.5.8 1.5 1.7-.6 1.7-1.5 1.7zm6.2 0c-.8 0-1.5-.8-1.5-1.7s.6-1.7 1.5-1.7 1.5.8 1.5 1.7-.7 1.7-1.5 1.7z"/></svg>
           <span>Discord</span>
         </a>
-        <!-- Verzió-jelző: az app.js SAJÁT konstansából íródik ki (nem az
-             index.html-ből), ezért ha itt régi számot látsz, a böngésző még a
-             RÉGI app.js-t futtatja - így egy pillantással eldönthető, hogy egy
-             frissítés tényleg kiért-e a felhasználókhoz. -->
         <div class="app-nav-version" id="centerVersion"></div>
       </div>
     </nav>
 
     <div class="app-main">
       <div class="app-topbar">
-        <!-- ÚJ: téma-választó (ld. theme.js) - localStorage-alapú, csak a
-             böngészőben tárolt megjelenés-választás, nem fiókhoz kötött. -->
         <div class="topbar-theme" id="topbarThemeBtn">
           <svg viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" opacity="0.5"/></svg>
           <div class="topbar-theme-dropdown hidden" id="topbarThemeDropdown"></div>
@@ -401,7 +332,6 @@
               <img src="assets/pp-coin.png" alt="PP" />
               <span id="topbarPpValue">0 PP</span>
             </span>
-            <!-- ÚJ: valós pénzes egyenleg (ld. app.js renderWalletBadge) -->
             <span class="topbar-pp-badge topbar-wallet-badge">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="6" width="20" height="14" rx="2.5"/><path d="M2 10.5h20"/><circle cx="17" cy="14.5" r="1.3" fill="currentColor" stroke="none"/></svg>
               <span id="topbarWalletValue">0 Ft</span>
@@ -410,7 +340,6 @@
           <svg class="topbar-caret" viewBox="0 0 24 24" width="12" height="12"><path fill="currentColor" d="M7 10l5 5 5-5z"/></svg>
 
           <div class="topbar-dropdown hidden" id="topbarDropdown">
-            <!-- ÚJ: gyors fiókváltás (mint a SolarLauncherben) -->
             <button id="btnManageAccounts">
               <svg viewBox="0 0 24 24" width="15" height="15"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
               <span>Fiókok kezelése</span>
@@ -423,36 +352,14 @@
         </div>
       </div>
 
-      <!-- A <main> SZÁNDÉKOSAN ide került (és nem az app-héjra): a lapon
-           pontosan EGY fő tartalmi régió lehet, és a képernyőolvasók
-           "ugrás a fő tartalomra" parancsa is ide kell vigyen - nem az
-           oldalsávot is magában foglaló héjra. Ez a "Ugrás a tartalomra"
-           kihagyó-link célpontja is (ld. .skip-link). -->
       <main class="app-content" id="appMainContent" tabindex="-1">
 
-        <!-- FŐOLDAL -->
         <section class="view active" data-view="home">
           <h1 class="page-title">Üdvözlünk, <span id="homeUsername"></span>!</h1>
           <p class="page-note">Innen érheted el a fiókodhoz kapcsolódó összes SolarynNetwork-szolgáltatást.</p>
 
-          <!-- A statisztika-csempék ÉS az egyenleg EGY sorban.
-               MIÉRT A KÖZÖS SOR: az egyenleg korábban egy teljes szélességű,
-               egyetlen számot tartalmazó szalag volt a csempék alatt - a
-               főoldal tetején ez adta az "üres, kitöltetlen hely" érzet
-               nagyját. A .home-stat-row rácsba a #statBadgeGrid
-               "display: contents"-szel olvad bele, tehát a benne generált
-               csempék és az egyenleg-kártya EGYETLEN rács elemei lesznek, és
-               együtt töltik ki a sort (ld. style.css).
-               Az egyenleg SZÁNDÉKOSAN külön elem marad, nem a #statBadgeGrid
-               tartalma: azt a rácsot a "Játékosok" kereső MÁSOK profiljának
-               kirajzolására is újrahasznosítja (renderStatBadges), az egyenleg
-               viszont valós pénz, csak a SAJÁT profilon jelenhet meg. -->
           <div class="home-stat-row">
             <div id="statBadgeGrid" class="stat-badge-grid"></div>
-            <!-- Az ikont az app.js tölti be (STAT_ICONS.wallet), hogy a
-                 pénztárca-jel EGY helyen legyen definiálva - ugyanaz a jel
-                 jelenik meg más játékos profiljának egyenleg-csempéjén is
-                 (renderStatBadges showWallet ága). -->
             <div class="card wallet-highlight-card">
               <div class="stat-badge-icon" id="homeWalletIcon"></div>
               <div class="wallet-highlight-text">
@@ -473,8 +380,6 @@
                   <div class="profile-info">
                     <div class="profile-name-row">
                       <div class="profile-name" id="profileName"></div>
-                      <!-- ÚJ: jelvények (ld. SolarBackend src/badges.js) - mindenki
-                           számára láthatók a saját neve mellett a főoldalon. -->
                       <span class="name-badges" id="profileNameBadges"></span>
                     </div>
                     <p class="profile-empty-skin" id="profileSkinNote"></p>
@@ -484,35 +389,20 @@
                 </div>
               </div>
 
-              <!-- ÚJ: legfrissebb hír/felhívás (ld. src/news.js GET /api/news/latest) -
-                   csak akkor jelenik meg, ha már mentettek legalább egy hírt. -->
               <div class="card news-card hidden" id="homeNewsCard">
                 <div class="card-title">📰 Legfrissebb hír</div>
-                <!-- Az alt-ot az app.js loadHomeNews() tölti ki a hír
-                     címéből (ott a TARTALOM része, nem dekoráció). -->
                 <img class="news-card-image hidden" id="homeNewsImage" alt="" loading="lazy" decoding="async" />
                 <div class="news-card-title" id="homeNewsTitle"></div>
                 <div class="news-card-meta" id="homeNewsMeta"></div>
                 <p class="news-card-content" id="homeNewsContent"></p>
               </div>
 
-              <!-- ÚJ: baráti lista (ld. SolarBackend src/friends.js GET
-                   /api/friends/:username) - zölden a jelenleg elérhető,
-                   fehéren a nem elérhető barátok neve, a /fr in-game
-                   parancsokkal (add/accept/remove) kezelhető lista. Egy
-                   barátra kattintva ugyanaz a profil-nézet nyílik meg, mint a
-                   Játékosok fülön (ld. openPlayerProfile). -->
               <div class="card" id="homeFriendsCard">
                 <div class="card-title">Barátok</div>
                 <div id="homeFriendsGrid" class="player-result-grid"></div>
                 <p class="player-result-note hidden" id="homeFriendsEmpty">Még nincs egyetlen barátod sem - a szerveren a /fr add &lt;név&gt; paranccsal küldhetsz barátkérelmet.</p>
               </div>
 
-              <!-- ÚJ: a csapattag SAJÁT havi statisztikája (ld. SolarBackend
-                   src/client.js GET /api/staff/my-stats). Alapból rejtve: a
-                   kártya CSAK akkor jelenik meg, ha a válasz szerint a
-                   bejelentkezett felhasználó tényleg csapattag - egy sima
-                   játékos így soha nem is látja, hogy ilyen kártya létezik. -->
               <div class="card staff-stats-card hidden" id="homeStaffStatsCard">
                 <div class="card-title">Havi statisztikád <span class="staff-stats-rank" id="homeStaffStatsRank"></span></div>
                 <p class="staff-stats-note" id="homeStaffStatsMonth"></p>
@@ -543,12 +433,6 @@
                 <span>Discord közösség</span>
               </div>
               <div class="discord-card-body">
-                <!-- ADATVÉDELEM: a Discord-widget egy KÜLSŐ szolgáltató
-                     iframe-je - a puszta betöltésével a discord.com már
-                     látja a látogató IP-címét és sütit is tehet nála.
-                     Ezért itt csak egy helyőrző áll, és az iframe-et a
-                     ui.js (loadEmbed) építi fel, KIZÁRÓLAG ha a felhasználó
-                     a "Beágyazott tartalom" süti-kategóriát elfogadta. -->
                 <div class="embed-placeholder"
                      data-embed-src="https://discord.com/widget?id=1458836378493391046&amp;theme=dark"
                      data-embed-title="Solaryn Discord közösségi widget"
@@ -563,7 +447,6 @@
           </div>
         </section>
 
-        <!-- EGYENLEG -->
         <section class="view" data-view="wallet">
           <h1 class="page-title">Egyenleg</h1>
           <p class="page-note">Tölts fel egyenleget tetszőleges összeggel - a feltöltött egyenlegből azonnal, kártyás fizetés nélkül vásárolhatsz PrémiumPontot vagy bármilyen más terméket, ha van rá elég fedezeted.</p>
@@ -587,7 +470,6 @@
           </div>
         </section>
 
-        <!-- PRÉMIUMPONT -->
         <section class="view" data-view="coin">
           <h1 class="page-title">PrémiumPont</h1>
           <p class="page-note">Vásárolj PrémiumPont (PP) csomagokat, hogy hozzáférj a szerver exkluzív tartalmaihoz - a vásárlás után a PP automatikusan, jellemzően 1 percen belül jóváíródik a játékban.</p>
@@ -632,7 +514,6 @@
           </div>
         </section>
 
-        <!-- RANGOK -->
         <section class="view" data-view="ranks">
           <h1 class="page-title">Rangok</h1>
           <p class="page-note">Vásárolj rangot a felgyűjtött PrémiumPontodból - a rangot a plugin automatikusan beállítja, amint levonásra kerül a PP.</p>
@@ -658,7 +539,6 @@
           </div>
         </section>
 
-        <!-- ÁTUTALÁS -->
         <section class="view" data-view="transfer">
           <h1 class="page-title">Átutalás</h1>
           <p class="page-note">Küldj PrémiumPontot más játékosoknak - minden átutalásra 10% díj kerül felszámításra.</p>
@@ -683,7 +563,6 @@
           </div>
         </section>
 
-        <!-- NAPLÓ -->
         <section class="view" data-view="ledger">
           <h1 class="page-title">Napló</h1>
           <p class="page-note">Minden esemény, ami a PrémiumPont-egyenlegedet érinti: átutalások, vásárlások és játékbeli vásárlások.</p>
@@ -723,7 +602,6 @@
           </div>
         </section>
 
-        <!-- KÓDBEVÁLTÁS -->
         <section class="view" data-view="redeem">
           <h1 class="page-title">Kódbeváltás</h1>
           <p class="page-note">Írd be a hívásban vagy ajándékba kapott kódodat az alábbi mezőbe.</p>
@@ -763,7 +641,6 @@
           </div>
         </section>
 
-        <!-- SKIN -->
         <section class="view" data-view="skin">
           <h1 class="page-title">Skin</h1>
           <p class="page-note">Egyedi skin feltöltés (.png, 64x64/64x32 vagy ennek HD többszöröse - pl. 128x128, 256x256, egészen 2048x2048/2048x1024-ig -, klasszikus vagy slim modell) - ugyanaz a skin jelenik meg a szerveren és a SolarLauncherben is. HD skin feltöltésekor az lesz a skined (nem lehet egyszerre sima ÉS HD skined is).</p>
@@ -805,20 +682,12 @@
           </div>
         </section>
 
-        <!-- KIEGÉSZÍTŐK (ld. SolarBackend src/cosmetics.js) - a játékos SAJÁT
-             kiegészítői, slotonként fel/levéve. A megjelenítés kliens-oldali:
-             a SolarClient a /api/cosmetics/loadout/:username végpontról olvas,
-             a Minecraft szervernek semmit nem kell tudnia róla. -->
         <section class="view" data-view="cosmetics">
           <h1 class="page-title">Kiegészítők</h1>
           <p class="page-note">A kiegészítőid a SolarClientben jelennek meg a karaktereden - nem kell hozzá texture pack, és a szervernek sem kell semmit letöltenie. Helyenként (fej / hát / test) egyet-egyet viselhetsz egyszerre.</p>
 
           <div class="cosmetic-slot-bar" id="cosmeticSlotBar"></div>
 
-          <!-- Szűrősáv. MIÉRT KELL: a katalógus nő, és egy 40 elemű rácsban a
-               "hol van az a szárny" kérdés végiggörgetés nélkül nem
-               válaszolható meg. A szűrés SZÁNDÉKOSAN kliens-oldali: az adat
-               már úgyis mind itt van, egy szerverkérés csak lassítana. -->
           <div class="cosmetic-filter-bar">
             <input type="search" id="cosmeticFilterSearch" class="cosmetic-filter-input" placeholder="Keresés név szerint..." aria-label="Keresés a kiegészítők között" />
             <select id="cosmeticFilterSlot" class="cosmetic-filter-input" aria-label="Szűrés hely szerint">
@@ -842,18 +711,10 @@
             <div>
               <div id="cosmeticsOwnedWrap"></div>
             </div>
-            <!-- A jobb oldali oszlop: az előnézet ALATT a gyűjtemény-összegző
-                 és a támogató kártya. MIÉRT: a bal oldali rács tíz-húsz
-                 kiegészítőnél jóval magasabb, mint a 340 pixeles előnézet -
-                 alatta korábban több képernyőnyi ÜRES sáv maradt. -->
             <div class="side-rail-col">
               <div class="card cosmetic-char-card">
                 <div class="card-title">Így nézel ki</div>
                 <canvas id="cosmeticCharPreview" width="260" height="340"></canvas>
-                <!-- NAGYÍTÁS: a görgő SZÁNDÉKOSAN csak Ctrl-lal nagyít (ld.
-                     skin3d.js onWheel), különben az oldal görgetése akadna el
-                     valahányszor az egér átfut az előnézet fölött - a gombok
-                     és a csúszka viszont módosító nélkül is elérhetők. -->
                 <div class="preview-zoom-bar">
                   <button type="button" class="preview-zoom-btn" id="cosmeticZoomOutBtn" aria-label="Kicsinyítés" title="Kicsinyítés">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h14"/></svg>
@@ -869,9 +730,6 @@
                 <p class="skin-preview-hint" id="cosmeticCharPreviewHint">Húzással forgatható</p>
               </div>
 
-              <!-- Gyűjtemény-összegző. Minden adata a MÁR letöltött listából
-                   számolódik (ld. app.js renderCosmeticSummary) - nincs
-                   mögötte külön szerverkérés. -->
               <div class="card cosmetic-summary-card" id="cosmeticSummaryCard">
                 <div class="card-title">Gyűjteményed</div>
                 <div class="cosmetic-summary-grid">
@@ -901,18 +759,10 @@
           <div id="cosmeticsShopWrap"></div>
         </section>
 
-        <!-- PIAC - játékosok közti kiegészítő-adásvétel SC-ért. A 10% adó az
-             ELADÓT terheli az eladás pillanatában (a vevő a listaárat fizeti,
-             az eladó annak 90%-át kapja) - ld. SolarBackend src/cosmetics.js
-             MARKET_TAX_PERCENT. -->
         <section class="view" data-view="market">
           <h1 class="page-title">Piac</h1>
           <p class="page-note">Add el a felesleges kiegészítőidet más játékosoknak PrémiumPontért, vagy vedd meg, ami neked kell. Eladáskor <strong id="marketTaxNote">10%</strong> adó vonódik le az árból - a vevő a teljes listaárat fizeti, te a 90%-át kapod meg.</p>
 
-          <!-- A feladó-űrlap SZÁNDÉKOSAN a jobb oszlopba került (nem teljes
-               szélességben áll a lap tetején): egy hét mezős kártya kiterítve
-               egy 1200 pixeles tartalomterületen csupa levegő volt, miközben a
-               saját hirdetések listája alatta szorongott. -->
           <div class="content-grid">
             <div>
               <div class="admin-subsection-title" style="margin-top:0;">Saját hirdetéseim</div>
@@ -937,10 +787,6 @@
           <div id="marketListingsWrap"></div>
         </section>
 
-        <!-- CSERE AJÁNLATOK - névre szóló adásvétel. A piactól abban tér el,
-             hogy EGY konkrét játékosnak szól, és csak ő tudja elfogadni vagy
-             elutasítani; a 10%-os adó ugyanúgy az eladót (a küldőt) terheli.
-             Ld. SolarBackend src/cosmetics.js "Csere ajánlatok" szakaszát. -->
         <section class="view" data-view="trades">
           <h1 class="page-title">Csere ajánlatok</h1>
           <p class="page-note">Ajánld fel egy kiegészítődet közvetlenül egy játékosnak, te szabod meg, mennyi PrémiumPontért. Ő elfogadhatja vagy elutasíthatja - amíg nem dönt, a kiegészítő letétben van nálunk, tehát nem tudod közben viselni vagy másnak is felajánlani. Elfogadáskor <strong id="tradeTaxNote">10%</strong> adó vonódik le az árból, a többit megkapod. Az el nem bírált ajánlat <strong id="tradeTtlNote">7</strong> nap után magától visszakerül hozzád.</p>
@@ -977,7 +823,6 @@
           </div>
         </section>
 
-        <!-- KITILTÁSCSÖKKENTÉS -->
         <section class="view" data-view="sanction">
           <h1 class="page-title">Kitiltáscsökkentés</h1>
           <p class="page-note">Vásárolj szankció feloldást, hogy eltöröld a szerverről a rád kiszabott némítást vagy kitiltást - a vásárlás után automatikusan jóváíródik a feloldás a játékban.</p>
@@ -988,7 +833,6 @@
           </div>
         </section>
 
-        <!-- CASINO -->
         <section class="view" data-view="casino">
           <h1 class="page-title">Casino</h1>
           <p class="page-note">Minden 7. egymást követő napi belépésedért +1 ingyenes pörgetést kapsz. Az ingyenes pörgetésed elhasználása után még 2 próbálkozást vásárolhatsz 200 PrémiumPontért - a nyereményt a rendszer automatikusan jóváírja a fiókodhoz.</p>
@@ -1035,7 +879,6 @@
           </div>
         </section>
 
-        <!-- JÁTÉKOSOK -->
         <section class="view" data-view="players">
           <div class="card player-search-panel">
             <h1 class="player-search-title">Játékosok <span class="text-accent">keresése</span></h1>
@@ -1056,18 +899,10 @@
           <div id="playerResult" class="player-result-grid"></div>
         </section>
 
-        <!-- ÚJ: BIZTONSÁG - 2FA (TOTP) ÉS a biztonsági kód (PIN) be/kikapcsolása
-             a SAJÁT fiókhoz, ld. app.js loadSecurityStatus/start2faSetup és
-             loadSecurityPinStatus. A kettő EGYMÁSTÓL FÜGGETLENÜL kapcsolható -
-             mindkettő, csak az egyik, vagy egyik se lehet aktív; ha egyik se
-             aktív, az alábbi figyelmeztető sáv jelzi ezt (ld.
-             refreshSecurityWarning). -->
         <section class="view" data-view="security">
           <h1 class="page-title">Biztonság</h1>
           <p class="page-note">Kétlépcsős azonosítás (2FA) - bejelentkezéskor a jelszó mellett egy hitelesítő alkalmazásban (pl. Google Authenticator, Authy) megjelenő kódot is be kell majd írnod. A biztonsági kód egy ettől független, általad választott 4 vagy 6 jegyű PIN, amit szintén minden bejelentkezéskor be kell majd írnod - a kettő egyszerre, külön-külön, vagy egyik se is bekapcsolható.</p>
 
-          <!-- Kétoszlopos elrendezés: a kártyák teljes szélességben egyetlen
-               gombbal/mezővel túl üresek voltak egy szélesvásznú képernyőn. -->
           <div class="content-grid">
             <div>
               <div class="card redeem-result error hidden" id="securityWeakWarning" style="display:flex; align-items:center; gap:10px;">
@@ -1079,12 +914,10 @@
                 <div class="card-title">Kétlépcsős azonosítás</div>
                 <p class="redeem-result" id="securityTotpStatus">Betöltés...</p>
 
-                <!-- Kikapcsolt állapot: "Bekapcsolás" indítja a folyamatot -->
                 <div id="securityTotpDisabledPanel" class="hidden">
               <button type="button" class="btn-glow" id="btnStart2faSetup">2FA bekapcsolása</button>
                 </div>
 
-                <!-- Beállítás folyamatban: QR + kód-megerősítés -->
                 <div id="securityTotpSetupPanel" class="hidden">
               <p>Olvasd be az alábbi QR-kódot a hitelesítő alkalmazásoddal, vagy add meg kézzel a titkot:</p>
               <img id="securityTotpQr" alt="QR-kód" style="display:block; margin:14px auto; border-radius:10px;" />
@@ -1096,7 +929,6 @@
               <button type="button" class="btn-outline" id="btnCancel2faSetup" style="margin-top:8px;">Mégse</button>
                 </div>
 
-                <!-- Helyreállítási kódok - EGYETLEN alkalommal jelennek meg -->
                 <div id="securityRecoveryCodesPanel" class="hidden">
               <p class="redeem-result error">Mentsd el ezeket a kódokat biztonságos helyre - ha elveszíted a hitelesítő eszközödet, ezekkel tudsz újra bejelentkezni. TÖBBÉ NEM FOGOD ŐKET LÁTNI.</p>
               <div id="securityRecoveryCodesList" class="account-list"></div>
@@ -1104,7 +936,6 @@
               <button type="button" class="btn-glow" id="btnDoneRecoveryCodes" style="margin-top:10px;">Elmentettem, kész</button>
                 </div>
 
-                <!-- Bekapcsolt állapot: "Kikapcsolás" + kódok újragenerálása -->
                 <div id="securityTotpEnabledPanel" class="hidden">
               <label class="gift-modal-label">Jelszó (a művelet megerősítéséhez)</label>
               <input type="password" id="securityTotpPasswordInput" class="gift-modal-input" autocomplete="current-password" placeholder="••••••••" />
@@ -1114,14 +945,10 @@
                 </div>
               </div>
 
-              <!-- ÚJ: BIZTONSÁGI KÓD (4/6 jegyű PIN) - a fenti 2FA-tól FÜGGETLEN
-               be/kikapcsolás, ld. app.js loadSecurityPinStatus. -->
               <div class="card">
                 <div class="card-title">Biztonsági kód</div>
                 <p class="redeem-result" id="securityPinStatus">Betöltés...</p>
 
-                <!-- Kikapcsolt állapot VAGY meglévő kód módosítása - ugyanaz az
-                 űrlap mindkettőhöz (ld. app.js openSecurityPinSetup). -->
                 <div id="securityPinSetupPanel" class="hidden">
               <label class="gift-modal-label">A kód hossza</label>
               <div style="display:flex; gap:16px; margin-bottom:10px;">
@@ -1139,8 +966,6 @@
               <button type="button" class="btn-outline hidden" id="btnCancelSecurityPinSetup" style="margin-top:8px;">Mégse</button>
                 </div>
 
-                <!-- Bekapcsolt állapot: "Módosítás" (a fenti űrlapot nyitja meg) +
-                 kikapcsolás. -->
                 <div id="securityPinEnabledPanel" class="hidden">
               <button type="button" class="btn-outline" id="btnChangeSecurityPin">Kód módosítása</button>
               <label class="gift-modal-label" style="margin-top:14px;">Jelszó (a kikapcsolás megerősítéséhez)</label>
@@ -1154,13 +979,6 @@
           </div>
         </section>
 
-        <!-- VÁSÁRLÁS NAPLÓ (admin) - a pp_ledger-alapú, KIZÁRÓLAG a beváltó
-             plugin által jelentett PP-gazdasági eseményeket (vásárlás,
-             utalás, ajándékozás stb.) mutató nézet - korábban "Napló
-             (admin)" néven futott, a felhasználó kérésére ez itt "Vásárlás
-             napló"-ra lett átnevezve, hogy a staff-tevékenységeket mutató,
-             ÚJ "staffActionLogs" nézettől (ld. lejjebb) egyértelműen
-             megkülönböztethető legyen. ld. app.js loadPurchaseLogsGlobal. -->
         <section class="view" data-view="purchaseLogs">
           <h1 class="page-title">Vásárlás napló</h1>
           <p class="page-note" id="purchaseLogsScopeNote">Legutóbbi 100 bejegyzés (globális, minden játékos).</p>
@@ -1199,13 +1017,6 @@
           </div>
         </section>
 
-        <!-- NAPLÓ (ADMIN) - staff-tevékenységek (ki/mikor/kin/mit csinált a
-             SolarCenter admin felületén) - ld. SolarBackend src/adminLog.js.
-             SZÁNDÉKOSAN ugyanaz a dizájn, mint a fenti Vásárlás naplóé, csak
-             "Összeg"/"Egyenleg utána" oszlopok nélkül (ezek a bejegyzések
-             nem pénzösszeg-alapúak) és egy "Tevékenység" oszloppal az adott
-             admin-művelet gépi kulcsának emberi címkéjéhez (ld. app.js
-             ADMIN_ACTION_LABELS). -->
         <section class="view" data-view="staffActionLogs">
           <h1 class="page-title">Napló (admin)</h1>
           <p class="page-note" id="staffActionLogsScopeNote">Legutóbbi 100 bejegyzés (globális, minden staff-tevékenység).</p>
@@ -1242,7 +1053,6 @@
           </div>
         </section>
 
-        <!-- CSAPAT STATISZTIKA (admin) -->
         <section class="view" data-view="staffStats">
           <h1 class="page-title">Csapat statisztika</h1>
           <p class="page-note">A jelen naptári hónap adatai (Jr. Moderátortól Admin+-ig) - minden hónap 1-jén automatikusan újraindul.</p>
@@ -1253,7 +1063,6 @@
           <p class="ledger-empty hidden" id="staffStatsEmptyNote">Nincs jelenleg staff-rangú felhasználó.</p>
         </section>
 
-        <!-- HAVI BEVÉTEL (admin) - naptár nézet, ld. app.js loadRevenue() -->
         <section class="view" data-view="revenue">
           <h1 class="page-title">Havi bevétel</h1>
           <p class="page-note">Kattints egy hónapra a részletekért - minden sikeres (pénzes) vásárlást számol, visszamenőleg is.</p>
@@ -1261,7 +1070,6 @@
           <div id="revenueCalendar"></div>
         </section>
 
-        <!-- HAVI BEVÉTEL RÉSZLETEI (egy hónapra kattintva) -->
         <section class="view" data-view="revenueDetail">
           <button class="btn-back" id="btnBackToRevenue">
             <svg viewBox="0 0 24 24" width="14" height="14"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M15 18l-6-6 6-6"/></svg>
@@ -1293,12 +1101,6 @@
           </div>
         </section>
 
-        <!-- FELHÍVÁSOK / HÍREK (admin) -->
-        <!-- ── LÁTOGATOTTSÁG (admin) ────────────────────────────────────
-             A SAJÁT, névtelen mérésünk összesítője (ld. SolarBackend
-             src/analytics.js). Nincs benne IP, felhasználónév, sem
-             ujjlenyomat - a látogató-azonosító naponta forgó kulccsal
-             hashelt, ezért a napok között szándékosan NEM összefűzhető. -->
         <section class="view" data-view="analytics">
           <h1 class="page-title">Látogatottság</h1>
           <p class="page-note">Névtelen, saját mérésű forgalmi adatok a SolarCenterről. Csak azokról a látogatókról gyűjtünk adatot, akik a süti-sávban ehhez hozzájárultak - a tényleges forgalom tehát ennél magasabb.</p>
@@ -1339,12 +1141,6 @@
           <div class="card">
             <div class="card-title" id="newsFormTitle">Új felhívás</div>
 
-            <!-- ÚJ (a felhasználó kifejezett kérésére): a cím ÉS a tartalom
-                 is formázható (félkövér/dőlt/aláhúzott/méret/szín/igazítás) -
-                 ld. app.js initRichTextToolbar(). A tényleges kimeneti HTML-t
-                 a SolarBackend (src/news.js sanitize-html) szigorúan
-                 tisztítja mentés előtt, ez a szerkesztő csak a bemenetet
-                 állítja elő. -->
             <label class="gift-modal-label" style="margin-top:0;">Cím</label>
             <div class="richtext-toolbar" id="newsTitleToolbar">
               <button type="button" data-rt-cmd="bold" title="Félkövér"><b>B</b></button>
@@ -1404,7 +1200,6 @@
           <div id="newsAdminList"></div>
         </section>
 
-        <!-- JELVÉNYEK (admin, ld. SolarBackend src/badges.js) -->
         <section class="view" data-view="badges">
           <h1 class="page-title">Jelvények</h1>
           <p class="page-note">A létrehozott jelvényeket a játékos-profil admin paneljén oszthatod ki/veheted el - a megkapott jelvények mindenki neve mellett megjelennek a főoldalon.</p>
@@ -1433,36 +1228,9 @@
           <div id="badgesAdminList"></div>
         </section>
 
-        <!-- KIEGÉSZÍTŐK (admin, ld. SolarBackend src/cosmetics.js) - katalógus-
-             kezelés (modell/textúra feltöltés, ár, érvényesség, piacra
-             tehetőség) + piac-moderálás. A kiosztás/elvétel EGY KONKRÉT
-             játékosnak a játékos-profil admin paneljén történik, ugyanúgy,
-             mint a jelvényeknél. -->
-        <!-- KIEGÉSZÍTŐK (admin).
-             KÉT NÉZET egy szekcióban, a .editing osztály kapcsol köztük (ld.
-             style.css, app.js openCosmeticEditor/closeCosmeticEditor):
-
-               LISTA   - ez az alapértelmezett. A meglévő kiegészítők kártyás
-                         rácsban, fölötte a műveleti gombokkal.
-               SZERKESZTŐ - csak akkor, ha tényleg szerkesztesz valamit.
-
-             MIÉRT NEM EGY OLDALON MINDEN (a korábbi állapot): a "Új
-             kiegészítő" űrlap a maga ~30 mezőjével, a rész-kezelővel, az
-             illesztő-szerkesztővel és az animáció-sávokkal együtt MINDIG ott
-             állt az oldal tetején, akkor is, ha valaki csak megnézni akarta,
-             mi van felvéve - a tényleges katalógus így másfél képernyővel
-             lejjebb kezdődött. A gyakori művelet (átnézem / szerkesztem a
-             meglévőt) került a legnehezebben elérhető helyre, a ritka
-             (újat veszek fel) pedig a legkönnyebbre.
-
-             A szerkesztőn belül a mezők HÁROM fülre bomlanak (alapadatok /
-             modell / animáció), az ELŐNÉZET viszont mindháromnál látszik, a
-             jobb oldali oszlopban - animációt állítani úgy, hogy közben nem
-             látod a mozgást, használhatatlan lenne. -->
         <section class="view" data-view="cosmeticsAdmin">
           <h1 class="page-title">Kiegészítők</h1>
 
-          <!-- ── LISTA NÉZET ──────────────────────────────────────────── -->
           <div class="cosmetic-admin-list">
             <p class="page-note">A feltöltött modell a SolarClientbe töltődik le, resource pack nélkül - a Blockbench natív JSON exportját várjuk (<code>elements</code> tömbbel), a hozzá tartozó PNG textúrával. Egy kiegészítőt a játékos-profil admin paneljén tudsz kiosztani/elvenni.</p>
 
@@ -1472,10 +1240,6 @@
               <input type="search" id="cosmeticAdminSearch" class="cosmetic-filter-input admin-toolbar-search" placeholder="Keresés név vagy azonosító szerint..." aria-label="Keresés a kiegészítők között" />
             </div>
 
-            <!-- SZERVER-KATALÓGUS: ebből lehet a kiegészítőknél kiválasztani,
-                 hogy a játékbeli effektjük mely szervereken hasson. Azért van
-                 itt (a lista fölött, összecsukva), mert ritkán változik - de
-                 amikor kell, itt keresi az ember. -->
             <details class="card cosmetic-servers-card" data-perm="global.cosmeticsManage">
               <summary class="card-title">Szerverek (a játékbeli effektek hatóköréhez)</summary>
               <p class="cosmetic-file-note">Vedd fel ide azokat a szervereket, ahol a <strong>SolarCosmeticEffects</strong> plugin fut. Az <em>azonosítónak</em> pontosan egyeznie kell a plugin <code>config.yml</code>-jében megadott <code>server-id</code> értékkel.</p>
@@ -1495,12 +1259,6 @@
             <div id="cosmeticsMarketAdminList" data-perm="global.cosmeticsMarketManage"></div>
           </div>
 
-          <!-- ── SZERKESZTŐ NÉZET ─────────────────────────────────────── -->
-          <!-- SZÁNDÉKOSAN nincs rajta "data-perm": azt az applyPermVisibility()
-               a "hidden" osztállyal kapcsolgatja, ami itt felülírná a
-               lista/szerkesztő váltást. A jogosultság-ellenőrzést a fenti
-               gombok (data-perm) végzik - oda se jut el, aki nem kezelheti a
-               katalógust. -->
           <div class="cosmetic-admin-editor">
             <div class="admin-editor-head">
               <button type="button" class="btn-outline admin-back-btn" id="cosmeticBackBtn">&larr; Vissza a listához</button>
@@ -1516,24 +1274,8 @@
                   <button type="button" class="cosmetic-tab" data-cosmetic-tab="effects">Aura és effektek</button>
                 </div>
 
-                <!-- ── FÜL: ALAPADATOK ─────────────────────────────────── -->
                 <div class="cosmetic-tab-pane active" data-cosmetic-pane="basics">
 
-                  <!-- VÁLLON ÜLŐ FIGURA: modell-generátor skinből. Csak akkor
-                       jelenik meg, ha a "+ Vállon ülő figura" gombbal nyitottad
-                       meg a szerkesztőt (ld. app.js openCosmeticEditor).
-                       MIÉRT NEM ÚJ SLOT, HANEM A "TEST" HELYRE MEGY: egy vállon
-                       ülő figura ugyanaz a fajta dolog, mint egy köpeny vagy egy
-                       páncél - a TESThez kapcsolódik, azzal együtt mozog. Egy
-                       külön "váll" hely azt jelentené, hogy a kliensben új
-                       csontot kell kezelni, a játékos pedig egy újabb, külön
-                       szabályokkal működő helyet kapna - miközben a "test"
-                       helyen minden meglévő eszköz (illesztés, animáció, piac,
-                       csere) változtatás nélkül működik rá.
-                       A generátor egy SZABVÁNYOS kiegészítőt állít elő: a skin
-                       lapjaiból összerak egy kicsinyített, ülő játékos-modellt,
-                       és pontosan úgy tölti ki az űrlapot, mintha kézzel
-                       töltöttél volna fel egy Blockbench-modellt. -->
                   <div class="card cosmetic-pet-card hidden" id="cosmeticPetBox">
                     <div class="card-title" id="cosmeticPetTitle">Figura készítése skinből</div>
                     <p class="cosmetic-file-note" style="margin-bottom:10px;">Tölts fel egy sima Minecraft-skint (64&times;64 vagy régi 64&times;32), és a rendszer összerak belőle egy kicsinyített, a vállon ülő figurát. A generálás után a többi fül (alapadatok, illesztés, animáció) ugyanúgy szerkeszthető, mint bármelyik kézzel feltöltött kiegészítőnél &ndash; a figura a <strong>test</strong> helyre kerül.<br />Egy <strong>meglévő</strong> figuránál ugyanez a doboz nyílik ki a mentett beállításaival és a jelenlegi skinjével: elég átállítani, amit szeretnél, és újragenerálni &ndash; az illesztés, a forgatás és a méret megmarad.</p>
@@ -1606,13 +1348,8 @@
                   </div>
                 </div>
 
-                <!-- ── FÜL: MODELL ÉS ILLESZTÉS ────────────────────────── -->
                 <div class="cosmetic-tab-pane" data-cosmetic-pane="model">
 
-                  <!-- AJÁNLOTT ÚT: a teljes .bbmodel projektfájl. Egy
-                       kérésben viszi a geometriát, a textúrát ÉS a Blockbench
-                       "Animate" fülén készült animációkat - a mobokkal
-                       azonos módon (ld. SolarBackend cosmetics.js). -->
                   <div class="card">
                     <div class="card-title">Modell feltöltése (.bbmodel)</div>
                     <p class="cosmetic-file-note">Töltsd fel a <strong>teljes .bbmodel projektfájlt</strong> &ndash; a geometria, a textúra és a Blockbench &bdquo;Animate&rdquo; fülén készült <strong>animációk</strong> is abból jönnek. Ez az ajánlott út; a lenti, kétfájlos rendszer változatlanul megmarad.</p>
@@ -1649,11 +1386,6 @@
                     </div>
                   </details>
 
-                  <!-- RÉSZEK: egy kiegészítő több modellből állhat, amik EGY
-                       KÖZÖS textúrán osztoznak (ld. SolarBackend
-                       cosmetic_parts). Egy szárny jellemzően két félből áll, és
-                       pont az kell, hogy a két fél egymáshoz képest ellentétes
-                       fázisban mozogjon. -->
                   <div class="cosmetic-transform-box" data-cosmetic-parts-box>
                     <div class="cosmetic-transform-title">Részek (közös textúrán)</div>
                     <p class="cosmetic-file-note" style="margin-bottom:10px;">Egy kiegészítő több modellből is állhat - például egy szárny bal és jobb feléből -, amik ugyanazt a textúrát használják. Válaszd ki lent, mit szerkessz: a <strong>teljes kiegészítőt</strong> (az egész együtt mozdul) vagy egy <strong>részt</strong> külön. A választás az illesztésre ÉS az animációra is vonatkozik.</p>
@@ -1661,11 +1393,6 @@
                     <div class="cosmetic-part-panel" id="cosmeticPartPanel"></div>
                   </div>
 
-                  <!-- Illesztés: ld. SolarBackend src/db.js megjegyzését. A kliens a
-                       fej/test csont MODELL-terében rajzol, egy Blockbench item-modell
-                       viszont Y-felfelé, a (8,8,8) blokk-középpont körül készül -
-                       ezekkel a mezőkkel lehet a helyére igazítani ÚJRAFELTÖLTÉS NÉLKÜL
-                       (mentés után a kliensek ~1 percen belül átveszik). -->
                   <div class="cosmetic-transform-box">
                     <div class="cosmetic-transform-title">Illesztés a karakterhez - <span id="cosmeticTargetLabel">teljes kiegészítő</span></div>
                     <p class="cosmetic-file-note" style="margin-bottom:12px;">A jobb oldali előnézeten, a saját karaktereden állíthatod be a kiegészítő helyét és állását.</p>
@@ -1690,10 +1417,6 @@
                   </div>
                 </div>
 
-                <!-- ── FÜL: ANIMÁCIÓ ───────────────────────────────────── -->
-                <!-- A sávok képlete SZÓ SZERINT ugyanaz, mint a kliensben (ld.
-                     SolarClient CosmeticAnim.java) - amit itt látsz, az jelenik
-                     meg in-game. -->
                 <div class="cosmetic-tab-pane" data-cosmetic-pane="anim">
                   <div class="cosmetic-transform-box">
                     <div class="cosmetic-transform-title">Animáció - <span id="cosmeticAnimTargetLabel">teljes kiegészítő</span></div>
@@ -1717,12 +1440,6 @@
                   </div>
                 </div>
 
-                <!-- ── AURA + JÁTÉKBELI EFFEKTEK ──────────────────────────
-                     A kettő SZÁNDÉKOSAN egy fülön, de KÉT külön dobozban van:
-                     a nevük és a hatásuk teljesen más (az egyik látvány a
-                     kliensben, a másik játékmenet a szerveren), viszont
-                     mindkettő ugyanahhoz a kérdéshez tartozik: "mit ad ez a
-                     kiegészítő azon felül, hogy látszik". -->
                 <div class="cosmetic-tab-pane" data-cosmetic-pane="effects">
                   <div class="cosmetic-transform-box">
                     <div class="cosmetic-transform-title">Aura &ndash; részecskék a kiegészítő körül</div>
@@ -1783,10 +1500,6 @@
                 </div>
               </div>
 
-              <!-- ── ÁLLANDÓAN LÁTHATÓ ELŐNÉZET ────────────────────────
-                   Mindhárom fülnél ott van (ragadós, tehát görgetés közben is
-                   a képernyőn marad): illesztést és animációt egyaránt csak
-                   úgy lehet beállítani, ha közben látod az eredményt. -->
               <div class="cosmetic-admin-side">
                 <div class="card cosmetic-stage-card">
                   <div class="card-title">Előnézet</div>
@@ -1807,18 +1520,6 @@
           </div>
         </section>
 
-        <!-- ── MOBOK (admin) ──────────────────────────────────────────
-
-             A SolarMobs plugin szinkronizál ide. Az a mob jelenik meg itt,
-             amit a szerveren LÁTHATÓRA kapcsoltak (/solarmob center <id> on) -
-             ez a felhasználó kifejezett kérése volt: a mobokat ingame állítja
-             be az admin, és csak azt hozza ide, amihez modellt akar tölteni.
-
-             MIÉRT NINCS ITT "ÚJ MOB" GOMB: a mob DEFINÍCIÓJA (élet, sebzés,
-             képességek, drop) a szerveren él, nem itt. Egy weboldalról
-             létrehozott mob a plugin YAML-jeiben nem létezne, tehát soha nem
-             jelenne meg a játékban - a gomb csak becsapná az admint. Itt
-             kizárólag a MEGJELENÉS állítható. -->
         <section class="view" data-view="mobsAdmin">
           <h1 class="page-title">Mobok</h1>
 
@@ -1838,7 +1539,6 @@
             <div id="mobsAdminList"></div>
           </div>
 
-          <!-- ── SZERKESZTŐ ───────────────────────────────────────────── -->
           <div class="mob-admin-editor">
             <div class="admin-editor-head">
               <button type="button" class="btn-outline admin-back-btn" id="mobBackBtn">&larr; Vissza a listához</button>
@@ -1854,18 +1554,8 @@
                   <button type="button" class="cosmetic-tab" data-mob-tab="aura">Aura</button>
                 </div>
 
-                <!-- FÜL: MODELL -->
                 <div class="cosmetic-tab-pane active" data-mob-pane="model">
 
-                  <!-- ── A TELJES BLOCKBENCH PROJEKT ─────────────────────
-                       MIÉRT EZ AZ ELSŐDLEGES ÚT, ÉS NEM A KÜLÖN GEOMETRIA +
-                       TEXTÚRA (mint a kiegészítőknél): egy mob-modell nem
-                       "java block/item" formátumban készül, hanem szabad
-                       (Free/Bedrock) projektként - csontokkal, három tengely
-                       körüli forgatásokkal, a textúrával EGYÜTT a fájlban.
-                       A .bbmodel tehát mindent tartalmaz, amit a rendszernek
-                       tudnia kell, és nem lehet elcsúsztatni a geometriát a
-                       textúrától. -->
                   <div class="card">
                     <div class="card-title">Blockbench modell</div>
                     <p class="cosmetic-file-note">Töltsd fel a <strong>teljes .bbmodel projektfájlt</strong> &ndash; a geometriát és a textúrát is abból vesszük ki. A csontok (csoportok) forgatásai beleégnek a modellbe, tehát a kirajzolt alak pontosan az lesz, amit a Blockbenchben látsz.</p>
@@ -1884,9 +1574,6 @@
                     <input type="file" id="mobNewPartBbmodelInput" accept=".bbmodel,application/json" hidden />
                   </div>
 
-                  <!-- Haladó: a régi, kétfájlos út. Összecsukva, mert a
-                       normál munkafolyamatban nincs rá szükség - de aki
-                       kézzel állított elő geometriát, annak itt megvan. -->
                   <details class="card">
                     <summary class="card-title">Haladó: külön geometria és textúra</summary>
                     <p class="cosmetic-file-note">Ha nincs .bbmodel fájlod (pl. kész Java item-modellt kaptál), itt a geometriát (<code>elements</code> tömbös JSON) és a PNG textúrát külön is feltöltheted. A geometria a <strong>kijelölt részbe</strong> kerül.</p>
@@ -1926,18 +1613,8 @@
                   </div>
                 </div>
 
-                <!-- FÜL: ANIMÁCIÓ -->
                 <div class="cosmetic-tab-pane" data-mob-pane="anim">
 
-                  <!-- ── A .BBMODEL SAJÁT ANIMÁCIÓI ───────────────────────
-                       Ezek a Blockbench "Animate" fülén készült, valódi
-                       CSONTVÁZ-animációk: a kliens játssza le őket a
-                       játékban. NEM ugyanaz, mint a lentebbi mozgás-sávok,
-                       amik a Center saját, egyszerű lengető rendszere - azok
-                       a csontok nélküli (lapos) modellekhez valók.
-                       A lista azért van itt, mert a NEVEK kellenek a
-                       pluginhoz: azokat kell beírni egy képesség
-                       "animation name=..." mechanikájába. -->
                   <div class="card">
                     <div class="card-title">A modell animációi</div>
                     <p class="cosmetic-file-note">A <strong>.bbmodel &bdquo;Animate&rdquo; füléről</strong> beolvasott animációk. A nyugalom / járás / futás mozgást a kliens <strong>magától</strong> választja ki a nevükből; a többit a plugin váltja ki.</p>
@@ -1961,7 +1638,6 @@
                   </div>
                 </div>
 
-                <!-- FÜL: HITBOX -->
                 <div class="cosmetic-tab-pane" data-mob-pane="hitbox">
                   <div class="card">
                     <div class="card-title">Hitbox</div>
@@ -1997,7 +1673,6 @@
                   </div>
                 </div>
 
-                <!-- FÜL: AURA -->
                 <div class="cosmetic-tab-pane" data-mob-pane="aura">
                   <div class="card">
                     <div class="card-title">Aura</div>
@@ -2029,7 +1704,6 @@
                 </div>
               </div>
 
-              <!-- ELŐNÉZET -->
               <div class="cosmetic-editor-stage mob-editor-stage">
                 <div class="mob-preview-canvas-wrap">
                   <canvas id="mobEditorPreview" width="280" height="340"></canvas>
@@ -2090,11 +1764,6 @@
           <div id="discountsAdminList"></div>
         </section>
 
-        <!-- KUPONOK - a "Kódbeváltás" nézeten beváltható kódok (ld.
-             app.js couponsAdmin* / #redeemSubmit). Ugyanaz a CRUD-minta, mint
-             az Akciók fent, csak a "Jutalom" mezőkkel (típus + mennyiség +
-             felhasználhatóság + érvényességi ablak) az érvényességi kör
-             helyett. -->
         <section class="view" data-view="coupons">
           <h1 class="page-title">Kuponok</h1>
           <p class="page-note">A létrehozott kódokat a játékosok a "Kódbeváltás" nézeten válthatják be - a PrémiumPont-jutalom a következő szerverre lépéskor íródik jóvá (ugyanúgy, mint egy tulajdonosi PP-módosítás), az egyenleg-jutalom viszont azonnal.</p>
@@ -2110,16 +1779,10 @@
               <option value="cosmetic">Kiegészítő</option>
               <option value="rank">Rang</option>
             </select>
-            <!-- Kiegészítő-jutalom: a lista a katalógusból jön (ld. app.js
-                 populateCouponCosmeticSelect). Csak "Kiegészítő" típusnál
-                 látszik - ld. syncCouponRewardTypeUI(). -->
             <div id="couponCosmeticRow" class="hidden">
               <label class="gift-modal-label">Melyik kiegészítő</label>
               <select id="couponCosmeticSelect" class="gift-modal-input"></select>
             </div>
-            <!-- Rang-jutalom: a lista a bolt rang-katalógusából jön (ld. app.js
-                 populateCouponRewardRankSelect). Az időtartam nem kötelező -
-                 üresen hagyva a rang végleges. Csak "Rang" típusnál látszik. -->
             <div id="couponRankRow" class="hidden">
               <label class="gift-modal-label">Melyik rang</label>
               <select id="couponRewardRankSelect" class="gift-modal-input"></select>
@@ -2153,10 +1816,6 @@
           <div id="couponsAdminList"></div>
         </section>
 
-        <!-- CREATOR KÓDOK - a regisztrációs űrlap "Support / Creator kód"
-             mezőjében megadható kódok (ld. SolarBackend src/creatorCodes.js).
-             Ugyanaz a CRUD-minta, mint a Kuponok fent, plusz egy aktivál/
-             inaktivál gyorsgomb és egy "kik regisztráltak" részletező modál. -->
         <section class="view" data-view="creatorCodes">
           <h1 class="page-title">Creator kódok</h1>
           <p class="page-note">A regisztrációs űrlap "Support / Creator kód" mezőjében megadható kódok - a jutalom (ha van) az ÚJ fiók regisztrációjakor egyszer íródik jóvá. Egy kikapcsolt kód elmentve marad, később bármikor újra aktiválható.</p>
@@ -2203,16 +1862,10 @@
           <div id="creatorCodesAdminList"></div>
         </section>
 
-        <!-- JOGOK - kizárólag a valódi tulajdonosnak (ld. app.js
-             #navPermissionsBtn), a jog-adás maga nem delegálható. -->
         <section class="view" data-view="permissions">
           <h1 class="page-title">Jogok</h1>
           <p class="page-note">Adj admin-jogosultságokat egy KONKRÉT játékosnak, vagy egy egész RANGNAK (mindenkinek, akinek éppen az a rangja) - a tulajdonos mindig mindenhez hozzáfér, a két forrás egymástól függetlenül szerkeszthető, a tényleges hozzáférés a kettő összege.</p>
 
-          <!-- ÚJ: SZÁNDÉKOSAN NEM .legal-tab (bár vizuálisan onnan másolt stílus,
-               ld. style.css) - a "Jogi dokumentumok" nézet egy delegált
-               kattintás-figyelőt köt MINDEN .legal-tab elemre (ld. app.js
-               setLegalTab), ugyanaz a class itt összeakadt volna azzal. -->
           <div class="legal-tabs">
             <button type="button" class="perms-mode-tab active" id="permsModePlayerBtn">Játékos szerint</button>
             <button type="button" class="perms-mode-tab" id="permsModeRankBtn">Rang szerint</button>
@@ -2249,7 +1902,6 @@
           </div>
         </section>
 
-        <!-- JÁTÉKOS PROFIL (egy találatra kattintva) -->
         <section class="view" data-view="playerProfile">
           <button class="btn-back" id="btnBackToPlayers">
             <svg viewBox="0 0 24 24" width="14" height="14"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M15 18l-6-6 6-6"/></svg>
@@ -2276,10 +1928,6 @@
             </div>
           </div>
 
-          <!-- A megjelenés a hívó EGYEDI jogosultságai szerint alakul -
-               ld. app.js applyPermVisibility()/PLAYER_PANEL_KEYS. Az egész
-               panel akkor látszik, ha van BÁRMILYEN "player.*" jog, az egyes
-               mezők/gombok pedig a saját "data-perm" attribútumuk szerint. -->
           <div class="card admin-panel hidden" id="playerProfileAdminPanel">
             <div class="card-title">Admin</div>
             <div class="admin-info-grid">
@@ -2306,9 +1954,6 @@
             </div>
             <p class="redeem-result" id="adminEmailResult"></p>
 
-            <!-- ÚJ: kártyás rács - ld. style.css .admin-cards-grid/.admin-card
-                 megjegyzése, miért lett szétbontva a korábbi egy hosszú
-                 oszlopból ide. -->
             <div class="admin-cards-grid">
               <div class="admin-card" data-perm="player.view.lockStatus,player.action.lock,player.action.unlock">
                 <div class="admin-subsection-title">Fiók zárolása</div>
@@ -2384,22 +2029,11 @@
                 </div>
               </div>
 
-              <!-- Kiegészítők - ugyanaz a minta, mint a Jelvények fent, egy
-                   extra "érvényesség" mezővel (a katalógus alapértelmezését
-                   felülírva adható pl. eseményre 7 napra valami, ami
-                   egyébként örök). -->
               <div class="admin-card" data-perm="player.action.cosmeticGrant,player.action.cosmeticRevoke">
                 <div class="admin-subsection-title">Kiegészítők</div>
                 <div class="ban-panel admin-badges-panel">
                   <p class="redeem-result" id="adminCosmeticGrantStatus"></p>
 
-                  <!-- ÚJ (a felhasználó kérésére: "legyen egyszerűbben
-                       megoldva, hogy könnyebben lehessen adni, elvenni"):
-                       a korábbi legördülő + "Adás" gomb helyett a TELJES
-                       katalógus látszik egy kereshető rácsban, és minden
-                       tételnél EGY kattintás a művelet. Így egy pillantásra
-                       látszik az is, mije van már meg a játékosnak - korábban
-                       ezt két külön helyen kellett összeolvasni. -->
                   <div class="admin-cosmetic-toolbar">
                     <input type="search" id="adminCosmeticSearch" placeholder="Keresés név vagy hely szerint..." aria-label="Keresés a kiegészítők között" />
                     <select id="adminCosmeticFilter" aria-label="Szűrés">
@@ -2480,7 +2114,6 @@
           </div>
         </section>
 
-        <!-- GÉP RÉSZLETEK (Admin panelen egy gépre kattintva) -->
         <section class="view" data-view="deviceDetail">
           <button class="btn-back" id="btnBackFromDevice">
             <svg viewBox="0 0 24 24" width="14" height="14"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M15 18l-6-6 6-6"/></svg>
@@ -2536,12 +2169,6 @@
           </div>
         </section>
 
-        <!-- JOGI DOKUMENTUMOK (lábléc linkjeiről nyílik) -->
-        <!-- ── GYIK ────────────────────────────────────────────────────
-             A leggyakoribb Discord-os kérdések, hogy ne kelljen minden
-             játékosnak ticketet nyitnia ugyanazért. Kereshető (ld. ui.js
-             initFaq), és a nyitható elemek billentyűzettel is kezelhetők,
-             mert valódi <button>-ök (nem <div onclick>). -->
         <section class="view" data-view="faq">
           <h1 class="page-title">Gyakori <span class="text-accent">kérdések</span></h1>
           <p class="page-note">Itt találod a leggyakoribb kérdéseket a fiókodról, a vásárlásról és a szerverről. Ha nem találod a választ, keress minket a Discordon.</p>
@@ -2801,18 +2428,12 @@
           <a href="#legal" data-legal-link="aszf">ÁSZF</a>
           <a href="#legal" data-legal-link="adatkezeles">Adatvédelem</a>
           <a href="#legal" data-legal-link="impresszum">Impresszum</a>
-          <!-- SZÁNDÉKOSAN <button>, nem <a href="#">: ez műveletet indít
-               (modált nyit), nem navigál. A korábbi "#" cél a böngésző
-               előzményeit szemetelte, és a képernyőolvasó is linkként
-               jelentette be - ami félrevezető. -->
           <button type="button" class="footer-link-btn" id="btnCookieSettings">Süti beállítások</button>
         </nav>
       </footer>
     </div>
   </div>
 
-  <!-- Elfelejtett jelszó - email/felhasználónév bekérése (ld. app.js,
-       SolarBackend src/passwordReset.js POST /api/password-reset/request) -->
   <div class="modal-overlay hidden" id="forgotPasswordModal">
     <div class="modal-card">
       <h3>Elfelejtett jelszó</h3>
@@ -2827,8 +2448,6 @@
     </div>
   </div>
 
-  <!-- Új jelszó megadása - a fenti emailben kapott "?resetToken=" linkről
-       nyílik meg automatikusan (ld. app.js handlePasswordResetLink()) -->
   <div class="modal-overlay hidden" id="setNewPasswordModal">
     <div class="modal-card">
       <h3>Új jelszó megadása</h3>
@@ -2844,8 +2463,6 @@
     </div>
   </div>
 
-  <!-- ÚJ: gyors fiókváltás (ld. app.js renderAccountList/switchAccount) -
-       a SolarLauncher fiókváltó-modáljának webes megfelelője. -->
   <div class="modal-overlay hidden" id="accountModal">
     <div class="modal-card account-modal-card">
       <h3>Fiókok</h3>
@@ -2861,11 +2478,6 @@
         <p class="auth-switch-hint">Nincs még fiókod? <span class="link-inline" id="accountAddSwitchToRegister">Regisztráció!</span></p>
       </div>
 
-      <!-- ÚJ: regisztráció közvetlenül a fiókváltó modálból - a
-           SolarLauncher #accountAddRegisterForm-jának webes megfelelője.
-           Sikeres regisztráció után ugyanazzal a záró-szekvenciával
-           fejeződik be, mint egy meglévő fiók hozzáadása (btnDoAddAccount) -
-           ld. app.js doModalRegister. -->
       <div class="hidden" id="accountAddRegisterForm">
         <label class="gift-modal-label">Játékos név *</label>
         <input id="modalRegUser" type="text" class="gift-modal-input" autocomplete="off" placeholder="Játékos név" />
@@ -2935,10 +2547,6 @@
     </div>
   </div>
 
-  <!-- ÚJ: egy creator kód beváltóinak ("kik regisztráltak ezzel a kóddal")
-       listája, ld. app.js openCreatorCodeRedemptions - a felhasználó
-       kifejezett kérésére ("lássuk hogy hány felhasználó regisztrált azzal
-       a kóddal, hogy kik azok"). -->
   <div class="modal-overlay hidden" id="creatorCodeRedemptionsModal">
     <div class="modal-card account-modal-card">
       <h3 id="creatorCodeRedemptionsTitle">Regisztráltak</h3>
@@ -2949,10 +2557,6 @@
     </div>
   </div>
 
-  <!-- ÚJ: 2FA-kód bekérése bejelentkezéskor (ld. app.js promptTotpModal) -
-       Promise-alapú, a confirmModal() mintáját követi, de itt statikus
-       markup (nem futásidőben generált), mert a form-mezőknek stabil id-ra
-       van szükségük az input-eseményekhez. -->
   <div class="modal-overlay hidden" id="totpPromptModal">
     <div class="modal-card">
       <h3>Kétlépcsős azonosítás</h3>
@@ -2968,10 +2572,6 @@
     </div>
   </div>
 
-  <!-- ÚJ: biztonsági kód (PIN) bekérése bejelentkezéskor (ld. app.js
-       promptPinModal) - ugyanaz a minta, mint a fenti #totpPromptModal, a
-       jegyek száma (4 vagy 6) futásidőben, a maxlength/placeholder
-       átírásával áll be (ld. promptPinModal). -->
   <div class="modal-overlay hidden" id="pinPromptModal">
     <div class="modal-card">
       <h3>Biztonsági kód</h3>
@@ -2985,12 +2585,6 @@
     </div>
   </div>
 
-  <!-- ── SÜTI-HOZZÁJÁRULÁS ────────────────────────────────────────────────
-       Első látogatáskor felúszó sáv (a döntésig semmilyen nem-szükséges
-       adatkezelés nem indul el), utána a lábléc "Süti beállítások" pontján
-       bármikor újranyitható és MEGVÁLTOZTATHATÓ a döntés - a GDPR szerint
-       a visszavonásnak ugyanolyan könnyűnek kell lennie, mint a
-       megadásnak. A logikát a ui.js initCookies() tartalmazza. -->
   <div class="cookie-banner" id="cookieBanner" role="dialog" aria-modal="false"
        aria-labelledby="cookieBannerTitle" aria-describedby="cookieBannerText" hidden>
     <div class="cookie-banner-head">
@@ -3012,7 +2606,6 @@
     </div>
   </div>
 
-  <!-- Süti beállítások modál - kategóriánként külön kapcsolóval -->
   <div class="modal-overlay hidden" id="cookieModal" role="dialog" aria-modal="true" aria-labelledby="cookieModalTitle">
     <div class="modal-card cookie-modal">
       <h3 id="cookieModalTitle">Süti beállítások</h3>
@@ -3063,11 +2656,6 @@
     </div>
   </div>
 
-  <!-- `defer`: a böngésző párhuzamosan tölti le mindhármat, de a HTML
-       feldolgozása UTÁN, egymás után, a FORRÁSSORRENDBEN futtatja őket -
-       ez utóbbi itt lényeges, mert a ui.js az app.js globális
-       switchView()/showToast() függvényeit csomagolja be, tehát csak
-       azok létrejötte után futhat. -->
   <script src="skin3d.js?v=20260922a" defer></script>
   <script src="app.js?v=20260922a" defer></script>
   <script src="ui.js?v=20260922a" defer></script>

@@ -1,17 +1,3 @@
-// ── Backend kapcsolat ──
-// Ugyanaz a SolarBackend (Node/Express), amit a SolarLauncher is használ - a
-// login/register/me/skin végpontok innen valók, nem itt kerültek kitalálásra.
-// JAVÍTVA: a SolarCenter mostantól HTTPS alól fut (center.solaryn.hu, GitHub
-// Pages), ezért a korábbi sima http:// cím "kevert tartalomként" (mixed
-// content) BLOKKOLVA volt a böngészőben - a backendnek időközben lett egy
-// HTTPS-listenere is (ld. SolarBackend src/tls.js + data/tls-config.json),
-// ezt kell itt is használni. A domain neve ("api.overclockgame.hu") egy másik
-// projekthez lett eredetileg bejegyezve, de mivel ugyanaz a HTTPS-szerver
-// szolgálja ki most már a TELJES Solaryn-backendet is, működik erre is.
-// A kiadás azonosítója. Az oldalsáv alján jelenik meg - ha ott régi
-// számot látsz, a böngésző MÉG A RÉGI app.js-t futtatja (a webtárhely
-// cache-e miatt egy feltöltés nem feltétlenül ér ki azonnal). MINDEN
-// kiadásnál emelni kell, az index.html ?v= paramétereivel EGYÜTT.
 const CENTER_VERSION = '20260922a';
 
 const BACKEND_URL = 'https://api.overclockgame.hu:8908';
@@ -19,8 +5,6 @@ const BACKEND_URL = 'https://api.overclockgame.hu:8908';
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
-// ── Jelszó megjelenítése (szem-ikon) minden jelszómezőn - ld. ugyanez a
-// mintázat a SolarLauncher renderer.js-ében (initPasswordToggles). ──
 const PW_EYE_SVG = '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M1.5 12S5 5 12 5s10.5 7 10.5 7-3.5 7-10.5 7S1.5 12 1.5 12Z"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
 const PW_EYE_OFF_SVG = '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M3 3l18 18M10.6 10.6a3 3 0 0 0 4.24 4.24M9.4 5.3A10.8 10.8 0 0 1 12 5c7 0 10.5 7 10.5 7a13.4 13.4 0 0 1-3.15 4.05M6.5 6.5C3.6 8.3 1.5 12 1.5 12s2.2 4.4 6.1 6.2"/></svg>';
 function initPasswordToggles(root) {
@@ -47,13 +31,8 @@ function initPasswordToggles(root) {
 }
 initPasswordToggles();
 
-// ── Hulló parázs-szemcse háttéranimáció (ugyanaz, mint a SolarLauncherben) ──
 (function initParticles() {
   const canvas = $('#particleCanvas');
-  // ÚJ: aki a rendszerében kikapcsolta az animációkat (mozgásérzékenység,
-  // vestibuláris panasz - WCAG 2.3.3), annál el sem indítjuk a hurkot. Ez
-  // egyben a leggyengébb gépeken/akkumulátoron is spórolás: így nincs
-  // másodpercenként 60 teljes képernyős újrarajzolás.
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     canvas.style.display = 'none';
     return;
@@ -65,11 +44,6 @@ initPasswordToggles();
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
   }
-  // ÚJ: az átméretezés fojtása (throttle). A canvas.width írása minden
-  // alkalommal ÚJRAFOGLALJA a teljes rajzfelületet - egy ablak-húzás alatt
-  // ez másodpercenként több tucatszor futott le, ami az egész felületet
-  // megakasztotta. Egy képkockányi késleltetés érzékelhetetlen, viszont
-  // húzás közben egyetlen újrafoglalásra csökkenti.
   let resizePending = false;
   window.addEventListener('resize', () => {
     if (resizePending) return;
@@ -112,19 +86,10 @@ initPasswordToggles();
   requestAnimationFrame(tick);
 })();
 
-// ÚJ: gyors fiókváltás (a SolarLauncher accounts/activeUsername mintáját
-// követve, ld. SolarLauncher src/config.js+renderer.js) - több elmentett
-// fiók (max 5), egy "aktív" közülük. A "session" változó MARAD a fájl
-// TÖBBI RÉSZÉBEN mindenhol hivatkozott, származtatott {username, token} pár
-// (az aktív fióké) - így nem kellett a fájlban szétszórt session.token/
-// session.username hivatkozásokat egyenként átírni, csak a MÖGÖTTES tárolást
-// alakítottuk többfiókosra.
 let accounts = [];
 let activeUsername = '';
 let session = null;
 
-// Egyszeri migráció a régi, egyfiókos "solarcenter_session" kulcsról - ha
-// már létezik az új "solarcenter_accounts" kulcs, nincs teendő.
 (function migrateOldSession() {
   if (localStorage.getItem('solarcenter_accounts')) return;
   try {
@@ -132,16 +97,10 @@ let session = null;
     if (old && old.username && old.token) {
       accounts = [{ username: old.username, token: old.token }];
       activeUsername = old.username;
-      // JAVÍTVA: enélkül a lenti blokk localStorage.getItem('solarcenter_accounts')
-      // hívása még mindig null-t adott volna vissza (még nem írtuk ki), és
-      // felülírta volna az imént migrált "accounts"-ot egy üres tömbre,
-      // miközben "activeUsername" tévesen megmaradt volna - a végeredmény egy
-      // "van aktív felhasználónév, de nincs hozzá tartozó fiók" hibás állapot
-      // lett volna (session=null annak ellenére, hogy volt érvényes régi token).
       localStorage.setItem('solarcenter_accounts', JSON.stringify(accounts));
       localStorage.setItem('solarcenter_active_username', activeUsername);
     }
-  } catch { /* nincs (érvényes) régi munkamenet - nincs mit migrálni */ }
+  } catch {  }
   localStorage.removeItem('solarcenter_session');
 })();
 try {
@@ -160,14 +119,8 @@ function persistAccounts() {
 }
 syncSessionFromAccounts();
 
-// A fájlban MINDENHOL meglévő hívási pont (login/register/auto-login/
-// zárolt-fiók-kijelentkezés stb. - "session = {...}; saveSession();" VAGY
-// "session = null; saveSession();") - a belseje mostantól a többfiókos
-// tárolást tartja karban, a hívási pontokat NEM kellett módosítani.
 function saveSession() {
   if (session) {
-    // Felvesz VAGY frissít + aktívvá tesz - ugyanaz, mint a launcher
-    // upsertAccountAndActivate()-je. Max 5 fiók, a legrégebbi esik ki.
     const idx = accounts.findIndex((a) => a.username === session.username);
     if (idx >= 0) accounts[idx].token = session.token;
     else {
@@ -176,10 +129,6 @@ function saveSession() {
     }
     activeUsername = session.username;
   } else if (activeUsername) {
-    // session=null -> az AKTÍV fiók már nem érvényes (zárolva/törölve/
-    // kijelentkezés) - ugyanaz, mint a launcher removeAccount()-ja: csak
-    // azt az egy sort vesszük ki, a többi elmentett fiók megmarad, és ha
-    // maradt másik, arra váltunk.
     accounts = accounts.filter((a) => a.username !== activeUsername);
     activeUsername = accounts[0]?.username || '';
     syncSessionFromAccounts();
@@ -187,12 +136,6 @@ function saveSession() {
   persistAccounts();
 }
 
-// ÚJ: TELJES kijelentkezés - a "Kijelentkezés" gomb (ellentétben a
-// saveSession() fenti "session=null" ágával, ami csak az AKTÍV fiókot veszi
-// ki, a többi mentett fiókot érintetlenül hagyva) MINDEN mentett fiókot
-// töröl egyszerre, ugyanúgy mint a launcher removeAllAccounts()-ja - a
-// felhasználó kérése, hogy egy kattintással biztosan egyik mentett fiók se
-// maradjon bejelentkezve ezen a böngészőn.
 function logoutAllAccounts() {
   accounts = [];
   activeUsername = '';
@@ -216,18 +159,12 @@ async function apiPost(path, body) {
 async function apiGetMe(token) {
   try {
     const res = await fetch(BACKEND_URL + '/api/me', { headers: { Authorization: 'Bearer ' + token } });
-    // JAVÍTVA: korábban egy nem-2xx válasz esetén (pl. 403 zárolt fióknál)
-    // eldobtuk a válasz törzsét, és csak egy csupasz {ok:false}-t adtunk
-    // vissza - emiatt a "locked"/"reason" mezők sosem jutottak el a
-    // hívóhoz. Most a törzset MINDIG megpróbáljuk beolvasni, státusztól
-    // függetlenül (ugyanaz a minta, mint az apiPost()-nál).
     return await res.json();
   } catch {
     return { ok: false };
   }
 }
 
-// ── Auth: fül-váltás ──
 function setAuthMode(mode) {
   $$('.auth-tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === mode));
   $('#loginForm').classList.toggle('hidden', mode !== 'login');
@@ -238,23 +175,8 @@ function setAuthMode(mode) {
 $$('.auth-tab').forEach((tab) => tab.addEventListener('click', () => setAuthMode(tab.dataset.tab)));
 $('#switchToLogin').addEventListener('click', () => setAuthMode('login'));
 
-// ── Bejelentkezés ──
-// JAVÍTVA: a #loginForm mostantól VALÓDI <form> (ld. index.html megjegyzését
-// a jelszókezelő-barátságról) - natív "submit" eseményt figyelünk (Enterrel
-// VAGY a gombra kattintva egyaránt kiváltódik), preventDefault()-tal, hogy
-// ne töltődjön újra az oldal.
 $('#loginForm').addEventListener('submit', (e) => { e.preventDefault(); doLogin(); });
 
-// ÚJ: 2FA/biztonsági-kód-tudatos bejelentkezés - a POST /api/login VAGY egy
-// azonnali {ok,username,token} választ ad, VAGY (ha a fióknak be van
-// kapcsolva a 2FA-ja és/vagy a biztonsági kódja) egy {requiresTotp,
-// requiresPin, pendingToken}-et. A kettő EGYMÁSTÓL FÜGGETLENÜL lehet igaz -
-// ha mindkettő az, EGYMÁS UTÁN kérjük be őket (előbb a 2FA-t, utána a
-// biztonsági kódot), ugyanazzal a pendingToken-nel - a backend
-// (finalizePendingLogin, ld. server.js) csak akkor ad ki valódi tokent, ha
-// MINDKETTŐ teljesült. Ugyanezt a függvényt hívja a fő bejelentkezési űrlap
-// ÉS a fiókváltó-modál "Fiók hozzáadása" mini-űrlapja is (ld. lentebb) - így
-// ez a lépés UI-ja egyetlen helyen él, nem duplikálódik.
 async function performLogin(username, password, rememberMe) {
   let res = await apiPost('/api/login', { username, password, rememberMe: rememberMe === true });
   if (!res.ok) return res;
@@ -272,9 +194,6 @@ async function performLogin(username, password, rememberMe) {
   return res;
 }
 
-// Promise-alapú biztonsági-kód bekérő modal bejelentkezéskor - ugyanaz a
-// minta, mint promptTotpModal(), de egyetlen, dinamikus hosszúságú (4 vagy
-// 6 jegyű) mezővel.
 function promptPinModal(pinLength) {
   return new Promise((resolve) => {
     const overlay = $('#pinPromptModal');
@@ -314,10 +233,6 @@ function promptPinModal(pinLength) {
   });
 }
 
-// Promise-alapú 2FA-kód bekérő modal - a confirmModal() mintáját követi,
-// DE statikus (nem futásidőben generált) markup (ld. index.html
-// #totpPromptModal), mert a kód/helyreállítási-kód mezőknek stabil id-ra
-// van szükségük.
 function promptTotpModal() {
   return new Promise((resolve) => {
     const overlay = $('#totpPromptModal');
@@ -384,14 +299,6 @@ async function doLogin() {
   const rememberMe = $('#authRememberMe').checked;
   $('#authError').textContent = '';
 
-  // ÚJ: kliens-oldali kötelező-mező ellenőrzés. Enélkül egy ÜRES űrlap
-  // elküldése is elment a backendig, és onnan a félrevezető "Hibás
-  // felhasználónév vagy jelszó" jött vissza - miközben a felhasználó nem
-  // rontott el semmit, csak még nem írt be semmit. Ráadásul minden ilyen
-  // üres próbálkozás beleszámított a bejelentkezési kísérlet-korlátba.
-  // A markFieldInvalid()/setButtonLoading() a ui.js-ben él; ha az valamiért
-  // nem töltött be, a ?.-mentes hívás helyett itt egy őrfeltétel áll, hogy
-  // a bejelentkezés attól még működjön.
   const invalid = (el, msg) => { if (typeof window.markFieldInvalid === 'function') window.markFieldInvalid(el, msg); };
   if (!user || !pass) {
     if (!user) invalid(userEl, 'Add meg a játékosnevedet.');
@@ -418,7 +325,6 @@ async function doLogin() {
   enterApp();
 }
 
-// ── Elfelejtett jelszó (ld. SolarBackend src/passwordReset.js) ──
 const forgotPasswordModal = $('#forgotPasswordModal');
 function openForgotPasswordModal() {
   $('#forgotPasswordInput').value = $('#authUser').value.trim();
@@ -440,19 +346,10 @@ $('#forgotPasswordSubmitBtn').addEventListener('click', async () => {
     return;
   }
   const res = await apiPost('/api/password-reset/request', { usernameOrEmail: identifier });
-  // A backend SZÁNDÉKOSAN mindig {ok:true}-val válaszol (ld. ott a
-  // user-enumeration elleni megjegyzést) - itt is egyszerűen ezt az
-  // üzenetet mutatjuk, nem árulunk el többet.
   resultEl.textContent = res.message || 'Ha létezik ilyen fiók, hamarosan kapsz egy emailt.';
   resultEl.className = 'redeem-result success';
 });
 
-// A jelszó-emailben kapott "?resetToken=<token>" linkről nyílik meg -
-// ugyanaz a minta, mint a "?discordLink=" olvasása lentebb: oldalbetöltéskor
-// azonnal kiolvassuk (bejelentkezés NÉLKÜL is használható, hiszen pont az a
-// lényege, hogy egy kijelentkezett állapotú felhasználó is vissza tudjon
-// jutni a fiókjába), és a modál bezárásakor/sikeres váltás után töröljük az
-// URL-ből, hogy egy frissítés ne nyissa meg újra.
 const setNewPasswordModal = $('#setNewPasswordModal');
 let pendingPasswordResetToken = (function readPendingPasswordResetToken() {
   const params = new URLSearchParams(window.location.search);
@@ -512,9 +409,6 @@ $('#setNewPasswordSubmitBtn').addEventListener('click', async () => {
   setAuthMode('login');
 });
 
-// A zárolt-fiók képernyő bármely belépési ponton (friss login, automatikus
-// munkamenet-visszaállítás) megjeleníthető - mindig ugyanazt az élményt adja,
-// nem csak egy apró hibaüzenetet.
 function showLockedScreen(reason) {
   $('#authScreen').classList.add('hidden');
   $('#appScreen').classList.add('hidden');
@@ -527,11 +421,6 @@ $('#btnLogoutLocked').addEventListener('click', () => {
   $('#authScreen').classList.remove('hidden');
 });
 
-// ── Regisztráció: születési dátum legördülők feltöltése ── (ÚJ: kiemelve
-// egy újrahasznosítható függvénybe, mert a fiókváltó modál beágyazott
-// regisztrációs formja - #accountAddRegisterForm - saját, külön select-eket
-// használ ugyanezzel a listával, ld. lentebb - a SolarLauncher renderer.js
-// ugyanezt a mintát követi.)
 const HU_MONTHS = ['Január', 'Február', 'Március', 'Április', 'Május', 'Június', 'Július', 'Augusztus', 'Szeptember', 'Október', 'November', 'December'];
 function populateBirthDateSelects(yearSel, monthSel, daySel) {
   const nowYear = new Date().getFullYear();
@@ -554,10 +443,6 @@ function populateBirthDateSelects(yearSel, monthSel, daySel) {
 populateBirthDateSelects($('#regYear'), $('#regMonth'), $('#regDay'));
 populateBirthDateSelects($('#modalRegYear'), $('#modalRegMonth'), $('#modalRegDay'));
 
-// ── Regisztráció: validáció + beküldés, KIEMELVE egy megosztott függvénybe
-// (ÚJ) - mind a teljes képernyős regisztrációs form, mind a fiókváltó modál
-// beágyazott #accountAddRegisterForm-ja ugyanezt hívja, csak a saját mező-
-// ID-jaikkal. ──
 async function submitRegistration(ids, errEl) {
   errEl.textContent = '';
 
@@ -573,10 +458,6 @@ async function submitRegistration(ids, errEl) {
   const marketingOk = $(ids.marketing).checked;
   const marketingChannel = $(ids.marketingChannel).value;
 
-  // A hibát mostantól nemcsak az űrlap alján, egyetlen közös sorban írjuk
-  // ki, hanem MEGJELÖLJÜK a hibás mezőt is (piros keret + rövid rázás), és
-  // oda is ugrunk. Egy 10 mezős regisztrációs űrlapnál a "A két jelszó nem
-  // egyezik" önmagában, az űrlap alján gyakran nem is látszott a képernyőn.
   const fail = (msg, fieldSel) => {
     errEl.textContent = msg;
     const el = fieldSel ? $(fieldSel) : null;
@@ -590,9 +471,6 @@ async function submitRegistration(ids, errEl) {
 
   if (!username) return fail('Adj meg egy játékos nevet.', ids.user);
   if (!email) return fail('Add meg az email címedet.', ids.email);
-  // ÚJ: formai ellenőrzés. Eddig csak a KÉT mező egyezését néztük, tehát egy
-  // elgépelt cím (pl. hiányzó @) is elment a backendig - és mivel a
-  // visszaigazoló levél oda ment volna, a hiba csak sokkal később derült ki.
   if (!/^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/.test(email)) return fail('Ez nem tűnik érvényes email címnek.', ids.email);
   if (email !== email2) return fail('A két email cím nem egyezik.', ids.email2);
   if (!pass) return fail('Adj meg egy jelszót.', ids.pass);
@@ -627,7 +505,6 @@ const MODAL_REGISTER_FORM_IDS = {
   terms: '#modalRegTerms', age: '#modalRegAge', marketing: '#modalRegMarketing', marketingChannel: '#modalRegMarketingChannel'
 };
 
-// ── Regisztráció: beküldés ──
 $('#registerSubmit').addEventListener('click', doRegister);
 
 async function doRegister() {
@@ -638,7 +515,6 @@ async function doRegister() {
   enterApp();
 }
 
-// ── Automatikus bejelentkezés, ha van elmentett (még érvényes) munkamenet ──
 async function tryAutoLogin() {
   if (!session || !session.token) return;
   $('#authScreen').classList.add('hidden');
@@ -653,24 +529,10 @@ async function tryAutoLogin() {
     session = null;
     saveSession();
     $('#authScreen').classList.remove('hidden');
-    // A törölt fiókokat (ld. requireAuth "deleted: true" válasza) külön
-    // üzenettel jelezzük - a zárolással ellentétben ez nem visszavonható,
-    // úgyhogy nincs értelme egy külön "zárolt" képernyőnek, csak a login
-    // formra dobjuk vissza egy magyarázó szöveggel.
     if (res.deleted) $('#authError').textContent = 'A fiókod törölve lett.';
   }
 }
 
-// ── Statisztika-jelvények ──
-// JAVÍTVA: a felhasználó KÉTSZER is kifejezetten kérte, hogy a Zseton és a
-// Szint NE szerepeljen a főoldalon (ahogy a Guild sem, ld. az eredeti kérést:
-// "szint, guild, zseton nem kell") - ez a lista most már tényleg csak azt a
-// hármat tartalmazza, amit kért: Rang, PrémiumPont, Online töltött idő. A
-// SolarBungee (playtime) és SolarLobby (PP/rang) szerver-oldali pluginok
-// töltik fel ezeket a /api/game/report végponton keresztül - innentől valódi
-// adatok, nem helykitöltő 0/"-" érték.
-// JAVÍTVA: a PrémiumPont-jelvény mostantól a felhasználó saját PP-érme
-// képét használja (assets/pp-coin.png) a korábbi generikus érme-SVG helyett.
 const STAT_ICONS = {
   rank: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l2.4 6.6L21 9l-5 4.6L17.4 21 12 17.3 6.6 21 8 13.6 3 9l6.6-.4z"/></svg>',
   coin: '<img src="assets/pp-coin.png" alt="PP" />',
@@ -679,18 +541,47 @@ const STAT_ICONS = {
   spin: '<svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M4 12a8 8 0 0 1 14.6-4.5M20 12a8 8 0 0 1-14.6 4.5M18.6 7.5V4m0 3.5H15M5.4 16.5V20m0-3.5H9"/></svg>'
 };
 
+const RICH_TEXT_TAGS = new Set(['B', 'STRONG', 'I', 'EM', 'U', 'SPAN', 'DIV', 'FONT', 'BR']);
+const RICH_TEXT_COLOR_RE = /^(#[0-9a-f]{3,6}|rgb\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\))$/i;
+
+function sanitizeRichText(html) {
+  const tpl = document.createElement('template');
+  tpl.innerHTML = String(html || '');
+  const clean = (parent) => {
+    for (const node of Array.from(parent.childNodes)) {
+      if (node.nodeType === Node.TEXT_NODE) continue;
+      if (node.nodeType !== Node.ELEMENT_NODE || !RICH_TEXT_TAGS.has(node.tagName)) {
+        if (node.nodeType === Node.ELEMENT_NODE && !['SCRIPT', 'STYLE', 'TEMPLATE', 'IFRAME', 'OBJECT'].includes(node.tagName)) {
+          clean(node);
+          node.replaceWith(...Array.from(node.childNodes));
+        } else {
+          node.remove();
+        }
+        continue;
+      }
+      const color = node.style ? node.style.color : '';
+      const align = node.style ? node.style.textAlign : '';
+      const fontSize = node.getAttribute('size');
+      const fontColor = node.getAttribute('color');
+      for (const attr of Array.from(node.attributes)) node.removeAttribute(attr.name);
+      if (node.tagName === 'SPAN' || node.tagName === 'DIV') {
+        if (color && RICH_TEXT_COLOR_RE.test(color)) node.style.color = color;
+        if (/^(left|center|right)$/.test(align)) node.style.textAlign = align;
+      } else if (node.tagName === 'FONT') {
+        if (fontSize && /^[1-7]$/.test(fontSize)) node.setAttribute('size', fontSize);
+        if (fontColor && /^#[0-9a-f]{3,6}$/i.test(fontColor)) node.setAttribute('color', fontColor);
+      }
+      clean(node);
+    }
+  };
+  clean(tpl.content);
+  return tpl.innerHTML;
+}
+
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-// ÚJ: "opts.showWallet" - a más játékos profilját megnyitó hívás (ld.
-// openPlayerProfile) ezzel egy 4. "Egyenleg" (valós pénzes, ld.
-// GET /api/profile/:username "walletBalanceHuf" mezőjét) jelvényt is
-// megjelenít - a felhasználó kifejezett kérésére ez a kereséssel megnyitott
-// profilon LÁTHATÓ mindenki számára, a PrémiumPont-tal ("coin") együtt. A
-// saját profil (GET /api/me) hívása nem ad opts-ot - ott az egyenleget a már
-// meglévő, külön topbar-/főoldal-jelvény (ld. renderWalletBadge) mutatja,
-// itt nem duplikáljuk.
 function renderStatBadges(container, values, opts) {
   const showWallet = !!(opts && opts.showWallet);
   const items = [
@@ -710,9 +601,6 @@ function renderStatBadges(container, values, opts) {
   `).join('');
 }
 
-// Amíg egy adott statisztikát még sosem jelentett be plugin (pl. a játékos
-// sosem lépett még a szerverre), a megfelelő mező null/hiányzik a backendtől -
-// ilyenkor esik vissza helykitöltőre ("-"/"0"/"0 óra").
 function emptyStats() {
   return { rank: '-', coin: '0', wallet: '0 Ft', time: '0 óra' };
 }
@@ -723,53 +611,23 @@ function formatPlaytime(seconds) {
   return `${hours.toLocaleString('hu-HU')} óra`;
 }
 
-// Nagy kezdőbetűs csoportnév ("tulajdonos" -> "Tulajdonos") - csak az ELSŐ
-// betűt nagybetűsítjük, a többit érintetlenül hagyjuk (a LuckPerms
-// csoportnevek eleve kisbetűsek, nem szónként címkeszerűek).
 function capitalizeFirst(s) {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
 
 function formatStats(data) {
   if (!data) return emptyStats();
-  // JAVÍTVA (a felhasználó kérésére): a jelvényen mostantól a NYERS LuckPerms
-  // csoportnév jelenik meg nagy kezdőbetűvel, egyszínű (fehér) szövegként -
-  // NEM a színes/szakaszos in-game chat-prefix ("[TULAJDONOS]" stb.). Az
-  // isOwner-döntés (enterApp) EZZEL SZEMBEN továbbra is mindig a nyers
-  // "data.rank"-ot nézi, sosem ezt a formázott változatot.
   return {
     rank: data.rank ? capitalizeFirst(data.rank) : '-',
     coin: typeof data.scBalance === 'number' ? data.scBalance.toLocaleString('hu-HU') : '0',
-    // ÚJ: valós pénzes egyenleg (ld. GET /api/profile/:username
-    // "walletBalanceHuf" mezője) - jelenleg csak a más játékos profilját
-    // megnyitó renderStatBadges(..., { showWallet: true }) hívás jeleníti
-    // meg ténylegesen (ld. openPlayerProfile).
     wallet: typeof data.walletBalanceHuf === 'number' ? formatHuf(data.walletBalanceHuf) : '0 Ft',
     time: formatPlaytime(data.playtimeSeconds)
   };
 }
 
-// ÚJ: "Összekötve ezzel: ..." jelvény a profil-kártyán (Főoldal SAJÁT profil,
-// illetve a tulajdonosi Játékos-profil admin panelje) - ugyanazt a
-// data.discordUsername/discordAvatar mezőpárt használja mindkét helyen (ld.
-// SolarBackend /api/me, /api/profile/:username, /api/admin/player/:username).
-// ÚJ: "opts.mode" dönti el, a leválasztás-gomb (ha "data" össze van kötve)
-// a SAJÁT fiókot (mode:'self', ld. #profileDiscordLink - nincs jogosultsághoz
-// kötve, mindenki leválaszthatja a sajátját) vagy egy MÁSIK, admin panelen
-// megnyitott játékos fiókját válassza-e le (mode:'admin' - "data-perm"
-// attribútumot kap, ld. applyPermVisibility()). opts hiányában (pl. régebbi
-// hívási pont) nincs leválasztás-gomb - ugyanaz a viselkedés, mint korábban.
 function renderDiscordLinkBadge(container, data, opts) {
   if (!container) return;
   if (data && data.discordUsername) {
-    // JAVÍTVA (XSS): a Discord-profil megjelenítendő neve/avatar-URL-je a
-    // felhasználó OAuth-profiljából jön (Discord oldalán szabadon
-    // állítható, NEM esik át a SolarCenter saját USERNAME_RE-jén) - a
-    // korábbi, nyers interpolálás egy célzottan összeállított Discord
-    // megjelenítési névvel (vagy avatar-URL-lel, ami megszakíthatta volna
-    // az src="..." attribútumot) tárolt XSS-t tett volna lehetővé, ami a
-    // fiókot linkelő játékosnak ÉS minden adminnak lefutott volna, aki
-    // megnyitja a profilját.
     const avatarHtml = data.discordAvatar
       ? `<img class="discord-link-avatar" src="${escapeHtml(data.discordAvatar)}" alt="" />`
       : '';
@@ -792,10 +650,6 @@ function renderDiscordLinkBadge(container, data, opts) {
   }
 }
 
-// ── Discord leválasztás (saját fiók VAGY - jogosultsággal - egy másik
-// játékos fiókja az admin panelről, ld. renderDiscordLinkBadge fenti
-// megjegyzését) - ld. SolarBackend src/discord.js POST /api/discord/unlink
-// és POST /api/admin/player/:username/discord/unlink. ──
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('.discord-unlink-btn');
   if (!btn) return;
@@ -825,21 +679,7 @@ document.addEventListener('click', (e) => {
   });
 });
 
-// ÚJ: "van-e aktív némításod/kitiltásod/kliens-tiltásod/fiók-zárolásod"
-// jelzés a profil-kártyán - a data.activeMute/activeBan/activeCban mezőket a
-// SolarBackend GET /api/me (ld. ott activeMuteInfo/activeBanInfoFromUser/
-// getActiveCbanForUsername) és a GET /api/profile/:username adja, null-t, ha
-// épp nincs aktív szankció az adott típusból; a "locked" a fiók zárolását
-// jelenti. Ha egyik sincs aktív, a konténer üresen marad (nincs "minden
-// rendben" jelvény - csak a figyelmeztetés jellegű állapotok jelennek meg).
-// JAVÍTVA (2): korábban minden szankció egy-egy nagy, MINDIG kinyitott
-// kártyaként jelent meg, emoji-s címkével. A felhasználó kérésére mostantól
-// csak egy-egy kis IKON jelzi őket (valódi, kézzel rajzolt SVG-ikonok, NEM
-// emoji - az emoji platformonként más-más képet ad és nem veszi fel a téma
-// színét), a részletek (ki adta, mikor, meddig, miért) pedig egy
-// rákattintásra, animációval előugró kis panelben olvashatók.
 const SANCTION_ICONS = {
-  // Némítás - áthúzott mikrofon.
   mute: `<svg viewBox="0 0 24 24" aria-hidden="true">
     <rect x="9" y="3" width="6" height="10.5" rx="3" fill="currentColor"/>
     <path d="M5.5 11a6.5 6.5 0 0 0 13 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -847,8 +687,6 @@ const SANCTION_ICONS = {
     <line x1="8.5" y1="20.8" x2="15.5" y2="20.8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
     <line x1="4" y1="4" x2="20" y2="20" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
   </svg>`,
-  // Kitiltás - "ban hammer", azaz bírói kalapács: a 45 fokkal elfordított
-  // kalapácsfej + nyél, alatta a talp, amire lecsap.
   ban: `<svg viewBox="0 0 24 24" aria-hidden="true">
     <g transform="rotate(-45 12 10)">
       <rect x="5.4" y="4" width="13.2" height="5.6" rx="1.7" fill="currentColor"/>
@@ -856,15 +694,12 @@ const SANCTION_ICONS = {
     </g>
     <rect x="3.2" y="19.2" width="14.6" height="2.8" rx="1.4" fill="currentColor"/>
   </svg>`,
-  // Kliens-tiltás - a témához illően maga a kliens (monitor/képernyő) van
-  // áthúzva, nem egy általános tiltótábla.
   cban: `<svg viewBox="0 0 24 24" aria-hidden="true">
     <rect x="2.6" y="3.8" width="18.8" height="13" rx="2.4" fill="none" stroke="currentColor" stroke-width="2"/>
     <line x1="12" y1="16.8" x2="12" y2="20.2" stroke="currentColor" stroke-width="2"/>
     <line x1="8" y1="20.4" x2="16" y2="20.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
     <line x1="6.4" y1="13.4" x2="17.6" y2="7.2" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
   </svg>`,
-  // Fiók-zárolás - lakat.
   lock: `<svg viewBox="0 0 24 24" aria-hidden="true">
     <rect x="4.2" y="10.2" width="15.6" height="10.6" rx="2.6" fill="none" stroke="currentColor" stroke-width="2"/>
     <path d="M8 10.2V7.8a4 4 0 0 1 8 0v2.4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -873,23 +708,15 @@ const SANCTION_ICONS = {
   </svg>`
 };
 
-// A "note" a panel alján álló egymondatos magyarázat - az ikon önmagában
-// nem mondja meg, mit is korlátoz az adott szankció.
 const SANCTION_TYPES = {
   mute: { label: 'Aktív némítás', note: 'A chat használata korlátozva van.' },
   ban: { label: 'Aktív kitiltás', note: 'A szerverre való belépés korlátozva van.' },
   cban: { label: 'Aktív kliens-tiltás', note: 'A Solaryn kliens használata korlátozva van.' },
-  // A zárolás indoka szándékosan NEM nyilvános (ld. GET /api/profile/:username
-  // "locked" mezőjét: az csak egy igaz/hamis, by/reason/until nélkül) - ezért
-  // ennél a típusnál csak ez a mondat jelenik meg, adatsorok nélkül.
   lock: { label: 'A fiók zárolva van', note: 'Erre a fiókra jelenleg nem lehet bejelentkezni. A zárolás indoka nem nyilvános.' }
 };
 
 function renderSanctionStatus(container, data) {
   if (!container) return;
-  // Újrarendereléskor (pl. másik játékos profiljára lépve) az esetleg nyitva
-  // maradt panel azonnal, animáció nélkül tűnjön el - különben a régi
-  // szankció adatai villannának fel az új profil alatt.
   closeSanctionPopover(true);
 
   const items = [];
@@ -903,9 +730,6 @@ function renderSanctionStatus(container, data) {
     container.__sanctions = null;
     return;
   }
-  // A panel tartalmát csak kattintáskor építjük fel, ezért a nyers adatot
-  // magán a konténeren tároljuk (nem data-attribútumban: oda a felhasználói
-  // szöveget - pl. az indokot - külön escape-elni kellene).
   container.__sanctions = Object.fromEntries(items.map((it) => [it.type, it.info]));
   container.innerHTML = `
     <div class="sanction-icon-row" role="group" aria-label="Aktív szankciók">
@@ -957,13 +781,6 @@ function sanctionPopoverHtml(type, info) {
   `;
 }
 
-// FONTOS: a panel NEM a profil-kártyán belül él, hanem a <body> végén, fix
-// pozícióval. A kártyák ugyanis "overflow: hidden"-esek (ld. ui.css .card) ÉS
-// a rájuk kötött fadeSlideUp animáció transformja miatt saját réteget is
-// nyitnak - a kártyán belül maradó panelt így a kártya széle elvágná, a
-// szomszédos (DOM-ban későbbi) kártya pedig rátakarna. Egyszerre csak egy
-// panel létezik, azt használja a főoldali profil és a játékos-kereső
-// profil-nézete is.
 let sanctionPopEl = null;
 let openSanctionBtn = null;
 
@@ -978,9 +795,6 @@ function getSanctionPopover() {
   return sanctionPopEl;
 }
 
-// A panel az ikon alatt, középre igazítva jelenik meg - a képernyő szélénél
-// visszahúzva, alul kifutva pedig az ikon FÖLÉ fordítva (ekkor a nyíl is
-// alulra kerül, ld. .sanction-popover.above).
 function positionSanctionPopover(btn) {
   const pop = getSanctionPopover();
   const r = btn.getBoundingClientRect();
@@ -1009,8 +823,6 @@ function openSanctionPopover(container, btn) {
   pop.innerHTML = sanctionPopoverHtml(type, info);
   pop.classList.remove('closing', 'open');
   pop.hidden = false;
-  // Előbb pozicionálunk (ehhez kell a tényleges méret), és csak utána
-  // indítjuk az "előugrás" animációt, hogy ne ugorjon egyet a panel.
   positionSanctionPopover(btn);
   void pop.offsetWidth;
   pop.classList.add('open');
@@ -1020,8 +832,6 @@ function openSanctionPopover(container, btn) {
 }
 
 function closeSanctionPopover(instant) {
-  // Az "active"/aria-expanded takarítása minden ikonon: a nyitva hagyott
-  // panel gombja egy profil-újrarenderelés után már nem is létezik.
   document.querySelectorAll('.sanction-icon-btn.active, .sanction-icon-btn[aria-expanded="true"]').forEach((b) => {
     b.classList.remove('active');
     b.setAttribute('aria-expanded', 'false');
@@ -1037,16 +847,10 @@ function closeSanctionPopover(instant) {
   };
   pop.classList.remove('open');
   if (instant) { finish(); return; }
-  // A záró-animáció (.14s) után takarítunk - animationend helyett időzítővel,
-  // hogy a prefers-reduced-motion (ott .01ms a futásidő) se hagyhassa
-  // "félúton" ragadva a panelt.
   pop.classList.add('closing');
   pop.__closeTimer = setTimeout(finish, 170);
 }
 
-// Az ikonok dinamikusan (innerHTML-lel) jönnek létre, ezért delegált
-// figyelőt kötünk a dokumentumra - így egy profil újratöltése után is
-// működik, külön újrakötés nélkül.
 document.addEventListener('click', (e) => {
   const target = e.target;
   if (!target || typeof target.closest !== 'function') { closeSanctionPopover(); return; }
@@ -1059,7 +863,6 @@ document.addEventListener('click', (e) => {
     return;
   }
   if (target.closest('.sanction-popover')) {
-    // A panelen belüli kattintás nem zárja be, csak az X gomb.
     if (target.closest('[data-sanction-close]')) closeSanctionPopover();
     return;
   }
@@ -1068,16 +871,11 @@ document.addEventListener('click', (e) => {
 
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape' || !openSanctionBtn) return;
-  // A fókusz visszakerül arra az ikonra, amelyikről a panel nyílt.
   const btn = openSanctionBtn;
   closeSanctionPopover();
   btn.focus();
 });
 
-// Görgetéskor/átméretezéskor a panel követi az ikont (fix pozíciójú, tehát
-// magától nem mozdulna vele); ha az ikon kigörgött a képernyőről, bezárjuk.
-// A "capture" fázis kell, mert nem az ablak, hanem a belső .app-content
-// görgethető konténer mozog.
 let sanctionRepositionQueued = false;
 function repositionOpenSanctionPopover() {
   if (!openSanctionBtn || sanctionRepositionQueued) return;
@@ -1103,9 +901,6 @@ function formatSanctionUntil(iso) {
   return d.toLocaleString('hu-HU');
 }
 
-// A hátralévő időt "X nap Y óra" / "X óra Y perc" alakban adja vissza,
-// zárójelben a pontos dátummal - egy puszta dátum-időbélyeg kevésbé
-// szemléletes annál, mint amennyi idő ténylegesen hátravan.
 function formatRemaining(untilIso) {
   if (!untilIso) return '-';
   const untilMs = new Date(untilIso).getTime();
@@ -1123,12 +918,6 @@ function formatRemaining(untilIso) {
   return `${human} (${exact}-ig)`;
 }
 
-// ── Casino (SolarLucky) - a pörgetés MAGÁN a weboldalon zajlik (a
-// felhasználó kifejezett kérésére, NEM egy in-game /casino parancs GUI-
-// jában) - ld. SolarBackend src/casino.js POST /api/casino/spin. A
-// SolarLucky Minecraft-plugin csak a napi bejelentkezést jelenti (streak-
-// számításhoz) és a MÁR itt eldöntött nyeremény LuckPerms-parancsát hajtja
-// végre a szerveren. ──
 const CASINO_PRIZE_ICONS = {
   glow: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l1.8 5.6L19 9l-5.2 1.4L12 16l-1.8-5.6L5 9l5.2-1.4z"/><path fill="currentColor" opacity=".6" d="M19 15l.9 2.6L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.4z"/></svg>',
   antiqueue: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M2 5l8 7-8 7zM12 5l8 7-8 7z"/></svg>',
@@ -1185,9 +974,6 @@ function renderCasinoButtons() {
   spinBtn.disabled = casinoSpinning || !canSpin;
   spinBtn.textContent = canSpin ? 'Pörgetés' : 'Nincs elérhető pörgetésed';
 
-  // ÚJ: csak akkor vehető próbálkozás, ha az ingyenes keret TÉNYLEGESEN
-  // elfogyott (0) - ld. SolarBackend src/casino.js POST /buy-spin
-  // "free_spin_available" elutasítás-okát ugyanerről.
   const canBuy = casinoState.purchasesUnlocked && casinoState.purchasesRemaining > 0 && casinoState.freeSpinsAvailable === 0;
   buyBtn.hidden = !canBuy;
   buyBtn.disabled = casinoSpinning;
@@ -1236,10 +1022,6 @@ function loadCasino() {
   loadCasinoState();
 }
 
-// A pörgetés eredményét (nyert-e, melyik jutalmat) a backend MÁR eldöntötte
-// a POST /api/casino/spin válaszában, mire ez a függvény lefut - az
-// animáció csak megjelenítés, nem befolyásolja/nem is ismeri előre a
-// kimenetelt, amíg a hívás vissza nem tér.
 async function spinCasino() {
   if (casinoSpinning || !casinoState) return;
   if (casinoState.freeSpinsAvailable <= 0 && casinoState.purchasedSpinsAvailable <= 0) return;
@@ -1261,8 +1043,6 @@ async function spinCasino() {
     for (let i = 0; i < 3; i++) setCasinoReel(i, casinoIconHtml(CASINO_ICON_KEYS[Math.floor(Math.random() * CASINO_ICON_KEYS.length)]));
   }, 90);
 
-  // A "menő animáció" kedvéért mesterségesen legalább ~1.4 másodpercig pörög
-  // a tekercs, még ha a backend-hívás gyorsabban vissza is tér.
   const [data] = await Promise.all([spinPromise, new Promise((r) => setTimeout(r, 1400))]);
   clearInterval(cycleTimer);
   $('.slot-machine-lever-track')?.classList.remove('pulled');
@@ -1330,37 +1110,14 @@ async function buyCasinoSpin() {
 $('#casinoSpinBtn')?.addEventListener('click', spinCasino);
 $('#casinoBuySpinBtn')?.addEventListener('click', buyCasinoSpin);
 
-// A rangvásárlás gombjai (ld. renderRankCard/refreshPpBalance) ebből olvassák
-// ki, hogy a játékosnak van-e elég fedezete - ez csak kliens-oldali UX-segéd
-// (a tényleges, biztonságos ellenőrzést a beváltó plugin végzi élő adaton),
-// ezért egy kicsit elavult érték sem okoz problémát, csak rossz gombállapotot
-// mutathat egy frissítésig.
 let currentPpBalance = 0;
 
-// ÚJ: valós pénzes "egyenleg" (wallet, ld. SolarBackend src/shop.js POST
-// /wallet/topup + /checkout-with-wallet) - ugyanaz a "csak UX-segéd, a
-// szerver úgyis ellenőriz" elv, mint a fenti currentPpBalance-nál.
 let currentWalletBalanceHuf = 0;
 let lastRenderedWalletBalance = null;
 
-// A "tulajdonos" rangú felhasználóknak MINDIG megjelenik a teljes admin
-// felület - a backend a SAJÁT jogosultság-ellenőrzést is elvégzi minden
-// admin végponton (ld. SolarBackend src/permissions.js requirePermission()),
-// ez a kliens-oldali flag/halmaz csak azt dönti el, MEGJELENÍTSÜK-e
-// egyáltalán az egyes elemeket.
 let isOwner = false;
-// ÚJ: egyedi, játékosonkénti admin-jogosultságok (ld. SolarBackend
-// src/permissions.js PERMISSION_CATALOG) - a /api/me "permissions" mezőjéből
-// töltődik fel (ld. enterApp). hasPerm() a tulajdonosi bypass-t és a
-// ténylegesen megkapott jogokat EGYSÉGESEN kezeli, ezt kell hívni minden
-// admin nav-elem/mező/gomb láthatóságának eldöntésekor a régi, blanket
-// "isOwner" ellenőrzés helyett.
 let permSet = new Set();
 function hasPerm(key) { return isOwner || permSet.has(key); }
-// A player-profil admin panel (ld. openPlayerProfile) EGÉSZE akkor jelenjen
-// meg, ha a hívónak van BÁRMILYEN "player.*" jogköre - a panelen belüli
-// EGYES mezők/gombok láthatóságát külön, a data-perm attribútumuk szerint
-// dönti el applyPermVisibility() (ld. loadAdminPlayerPanel).
 const PLAYER_PANEL_KEYS = [
   'player.view.email', 'player.view.createdAt', 'player.view.lockStatus', 'player.view.logins',
   'player.view.devices', 'player.view.discord', 'player.view.media', 'player.view.badges', 'player.view.discount',
@@ -1371,12 +1128,6 @@ const PLAYER_PANEL_KEYS = [
   'player.action.discountSet', 'player.action.discountRemove', 'player.action.discordUnlink',
   'player.action.cosmeticGrant', 'player.action.cosmeticRevoke'
 ];
-// Bármely elemet, aminek van "data-perm" attribútuma, a megfelelő jog
-// szerint mutat/rejt - egyetlen közös helyen, hogy a player-admin-panel és
-// az eszköz-részletek nézet is ugyanazt a logikát használja. Vesszővel
-// felsorolt több kulcs esetén VAGY-kapcsolattal (elég BÁRMELYIK jog), ez
-// kell pl. egy "Fiók zárolása" alcímhez, amit lock VAGY unlock jog is
-// láthatóvá tehet.
 function applyPermVisibility(root = document) {
   root.querySelectorAll('[data-perm]').forEach((el) => {
     const keys = el.dataset.perm.split(',').map((k) => k.trim());
@@ -1384,47 +1135,22 @@ function applyPermVisibility(root = document) {
   });
 }
 
-// ÚJ: a legutóbb lekért /api/me aktív szankció-állapota (ld.
-// renderSanctionStatus fentebb) - a "sanction" (kitiltáscsökkentés) nézet
-// ebből dönti el, mely csomagok gombja legyen kattintható (ld.
-// loadShopCatalog) - csak akkor lehet megvenni egy csökkentést, ha tényleg
-// van mit csökkenteni.
 let currentSanctionStatus = { activeMute: null, activeBan: null, activeCban: null };
 
-// ÚJ: a felhasználó kérésére ("sokkal több animáció... modernebb") - a
-// PrémiumPont-egyenleg most a régi (vagy első betöltéskor 0) értékről az
-// újra SZÁMOLVA fut fel, nem csak egyszerűen kicserélődik a szöveg - a mai
-// dashboard-alkalmazásoknál megszokott "count-up" hatás. Csak EZT a
-// konkrét számot animáljuk (nem minden statisztikát site-szerte), mert ez a
-// leggyakrabban, legszembetűnőbben frissülő érték (minden vásárlás/
-// átutalás/rangvásárlás után), a többi statisztika-doboz ritkábban változik.
 let lastRenderedPpBalance = null;
-// JAVÍTVA: a felhasználó gyors nézetváltásainál (pl. Rangok <-> Egyenleg
-// pattogtatása) a refreshPpBalance() több, egymást átfedő hívása egymás
-// UTÁN, de egymást MEGELŐZVE futhatott le - mindegyik a SAJÁT célértékéhez
-// indított egy 650ms-es animációt UGYANAZON az elemen, cancelálás nélkül.
-// Két párhuzamos rAF-hurok emiatt felváltva írta a textContent-et két
-// KÜLÖNBÖZŐ interpolációból, ami néha a topbaron egészen más (akár
-// negatívnak látszó) számot eredményezett, mint amit a főoldal mutatott. A
-// WeakMap elemenként tárolja a "legutolsó indított animáció" generációját -
-// egy korábbi hurok az első lépésekor észreveszi, hogy felülírták, és
-// azonnal leáll, mielőtt bármit írna.
 const numberAnimGen = new WeakMap();
 function animateNumberTo(el, from, to, formatFn, duration = 650) {
   if (from === to) { el.textContent = formatFn(to); numberAnimGen.set(el, (numberAnimGen.get(el) || 0) + 1); return; }
   const myGen = (numberAnimGen.get(el) || 0) + 1;
   numberAnimGen.set(el, myGen);
-  // ÚJ: rövid megvillanás a szám mellett, hogy a változás akkor is
-  // észrevehető legyen, ha valaki épp nem a számlálást nézi (ld. ui.css
-  // .value-bump).
   el.classList.remove('value-bump');
   void el.offsetWidth;
   el.classList.add('value-bump');
   const start = performance.now();
   function tick(now) {
-    if (numberAnimGen.get(el) !== myGen) return; // felülírta egy újabb hívás - ez a hurok leáll
+    if (numberAnimGen.get(el) !== myGen) return;
     const t = Math.min(1, (now - start) / duration);
-    const eased = 1 - Math.pow(1 - t, 3); // ease-out kockás görbe - gyors indulás, lágy megállás
+    const eased = 1 - Math.pow(1 - t, 3);
     el.textContent = formatFn(Math.round(from + (to - from) * eased));
     if (t < 1) requestAnimationFrame(tick);
   }
@@ -1436,27 +1162,18 @@ function renderProfilePpBadge() {
   lastRenderedPpBalance = currentPpBalance;
 }
 
-// ÚJ: valós pénzes "egyenleg" jelvény (ld. currentWalletBalanceHuf) - a
-// topbar-badge mellett az "Egyenleg" oldal saját összeg-kijelzőjét is
-// frissíti, ha az épp a DOM-ban van.
 function renderWalletBadge() {
   const from = lastRenderedWalletBalance === null ? 0 : lastRenderedWalletBalance;
   animateNumberTo($('#topbarWalletValue'), from, currentWalletBalanceHuf, formatHuf);
   const pageEl = $('#walletPageBalance');
   if (pageEl) pageEl.textContent = formatHuf(currentWalletBalanceHuf);
-  // A főoldali egyenleg-csempe pénztárca-jele. Egyszer töltjük be (a
-  // számláló ezután másodpercenként többször is újrafut - fölösleges lenne
-  // minden képkockán újra beírni ugyanazt az SVG-t).
   const walletIcon = $('#homeWalletIcon');
   if (walletIcon && !walletIcon.firstChild) walletIcon.innerHTML = STAT_ICONS.wallet;
-  // ÚJ: nagyban kiírt egyenleg a főoldalon (ld. index.html #homeWalletBalance).
   const homeEl = $('#homeWalletBalance');
   if (homeEl) animateNumberTo(homeEl, lastRenderedWalletBalance === null ? 0 : lastRenderedWalletBalance, currentWalletBalanceHuf, formatHuf);
   lastRenderedWalletBalance = currentWalletBalanceHuf;
 }
 
-// meData: opcionálisan előre lekért /api/me válasz (pl. tryAutoLogin()-ból,
-// hogy ne kelljen kétszer lekérdezni) - ha nincs átadva, itt kérjük le.
 async function enterApp(meData) {
   $('#authScreen').classList.add('hidden');
   $('#appScreen').classList.remove('hidden');
@@ -1474,12 +1191,6 @@ async function enterApp(meData) {
     activeBan: meData?.activeBan || null,
     activeCban: meData?.activeCban || null
   };
-  // A bejelentkezés ELŐTT (szkript-betöltéskor) lefutott loadShopCatalog()
-  // még a fenti alapértelmezett (mind-null, azaz mind-zárolt) állapottal
-  // rendereli a kitiltáscsökkentés kártyákat - most, hogy tudjuk a valódi
-  // szankció-állapotot, újra kell generálni a gomb-állapotokat. Ugyanígy
-  // most már ismert a bejelentkezési token is, tehát az esetleges EGYEDI
-  // kedvezmény is bekerülhet mindkét listába (ld. loadShopCatalog/loadRanks).
   loadShopCatalog();
   loadRanks();
   currentPpBalance = typeof meData?.scBalance === 'number' ? meData.scBalance : 0;
@@ -1488,25 +1199,11 @@ async function enterApp(meData) {
   renderWalletBadge();
   isOwner = typeof meData?.rank === 'string' && meData.rank.toLowerCase() === 'tulajdonos';
   permSet = new Set(Array.isArray(meData?.permissions) ? meData.permissions : []);
-  // Minden admin nav-elem a SAJÁT "data-permission" kulcsa szerint jelenik
-  // meg (nem egy blanket "isOwner" kapcsolóval) - a "Jogok" nézet (nincs
-  // data-permission attribútuma) kivétel, az kizárólag tulajdonosnak
-  // látszik, mert a jog-adás maga nem delegálható (ld. #navPermissionsBtn
-  // markup indoklását index.html-ben).
-  // Vesszővel felsorolt több kulcs esetén VAGY-kapcsolattal (elég BÁRMELYIK
-  // jog) - ugyanaz a szemantika, mint az applyPermVisibility() data-perm
-  // kezelésénél. Kell pl. a "Kiegészítők" admin nézethez, amit a
-  // katalógus-kezelő ÉS a piac-moderátor jog is láthatóvá tesz.
   $$('.admin-nav-item[data-permission]').forEach((el) => {
     const keys = el.dataset.permission.split(',').map((k) => k.trim());
     el.classList.toggle('hidden', !keys.some(hasPerm));
   });
   $('#navPermissionsBtn')?.classList.toggle('hidden', !isOwner);
-  // Maga az "Admin" CSOPORT akkor látszik, ha maradt benne legalább egy
-  // látható elem. Szándékosan a tényleges elemekből számoljuk, nem az
-  // "isOwner || van bármilyen jog" közelítésből: egy olyan jogkészlettel,
-  // amiben csak nem-nav jogok vannak (pl. csak játékos-műveletek), különben
-  // egy üresen lenyíló csoport maradna a menüben.
   const adminGroup = document.querySelector('.app-nav-group[data-nav-group="admin"]');
   if (adminGroup) {
     const anyVisible = adminGroup.querySelectorAll('.app-nav-sub .app-nav-item:not(.hidden)').length > 0;
@@ -1518,34 +1215,19 @@ async function enterApp(meData) {
   loadDiscordWidget();
   renderSideRails();
 
-  // A Wolfy Discord bot /link (vagy /update) parancsa ide (?discordLink=<token>)
-  // irányítja a felhasználót - ha épp most jelentkezett be/regisztrált emiatt,
-  // vagy már eleve bejelentkezve volt egy ilyen linken keresztül érkezve, itt
-  // fejezzük be az összekötést (ld. tryConsumeDiscordLink lejjebb).
   tryConsumeDiscordLink();
 
-  // Minden bejelentkezéskor megnézzük, kapott-e a felhasználó időközben
-  // (MÁR teljesített) ajándékot valakitől - ld. checkPendingGifts lejjebb.
   checkPendingGifts();
 
-  // A legfrissebb hír/felhívás a főoldalon, a "Profilod" kártya alatt.
   loadHomeNews();
 
-  // A "Barátok" kártya (ld. loadHomeFriends lentebb).
   loadHomeFriends();
 
-  // A csapattagok saját havi statisztikája a barátlista alatt (ld.
-  // loadHomeStaffStats lentebb) - sima játékosnál a kártya rejtve marad.
   loadHomeStaffStats();
 
-  // Az oldalsáv "Csere ajánlatok" jelvénye (ld. refreshTradeBadge) - a
-  // beérkezett ajánlat különben észrevétlen maradna egy csukott csoportban.
   refreshTradeBadge();
 }
 
-// A Rangok fül megnyitásakor (ld. switchView) hívjuk - friss egyenleget kér
-// le, majd újrarajzolja a profil-jelvényt ÉS a rangkártyákat (hogy a "Nincs
-// elég PP" gombállapot is naprakész legyen).
 async function refreshPpBalance() {
   if (!session || !session.token) return;
   const res = await apiGetMe(session.token);
@@ -1558,10 +1240,6 @@ async function refreshPpBalance() {
   }
 }
 
-// ── Oldalsó "side rail" - minden alfülön (PrémiumPont/Rangok/Kódbeváltás/Skin/
-// Kitiltáscsökkentés) egy support/Discord kártya jelenik meg jobb oldalt, hogy
-// a tartalomterület sose maradjon kihasználatlanul üresen. JAVÍTVA: a korábbi
-// "Gyors elérés" gyorslink-kártyát a felhasználó kérésére eltávolítottuk.
 function sideRailHtml() {
   return `
     <div class="card side-card">
@@ -1581,7 +1259,6 @@ function renderSideRails() {
   });
 }
 
-// ── Felhasználói menü (topbar avatár/név -> lenyíló "Kijelentkezés") ──
 const topbarUserBtn = $('#topbarUserBtn');
 const topbarDropdown = $('#topbarDropdown');
 topbarUserBtn.addEventListener('click', (e) => {
@@ -1600,8 +1277,6 @@ $('#btnLogout').addEventListener('click', (e) => {
   location.reload();
 });
 
-// ── Gyors fiókváltás (ld. accounts/activeUsername fent) - a SolarLauncher
-// fiókváltó-modáljának 1:1 UX-portja. ──
 const accountModal = $('#accountModal');
 function openAccountModal() {
   $('#addAccountForm').classList.add('hidden');
@@ -1651,9 +1326,6 @@ function renderAccountList() {
   });
 }
 
-// Váltás egy MÁR elmentett fiókra - a launcher mintáját követve friss
-// apiGetMe()-vel újra-ellenőrizve (a token időközben lejárhatott/a fiók
-// zárolásra kerülhetett), mielőtt ténylegesen aktívvá tennénk.
 async function switchAccount(username) {
   const acc = accounts.find((a) => a.username === username);
   if (!acc) return;
@@ -1661,22 +1333,11 @@ async function switchAccount(username) {
   if (res.ok) {
     activeUsername = username;
     persistAccounts();
-    // JAVÍTVA: korábban itt egyszerűen enterApp(res)-t hívtuk újratöltés
-    // nélkül - ha admin fiókról egy sima játékos-fiókra (vagy fordítva)
-    // váltottunk, az admin-only nézetek/állapotok (pl. épp nyitva volt egy
-    // admin nézet) NEM ürültek ki, a régi fiók admin-jogaival lehetett volna
-    // tovább műveleteket végezni az újonnan aktív, jogosulatlan fiókkal is -
-    // ugyanaz a hiba osztály, amit a removeAccountEntry() lejjebbi
-    // location.reload()-ja már elkerül a "×" gombos eltávolításnál. Egy
-    // teljes újratöltés a legegyszerűbb módja annak, hogy MINDEN nézet/
-    // állapot friss, a most aktív fiókhoz tartozó legyen - tryAutoLogin()
-    // a betöltéskor úgyis a most elmentett aktív fiókkal jelentkezik be.
     location.reload();
   } else if (res.locked) {
     closeAccountModal();
     showLockedScreen(res.reason);
   } else {
-    // Lejárt/érvénytelen - a launcher mintáját követve kivesszük a listából.
     accounts = accounts.filter((a) => a.username !== username);
     persistAccounts();
     renderAccountList();
@@ -1684,9 +1345,6 @@ async function switchAccount(username) {
   }
 }
 
-// "×" gombbal explicit eltávolítás a modálban - ELLENTÉTBEN a saveSession()
-// session=null ágával (ami az AKTÍV fiók érvénytelenné válásakor fut le),
-// ez bármelyik (akár nem-aktív) fiókot eltávolíthatja.
 function removeAccountEntry(username) {
   const wasActive = username === activeUsername;
   accounts = accounts.filter((a) => a.username !== username);
@@ -1696,8 +1354,6 @@ function removeAccountEntry(username) {
   }
   persistAccounts();
   if (wasActive) {
-    // Ugyanaz, mint a "Kijelentkezés" gomb - egy reload újraindítja a
-    // tryAutoLogin()-t a (esetleg) megmaradt fiókkal.
     location.reload();
   } else {
     renderAccountList();
@@ -1723,25 +1379,9 @@ $('#btnDoAddAccount').addEventListener('click', async () => {
   session = { username: res.username, token: res.token };
   saveSession();
   closeAccountModal();
-  // JAVÍTVA: korábban itt enterApp()-t hívtunk újratöltés nélkül - az oldal
-  // az imént elhagyott nézeten/állapoton maradt, csak az adatok mögötte
-  // váltottak az újonnan hozzáadott fiókra (a felhasználó szerint "nem
-  // frissül az oldal, ott maradok ahol voltam csak a másik fiókon"). Ugyanaz
-  // a hiba osztály, amit switchAccount() location.reload()-ja fentebb már
-  // elkerül fiókváltáskor - itt is egy teljes újratöltés a legegyszerűbb
-  // módja annak, hogy MINDEN nézet/állapot az új, aktív fiókhoz tartozó
-  // legyen; tryAutoLogin() a betöltéskor úgyis a most mentett aktív fiókkal
-  // jelentkezik be.
   location.reload();
 });
 
-// ── ÚJ: regisztráció közvetlenül a fiókváltó modálból - a "Nincs még
-// fiókod? Regisztráció!" linkre kattintva a beágyazott bejelentkező-form
-// (#addAccountForm) helyett a beágyazott regisztrációs form
-// (#accountAddRegisterForm) jelenik meg, ugyanabban a modálban. Sikeres
-// regisztráció után PONTOSAN ugyanaz a záró-szekvencia fut, mint egy
-// meglévő fiók hozzáadásánál (btnDoAddAccount fent) - ld. renderer.js
-// doModalRegister ugyanez a mintázat a launcherben. ──
 $('#accountAddSwitchToRegister').addEventListener('click', () => {
   $('#addAccountForm').classList.add('hidden');
   $('#modalRegError').textContent = '';
@@ -1762,18 +1402,10 @@ async function doModalRegister() {
   location.reload();
 }
 
-// ── Biztonság (2FA/TOTP + biztonsági kód) - ld. SolarBackend src/totp.js és
-// src/securityPin.js. A két funkció EGYMÁSTÓL FÜGGETLEN, de a "biztonságod
-// veszélyben van" figyelmeztető sáv (ld. index.html #securityWeakWarning)
-// mindkettő állapotát ismernie kell - securityFactorState tárolja mindkét
-// betöltés eredményét, refreshSecurityWarning() dönt a sáv láthatóságáról. ──
 let lastGeneratedRecoveryCodes = null;
 const securityFactorState = { totp: null, pin: null };
 
 function refreshSecurityWarning() {
-  // Amíg valamelyik állapot még nem töltődött be (null), nem döntünk - egy
-  // BE állapotú tényezőt sose jelentsünk hibásan "nincs védelem"-nek egy
-  // lassabban betöltő másik kérés miatt.
   if (securityFactorState.totp === null || securityFactorState.pin === null) return;
   $('#securityWeakWarning').classList.toggle('hidden', securityFactorState.totp || securityFactorState.pin);
 }
@@ -1908,15 +1540,11 @@ $('#btnRegenerateRecoveryCodes').addEventListener('click', async () => {
   }
 });
 
-// ── Biztonsági kód (PIN) - ld. SolarBackend src/securityPin.js ──
 function showSecurityPinPanel(panelId) {
   ['securityPinSetupPanel', 'securityPinEnabledPanel']
     .forEach((id) => $('#' + id).classList.toggle('hidden', id !== panelId));
 }
 
-// A hossz-választó rádiógombok szerint tartja szinkronban a PIN-mezők
-// maxlength/placeholder-jét, hogy ne lehessen a választottnál több/kevesebb
-// számjegyet beírni.
 function currentSecurityPinLength() {
   return $('#securityPinLength4').checked ? 4 : 6;
 }
@@ -1930,9 +1558,6 @@ function syncSecurityPinInputLengths() {
 $('#securityPinLength4').addEventListener('change', syncSecurityPinInputLengths);
 $('#securityPinLength6').addEventListener('change', syncSecurityPinInputLengths);
 
-// Megnyitja a beállító űrlapot - "isChange" esetén (már bekapcsolt kód
-// módosítása) a jelenlegi hosszra állítja a rádiógombot, és megjeleníti a
-// "Mégse" gombot (első bekapcsoláskor nincs mihez visszalépni, ld. lentebb).
 function openSecurityPinSetup(isChange, currentLength) {
   $('#securityPinLength4').checked = currentLength === 4;
   $('#securityPinLength6').checked = currentLength !== 4;
@@ -2022,12 +1647,6 @@ $('#btnDisableSecurityPin').addEventListener('click', async () => {
   }
 });
 
-// ── Oldalsáv / nézetváltás ──
-
-// A LENYITHATÓ CSOPORTOK nyitva/csukva állapota a böngészőben marad meg
-// (nem a fiókban): ez pusztán megjelenési szokás, nem adat - ha valaki más
-// gépről lép be, semmi hasznos nem veszik el azzal, hogy nála alapból az van
-// nyitva, amiben épp jár.
 const NAV_GROUPS_KEY = 'solaryn.navGroups';
 
 function readOpenNavGroups() {
@@ -2041,17 +1660,9 @@ function persistOpenNavGroups() {
   try {
     const open = $$('.app-nav-group.open').map((g) => g.dataset.navGroup).filter(Boolean);
     localStorage.setItem(NAV_GROUPS_KEY, JSON.stringify(open));
-  } catch { /* privát mód / letiltott tároló - a menü ettől még működik */ }
+  } catch {  }
 }
 
-/**
- * EGYSZERRE EGY CSOPORT lehet nyitva.
- *
- * MIÉRT: a csoportosítás célja épp az, hogy a menü ne nőjön a képernyőnél
- * magasabbra. Ha minden megnyitott csoport nyitva is maradna, néhány fül
- * bejárása után visszakapnánk ugyanazt a huszonvalahány elemes, görgetendő
- * listát, ami elől elindultunk - csak most még a csoportfejekkel megtoldva.
- */
 function setNavGroupOpen(group, open) {
   if (open) {
     for (const other of $$('.app-nav-group')) {
@@ -2064,12 +1675,6 @@ function setNavGroupOpen(group, open) {
   group.querySelector('.app-nav-group-head')?.setAttribute('aria-expanded', open ? 'true' : 'false');
 }
 
-/**
- * A csoportok igazítása az AKTUÁLIS nézethez: az a csoport, amiben az épp
- * megnyitott oldal van, mindig kinyílik (különben a kattintás után eltűnne a
- * szem elől, hogy hol vagyunk), és a feje akkor is kiemelve marad, ha a
- * felhasználó utólag visszacsukja.
- */
 function syncNavGroups(view) {
   $$('.app-nav-group').forEach((group) => {
     const holds = !!group.querySelector(`.app-nav-item[data-view="${view}"]`);
@@ -2098,25 +1703,10 @@ function switchView(view) {
   $$('.view').forEach((v) => v.classList.toggle('active', v.dataset.view === view));
   syncNavGroups(view);
   if (view === 'skin') loadSkinPreview3d();
-  // A PP-egyenleg (rangvásárlás fedezet-ellenőrzéséhez) minden alkalommal
-  // frissül, amikor a felhasználó megnyitja a Rangok fület - nem élő/valós
-  // idejű szinkron, de elég friss ahhoz, hogy a gombok állapota (elég PP
-  // van-e) ne legyen régi adaton alapuló.
   if (view === 'ranks') refreshPpBalance();
-  // Az Egyenleg fület minden megnyitáskor frissítjük - ugyanaz az elv, mint a
-  // Rangoknál: friss egyenleget mutasson, ne egy esetleg elavult értéket.
   if (view === 'wallet') refreshPpBalance();
-  // A Biztonság fület minden megnyitáskor frissítjük - friss 2FA-állapotot
-  // mutasson (ld. loadSecurityStatus).
   if (view === 'security') { loadSecurityStatus(); loadSecurityPinStatus(); }
-  // A Napló fület minden megnyitáskor frissítjük - friss bejegyzéseket kér le
-  // (a dátum-szűrők szerint), a keresés viszont kliens-oldalon szűr a már
-  // letöltött listán, nem küld újabb kérést minden billentyűleütésre.
   if (view === 'ledger') loadLedger();
-  // A Vásárlás napló/Napló (admin) fület minden megnyitáskor a globális
-  // (mindenkire kiterjedő) nézetre állítjuk vissza - a korábban beírt
-  // játékosnév-szűrés nem marad meg fülváltás után, hogy ne legyen
-  // meglepő/régi szűrt nézet a legközelebbi megnyitáskor.
   if (view === 'purchaseLogs') loadPurchaseLogsGlobal();
   if (view === 'staffActionLogs') loadStaffActionLogsGlobal();
   if (view === 'staffStats') loadStaffStats();
@@ -2128,24 +1718,16 @@ function switchView(view) {
   if (view === 'coupons') { resetCouponForm(); loadCouponsAdmin(); }
   if (view === 'creatorCodes') { resetCreatorCodeForm(); loadCreatorCodesAdmin(); }
   if (view === 'casino') loadCasino();
-  // ÚJ: kiegészítők (ld. SolarBackend src/cosmetics.js). A "Kiegészítők" és a
-  // "Piac" is minden megnyitáskor frissül - a piaci kínálat más játékosok
-  // műveleteitől is változik, egy elavult lista pedig "már nem elérhető"
-  // hibába futna vásárláskor.
   if (view === 'cosmetics') loadMyCosmetics();
   if (view === 'market') loadMarket();
   if (view === 'trades') loadTrades();
   if (view === 'cosmeticsAdmin') { closeCosmeticEditor(); resetCosmeticForm(); loadCosmeticsAdmin(); }
-  // ÚJ: mobok (ld. SolarBackend src/mobs.js + a SolarMobs plugin). Minden
-  // megnyitáskor frissül: a lista forrása a SZERVER szinkronja, ami két
-  // megnyitás között is hozhatott új mobot vagy kapcsolhatott ki egyet.
   if (view === 'mobsAdmin') { closeMobEditor(); loadMobsAdmin(); }
 }
 $$('.app-nav-item[data-view]').forEach((btn) => {
   btn.addEventListener('click', () => switchView(btn.dataset.view));
 });
 
-// ── Profilkép (kis avatár a felső sávban) ──
 function drawDefaultFace(ctx, size) {
   const px = size / 8;
   const skin = '#cf9e76', hair = '#4a3323', eye = '#3b2a1e', mouth = '#a9744f';
@@ -2169,11 +1751,6 @@ async function drawFaceFromSkin(canvas, username, size) {
   const img = await loadSkinImage(username);
   if (img) {
     ctx.clearRect(0, 0, size, size);
-    // JAVÍTVA: a fej UV-régiója (8,8)-(16,16) csak sztenderd, 64 széles
-    // skinnél helyes pixelben - HD (pl. 128/256 széles) skinnél ugyanez a
-    // régió arányosan nagyobb helyen van, a kép TÉNYLEGES szélessége/64
-    // arányában (ld. skin3d.js azonos hibájának javítását ugyanezzel a
-    // logikával).
     const scale = (img.naturalWidth || img.width) / 64;
     ctx.drawImage(img, 8 * scale, 8 * scale, 8 * scale, 8 * scale, 0, 0, size, size);
     if ((img.naturalHeight || img.height) > (img.naturalWidth || img.width) / 2) {
@@ -2184,7 +1761,6 @@ async function drawFaceFromSkin(canvas, username, size) {
   }
 }
 
-// Betölti a nyilvános /api/skin/:username képet Image objektumként (vagy nullt, ha nincs).
 function loadSkinImage(username) {
   return new Promise((resolve) => {
     const img = new Image();
@@ -2195,18 +1771,11 @@ function loadSkinImage(username) {
   });
 }
 
-// ── Főoldal: saját skin 3D előnézet ──
-// ÚJ: a köpenyet (ld. loadCapeImage lentebb) MINDIG együtt kérdezzük le a
-// skinnel - ha a felhasználónak van feltöltött köpenye, az a skin 3D-
-// modelljén jelenik meg, nincs többé külön köpeny-előnézet.
 let stopHomeSkinPreview = null;
 async function loadHomeSkinPreview() {
   const [img, capeImg] = await Promise.all([loadSkinImage(session.username), loadCapeImage(session.username)]);
   const noteEl = $('#profileSkinNote');
   if (!img) {
-    // Nincs (már) feltöltött skin - pl. épp most lett visszaállítva
-    // alapértelmezettre. A korábban elindított forgó előnézetet le kell
-    // állítani, különben a régi skin tovább forogna a törlés után is.
     if (stopHomeSkinPreview) { stopHomeSkinPreview(); stopHomeSkinPreview = null; }
     const canvas = $('#homeSkinCanvas');
     canvas.width = canvas.width;
@@ -2218,7 +1787,6 @@ async function loadHomeSkinPreview() {
   stopHomeSkinPreview = SkinPreview.start($('#homeSkinCanvas'), img, false, capeImg);
 }
 
-// ── Skin nézet: 3D előnézet + feltöltés ──
 let stopSkinPreview = null;
 let skinModel = 'classic';
 
@@ -2258,7 +1826,6 @@ skinFileInput.addEventListener('change', () => {
   skinFileInput.value = '';
 });
 
-// ── Skin visszaállítása alapértelmezettre ──
 $('#skinResetBtn').addEventListener('click', async () => {
   const statusEl = $('#skinStatus');
   const confirmed = await confirmModal('Alapértelmezett skin visszaállítása', 'Biztosan törlöd a jelenlegi skinedet, és visszaállsz az alapértelmezett megjelenésre?', 'Igen, visszaállítás');
@@ -2315,10 +1882,6 @@ async function uploadSkinFile(file) {
   }
 }
 
-// ── Köpeny: NINCS külön előnézete - a feltöltött köpeny a skin 3D-
-// modelljén jelenik meg (ld. loadHomeSkinPreview/loadSkinPreview3d/
-// openPlayerProfile, amik MINDIG lekérdezik ezt is a skinnel együtt), ezért
-// itt csak a lekérdező függvény + a feltöltés/törlés logika maradt.
 function loadCapeImage(username) {
   return new Promise((resolve) => {
     const img = new Image();
@@ -2396,7 +1959,6 @@ async function uploadCapeFile(file) {
   }
 }
 
-// ── Kódbeváltás (ld. SolarBackend src/coupons.js POST /api/coupons/redeem) ──
 $('#redeemSubmit').addEventListener('click', async () => {
   const val = $('#redeemInput').value.trim();
   const resultEl = $('#redeemResult');
@@ -2418,15 +1980,11 @@ $('#redeemSubmit').addEventListener('click', async () => {
       return;
     }
     if (data.rewardType === 'cosmetic') {
-      // A kiegészítő AZONNAL a fiókra kerül (nincs szerverre lépéshez kötve,
-      // mint a PP) - a "Kiegészítők" nézetben rögtön felvehető.
       const until = data.expiresAt
         ? ` Érvényes: ${new Date(data.expiresAt.replace(' ', 'T')).toLocaleDateString('hu-HU')}-ig.`
         : ' Örökre a tiéd.';
       resultEl.textContent = `Sikeres beváltás! Megkaptad ezt a kiegészítőt: ${data.cosmeticName}.${until} A Kiegészítők fülön veheted fel.`;
     } else if (data.rewardType === 'rank') {
-      // A rangot a Minecraft-szerver adja (LuckPerms), ezért a beváltás
-      // pillanatában még nincs meg - ugyanaz a helyzet, mint a PP-nél.
       const until = data.rankDurationDays ? ` ${data.rankDurationDays} napra` : ' véglegesen';
       resultEl.textContent = `Sikeres beváltás! A(z) ${data.rankLabel} rangot${until} a következő szerverre lépéskor kapod meg.`;
     } else if (data.rewardType === 'wallet') {
@@ -2445,12 +2003,6 @@ $('#redeemSubmit').addEventListener('click', async () => {
 });
 $('#redeemInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#redeemSubmit').click(); });
 
-// ── Játékosok: keresés ──
-// JAVÍTVA: korábban a kereső a /api/profile/:username-re épült, ami csak PONTOS
-// egyezést adott vissza (egyetlen találatot, vagy semmit) - a felhasználó
-// referenciájában viszont RÉSZLEGES egyezésre több találat is megjelenik
-// (pl. "Kisskorboy" beírására "Kisskorboy1", "Kisskorboyfiam" is). Ehhez a
-// SolarBackend kapott egy új, dedikált /api/players/search?q=... végpontot.
 async function apiSearchPlayers(query) {
   try {
     const res = await fetch(BACKEND_URL + '/api/players/search?q=' + encodeURIComponent(query));
@@ -2461,9 +2013,6 @@ async function apiSearchPlayers(query) {
   }
 }
 
-// A találatra kattintva a profil-nézet ezt hívja, hogy a keresett játékos
-// TÉNYLEGES statisztikáit (playtimeSeconds/scBalance/rank) is megjelenítse,
-// nem csak a skinjét.
 async function apiGetProfile(username) {
   try {
     const res = await fetch(BACKEND_URL + '/api/profile/' + encodeURIComponent(username));
@@ -2502,15 +2051,6 @@ async function doPlayerSearch() {
     </div>
   `).join('');
 
-  // JAVÍTVA: korábban ez a lekérdezés ("$$('.player-card')") NEM volt az
-  // eredmény-listára szűkítve - mivel a "Barátok" kártya (ld. loadHomeFriends)
-  // a főoldalon UGYANEZT a ".player-card" osztályt használja (és a főoldal
-  // DOM-eleme akkor is a lapon marad, ha épp nem az aktív nézet), a globális
-  // lekérdezés a barát-kártyákat IS visszaadta, elcsúsztatva az index szerinti
-  // "data.players[i]" párosítást - ha volt legalább egy barátod, egy adott
-  // ponton "player" undefined lett, ami megszakította a forEach-et, mielőtt a
-  // tényleges keresési találatokra rákerülhetett volna a canvas-rajzolás/
-  // kattintás-figyelő.
   $$('#playerResult .player-card').forEach((card, i) => {
     const player = data.players[i];
     const canvas = card.querySelector('canvas');
@@ -2519,13 +2059,6 @@ async function doPlayerSearch() {
   });
 }
 
-// JAVÍTVA: korábban a méret mindenhol be volt égetve 40-re, ami a
-// player-card-canvas (mindig 40x40) hívásoknál nem számított, de a
-// fiókváltó-modál KOMPAKTABB, 32x32-es account-row-avatar canvasán (ld.
-// renderAccountList) elcsúszott/kilógott képet eredményezett, mert a
-// rajzolás egy nála nagyobb (40x40) területet feltételezett. Most a canvas
-// SAJÁT width attribútumából olvassuk ki a tényleges méretet, így bármilyen
-// négyzet alakú canvasra helyesen rajzol.
 async function drawFaceForPlayer(canvas, player) {
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingEnabled = false;
@@ -2533,7 +2066,6 @@ async function drawFaceForPlayer(canvas, player) {
   const img = player.hasSkin ? await loadSkinImage(player.username) : null;
   if (img) {
     ctx.clearRect(0, 0, size, size);
-    // JAVÍTVA: ld. drawFaceFromSkin ugyanezen HD-skálázási javítását.
     const scale = (img.naturalWidth || img.width) / 64;
     ctx.drawImage(img, 8 * scale, 8 * scale, 8 * scale, 8 * scale, 0, 0, size, size);
     if ((img.naturalHeight || img.height) > (img.naturalWidth || img.width) / 2) {
@@ -2544,8 +2076,6 @@ async function drawFaceForPlayer(canvas, player) {
   }
 }
 
-// A "Vissza" gomb az eszköz-részletekről mindig ide (a legutóbb megnyitott
-// játékos-profilra) tér vissza, ld. openDeviceDetail/btnBackFromDevice.
 let lastAdminPlayerUsername = null;
 
 async function openPlayerProfile(username) {
@@ -2557,12 +2087,7 @@ async function openPlayerProfile(username) {
   renderNameBadges($('#playerProfileNameBadges'), null);
   apiGetProfile(username).then((profile) => {
     renderStatBadges($('#playerProfileStats'), profile.ok ? formatStats(profile) : emptyStats(), { showWallet: true });
-    // ÚJ: a felhasználó kérésére a némítás-/kitiltás-állapot a játékos-
-    // keresőben (bárki profilját megnézve) is megjelenik, nem csak a saját
-    // fooldalon - ld. SolarBackend GET /api/profile/:username kiterjesztését.
     renderSanctionStatus($('#playerProfileSanctionStatus'), profile.ok ? profile : null);
-    // ÚJ: jelvények (ld. SolarBackend src/badges.js) - mindenki látja bárki
-    // más neve mellett is, nem csak a sajátjánál.
     renderNameBadges($('#playerProfileNameBadges'), profile.ok ? profile.badges : null);
   });
 
@@ -2572,15 +2097,8 @@ async function openPlayerProfile(username) {
   if (canSeeAdminPanel) loadAdminPlayerPanel(username);
 
   const noteEl = $('#playerProfileSkinNote');
-  // ÚJ: a köpenyt is lekérdezzük ehhez a MÁSIK játékoshoz - ha van neki
-  // feltöltve, ugyanúgy megjelenik a 3D előnézetén, mint a sajátodén.
   const [img, capeImg] = await Promise.all([loadSkinImage(username), loadCapeImage(username)]);
   if (!img) {
-    // JAVÍTVA: korábban itt csak a szöveg állt be, a canvas-t/előnézetet NEM
-    // állítottuk le/töröltük - ha korábban (akár a saját profilodon, akár egy
-    // másik keresésnél) már megjelent VALAMILYEN skin ezen a canvason, az
-    // tovább forgott/látszott, még egy skin NÉLKÜLI játékos profiljánál is
-    // (ld. loadHomeSkinPreview ugyanezen mintáját a Főoldalon).
     if (stopPlayerPreview) { stopPlayerPreview(); stopPlayerPreview = null; }
     const canvas = $('#playerProfileSkinCanvas');
     canvas.width = canvas.width;
@@ -2592,8 +2110,6 @@ async function openPlayerProfile(username) {
   stopPlayerPreview = SkinPreview.start($('#playerProfileSkinCanvas'), img, false, capeImg);
 }
 
-// ── Admin panel (csak "tulajdonos" rangnak) - email/regisztráció + kliens-
-// eszközök (ld. SolarBackend src/client.js /api/admin/*). ──
 function renderAdminLockStatus(locked) {
   const statusEl = $('#adminLockStatus');
   if (locked) {
@@ -2605,9 +2121,6 @@ function renderAdminLockStatus(locked) {
   }
 }
 
-// A "Változtatás" gomb kattintásakor felfedett szerkesztő mezőnek kell
-// tudnia, mi a JELENLEG mentett email, hogy "Mégse"-nél pontosan erre
-// tudjon visszaállni (ne a régi, esetleg félbehagyott beírt szöveget mutassa).
 let currentAdminEmail = '';
 
 function setAdminEmailEditing(editing) {
@@ -2619,10 +2132,6 @@ function setAdminEmailEditing(editing) {
   }
 }
 
-// ÚJ: a játékos-profil admin paneljének "Jelvények" szekciója - a
-// jelenleg birtokolt jelvényeket tárolja, hogy a grant/revoke gombok
-// mindig friss listára hivatkozzanak (ld. loadAdminPlayerPanel/
-// renderAdminPlayerBadgesList).
 let currentAdminPlayerBadges = [];
 
 async function ensureAllBadgesLoaded() {
@@ -2678,9 +2187,6 @@ async function loadAdminPlayerPanel(username) {
   $('#adminDeleteBtn').disabled = true;
   $('#adminBadgeGrantStatus').textContent = '';
   $('#adminPlayerBadgesList').innerHTML = '';
-  // ÚJ: kiegészítők - a jelvényekkel ellentétben ez KÜLÖN végpontról jön
-  // (/api/admin/player/:username/cosmetics), mert a saját jogkulcsai
-  // (cosmeticGrant/cosmeticRevoke) függetlenek a jelvény-jogoktól.
   $('#adminCosmeticGrantStatus').textContent = '';
   $('#adminPlayerCosmeticsList').innerHTML = '';
   $('#adminCosmeticDurationInput').value = '';
@@ -2730,9 +2236,6 @@ async function loadAdminPlayerPanel(username) {
   }
 }
 
-// ÚJ: a "Kedvezmény beállítása" admin-alszekció összefoglaló szövege (ld.
-// SolarBackend src/discounts.js GET /api/admin/player/:username "discount"
-// mezője - "null", ha nincs, vagy már lejárt egyedi kedvezmény).
 function renderAdminDiscountState(discount) {
   const el = $('#adminDiscountCurrent');
   if (!discount) { el.textContent = 'Jelenleg nincs egyedi kedvezménye.'; return; }
@@ -2742,9 +2245,6 @@ function renderAdminDiscountState(discount) {
   el.textContent = parts.join(' - ');
 }
 
-// ÚJ: a "Skin / Köpeny" admin-alszekció állapot-kijelzése + gombok
-// engedélyezése/tiltása - ld. index.html #adminSkinState/#adminCapeState.
-// A gombok csak akkor aktívak, ha ténylegesen VAN mit törölni/tiltani.
 function renderAdminMediaState(hasSkin, hasCape) {
   $('#adminSkinState').textContent = hasSkin ? 'van feltöltve' : 'nincs feltöltve';
   $('#adminCapeState').textContent = hasCape ? 'van feltöltve' : 'nincs feltöltve';
@@ -2754,8 +2254,6 @@ function renderAdminMediaState(hasSkin, hasCape) {
   $('#adminCapeBanBtn').disabled = !hasCape;
 }
 
-// A négy gomb (skin/köpeny × törlés/tiltás) ugyanazt a mintát követi -
-// egyetlen segédfüggvény hívja mindegyiket, csak a végpont/szöveg különbözik.
 async function adminMediaAction(kind, action, confirmTitle, confirmBody, confirmLabel) {
   if (!lastAdminPlayerUsername) return;
   const statusEl = $('#adminMediaStatus');
@@ -2822,7 +2320,7 @@ $('#adminPlayerEmailSave').addEventListener('click', async () => {
 
   const confirmed = await confirmModal(
     'Email cím módosítása',
-    `Biztosan megváltoztatod <b>${lastAdminPlayerUsername}</b> email címét erre: <b>${email}</b>?`,
+    `Biztosan megváltoztatod <b>${escapeHtml(lastAdminPlayerUsername)}</b> email címét erre: <b>${escapeHtml(email)}</b>?`,
     'Igen, mentés'
   );
   if (!confirmed) return;
@@ -2905,11 +2403,6 @@ $('#adminUnlockBtn').addEventListener('click', async () => {
   }
 });
 
-// A PP-módosítás SZÁNDÉKOSAN NEM közvetlenül a users.sc_balance oszlopot
-// írja (ld. SolarBackend src/client.js /api/admin/player/:username/pp-adjust
-// megjegyzését) - ezért a válasz itt csak azt jelzi, hogy a kérés
-// ELINDULT, a tényleges jóváírás/levonás a SolarShop pluginon keresztül,
-// aszinkron (kb. 1 percen belül) történik meg.
 $('#adminPpAdjustBtn').addEventListener('click', async () => {
   if (!lastAdminPlayerUsername) return;
   const statusEl = $('#adminPpAdjustStatus');
@@ -2948,11 +2441,6 @@ $('#adminPpAdjustBtn').addEventListener('click', async () => {
   }
 });
 
-// ÚJ: tulajdonosi valós pénzes "egyenleg" (wallet) módosítás - ELLENTÉTBEN a
-// fenti PP-módosítással, ez KÖZVETLENÜL, szinkron módon történik (nincs
-// beváltó-plugin-kör, ld. SolarBackend src/client.js POST
-// /api/admin/player/:username/wallet-adjust megjegyzését) - a válasz azonnal
-// a friss egyenleget adja vissza, nincs "kb. 1 percen belül" várakozás.
 $('#adminWalletAdjustBtn').addEventListener('click', async () => {
   if (!lastAdminPlayerUsername) return;
   const statusEl = $('#adminWalletAdjustStatus');
@@ -2991,11 +2479,6 @@ $('#adminWalletAdjustBtn').addEventListener('click', async () => {
   }
 });
 
-// ÚJ: egyedi, játékosonkénti kedvezmény beállítása/törlése (ld.
-// SolarBackend src/discounts.js POST/DELETE /api/admin/player/:username/discount) -
-// ELLENTÉTBEN a fenti PP-/casino-módosítással, ez KÖZVETLENÜL, szinkron
-// módon történik (nincs beváltó-plugin-kör, a "discounts"/"player_discounts"
-// tábla a backend SAJÁT, azonnal-friss adata - ld. computeDiscountPercent()).
 $('#adminDiscountSetBtn').addEventListener('click', async () => {
   if (!lastAdminPlayerUsername) return;
   const statusEl = $('#adminDiscountStatus');
@@ -3066,11 +2549,6 @@ $('#adminDiscountRevokeBtn').addEventListener('click', async () => {
   }
 });
 
-// A SolarLucky pörgetés adása/elvétele - ELLENTÉTBEN a fenti PP-módosítással,
-// ez KÖZVETLENÜL, szinkron módon történik (ld. SolarBackend src/client.js
-// /api/admin/player/:username/casino-adjust megjegyzését) - nincs szükség
-// a beváltó plugin aszinkron körére, mert a SolarLucky plugin a backendtől
-// magától kérdezi le élőben a pörgetés-számot.
 $('#adminCasinoAdjustBtn').addEventListener('click', async () => {
   if (!lastAdminPlayerUsername) return;
   const statusEl = $('#adminCasinoAdjustStatus');
@@ -3137,9 +2615,6 @@ $('#adminBadgeGrantBtn').addEventListener('click', async () => {
   }
 });
 
-// Delegált kattintás-figyelő (a jelvény-chipek dinamikusan újragenerálódnak,
-// ld. renderAdminPlayerBadgesList) - ugyanaz a minta, mint a news-edit-btn/
-// news-delete-btn-nél fentebb.
 document.addEventListener('click', (e) => {
   const revokeBtn = e.target.closest('[data-revoke-badge-id]');
   if (!revokeBtn || !lastAdminPlayerUsername) return;
@@ -3157,9 +2632,6 @@ document.addEventListener('click', (e) => {
   }).catch(() => showToast('Nem sikerült elérni a szervert.', true));
 });
 
-// A törlés gomb CSAK akkor engedélyezett, ha a beírt szöveg PONTOSAN egyezik
-// a felhasználónévvel - ez a szándékos "beírásos" plusz megerősítés (a
-// szokásos Igen/Mégse ablakon felül) egy VISSZAVONHATATLAN művelethez.
 $('#adminDeleteConfirmInput').addEventListener('input', (e) => {
   $('#adminDeleteBtn').disabled = e.target.value !== lastAdminPlayerUsername;
 });
@@ -3241,9 +2713,6 @@ function renderDeviceBanStatus() {
     $('#deviceBanCurrentNote').textContent = '';
     return;
   }
-  // A "until" ISO-formában jön (a backend Date.toISOString()-jével generálva,
-  // ld. src/client.js /ban), ezért itt közvetlenül new Date()-tel olvassuk,
-  // NEM a formatLedgerDate()-tel (az a "YYYY-MM-DD HH:MM:SS" SQLite-formát vár).
   const untilText = currentDeviceBan.permanent ? 'Végleges tiltás.' : `Lejár: ${new Date(currentDeviceBan.until).toLocaleString('hu-HU')}.`;
   $('#deviceDetailBanStatus').textContent = `Ez az eszköz jelenleg TILTVA van. Indok: ${currentDeviceBan.reason}. ${untilText}`;
   $('#deviceBanCurrentNote').textContent = `Jelenlegi tiltás - tiltotta: ${currentDeviceBan.bannedBy}, ekkor: ${formatLedgerDate(currentDeviceBan.bannedAt)}.`;
@@ -3321,11 +2790,6 @@ $('#unbanSubmitBtn').addEventListener('click', async () => {
 
 $('#btnBackToPlayers').addEventListener('click', () => switchView('players'));
 
-// ── Csomag-ikonok (PrémiumPont, kitiltáscsökkentés, rangok mind ezt
-// használják). ──
-// JAVÍTVA: a "ban"/"micMute" ikonok korábban kézzel rajzolt, bonyolult bezier-
-// útvonalak voltak, amik torzan/elcsúszva jelentek meg - most egyszerű,
-// garantáltan szimmetrikus SVG alapformákból (kör, vonal, téglalap) épülnek fel.
 const ICONS = {
   coin: '<img src="assets/pp-coin.png" alt="PP" />',
   gem: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M6 3h12l4 6-10 12L2 9z"/></svg>',
@@ -3343,40 +2807,14 @@ const ICONS = {
   </svg>`
 };
 
-// ── Bolt (PrémiumPont + kitiltáscsökkentés) - Stripe Checkout ──
-// A katalógus (nevek/árak) a backendtől jön (GET /api/shop/catalog) - a
-// SolarBackend src/shop.js az EGYETLEN hiteles forrás, itt csak
-// megjelenítjük, hogy a két hely (backend/frontend) sose kerülhessen
-// szinkronon kívülre. A korábbi, közvetlenül a CraftingStore-ra mutató
-// linkeket a "Vásárlás" gomb egy backend-hívása váltja fel (ld. buyItem),
-// ami egy Stripe Checkout Session URL-jére irányít át.
 let shopCatalog = [];
 
-// A beépített toLocaleString('hu-HU') NBSP-t tesz ezres elválasztónak, a
-// csomagkártyák eredeti kialakítása viszont pontot használt (pl. "1.500 Ft") -
-// ezt a formázást tartjuk meg itt kézzel, hogy a megjelenés ne változzon.
 function formatHuf(n) {
   return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ' Ft';
 }
 
-// A "locked" (true, ha nincs mit csökkenteni) csak a némítás-/kitiltás-/
-// kliens-tiltás-csökkentés kártyáknál kap értéket (ld. loadShopCatalog) - a
-// PrémiumPont-csomagoknál mindig undefined marad, ott nincs ilyen feltétel.
-//
-// JAVÍTVA: a felhasználó kérésére a szankció-csökkentés egyik fajtája sem
-// ajándékozható többé - ajándékozni csak PrémiumPontot vagy rangot lehet.
-// (Ez egyben egy korábban felfedezett, de sosem javított hibát is
-// megszüntet: a beváltó plugin fulfillSanctionReduction()-je sosem vette
-// figyelembe a gift_to mezőt, tehát egy "ajándék" csökkentés valójában a
-// VÁSÁRLÓ saját szankcióját csökkentette volna - mivel ez az útvonal most
-// egyáltalán elérhetetlenné válik, a hiba is okafogyottá válik.)
 const GIFTABLE_TYPES = new Set(['sc', 'rank']);
 
-// ÚJ: ha a kártya konkrét tételére aktív akció (globális vagy egyedi,
-// játékosonkénti) érvényes, a backend (ld. SolarBackend src/shop.js
-// GET /catalog) "discountPercent"/"originalPriceHuf" mezőket is küld - ekkor
-// egy "-X%" jelvényt és az áthúzott eredeti ár mellett a kedvezményes árat
-// jelenítjük meg, hogy ez a kártyán is látszódjon, ne csak fizetéskor derüljön ki.
 function renderPkgCard(item, locked) {
   const lockedNote = locked
     ? `<div class="pkg-locked-note">Nincs aktív szankciód - nincs mit csökkenteni</div>`
@@ -3388,11 +2826,6 @@ function renderPkgCard(item, locked) {
   const priceHtml = item.discountPercent > 0
     ? `<span class="price-original">${formatHuf(item.originalPriceHuf)}</span>${formatHuf(item.priceHuf)}`
     : formatHuf(item.priceHuf);
-  // ÚJ: fizetés a feltöltött egyenlegből (ld. buyItemWithWallet lentebb), a
-  // kártyás "Vásárlás" gomb mellett - MINDKÉT gomb mindig látszik (a
-  // felhasználó kérésére, popup-os megerősítés nélkül), az egyenlegből-gomb
-  // csak akkor aktív, ha van rá elég fedezet (és, szankció-csökkentésnél,
-  // ha egyáltalán van mit csökkenteni).
   const walletAffordable = currentWalletBalanceHuf >= item.priceHuf;
   const walletDisabled = locked || !walletAffordable;
   const walletLabel = !locked && !walletAffordable ? 'Nincs elég egyenleged' : 'Fizetés egyenlegből';
@@ -3413,9 +2846,6 @@ function renderPkgCard(item, locked) {
 
 async function loadShopCatalog() {
   try {
-    // ÚJ: ha már be van jelentkezve (session ismert), a tokent is elküldjük -
-    // az esetleges EGYEDI, játékosonkénti kedvezmény csak így számítható be
-    // (a globális akciók bejelentkezés nélkül is látszanak).
     const res = await fetch(BACKEND_URL + '/api/shop/catalog', session
       ? { headers: { Authorization: 'Bearer ' + session.token } }
       : undefined);
@@ -3430,12 +2860,6 @@ async function loadShopCatalog() {
   const banItems = shopCatalog.filter((i) => i.type === 'ban_reduction');
   const cbanItems = shopCatalog.filter((i) => i.type === 'cban_reduction');
 
-  // ÚJ: a "Vásárlás" gomb (nem az ajándékozás - azt más játékos szankciójára
-  // vesszük, ld. buyItem/giftModal) csak akkor kattintható, ha a
-  // bejelentkezett játékosnak TÉNYLEG van aktív szankciója az adott
-  // típusból (ld. currentSanctionStatus, enterApp() tölti a legutóbbi
-  // /api/me válaszból) - a szerver a /checkout végponton ÚGYIS elutasítaná,
-  // ez csak megelőzi, hogy valaki feleslegesen próbálkozzon.
   const muteLocked = !currentSanctionStatus.activeMute;
   const banLocked = !currentSanctionStatus.activeBan;
   const cbanLocked = !currentSanctionStatus.activeCban;
@@ -3452,37 +2876,21 @@ async function loadShopCatalog() {
 }
 loadShopCatalog();
 
-// ── Rangok - NEM Stripe-fizetés, a játékos MÁR meglévő PrémiumPont-
-// egyenlegéből vonja le a beváltó plugin (ld. POST /api/shop/purchase-rank) -
-// ezért itt nincs redirect, csak egy visszajelzés, hogy a kérés elindult
-// (a tényleges fedezet-ellenőrzés a pluginban, aszinkron történik). A gombok
-// állapotát (elég PP van-e) itt, kliens-oldalon is ellenőrizzük - ez csak UX-
-// segéd, a valódi, biztonságos ellenőrzést mindig a plugin végzi élő adaton. ──
 function formatPp(n) {
   return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ' PP';
 }
 
 let shopRanks = [];
-// ÚJ: automatikus PP-előfizetéses rangrendszer (a felhasználó kifejezett
-// kérésére, ld. SolarBackend src/subscriptions.js) - a bejelentkezett
-// felhasználó SAJÁT aktív/lemondott előfizetéseinek listája, hogy minden
-// rang-kártyán el tudjuk dönteni: "Előfizetés" gombot mutassunk-e, vagy már
-// van rá aktív előfizetés (akkor "Lemondás" + a következő terhelés dátuma).
 let mySubscriptions = [];
 
 function formatSubscriptionDate(iso) {
   if (!iso) return '';
-  // A backend "YYYY-MM-DD HH:MM:SS" (UTC, SQLite datetime()) formátumban adja
-  // vissza - a Date natívan is fel tudja dolgozni "T"-re cserélve a szóközt.
   const d = new Date(iso.replace(' ', 'T') + 'Z');
   if (isNaN(d.getTime())) return iso;
   return d.toLocaleDateString('hu-HU');
 }
 
 function renderRankCard(rank) {
-  // A "priceCoins" itt MÁR a kedvezménnyel csökkentett ár (ld. GET /ranks) -
-  // az "elég PP van-e" ellenőrzés is helyesen a TÉNYLEGESEN fizetendő,
-  // kedvezményes árhoz hasonlít.
   const affordable = currentPpBalance >= rank.priceCoins;
   const discountBadge = rank.discountPercent > 0 ? `<div class="discount-badge">-${rank.discountPercent}%</div>` : '';
   const priceInner = rank.discountPercent > 0
@@ -3565,10 +2973,6 @@ document.addEventListener('click', (e) => {
   if (cancelBtn) cancelSubscription(cancelBtn.dataset.cancelSubRankId, cancelBtn);
 });
 
-// ÚJ: havonta automatikusan megújuló előfizetés indítása - az ELSŐ terhelés
-// azonnal elindul (ugyanaz az async pending/claim mechanizmus, mint egy sima
-// rang-vásárlásnál, ld. buyRank), utána a SolarBackend saját maga terheli
-// havonta, amíg a játékos le nem mondja.
 async function subscribeRank(rankId, buttonEl) {
   if (!session || !session.token) {
     showToast('Az előfizetéshez jelentkezz be.', true);
@@ -3632,8 +3036,6 @@ async function cancelSubscription(rankId, buttonEl) {
   }
 }
 
-// Egyszerű, a site stílusát követő Igen/Mégse megerősítő modál (a natív
-// confirm() helyett) - Promise<boolean>-t ad vissza.
 function confirmModal(title, message, okLabel) {
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
@@ -3669,7 +3071,7 @@ async function buyRank(rankId, buttonEl, giftTo, giftMessage) {
   const confirmed = await confirmModal(
     'Biztosan megveszed?',
     giftTo
-      ? (rank ? `A(z) <b>${rank.label}</b> rangot ajándékozod <b>${giftTo}</b>-nak <b>${formatPp(rank.priceCoins)}</b>-ért - ez a TE egyenlegedből kerül levonásra.` : `Biztosan ajándékozod ezt a rangot ${giftTo}-nak?`)
+      ? (rank ? `A(z) <b>${escapeHtml(rank.label)}</b> rangot ajándékozod <b>${escapeHtml(giftTo)}</b>-nak <b>${formatPp(rank.priceCoins)}</b>-ért - ez a TE egyenlegedből kerül levonásra.` : `Biztosan ajándékozod ezt a rangot ${escapeHtml(giftTo)}-nak?`)
       : (rank ? `A(z) <b>${rank.label}</b> rangot vásárolod meg <b>${formatPp(rank.priceCoins)}</b>-ért. Ez levonásra kerül az egyenlegedből.` : 'Biztosan megveszed ezt a rangot?'),
     giftTo ? 'Igen, ajándékozás' : 'Igen, vásárlás'
   );
@@ -3698,11 +3100,6 @@ async function buyRank(rankId, buttonEl, giftTo, giftMessage) {
   }
 }
 
-// Az ajándékozás címzettjét/opcionális üzenetét kérdező modál - a
-// confirmModal()-hoz hasonló Promise-alapú minta, de saját input mezőkkel. A
-// visszaadott {giftTo, giftMessage} objektumot a buyItem()/buyRank() a
-// checkout/purchase-rank kérés testébe fűzi bele (ld. SolarBackend src/shop.js
-// validateGiftTarget() végzi a tényleges, biztonságos ellenőrzést).
 function giftModal(itemLabel) {
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
@@ -3772,10 +3169,6 @@ document.addEventListener('click', (e) => {
   if (btn && !btn.disabled) giftRank(btn.dataset.giftRankId, btn);
 });
 
-// ── Átutalás - a tényleges levonást/jóváírást is a beváltó plugin végzi
-// (aszinkron, ld. SolarShop fulfillTransfer), itt csak elindítjuk a kérést. A
-// 10%-os díj kliens-oldali kiszámítása csak megjelenítési célú előzetes
-// becslés - a backend/plugin újraszámolja, ez a tényleges forrás. ──
 const TRANSFER_FEE_PERCENT = 10;
 
 function updateTransferFeeNote() {
@@ -3853,11 +3246,6 @@ $('#transferSubmitBtn').addEventListener('click', async () => {
   }
 });
 
-// ── Egyenleg feltöltése - szabadon megadott Ft-összeg, nincsenek előre
-// megadott gyors-összeg gombok (a felhasználó kifejezett kérésére). A
-// tényleges jóváírás a Stripe webhookban történik (ld. SolarBackend
-// src/shop.js) - itt csak a fizetési munkamenetet indítjuk el, ugyanúgy,
-// mint egy katalógus-tétel vásárlásánál (ld. buyItem lentebb). ──
 const WALLET_TOPUP_MIN_HUF = 500;
 const WALLET_TOPUP_MAX_HUF = 500000;
 
@@ -3912,14 +3300,6 @@ $('#btnWalletTopup').addEventListener('click', async () => {
   }
 });
 
-// ── Napló - a dátum-tartományt a backend szűri (ld. GET /api/shop/ledger),
-// a szöveges keresést (érintett/művelet/részletek) kliens-oldalon, a már
-// letöltött listán, hogy ne kelljen minden billentyűleütésre új kérést
-// küldeni. ──
-// A típusok a beváltó plugin oldaláról érkeznek szabad szövegként (ld.
-// SolarCore ShopService postLedgerEntry / SolarBackend POST /api/shop/ledger) -
-// az itt fel nem sorolt típus a nyers, aláhúzásos kulcsával jelenne meg a
-// Napló fülön, ezért minden ténylegesen írt típusnak szerepelnie kell itt.
 const LEDGER_TYPE_LABELS = {
   transfer_in: 'Átutalás',
   transfer_out: 'Átutalás',
@@ -3938,8 +3318,6 @@ const LEDGER_TYPE_LABELS = {
 let ledgerEntries = [];
 
 function formatLedgerDate(sqliteDatetime) {
-  // A backend "YYYY-MM-DD HH:MM:SS" (UTC, datetime('now')) alakot ad vissza -
-  // ISO-formára alakítva adjuk át a Date-nek, hogy megbízhatóan parse-olja.
   const d = new Date(sqliteDatetime.replace(' ', 'T') + 'Z');
   if (Number.isNaN(d.getTime())) return sqliteDatetime;
   const pad = (n) => String(n).padStart(2, '0');
@@ -3953,9 +3331,9 @@ function renderLedgerRow(entry) {
   return `
     <tr>
       <td>${formatLedgerDate(entry.created_at)}</td>
-      <td>${entry.counterparty || '-'}</td>
-      <td>${typeLabel}</td>
-      <td>${entry.detail || '-'}</td>
+      <td>${entry.counterparty ? escapeHtml(entry.counterparty) : '-'}</td>
+      <td>${escapeHtml(typeLabel)}</td>
+      <td>${entry.detail ? escapeHtml(entry.detail) : '-'}</td>
       <td class="${amountClass}">${amountText}</td>
       <td class="ledger-balance">${formatPp(entry.balance_after)}</td>
     </tr>
@@ -3993,19 +3371,6 @@ async function loadLedger() {
 
 $('#ledgerSearchInput').addEventListener('input', renderLedgerTable);
 
-// ── Vásárlás napló (admin) - jogosultsági rálátás MINDEN játékos pp_ledger
-// bejegyzésére (ld. SolarBackend GET /api/admin/logs[/:username]), szemben a
-// fenti (saját) Napló füllel - ugyanazt a "ledger-table" HTML/CSS mintát és
-// segédfüggvényeket (formatLedgerDate/LEDGER_TYPE_LABELS/formatPp) használja,
-// csak egy plusz "Játékos" oszloppal, mert itt több felhasználó keveredik.
-// KORÁBBAN "Napló (admin)" néven futott - a felhasználó kérésére "Vásárlás
-// napló"-ra átnevezve, hogy a staff-tevékenységeket mutató, ÚJ nézettől (ld.
-// lejjebb) megkülönböztethető legyen; a jogosultsági kulcs (global.logs)
-// VÁLTOZATLAN maradt. JAVÍTVA: a betöltő függvények korábban "!isOwner"-t
-// ellenőriztek "!hasPerm(...)" helyett - egy "global.logs" jogot kapott
-// (de nem tulajdonos) staff a nav-gombot látta, de a nézet üresen maradt
-// volna (ugyanez a hiba a többi admin-nézet betöltőjében is megvan, azok
-// egyelőre változatlanok). ──
 let purchaseLogsEntries = [];
 
 function renderPurchaseLogRow(entry) {
@@ -4017,7 +3382,7 @@ function renderPurchaseLogRow(entry) {
       <td>${formatLedgerDate(entry.created_at)}</td>
       <td>${escapeHtml(entry.username)}</td>
       <td>${entry.counterparty ? escapeHtml(entry.counterparty) : '-'}</td>
-      <td>${typeLabel}</td>
+      <td>${escapeHtml(typeLabel)}</td>
       <td>${entry.detail ? escapeHtml(entry.detail) : '-'}</td>
       <td class="${amountClass}">${amountText}</td>
       <td class="ledger-balance">${formatPp(entry.balance_after)}</td>
@@ -4070,11 +3435,6 @@ $('#purchaseLogsUserSearchInput').addEventListener('keydown', (e) => {
 });
 $('#purchaseLogsClearBtn').addEventListener('click', loadPurchaseLogsGlobal);
 
-// ── Napló (admin) - staff-tevékenységek (ld. SolarBackend src/adminLog.js
-// GET /api/admin/staff-action-logs[/:username]) - ugyanaz a minta, mint a
-// fenti Vásárlás napló, csak "Összeg"/"Egyenleg utána" oszlopok nélkül
-// (ezek a bejegyzések nem pénzösszeg-alapúak), és egy "Tevékenység"-címke
-// térképpel (ADMIN_ACTION_LABELS) az "action" gépi kulcshoz. ──
 const ADMIN_ACTION_LABELS = {
   'player.lock': 'Fiók zárolása', 'player.unlock': 'Zárolás feloldása',
   'player.ppAdjust': 'PrémiumPont módosítása', 'player.walletAdjust': 'Egyenleg módosítása',
@@ -4103,10 +3463,10 @@ function renderStaffActionLogRow(entry) {
   return `
     <tr>
       <td>${formatLedgerDate(entry.created_at)}</td>
-      <td>${entry.actor_username}</td>
-      <td>${entry.target_username || '-'}</td>
-      <td>${actionLabel}</td>
-      <td>${entry.detail || '-'}</td>
+      <td>${escapeHtml(entry.actor_username)}</td>
+      <td>${entry.target_username ? escapeHtml(entry.target_username) : '-'}</td>
+      <td>${escapeHtml(actionLabel)}</td>
+      <td>${entry.detail ? escapeHtml(entry.detail) : '-'}</td>
     </tr>
   `;
 }
@@ -4158,17 +3518,8 @@ $('#staffActionLogsClearBtn').addEventListener('click', loadStaffActionLogsGloba
 $('#ledgerFromInput').addEventListener('change', loadLedger);
 $('#ledgerToInput').addEventListener('change', loadLedger);
 
-// ── Csapat statisztika (admin, ld. SolarBackend GET /api/admin/staff-stats) ──
-// JAVÍTVA: a felhasználó kérésére a korábbi sima táblázat helyett kártya-
-// rácsos megjelenítés - a kártyák a havi online idő szerint csökkenő
-// sorrendben jelennek meg, hogy a legaktívabb staff-tagok legyenek elöl.
 const STAFF_STAT_ICON_TICKET = '<svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M3 9a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v1a1.5 1.5 0 0 0 0 3v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1a1.5 1.5 0 0 0 0-3z"/><path d="M9 7v10" stroke="currentColor" stroke-width="1.6" stroke-dasharray="2.5 2.5"/></svg>';
 
-// A csapat-szintű összesítő sáv (ld. staff-stats-summary) - a per-staff
-// kártyák FÖLÖTT, az összes staff-tag adatait összeadva mutatja, hogy ne
-// kelljen fejben összeadni 10+ kártyát a "mennyi ban/mute/ticket volt
-// összesen ebben a hónapban" kérdés megválaszolásához. Tisztán a már
-// letöltött staff-tömbből számol, nincs hozzá külön backend-végpont.
 function renderStaffStatsSummary(staff) {
   const container = $('#staffStatsSummary');
   if (!staff.length) {
@@ -4244,11 +3595,6 @@ async function loadStaffStats() {
   $('#staffStatsEmptyNote').classList.toggle('hidden', staff.length > 0);
 }
 
-// ── Havi bevétel (admin) - naptár nézet: minden évhez mind a 12 hónap
-// kártyaként megjelenik (akkor is, ha egy hónapban nem volt vásárlás), a
-// LEGFRISSEBB év felül. Az évek listáját a ténylegesen létező adatokból ÉS a
-// jelen évből építjük - így egy vadonatúj, még adat nélküli évben is
-// azonnal látszik a folyó hónap kártyája, nem csak ott, ahol már van adat.
 const REVENUE_MONTH_NAMES = ['Jan', 'Feb', 'Márc', 'Ápr', 'Máj', 'Jún', 'Júl', 'Aug', 'Szept', 'Okt', 'Nov', 'Dec'];
 
 function buildRevenueCalendarHtml(months) {
@@ -4341,12 +3687,8 @@ async function loadRevenueDetail(month) {
 
 $('#btnBackToRevenue').addEventListener('click', () => switchView('revenue'));
 
-// ── Felhívások/hírek (admin, ld. SolarBackend src/news.js) ──
 let newsEditingId = null;
 let newsAdminItems = [];
-// ÚJ: a kiválasztott (de még fel nem töltött) kép fájl, illetve a "meglévő
-// kép eltávolítása" jelző szerkesztéskor - ld. newsSaveBtn handlerét, ahol
-// ezekből épül fel a multipart FormData.
 let newsSelectedImageFile = null;
 let newsRemoveExistingImage = false;
 
@@ -4354,22 +3696,6 @@ function newsImageUrl(id) {
   return BACKEND_URL + '/api/news/' + id + '/image';
 }
 
-// ── Formázott szöveg eszköztár (Felhívások cím/tartalom) - a felhasználó
-// kifejezett kérésére: félkövér/dőlt/aláhúzott/méret/szín/igazítás. A
-// document.execCommand ELAVULT API, de Electronban/Chromiumban (a
-// SolarCenter itt egyetlen, ismert rendermotoron fut, nincs böngésző-
-// kompatibilitási kockázat) még megbízhatóan működik erre az egyszerű,
-// belső admin-eszközre - a kimeneti HTML-t a SolarBackend (src/news.js
-// sanitize-html) szigorúan tisztítja mentés előtt, függetlenül attól, hogy
-// execCommand pontosan milyen jelölést generál.
-//
-// JAVÍTVA (ismert execCommand+eszköztár csapda): egy eszköztár-gombra
-// kattintva a böngésző ALAPÉRTELMEZETTEN elveszi a fókuszt (és vele a
-// szövegkijelölést) a contenteditable mezőtől, MIELŐTT a click-handler
-// lefutna - ezért a gombokon mousedown-kor preventDefault()-tal
-// megakadályozzuk a fókuszváltást, a színválasztó/méret legördülő viszont
-// natívan MUSZÁJ hogy fókuszt kapjon (ott nem lehet preventDefault-olni) -
-// ezeknél a KIJELÖLÉST magát mentjük el/állítjuk vissza kézzel.
 let richTextSavedRange = null;
 let richTextSavedEditable = null;
 
@@ -4440,10 +3766,6 @@ function resetNewsForm() {
   $('#newsImagePreviewWrap').hidden = true;
   $('#newsImagePreview').src = '';
   $('#newsSendEmailCheckbox').checked = false;
-  // Szerkesztéskor a backend úgyis figyelmen kívül hagyja ezt a mezőt (ld.
-  // SolarBackend src/news.js megjegyzését - csak létrehozáskor küldhető ki),
-  // ezért új felhívásnál látszik, szerkesztésnél elrejtjük, hogy ne
-  // keltsen hamis benyomást.
   $('#newsSendEmailCheckbox').closest('label').hidden = false;
   $('#newsFormResult').textContent = '';
   $('#newsFormResult').className = 'redeem-result';
@@ -4456,7 +3778,7 @@ function renderNewsAdminList() {
       ${n.image_ext ? `<img class="news-admin-item-image" src="${newsImageUrl(n.id)}" alt="" />` : ''}
       <div class="news-admin-item-head">
         <div>
-          <div class="news-admin-item-title">${n.title}</div>
+          <div class="news-admin-item-title">${sanitizeRichText(n.title)}</div>
           <div class="news-admin-item-meta">${escapeHtml(n.created_by)} - ${formatLedgerDate(n.created_at)}${n.updated_at ? ' (szerkesztve: ' + formatLedgerDate(n.updated_at) + ')' : ''}</div>
         </div>
         <div class="news-admin-item-actions">
@@ -4464,17 +3786,11 @@ function renderNewsAdminList() {
           <button type="button" class="news-delete-btn" data-news-id="${n.id}">Törlés</button>
         </div>
       </div>
-      <p class="news-admin-item-content">${n.content}</p>
+      <p class="news-admin-item-content">${sanitizeRichText(n.content)}</p>
     </div>
   `).join('') || '<p class="redeem-result">Még nincs egyetlen felhívás sem.</p>';
 }
 
-// JAVÍTVA: a felhasználó kérésére a natív "Fájl kiválasztása" gomb (a
-// böngésző saját, stílusozatlan megjelenítése) helyett most egy a site
-// designjához illő gomb váltja ki a rejtett file-inputot - ugyanaz a minta,
-// mint a skin/köpeny feltöltésénél (ld. #skinDrop/#capeDrop kattintás-
-// továbbítása app.js-ben), csak itt egy kompakt gombbal, nem egy nagy
-// drag&drop dobozzal, mert ez a form szűkebb, egysoros mezőkből áll.
 $('#newsImagePickBtn').addEventListener('click', () => $('#newsImageInput').click());
 
 $('#newsImageInput').addEventListener('change', (e) => {
@@ -4516,11 +3832,6 @@ $('#newsDiscardBtn').addEventListener('click', resetNewsForm);
 
 $('#newsSaveBtn').addEventListener('click', async () => {
   const resultEl = $('#newsFormResult');
-  // ÚJ: a cím/tartalom mostantól formázott (contenteditable) mező - a
-  // MENTETT érték a teljes innerHTML (a formázás is benne marad, a backend
-  // sanitize-html-je tisztítja végleg, ld. SolarBackend src/news.js), de az
-  // "üres-e" ELLENŐRZÉS a textContent alapján történik, mert egy puszta
-  // "<br>"-t (üres sor) NEM szabad érvényes címnek/tartalomnak elfogadni.
   const titleEl = $('#newsTitleInput');
   const contentEl = $('#newsContentInput');
   const title = titleEl.innerHTML.trim();
@@ -4532,19 +3843,11 @@ $('#newsSaveBtn').addEventListener('click', async () => {
   }
   try {
     const url = newsEditingId ? BACKEND_URL + '/api/admin/news/' + newsEditingId : BACKEND_URL + '/api/admin/news';
-    // FormData (multipart), NEM JSON - a kép-csatolmány miatt (ld. SolarBackend
-    // src/news.js upload.single('image')). A "Content-Type" fejlécet
-    // SZÁNDÉKOSAN nem adjuk meg kézzel - a böngésző maga állítja be, a
-    // helyes multipart boundary-vel, ha kézzel írnánk felül, a szerver nem
-    // tudná feldolgozni a törzset.
     const formData = new FormData();
     formData.append('title', title);
     formData.append('content', content);
     if (newsSelectedImageFile) formData.append('image', newsSelectedImageFile);
     else if (newsEditingId && newsRemoveExistingImage) formData.append('removeImage', 'true');
-    // Csak ÚJ felhívásnál küldjük el ezt a mezőt - szerkesztésnél a backend
-    // úgyis figyelmen kívül hagyja (ld. news.js megjegyzését), a checkbox is
-    // el van rejtve ilyenkor.
     if (!newsEditingId && $('#newsSendEmailCheckbox').checked) formData.append('sendEmail', 'true');
     const res = await fetch(url, {
       method: newsEditingId ? 'PUT' : 'POST',
@@ -4582,12 +3885,9 @@ document.addEventListener('click', (e) => {
     newsRemoveExistingImage = false;
     $('#newsImageInput').value = '';
     $('#newsFormTitle').textContent = 'Felhívás szerkesztése';
-    $('#newsTitleInput').innerHTML = item.title;
-    $('#newsContentInput').innerHTML = item.content;
+    $('#newsTitleInput').innerHTML = sanitizeRichText(item.title);
+    $('#newsContentInput').innerHTML = sanitizeRichText(item.content);
     $('#newsSaveBtn').textContent = 'Frissítés';
-    // Szerkesztésnél a backend úgyis figyelmen kívül hagyja a "sendEmail"
-    // mezőt (ld. resetNewsForm megjegyzését) - elrejtjük, ne tűnjön úgy,
-    // mintha egy elgépelés-javítás újra kiküldené a hírlevelet.
     $('#newsSendEmailCheckbox').checked = false;
     $('#newsSendEmailCheckbox').closest('label').hidden = true;
     $('#newsFormResult').textContent = '';
@@ -4621,18 +3921,10 @@ document.addEventListener('click', (e) => {
   }
 });
 
-// ── Jelvények (admin, ld. SolarBackend src/badges.js) - ugyanaz a minta,
-// mint a fenti "Felhívások" (news) CRUD, csak név+szín+ikon mezőkkel a
-// szöveges cím+tartalom helyett. ──
 let badgeEditingId = null;
 let badgesAdminItems = [];
 let badgeSelectedIconFile = null;
 let badgeRemoveExistingIcon = false;
-// ÚJ: az ÖSSZES jelvény gyorsítótárazott listája - a fenti admin CRUD
-// (badgesAdminItems) TÖLTI FEL (ld. loadBadgesAdmin), a játékos-profil
-// admin paneljének jelvény-választója (ld. loadAdminPlayerPanel) pedig
-// EBBŐL olvas, hogy ne kelljen külön lekérdezést indítania minden egyes
-// játékos-profil megnyitásakor.
 let allBadgesCache = [];
 
 function badgeIconUrl(id) {
@@ -4670,8 +3962,6 @@ function renderBadgesAdminList() {
   `).join('') || '<p class="redeem-result">Még nincs egyetlen jelvény sem.</p>';
 }
 
-// JAVÍTVA: ugyanaz a stílusozott-gombos kiváltás, mint a felhívások
-// kép-feltöltésénél (ld. #newsImagePickBtn fenti megjegyzését).
 $('#badgeIconPickBtn').addEventListener('click', () => $('#badgeIconInput').click());
 
 $('#badgeIconInput').addEventListener('change', (e) => {
@@ -4707,10 +3997,6 @@ async function loadBadgesAdmin() {
     badgesAdminItems = [];
   }
   renderBadgesAdminList();
-  // ÚJ: a játékos-profil admin paneljén lévő jelvény-választó (ld.
-  // loadAdminPlayerPanel) ugyanezt a listát használja - itt is frissítjük,
-  // hogy egy most létrehozott/törölt jelvény azonnal megjelenjen ott is,
-  // anélkül hogy külön kellene újratölteni.
   allBadgesCache = badgesAdminItems;
 }
 
@@ -4727,8 +4013,6 @@ $('#badgeSaveBtn').addEventListener('click', async () => {
   }
   try {
     const url = badgeEditingId ? BACKEND_URL + '/api/admin/badges/' + badgeEditingId : BACKEND_URL + '/api/admin/badges';
-    // FormData (multipart), NEM JSON - az ikon-csatolmány miatt, ld. news.js
-    // hasonló megjegyzését ugyanerről.
     const formData = new FormData();
     formData.append('name', name);
     formData.append('color', color);
@@ -4797,10 +4081,6 @@ document.addEventListener('click', (e) => {
   }
 });
 
-// ── Akciók (admin, ld. SolarBackend src/discounts.js) - ugyanaz a CRUD-
-// minta, mint a fenti Jelvények, csak a "Kedvezmény" mezőkkel (érvényességi
-// kör + opcionális egy-csomagos szűkítés + aktív/lejárat) a szín+ikon
-// helyett - nincs fájlfeltöltés, ezért egyszerű JSON POST/PUT, nem FormData. ──
 let discountEditingId = null;
 let discountsAdminItems = [];
 
@@ -4819,10 +4099,6 @@ function resetDiscountForm() {
   populateDiscountScopeItemSelect();
 }
 
-// A "shopCatalog"/"shopRanks" globális tömböket használja (ld. loadShopCatalog/
-// loadRanks fentebb - mindkettő MÁR betöltődik oldalbetöltéskor, nincs szükség
-// külön lekérdezésre) - a legördülő értéke MINDIG a CATALOG-/RANKS-kulcs (pl.
-// "sc_1300"/"helios"), ugyanaz, amit a backend "scope_item_id"-ként vár.
 function populateDiscountScopeItemSelect(selectedId) {
   const sel = $('#discountScopeItemSelect');
   const catalogOptions = shopCatalog.map((i) => `<option value="${i.id}">${escapeHtml(i.short || i.label)} (${formatHuf(i.priceHuf)})</option>`).join('');
@@ -4839,9 +4115,6 @@ function discountScopeLabel(d) {
   if (d.scope === 'all') return 'Minden csomag';
   if (d.scope === 'pp') return 'PrémiumPont csomagok';
   if (d.scope === 'rank') return 'Rangok';
-  // "item" - a katalógusban/rangoknál megkeressük a megjeleníthető nevet,
-  // ha az akció létrehozása óta törölték a tételt a CATALOG-ból/RANKS-ból,
-  // egyszerűen a nyers azonosítót mutatjuk (nem hibázik el).
   const catalogItem = shopCatalog.find((i) => i.id === d.scope_item_id);
   if (catalogItem) return `Csomag: ${catalogItem.short || catalogItem.label}`;
   const rank = shopRanks.find((r) => r.id === d.scope_item_id);
@@ -4940,9 +4213,6 @@ document.addEventListener('click', (e) => {
     $('#discountScopeSelect').value = item.scope;
     $('#discountScopeItemWrap').hidden = item.scope !== 'item';
     populateDiscountScopeItemSelect(item.scope_item_id);
-    // ÚJ: a dátum-input "ÉÉÉÉ-HH-NN" alakot vár - a backend teljes ISO
-    // dátumidőt ad vissza (ld. discounts.js normalizálását a nap VÉGÉRE),
-    // ebből csak a dátumrészt vágjuk ki.
     $('#discountExpiresInput').value = item.expires_at ? item.expires_at.slice(0, 10) : '';
     $('#discountActiveCheckbox').checked = item.active === 1;
     $('#discountSaveBtn').textContent = 'Frissítés';
@@ -4970,31 +4240,15 @@ document.addEventListener('click', (e) => {
   }
 });
 
-// ── Kuponok (admin, ld. SolarBackend src/coupons.js) - ugyanaz a CRUD-minta,
-// mint a fenti Akciók, csak a "Jutalom" mezőkkel (típus + mennyiség +
-// felhasználhatóság + kezdet/lejárat) az érvényességi kör helyett - nincs
-// fájlfeltöltés, ezért egyszerű JSON POST/PUT, nem FormData. ──
 let couponEditingId = null;
 let couponsAdminItems = [];
 
-/**
- * A jutalom-típushoz igazítja az űrlapot.
- *
- * MIÉRT KELL: a "Jutalom mennyisége" mező jelentése típusfüggő - PP-nél és
- * egyenlegnél ÖSSZEG (legalább 1), kiegészítőnél viszont az ÉRVÉNYESSÉG
- * NAPOKBAN, ahol a 0 is értelmes ("örökre"). Ha a mező felirata és a min
- * korlátja nem követné ezt, az admin vagy nem tudná örökre adni a
- * kiegészítőt, vagy azt hinné, napokat kell megadnia PP-ből is.
- */
 function syncCouponRewardTypeUI() {
   const type = $('#couponRewardTypeSelect').value;
   const isCosmetic = type === 'cosmetic';
   const isRank = type === 'rank';
   $('#couponCosmeticRow').classList.toggle('hidden', !isCosmetic);
   $('#couponRankRow')?.classList.toggle('hidden', !isRank);
-  // RANGNÁL a "jutalom mennyisége" mező értelmetlen: a rangot az azonosítója,
-  // az időtartamát pedig a saját mezője adja meg - ezért el is rejtjük,
-  // nehogy az admin azt higgye, még valamit meg kell adnia.
   const amount = $('#couponRewardAmountInput');
   const amountLabel = $('#couponRewardAmountLabel');
   amount.classList.toggle('hidden', isRank);
@@ -5010,15 +4264,6 @@ function syncCouponRewardTypeUI() {
   }
 }
 
-/**
- * A rang-választó feltöltése a BOLT katalógusából (shopRanks - ld. loadRanks,
- * ami már oldalbetöltéskor lefut).
- *
- * MIÉRT A BOLTI LISTA, ÉS NEM SZABAD SZÖVEG: a backend is ehhez a
- * katalógushoz méri a mentést (ld. coupons.js validateCouponBody "rank"
- * ágát), mert a "users.rank_name" a Centeren jogosultságokat is jelent - egy
- * szabad szöveges mezővel egy kuponnal staff-rangot lehetne osztani.
- */
 function populateCouponRewardRankSelect(selectedId) {
   const sel = $('#couponRewardRankSelect');
   if (!sel) return;
@@ -5028,14 +4273,6 @@ function populateCouponRewardRankSelect(selectedId) {
   if (selectedId) sel.value = String(selectedId);
 }
 
-/**
- * A kiegészítő-választó feltöltése a katalógusból.
- *
- * A "cosmeticsCatalog" globálist a Kiegészítők admin nézet tölti fel; ha a
- * kuponok fület nyitják meg elsőként, még üres lehet - ezért itt saját,
- * egyszeri lekérést is indítunk. Csendben hibázik: ilyenkor a lista üres
- * marad, a mentés pedig a backend ellenőrzésén akad fenn érthető üzenettel.
- */
 let couponCosmeticOptions = [];
 async function populateCouponCosmeticSelect(selectedId) {
   const sel = $('#couponCosmeticSelect');
@@ -5077,9 +4314,6 @@ function resetCouponForm() {
   populateCouponRequiredRankSelect();
 }
 
-// A "shopRanks" globális tömböt használja (ld. loadRanks fentebb - MÁR
-// betöltődik oldalbetöltéskor) - ugyanaz a minta, mint
-// populateDiscountScopeItemSelect() a fenti Akciók admin formnál.
 function populateCouponRequiredRankSelect(selectedId) {
   const sel = $('#couponRequiredRankSelect');
   const rankOptions = shopRanks.map((r) => `<option value="${r.id}">${escapeHtml(r.label)}</option>`).join('');
@@ -5089,25 +4323,17 @@ function populateCouponRequiredRankSelect(selectedId) {
 
 function couponRewardLabel(c) {
   if (c.reward_type === 'cosmetic') {
-    // A backend a lista-válaszban a kiegészítő nevét is mellékeli
-    // (rewardCosmetic) - ha a kiegészítőt időközben törölték, az null.
     const name = c.rewardCosmetic ? c.rewardCosmetic.name : 'törölt kiegészítő';
     const days = Number(c.reward_amount) || 0;
-    return `${name} (${days > 0 ? days + ' nap' : 'örökre'})`;
+    return `${escapeHtml(name)} (${days > 0 ? days + ' nap' : 'örökre'})`;
   }
   if (c.reward_type === 'rank') {
-    // A backend a lista-válaszban az olvasható rangnevet is mellékeli
-    // (rewardRankLabel) - a tárolt érték a katalógus kulcsa.
     const days = Number(c.reward_duration_days) || 0;
-    return `${c.rewardRankLabel || c.reward_rank} rang (${days > 0 ? days + ' nap' : 'végleges'})`;
+    return `${escapeHtml(c.rewardRankLabel || c.reward_rank)} rang (${days > 0 ? days + ' nap' : 'végleges'})`;
   }
   return c.reward_type === 'wallet' ? `${formatHuf(c.reward_amount)} egyenleg` : `${formatPp(c.reward_amount)} PP`;
 }
 
-// A required_rank a users.rank_name-mel egyezik (LuckPerms-csoportnév) -
-// ha a shopRanks katalógusban megtalálható, a szebb címkéjét mutatjuk,
-// egyébként a nyers rangnevet (pl. egy staff-rang, ami nem vásárolható,
-// de attól még beállítható szükséges rangnak).
 function couponRequiredRankLabel(requiredRank) {
   const rank = shopRanks.find((r) => r.id === requiredRank);
   return rank ? rank.label : requiredRank;
@@ -5124,7 +4350,7 @@ function renderCouponsAdminList() {
     const windowParts = [];
     if (c.starts_at) windowParts.push('kezdet: ' + formatLedgerDate(c.starts_at));
     if (c.expires_at) windowParts.push('lejár: ' + formatLedgerDate(c.expires_at));
-    if (c.required_rank) windowParts.push('csak: ' + couponRequiredRankLabel(c.required_rank));
+    if (c.required_rank) windowParts.push('csak: ' + escapeHtml(couponRequiredRankLabel(c.required_rank)));
     return `
     <div class="badges-admin-item">
       <div class="badges-admin-item-info">
@@ -5174,9 +4400,6 @@ $('#couponSaveBtn').addEventListener('click', async () => {
   const active = $('#couponActiveCheckbox').checked;
 
   if (!code) { resultEl.textContent = 'Adj meg egy kódot.'; resultEl.className = 'redeem-result error'; return; }
-  // Kiegészítőnél a szám az ÉRVÉNYESSÉG napokban, ahol a 0 ("örökre")
-  // szintén érvényes - ld. syncCouponRewardTypeUI(). RANGNÁL ez a mező nem
-  // szerepel (a rangot és az időtartamát külön mezők adják).
   if (rewardType !== 'rank') {
     const minAmount = rewardType === 'cosmetic' ? 0 : 1;
     if (!Number.isInteger(rewardAmount) || rewardAmount < minAmount) {
@@ -5200,8 +4423,6 @@ $('#couponSaveBtn').addEventListener('click', async () => {
     resultEl.className = 'redeem-result error';
     return;
   }
-  // Üresen hagyva VÉGLEGES a rang - ezért "undefined", nem 0 (a backend a
-  // hiányzó mezőt tekinti véglegesnek, ld. coupons.js).
   const rankDurationRaw = $('#couponRankDurationInput').value.trim();
   const rewardDurationDays = rewardType === 'rank' && rankDurationRaw ? Number(rankDurationRaw) : undefined;
   if (rewardType === 'rank' && rankDurationRaw && (!Number.isInteger(rewardDurationDays) || rewardDurationDays < 1)) {
@@ -5248,9 +4469,6 @@ document.addEventListener('click', (e) => {
     $('#couponRewardAmountInput').value = item.reward_amount;
     $('#couponMaxUsesInput').value = item.max_uses !== null ? item.max_uses : '';
     populateCouponRequiredRankSelect(item.required_rank);
-    // ÚJ: a dátum-input "ÉÉÉÉ-HH-NN" alakot vár - a backend teljes ISO
-    // dátumidőt ad vissza (ld. coupons.js normalizálását), ebből csak a
-    // dátumrészt vágjuk ki.
     $('#couponStartsInput').value = item.starts_at ? item.starts_at.slice(0, 10) : '';
     $('#couponExpiresInput').value = item.expires_at ? item.expires_at.slice(0, 10) : '';
     $('#couponActiveCheckbox').checked = item.active === 1;
@@ -5279,11 +4497,6 @@ document.addEventListener('click', (e) => {
   }
 });
 
-// ── Creator kódok (admin, ld. SolarBackend src/creatorCodes.js) - ugyanaz a
-// CRUD-minta, mint a fenti Kuponok, plusz egy aktivál/inaktivál gyorsgomb
-// (a felhasználó kifejezett kérésére: "ha valaki megszűntetné velünk a
-// kapcsolatot és később vissza jönne akkor tudjuk újra aktiválni") és egy
-// "kik regisztráltak" részletező modál. ──
 let creatorCodeEditingId = null;
 let creatorCodesAdminItems = [];
 
@@ -5305,8 +4518,6 @@ function resetCreatorCodeForm() {
   updateCreatorCodeRewardRowVisibility();
 }
 
-// A "shopRanks" globális tömböt használja (ld. loadRanks - MÁR betöltődik
-// oldalbetöltéskor) - ugyanaz a minta, mint populateCouponRequiredRankSelect().
 function populateCreatorCodeRankSelect(selectedId) {
   const sel = $('#creatorCodeRewardRankSelect');
   sel.innerHTML = shopRanks.map((r) => `<option value="${r.id}">${escapeHtml(r.label)}</option>`).join('');
@@ -5326,7 +4537,7 @@ function creatorCodeRewardLabel(c) {
   if (c.reward_type === 'rank') {
     const rank = shopRanks.find((r) => r.id === c.reward_rank);
     const rankLabel = rank ? rank.label : c.reward_rank;
-    return c.reward_duration_days ? `${rankLabel} rang (${c.reward_duration_days} napig)` : `${rankLabel} rang (végleges)`;
+    return c.reward_duration_days ? `${escapeHtml(rankLabel)} rang (${c.reward_duration_days} napig)` : `${escapeHtml(rankLabel)} rang (végleges)`;
   }
   return 'Nincs jutalom';
 }
@@ -5486,9 +4697,6 @@ document.addEventListener('click', (e) => {
     $('#creatorCodeDurationInput').value = item.reward_duration_days !== null ? item.reward_duration_days : '';
     populateCreatorCodeRankSelect(item.reward_rank);
     updateCreatorCodeRewardRowVisibility();
-    // ÚJ: a dátum-input "ÉÉÉÉ-HH-NN" alakot vár - a backend teljes ISO
-    // dátumidőt ad vissza (ld. creatorCodes.js normalizálását), ebből csak a
-    // dátumrészt vágjuk ki.
     $('#creatorCodeValidFromInput').value = item.valid_from ? item.valid_from.slice(0, 10) : '';
     $('#creatorCodeValidUntilInput').value = item.valid_until ? item.valid_until.slice(0, 10) : '';
     $('#creatorCodeActiveCheckbox').checked = item.active === 1;
@@ -5518,21 +4726,11 @@ document.addEventListener('click', (e) => {
   }
 });
 
-// ── Jogok (admin) - admin-jogosultságok, ld. SolarBackend src/permissions.js.
-// Kizárólag a valódi tulajdonos éri el (ld. index.html #navPermissionsBtn -
-// nincs data-permission attribútuma), mert a jog-adás maga nem delegálható.
-// KÉT fül: "Játékos szerint" (egy konkrét felhasználónak) és "Rang szerint"
-// (egy egész rangnak, ld. users.rank_name) - a két forrás a backenden
-// EGYMÁSTÓL FÜGGETLENÜL tárolódik és összeadódik (ld. permissions.js
-// getEffectivePermissionKeys()), itt is külön-külön szerkeszthetők. ──
 let permCatalogCache = null;
 let permRankListCache = null;
-let permsMode = 'player'; // 'player' | 'rank'
-let permsEditorTarget = null; // username (player módban) vagy rank_name (rang módban)
+let permsMode = 'player';
+let permsEditorTarget = null;
 
-// A katalógus (kulcs+címke+kategória) ritkán változik, kliens-oldalon
-// egyszer betöltve gyorsítótárazzuk - minden váltásnál újra lekérdezni
-// felesleges kör lenne.
 async function loadPermCatalog() {
   if (permCatalogCache) return permCatalogCache;
   try {
@@ -5561,8 +4759,6 @@ function setPermsMode(mode) {
 $('#permsModePlayerBtn').addEventListener('click', () => setPermsMode('player'));
 $('#permsModeRankBtn').addEventListener('click', () => setPermsMode('rank'));
 
-// A ténylegesen élő rangnevek listája (ld. GET /api/admin/permissions/ranks) -
-// egyszer betöltve gyorsítótárazzuk, ugyanúgy, mint a katalógust.
 async function loadRankSelect() {
   const select = $('#permsRankSelect');
   select.innerHTML = '<option>Betöltés...</option>';
@@ -5616,8 +4812,6 @@ async function doPermsSearch() {
 $('#permsPlayerSearchBtn').addEventListener('click', doPermsSearch);
 $('#permsPlayerSearchInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') doPermsSearch(); });
 
-// A jelenlegi permsMode dönti el, melyik végpontot kérdezzük/írjuk - a
-// checkbox-lista renderelése és a mentés-logika egyébként azonos.
 function permsTargetUrl(target) {
   return permsMode === 'rank'
     ? '/api/admin/permissions/rank/' + encodeURIComponent(target)
@@ -5690,11 +4884,6 @@ $('#permsSaveBtn').addEventListener('click', async () => {
   }
 });
 
-// ÚJ: mindenhol, ahol egy felhasználó neve megjelenik, a megkapott
-// jelvényei is odakerülnek melléje (ld. index.html #profileNameBadges/
-// #playerProfileNameBadges) - a jelvény neve MINDIG látszik az ikon mellett
-// (nem csak rávitelkor/hoverre, ahogy korábban egy tooltip csinálta), a
-// jelvény saját névszínével.
 function renderNameBadges(container, badgeList) {
   if (!container) return;
   if (!Array.isArray(badgeList) || !badgeList.length) { container.innerHTML = ''; return; }
@@ -5706,9 +4895,6 @@ function renderNameBadges(container, badgeList) {
   `).join('');
 }
 
-// A főoldal "Profilod" szekció alatti kártya - MINDENKI látja (nem csak
-// tulajdonos), csak a legfrissebb (egyetlen) hírt jeleníti meg. Ha még
-// sosem mentettek hírt, a kártya rejtve marad.
 async function loadHomeNews() {
   if (!session || !session.token) return;
   const card = $('#homeNewsCard');
@@ -5722,45 +4908,26 @@ async function loadHomeNews() {
     const imageEl = $('#homeNewsImage');
     if (news.image_ext) {
       imageEl.src = newsImageUrl(news.id);
-      // A felhívás képe TARTALOM, nem dekoráció - ezért leíró alt-ot kap (a
-      // hír címéből), nem üres stringet. Az üres alt ott a helyes megoldás,
-      // ahol az ikon KÖZVETLENÜL a saját, látszó felirata mellett áll (pl.
-      // jelvény-chipek, rang-ikonok): ott egy leíró alt kétszer olvastatná
-      // fel ugyanazt a képernyőolvasóval.
       imageEl.alt = 'A(z) „' + String(news.title || 'legfrissebb hír').replace(/<[^>]*>/g, '') + '” felhíváshoz csatolt kép';
       imageEl.classList.remove('hidden');
     } else {
       imageEl.classList.add('hidden');
       imageEl.src = '';
     }
-    // ÚJ: a cím/tartalom mostantól formázott (a backend sanitize-html-je
-    // által tisztított) HTML lehet - innerHTML-lel jelenítjük meg, hogy a
-    // félkövér/dőlt/szín/igazítás stb. ténylegesen látszódjon, nem csak
-    // nyers szövegként a tag-ekkel együtt.
-    $('#homeNewsTitle').innerHTML = news.title;
+    $('#homeNewsTitle').innerHTML = sanitizeRichText(news.title);
     $('#homeNewsMeta').textContent = formatLedgerDate(news.created_at);
-    $('#homeNewsContent').innerHTML = news.content;
+    $('#homeNewsContent').innerHTML = sanitizeRichText(news.content);
     card.classList.remove('hidden');
   } catch {
-    // Csendben kihagyjuk - a kártya rejtve marad, a következő belépéskor újra próbálkozunk.
   }
 }
 
-// A főoldal "Barátok" kártyája - a bejelentkezett felhasználó ELFOGADOTT
-// barátait listázza (ld. SolarBackend GET /api/friends/:username), zölden az
-// éppen elérhetőket (proxy-oldali élő állapot, ld. SolarBungee
-// FriendCommand.handleList megjegyzését, itt viszont a backend heartbeat-
-// alapú "online" mezőjéből jön, mert a weboldalnak nincs élő kapcsolata a
-// proxyval). A barátkérelmek kezelése (küldés/elfogadás/eltávolítás)
-// SZÁNDÉKOSAN csak in-game (/fr add|accept|remove) lehetséges, itt csak a
-// már meglévő barátság jelenik meg. Egy kártyára kattintva ugyanaz a
-// profil-nézet nyílik meg, mint a Játékosok fülön (ld. openPlayerProfile).
 async function loadHomeFriends() {
   if (!session || !session.username) return;
   const grid = $('#homeFriendsGrid');
   const emptyNote = $('#homeFriendsEmpty');
   try {
-    const res = await fetch(BACKEND_URL + '/api/friends/' + encodeURIComponent(session.username));
+    const res = await fetch(BACKEND_URL + '/api/friends/' + encodeURIComponent(session.username), { headers: { Authorization: 'Bearer ' + session.token } });
     const data = await res.json();
     const friendsList = data.ok ? data.friends : [];
     if (!friendsList.length) {
@@ -5785,23 +4952,9 @@ async function loadHomeFriends() {
       card.addEventListener('click', () => openPlayerProfile(friend.username));
     });
   } catch {
-    // Csendben kihagyjuk - a kártya üresen marad, a következő belépéskor újra próbálkozunk.
   }
 }
 
-/**
- * A BEJELENTKEZETT csapattag saját havi statisztikája, a barátlista alatt.
- *
- * MIÉRT NEM AZ ADMIN "Csapat statisztika" NÉZETÉT HASZNÁLJUK: az a teljes
- * csapat adatait adja, és a "global.staffStats" jogosultsághoz van kötve -
- * egy jrmoderátor a SAJÁT számait sem látná. A backend ezért külön végpontot
- * kapott (GET /api/staff/my-stats), ami kizárólag a hívó saját sorát adja
- * vissza; ugyanazokból a forrásokból és ugyanazzal a hónap-szűréssel, mint a
- * vezetői nézet, hogy a kettő sose mondjon mást.
- *
- * Ha a felhasználó nem csapattag, a válasz "staff: false" - ilyenkor a kártya
- * egyszerűen rejtve marad, hibaüzenet nélkül.
- */
 async function loadHomeStaffStats() {
   const card = $('#homeStaffStatsCard');
   if (!card || !session || !session.token) return;
@@ -5819,13 +4972,10 @@ async function loadHomeStaffStats() {
     $('#homeStaffStatBans').textContent = String(data.bansIssued || 0);
     $('#homeStaffStatTickets').textContent = String(data.ticketsClosed || 0);
     $('#homeStaffStatsRank').textContent = data.rank || '';
-    // A hónap nevét a böngésző adja - a backend mindig a FOLYÓ hónapot
-    // összesíti (strftime('%Y-%m','now')), tehát ez mindig egyezik.
     $('#homeStaffStatsMonth').textContent =
       new Date().toLocaleDateString('hu-HU', { year: 'numeric', month: 'long' }) + ' - a hónap elejétől';
     card.classList.remove('hidden');
   } catch {
-    // Csendben kihagyjuk: a kártya rejtve marad, a következő belépéskor újra próbálkozunk.
     card.classList.add('hidden');
   }
 }
@@ -5842,18 +4992,11 @@ function showToast(message, isError) {
   }, 4500);
 }
 
-// A csomagrácsok minden betöltéskor újragenerálódnak (loadShopCatalog), ezért
-// eseménydelegálással figyeljük a "Vásárlás" gombokat, nem közvetlen
-// bekötéssel - így egy újrarenderelés után sincs szükség újrakötésre.
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('.btn-buy[data-item-id]');
   if (btn) buyItem(btn.dataset.itemId, btn);
 });
 
-// ÚJ: fizetés a feltöltött egyenlegből (ld. renderPkgCard fenti
-// walletBtn-jét) - ELLENTÉTBEN buyItem()-mel, ez NEM irányít át Stripe-ra,
-// szinkron, azonnali választ ad (ld. SolarBackend src/shop.js
-// POST /checkout-with-wallet).
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('.btn-buy-wallet[data-item-id]');
   if (btn && !btn.disabled) buyItemWithWallet(btn.dataset.itemId, btn);
@@ -5871,14 +5014,6 @@ async function buyItem(itemId, buttonEl, giftTo, giftMessage) {
     const res = await fetch(BACKEND_URL + '/api/shop/checkout', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
-      // A returnUrl (origin + PATH, query nélkül) mondja meg a backendnek,
-      // hova irányítson vissza a Stripe checkout után - a puszta origin nem
-      // volt elég, mert ha a SolarCenter nem a domain gyökerén fut, a
-      // gyökérre visszadobás egy másik oldalt (pl. a "hamarosan" landing
-      // page-et) mutatta a fizetés után a checkmark helyett. A giftTo/
-      // giftMessage csak akkor kerül bele, ha ajándékozásról van szó (ld.
-      // giftItem() lejjebb) - a backend a Stripe session "metadata" mezőjén
-      // keresztül viszi át a webhookig.
       body: JSON.stringify(giftTo
         ? { itemId, returnUrl: window.location.origin + window.location.pathname, giftTo, giftMessage }
         : { itemId, returnUrl: window.location.origin + window.location.pathname })
@@ -5921,10 +5056,6 @@ async function buyItemWithWallet(itemId, buttonEl) {
     }
     currentWalletBalanceHuf = typeof data.walletBalanceHuf === 'number' ? data.walletBalanceHuf : currentWalletBalanceHuf;
     renderWalletBadge();
-    // Újratöltjük a teljes katalógust, hogy a MARADÉK kártyák "Fizetés
-    // egyenlegből" gombjainak fedezet-állapota is naprakész legyen (ld.
-    // renderPkgCard walletAffordable-je) - ugyanaz az elv, mint
-    // refreshPpBalance() a Rangoknál.
     loadShopCatalog();
     showPurchaseSuccessModal();
   } catch {
@@ -5934,9 +5065,6 @@ async function buyItemWithWallet(itemId, buttonEl) {
   }
 }
 
-// A "modal-overlay"/"modal-card" osztályokat a süti-beállítások modál is
-// használja (ld. index.html #cookieModal + style.css) - ugyanazt a vizuális
-// stílust kapja a vásárlás-visszaigazolás is, nem egy egyedi megjelenést.
 function showPurchaseSuccessModal() {
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
@@ -5961,10 +5089,6 @@ function showPurchaseSuccessModal() {
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 }
 
-// A Stripe checkout sikeres/megszakított visszatérésének jelzése (ld.
-// SolarBackend src/shop.js success_url/cancel_url: "/?checkout=success|cancel").
-// A query paramétert megjelenítés után eltávolítjuk az URL-ből, hogy egy
-// oldalfrissítés ne mutassa újra ugyanazt az üzenetet.
 (function handleCheckoutReturn() {
   const params = new URLSearchParams(window.location.search);
   const checkout = params.get('checkout');
@@ -5980,16 +5104,6 @@ function showPurchaseSuccessModal() {
   window.history.replaceState({}, '', newUrl);
 })();
 
-// ── Discord fiók összekötés (ld. SolarBackend src/discord.js) ──
-// A Wolfy Discord bot /link (vagy /update) parancsa egy "?discordLink=<token>"
-// linket ad a felhasználónak - a tokent itt, oldalbetöltéskor olvassuk ki
-// (de MÉG NEM töröljük az URL-ből, mert a felhasználó lehet, hogy még nincs
-// bejelentkezve). A tényleges "elfogyasztás" (a token beváltása a MÁR
-// bejelentkezett munkamenettel) az enterApp() VÉGÉN történik (ld. ott a
-// tryConsumeDiscordLink() hívást) - ez az egyetlen hely, amit MINDEN
-// bejelentkezési út (automata/kézi/regisztráció) lefut, tehát a token attól
-// függetlenül beváltódik, hogy a felhasználó a linkre kattintáskor már be
-// volt-e jelentkezve, vagy csak utána jelentkezett be.
 let pendingDiscordLinkToken = (function readPendingDiscordLinkToken() {
   const params = new URLSearchParams(window.location.search);
   return params.get('discordLink') || null;
@@ -6006,11 +5120,9 @@ function clearDiscordLinkParam() {
 async function tryConsumeDiscordLink() {
   if (!pendingDiscordLinkToken || !session || !session.token) return;
   const token = pendingDiscordLinkToken;
-  pendingDiscordLinkToken = null; // azonnal töröljük, hogy egy hibás válasz se próbálkozzon újra a helyén
+  pendingDiscordLinkToken = null;
   clearDiscordLinkParam();
 
-  // apiPost() nem küld Authorization fejlécet, ez a végpont viszont
-  // requireAuth-os - ezért itt közvetlenül fetch-elünk, a session tokenjével.
   try {
     const res = await fetch(BACKEND_URL + '/api/discord/consume', {
       method: 'POST',
@@ -6029,15 +5141,10 @@ async function tryConsumeDiscordLink() {
   }
 }
 
-// ── Ajándék-értesítés (ld. SolarBackend src/shop.js GET /api/shop/gifts/pending) ──
-// Csak a MÁR TELJESÍTETT (a SolarShop plugin által ténylegesen jóváírt)
-// ajándékokat kérdezzük le - enterApp() végén, minden bejelentkezéskor, hogy
-// a következő belépéskor is megjelenjen, ha valaki épp akkor kapott
-// ajándékot, amikor nem volt bejelentkezve.
 function giftItemLabel(gift) {
-  if (gift.item_type === 'rank') return gift.label ? `a(z) ${gift.label} rangot` : 'egy rangot';
+  if (gift.item_type === 'rank') return gift.label ? `a(z) ${escapeHtml(gift.label)} rangot` : 'egy rangot';
   if (typeof gift.amount === 'number' && gift.amount > 0) return formatPp(gift.amount);
-  return gift.label || 'egy terméket';
+  return gift.label ? escapeHtml(gift.label) : 'egy terméket';
 }
 
 function showNextGiftModal(queue) {
@@ -6065,8 +5172,6 @@ function showNextGiftModal(queue) {
         headers: { Authorization: 'Bearer ' + session.token }
       });
     } catch {
-      // Csendben kihagyjuk - ha nem sikerült nyugtázni, a következő
-      // bejelentkezéskor egyszerűen újra megjelenik ugyanez az ajándék.
     }
     showNextGiftModal(queue);
   };
@@ -6084,20 +5189,11 @@ async function checkPendingGifts() {
       showNextGiftModal(data.gifts.slice());
     }
   } catch {
-    // Csendben kihagyjuk - a következő bejelentkezéskor úgyis újra lekérdezzük.
   }
 }
 
-// ── Discord widget ──
-// JAVÍTVA: a korábbi saját widget.json-fetch megoldás helyett most a Discord
-// SAJÁT hivatalos iframe-widgetje van beágyazva közvetlenül az index.html-be
-// (a felhasználó által adott guild ID-val) - ez pontosan azt az "élő tagok"
-// nézetet adja, amit a referencia-képernyőn mutatott, és nem igényel semmilyen
-// saját JS-logikát a betöltéséhez.
 function loadDiscordWidget() {}
 
-// ── Jogi dokumentumok nézet (a lábléc Impresszum/ÁSZF/Adatvédelem linkjeiről
-// nyílik - korábban ezek "#"-re mutattak, sehová sem vezettek). ──
 let lastViewBeforeLegal = 'home';
 
 function openLegal(tab) {
@@ -6122,16 +5218,6 @@ $$('[data-legal-link]').forEach((a) => {
 $('#linkTerms').addEventListener('click', () => openLegal('aszf'));
 $('#btnBackFromLegal').addEventListener('click', () => switchView(lastViewBeforeLegal));
 
-// ══════════════════════════════════════════════════════════════════════════
-// LÁTOGATOTTSÁG (admin) - ld. SolarBackend src/analytics.js
-// ══════════════════════════════════════════════════════════════════════════
-// A SAJÁT, névtelen mérésünk összesítője. Nincs benne IP, felhasználónév,
-// sem ujjlenyomat: a látogató-azonosító a szerveren naponta forgó kulccsal
-// hashelt, ezért NAPOK KÖZÖTT szándékosan nem fűzhető össze. Emiatt az
-// "egyedi látogató" csak NAPON BELÜL értelmes szám - az időszakra vetített
-// összeg nem egyedi látogatók száma, hanem "látogatónapok" (aki két napon
-// járt itt, kétszer számít); a felület is így nevezi meg, hogy ne lehessen
-// félreolvasni.
 let analyticsDays = 7;
 
 async function loadAnalytics() {
@@ -6139,9 +5225,6 @@ async function loadAnalytics() {
   const empty = $('#analyticsEmpty');
   if (!session || !session.token) return;
 
-  // Csontváz-betöltés: a lekérés a szerveren összesít, ami néhány száz
-  // ezer sornál is gyors, de a hálózat lassú lehet - ne ugráljon az
-  // elrendezés, amíg megjön az adat (ld. ui.css .skeleton).
   chart.innerHTML = '<div class="skeleton" style="width:100%;height:100%;border-radius:10px;"></div>';
 
   let data = null;
@@ -6160,7 +5243,6 @@ async function loadAnalytics() {
     return;
   }
 
-  // ── Összesítő csempék ──
   $('#analyticsSummary').innerHTML = [
     ['Oldalmegtekintés', formatHuNumber(data.totals.views)],
     ['Látogatónap', formatHuNumber(data.totals.visitorDays)],
@@ -6174,32 +5256,23 @@ async function loadAnalytics() {
     </div>
   `).join('');
 
-  // ── Napi oszlopdiagram ──
   const daily = Array.isArray(data.daily) ? data.daily : [];
   empty.classList.toggle('hidden', daily.length > 0);
   empty.textContent = 'Erre az időszakra még nincs adat.';
   const max = daily.reduce((m, d) => Math.max(m, d.visitors), 0) || 1;
-  // Legfeljebb ~10 dátumfelirat fér ki olvashatóan, akármilyen hosszú az
-  // időszak - ezért csak minden n-edik oszlop alá írunk ki dátumot.
   const step = Math.max(1, Math.ceil(daily.length / 10));
   chart.innerHTML = daily.map((d, i) => {
     const pct = Math.max(2, Math.round((d.visitors / max) * 100));
     const label = i % step === 0 ? `<small>${escapeHtml(d.day.slice(5))}</small>` : '';
-    // A "title" adja a rátét-buborékot: itt jelenik meg a megtekintés-szám
-    // is, amit szándékosan nem külön oszlopsorként rajzolunk ki.
     const tip = `${d.day}: ${d.visitors} látogató, ${d.views} megtekintés`;
     return `<div class="analytics-bar" title="${escapeHtml(tip)}"><i style="height:${pct}%"></i>${label}</div>`;
   }).join('');
 
-  // ── Rangsorolt listák ──
   renderAnalyticsRows('#analyticsPaths', data.topPaths, (r) => r.path === '/egyeb' ? 'egyéb / ismeretlen' : r.path, (r) => r.views, 'megtekintés');
   renderAnalyticsRows('#analyticsDevices', data.devices, (r) => r.device, (r) => r.visitors, '');
   renderAnalyticsRows('#analyticsRefs', data.referrers, (r) => r.ref.replace(/^https?:\/\//, ''), (r) => r.visitors, '');
 }
 
-// Egy rangsorolt lista: a sáv szélessége a legnagyobb elemhez viszonyít
-// (nem az összeghez) - így a második-harmadik helyezett is látható marad,
-// nem lapul észrevehetetlenné egy domináns első mellett.
 function renderAnalyticsRows(sel, rows, labelOf, valueOf, unit) {
   const el = $(sel);
   if (!el) return;
@@ -6233,32 +5306,8 @@ $$('[data-analytics-days]').forEach((btn) => {
   });
 });
 
-// ── Süti beállítások ──
-// ÁTKÖLTÖZTETVE (2026-09-03): a korábbi, egyetlen "analytics" jelölőnégyzetet
-// mentő blokk innen a ui.js initCookies()-ába került. Ok: a süti-kezelés
-// mostantól nem egyetlen elmentett érték, hanem teljes hozzájárulás-lánc -
-// első látogatáskori sáv, három kategória, verziózott tárolás, és ami a
-// lényeg: VALÓDI következmény (a Discord-widget iframe-je be sem töltődik,
-// amíg nincs rá engedély, ld. ui.js loadEmbed). Mivel ennek nincs egyetlen
-// backend-hívása sem, a megjelenítési réteg (ui.js) a helye. Itt csak ez a
-// jelzés maradt, hogy ne induljon fölösleges keresés a régi kód után.
-
-// ══════════════════════════════════════════════════════════════════════════
-// KIEGÉSZÍTŐK + PIAC (ld. SolarBackend src/cosmetics.js)
-// ══════════════════════════════════════════════════════════════════════════
-// Három nézet: a saját kiegészítők (fel/levétel + katalógus-vásárlás), a
-// játékosok közti piac, és az admin katalógus-kezelés. A megjelenítés
-// in-game teljesen kliens-oldali (a SolarClient a /api/cosmetics/loadout/
-// :username végpontról olvas), ezért itt semmilyen Minecraft-szerver felé
-// menő szinkronra nincs szükség - amit itt elmentünk, azt a kliens a
-// következő gyorsítótár-frissítésekor látja.
-
 const RARITY_LABELS = { common: 'Általános', rare: 'Ritka', epic: 'Epikus', legendary: 'Legendás', mythic: 'Mítikus' };
 
-// Mentés után növeljük: minden kiegészítő-modell/textúra hivatkozásra
-// rákerül, ezzel a BÖNGÉSZŐ gyorsítótárát is megkerüljük. Enélkül az admin a
-// mentés után percekig a régi képet/geometriát látná, és azt hinné, nem
-// mentődött el semmi (pontosan ez történt az élő próbán).
 let cosmeticAssetBust = 0;
 
 function cosmeticAssetSuffix() {
@@ -6273,30 +5322,14 @@ function cosmeticModelUrl(id) {
   return BACKEND_URL + '/api/cosmetics/model/' + id + cosmeticAssetSuffix();
 }
 
-// ── 3D bélyegképek ───────────────────────────────────────────────────────
-// A kiegészítő bélyegképe a TÉNYLEGES 3D modell, a saját textúrájával
-// kirenderelve - nem a nyers textúra-atlasz (abból egy szárny/sapka alakja
-// nem olvasható ki). A renderelés egyetlen, megosztott WebGL-kontextusban
-// történik (ld. skin3d.js renderCosmeticThumbnail megjegyzését arról, miért
-// nem kártyánként élő vászon), és az eredmény ITT is gyorsítótárazódik, hogy
-// egy nézet-váltás ne rajzoltassa újra ugyanazt.
 const cosmeticThumbCache = new Map();
 
 function cosmeticThumbHtml(c) {
   const cached = cosmeticThumbCache.get(c.id);
-  // A bélyegkép nem mindig áll a neve mellett (pl. napló-sorokban önmagában
-  // szerepel), ezért leíró alt-ot kap - ld. a loadHomeNews-nál írt indoklást
-  // arról, mikor helyes az üres alt és mikor nem.
   if (cached) return `<img class="cosmetic-thumb" src="${cached}" alt="${escapeHtml(c.name || 'Kiegészítő')} előnézeti képe" />`;
-  // Amíg elkészül, a helyőrző marad - a hydrateCosmeticThumbs() tölti fel.
   return `<div class="cosmetic-thumb cosmetic-thumb-empty" data-cosmetic-thumb="${c.id}" data-cosmetic-name="${escapeHtml(c.name || '')}"></div>`;
 }
 
-// A KÁRTYÁKON a bélyegkép ritkaság-színű gyűrűt kap (a kártya tetején futó
-// sáv felvett állapotban az arany keret alatt elveszett). A gyűrű külön elem,
-// mert a legendás/mítikus fokozat gradienst kap - ld. style.css. A
-// replaceThumb() ezzel is működik: a helyőrzőt a szülőjében cseréli ki, ami
-// innentől a gyűrű.
 function cosmeticCardThumbHtml(c) {
   return `<div class="cosmetic-thumb-ring">${cosmeticThumbHtml(c)}</div>`;
 }
@@ -6314,9 +5347,6 @@ function loadImage(src) {
 const cosmeticModelCache = new Map();
 async function fetchCosmeticModel(id, opts) {
   const fresh = !!(opts && opts.fresh);
-  // A SZERKESZTŐ mindig a LAPOS alakot kéri (admin végpont). A nyilvános
-  // végpont a csontvázat adná, amiben nincs 'parts' tömb - a szerkesztő
-  // előnézete attól NÉMÁN üres maradna.
   const flat = !!(opts && opts.flat);
   if (!fresh && !flat && cosmeticModelCache.has(id)) return cosmeticModelCache.get(id);
   try {
@@ -6328,8 +5358,6 @@ async function fetchCosmeticModel(id, opts) {
       : (fresh ? { cache: 'no-store' } : undefined));
     if (!res.ok) return null;
     const model = await res.json();
-    // A LAPOS (admin) válasz NEM kerül a közös gyorsítótárba: azt a
-    // kártyák bélyegképei is használják, és ott a nyilvános alak kell.
     if (!flat) cosmeticModelCache.set(id, model);
     return model;
   } catch {
@@ -6337,9 +5365,6 @@ async function fetchCosmeticModel(id, opts) {
   }
 }
 
-// A még üres bélyegkép-helyőrzők feltöltése. SOROSAN fut (nem párhuzamosan):
-// a megosztott WebGL-kontextus egyszerre egy modellt tud rajzolni, és így a
-// kártyák szép sorban, felülről lefelé jelennek meg.
 async function hydrateCosmeticThumbs(root) {
   const slots = [...(root || document).querySelectorAll('[data-cosmetic-thumb]')];
   for (const el of slots) {
@@ -6363,9 +5388,6 @@ function replaceThumb(el, url) {
   const img = document.createElement('img');
   img.className = 'cosmetic-thumb';
   img.src = url;
-  // A nevet a helyőrző data-attribútuma őrizte meg (ld. cosmeticThumbHtml),
-  // így a később kirajzolt kép is ugyanazt a leíró alt szöveget kapja, mint
-  // a gyorsítótárból azonnal visszaadott változat.
   img.alt = (el.dataset.cosmeticName || 'Kiegészítő') + ' előnézeti képe';
   el.parentNode.replaceChild(img, el);
 }
@@ -6380,13 +5402,8 @@ function cosmeticExpiryHtml(expiresAt) {
   return `<span class="cosmetic-meta-temp">Még ${hours} óra</span>`;
 }
 
-// ── Saját kiegészítők ────────────────────────────────────────────────────
 let myCosmetics = { owned: [], loadout: {}, slots: [] };
 
-// ── Szűrés (kliens-oldali) ─────────────────────────────────────────────
-// Ugyanaz a szűrő szolgálja ki a SAJÁT és a MEGVÁSÁROLHATÓ rácsot: két külön
-// szűrősáv ugyanazon a nézeten csak azt a kérdést szülné, hogy "melyikre
-// gépeltem be a keresést".
 const cosmeticFilter = { search: '', slot: '', rarity: '', animatedOnly: false };
 
 function cosmeticMatchesFilter(c) {
@@ -6401,9 +5418,6 @@ function cosmeticMatchesFilter(c) {
   return true;
 }
 
-// Az "animált" címke. MIÉRT LÁTHATÓ A KÁRTYÁN: a bélyegkép egy ÁLLÓ kép (egy
-// megosztott WebGL-kontextusban készül, ld. skin3d.js) - a mozgás rajta nem
-// látszik, tehát a vásárló nem tudná meg, hogy ez a szárny csapkod-e.
 function cosmeticAnimatedTag(c) {
   return c && c.animated ? '<span class="cosmetic-tag cosmetic-tag-animated" title="Ez a kiegészítő mozog a játékban">Animált</span>' : '';
 }
@@ -6452,11 +5466,6 @@ async function loadMyCosmetics() {
   renderCosmeticCharacterPreview();
 }
 
-// ── "Így nézel ki" előnézet ──────────────────────────────────────────────
-// A ténylegesen VISELT kiegészítők a karakteren, ugyanazzal a
-// transzformáció-lánccal, amit a SolarClient is használ (ld. skin3d.js
-// buildCosmeticGeometry levezetését). A saját skined jelenik meg rajta, ha
-// van feltöltve - ha nincs, egy alapértelmezett "Steve" karakter.
 let stopCosmeticCharPreview = null;
 
 async function renderCosmeticCharacterPreview() {
@@ -6489,10 +5498,6 @@ async function renderCosmeticCharacterPreview() {
   syncCosmeticZoomRange();
 }
 
-// ── Nagyítás az "Így nézel ki" előnézeten ────────────────────────────────
-// A vezérlők a SkinPreview 0..1-es "szintjével" dolgoznak, nem a kamera
-// távolságával (ld. skin3d.js stop.setZoomLevel) - így a határok a
-// rendererben maradnak, és itt nem kell semmit hozzájuk igazítani.
 function syncCosmeticZoomRange() {
   const range = $('#cosmeticZoomRange');
   if (!range || !stopCosmeticCharPreview?.getZoomLevel) return;
@@ -6514,17 +5519,9 @@ $('#cosmeticZoomResetBtn')?.addEventListener('click', () => {
 $('#cosmeticZoomRange')?.addEventListener('input', (e) => {
   stopCosmeticCharPreview?.setZoomLevel?.(Number(e.target.value) / 100);
 });
-// A görgős/csípős nagyítás a vásznon történik, a csúszka viszont nem tudná
-// magától, hogy közben elmozdult - ezért a vászon fölötti gesztus után
-// utánaigazítjuk. (A rAF-onkénti szinkron pazarlás lenne egy olyan értékért,
-// amit csak ritkán, kézzel változtatnak.)
 $('#cosmeticCharPreview')?.addEventListener('wheel', () => setTimeout(syncCosmeticZoomRange, 0), { passive: true });
 $('#cosmeticCharPreview')?.addEventListener('touchend', syncCosmeticZoomRange);
 
-/**
- * A "Gyűjteményed" kártya a jobb oszlopban. Minden száma a MÁR letöltött
- * listából jön (myCosmetics) - nincs mögötte külön szerverkérés.
- */
 function renderCosmeticSummary() {
   const owned = myCosmetics.owned || [];
   const equipped = Object.keys(myCosmetics.loadout || {}).length;
@@ -6535,8 +5532,6 @@ function renderCosmeticSummary() {
   set('#cosmeticSummaryEquipped', equipped);
   set('#cosmeticSummaryAnimated', animated);
 
-  // Ritkaság-bontás. Csak a ténylegesen előforduló ritkaságok kerülnek ki -
-  // öt üres sáv semmit nem mondana arról, mid van.
   const bars = $('#cosmeticSummaryBars');
   if (bars) {
     const order = ['mythic', 'legendary', 'epic', 'rare', 'common'];
@@ -6566,8 +5561,6 @@ function renderCosmeticSummary() {
   }
 }
 
-// A köpeny (ha van) - a 3D előnézet ezt is kirajzolja, hogy a kiegészítő és a
-// köpeny együttes hatása is látszódjon.
 function loadCapeImageOrNull() {
   return new Promise((resolve) => {
     const img = new Image();
@@ -6579,14 +5572,10 @@ function loadCapeImageOrNull() {
 }
 
 function myCosmeticsSkinSlim() {
-  // A skin-nézet már ismeri a modell-választást; ha még nem töltött be,
-  // a klasszikus (széles kar) az alapértelmezés - ugyanaz, mint a szerveren.
   const activePill = document.querySelector('.skin-model-toggle .pill.active');
   return !!(activePill && activePill.dataset.model === 'slim');
 }
 
-// A felső sáv slotonként mutatja, mit viselsz éppen - ez adja meg gyorsan a
-// választ arra, amit a nézet elsődlegesen megválaszol ("mi van rajtam most").
 function renderCosmeticSlotBar() {
   const bar = $('#cosmeticSlotBar');
   if (!bar) return;
@@ -6640,7 +5629,6 @@ function renderOwnedCosmetics() {
   hydrateCosmeticThumbs(wrap);
 }
 
-// A megvásárolható kínálat: a publikus katalógus mínusz amink már megvan.
 async function loadCosmeticShop() {
   const wrap = $('#cosmeticsShopWrap');
   if (!wrap) return;
@@ -6654,11 +5642,6 @@ async function loadCosmeticShop() {
   renderCosmeticShopGrid();
 }
 
-/**
- * A megvásárolható kiegészítők rácsa. SZÁNDÉKOSAN külön a letöltéstől: a
- * szűrő minden billentyűleütésnél újrarajzolja, letölteni viszont egyszer
- * elég.
- */
 function renderCosmeticShopGrid() {
   const wrap = $('#cosmeticsShopWrap');
   if (!wrap) return;
@@ -6741,12 +5724,9 @@ document.addEventListener('click', async (e) => {
   if (buyBtn) {
     const item = cosmeticShopItems.find((c) => String(c.id) === buyBtn.dataset.cosmeticBuy);
     if (!item) return;
-    // A tényleges PP-levonás a Minecraft-szerveren történik (ld. SolarBackend
-    // src/cosmetics.js fejlécét) - ezt a késleltetést a megerősítő szövegben
-    // is kimondjuk, hogy ne tűnjön hibának, ha nem jelenik meg azonnal.
     const confirmed = await confirmModal(
       'Kiegészítő megvásárlása',
-      `Megveszed a(z) "${item.name}" kiegészítőt ${item.priceSc.toLocaleString('hu-HU')} PrémiumPontért? A levonás a következő szerverre lépésedkor történik meg, utána jelenik meg a kiegészítőid között.`,
+      `Megveszed a(z) "${escapeHtml(item.name)}" kiegészítőt ${item.priceSc.toLocaleString('hu-HU')} PrémiumPontért? A levonás a következő szerverre lépésedkor történik meg, utána jelenik meg a kiegészítőid között.`,
       'Igen, megveszem'
     );
     if (!confirmed) return;
@@ -6765,13 +5745,10 @@ document.addEventListener('click', async (e) => {
   }
 });
 
-// ── Piac ─────────────────────────────────────────────────────────────────
 let marketTaxPercent = 10;
 
 async function loadMarket() {
   if (!session || !session.token) return;
-  // A hirdetés-feladó legördülőhöz kell a saját, ELADHATÓ készletünk - ezért
-  // a piac megnyitásakor a saját kiegészítőket is frissítjük.
   try {
     const res = await fetch(BACKEND_URL + '/api/cosmetics/mine', {
       headers: { Authorization: 'Bearer ' + session.token }
@@ -6798,8 +5775,6 @@ function renderMarketListForm() {
   updateMarketPayoutPreview();
 }
 
-// A 10% adó élő kiírása: az eladó pontosan lássa, mennyi jön be neki, MIELŐTT
-// felteszi - ez a leggyakoribb félreértés-forrás egy jutalékos piacon.
 function updateMarketPayoutPreview() {
   const el = $('#marketPayoutPreview');
   if (!el) return;
@@ -6833,8 +5808,6 @@ async function loadMarketListings() {
     }
   } catch {}
 
-  // A saját hirdetéseink a fenti külön szekcióban vannak - itt csak a
-  // ténylegesen megvehető kínálat látszik, hogy ne kelljen köztük keresgélni.
   const buyable = listings.filter((l) => !l.isMine);
   if (!buyable.length) {
     wrap.innerHTML = '<div class="card"><p class="redeem-result">Jelenleg nincs eladó kiegészítő a piacon.</p></div>';
@@ -6913,8 +5886,6 @@ $('#marketListBtn')?.addEventListener('click', async () => {
     resultEl.className = 'redeem-result error';
     return;
   }
-  // A hirdetés feladása LETÉTBE teszi a kiegészítőt (lekerül róla, és amíg
-  // kint van, nem viselhető) - ezt előre kimondjuk, hogy ne érje meglepetés.
   const confirmed = await confirmModal(
     'Hirdetés feladása',
     `Felteszed a piacra ${priceSc.toLocaleString('hu-HU')} PP-ért? Amíg kint van a hirdetés, nem tudod viselni a kiegészítőt. Eladáskor ${marketTaxPercent}% adó vonódik le, tehát ${Math.floor(priceSc * (100 - marketTaxPercent) / 100).toLocaleString('hu-HU')} PP lesz a tiéd.`,
@@ -6990,24 +5961,17 @@ document.addEventListener('click', async (e) => {
   }
 });
 
-// ── Csere ajánlatok ──────────────────────────────────────────────────────
-// Névre szóló adásvétel: a piactól abban tér el, hogy EGY konkrét játékosnak
-// szól, és csak ő tudja elbírálni (ld. SolarBackend src/cosmetics.js "Csere
-// ajánlatok" szakaszát). Az adó és az aszinkron fizetés viszont szó szerint
-// ugyanaz, mint a piacon.
 let tradeTaxPercent = 10;
 
 async function loadTrades() {
   if (!session || !session.token) return;
-  // Az ajánlat-küldő legördülőhöz kell a saját, TOVÁBBADHATÓ készletünk -
-  // ugyanaz az elv, mint a piacnál (ld. loadMarket).
   try {
     const res = await fetch(BACKEND_URL + '/api/cosmetics/mine', {
       headers: { Authorization: 'Bearer ' + session.token }
     });
     const data = await res.json();
     if (data.ok) myCosmetics = { owned: data.owned || [], loadout: data.loadout || {}, slots: data.slots || [] };
-  } catch { /* a lenti űrlap ilyenkor üres marad, a listák külön töltődnek */ }
+  } catch {  }
 
   renderTradeSendForm();
 
@@ -7018,7 +5982,7 @@ async function loadTrades() {
     });
     const data = await res.json();
     if (data.ok) payload = data;
-  } catch { /* lent "nem sikerült" üzenet */ }
+  } catch {  }
 
   if (!payload) {
     const msg = '<div class="card"><p class="redeem-result error">Nem sikerült lekérni a csere ajánlatokat.</p></div>';
@@ -7074,10 +6038,6 @@ function renderTradeList(wrap, offers, kind) {
       ? `tőle: ${escapeHtml(offer.sender)}`
       : `neki: ${escapeHtml(offer.recipient)}`;
 
-    // A "folyamatban" állapotban SEM a küldő, SEM a címzett nem tud
-    // beavatkozni: ott már fut a SolarShop felé indított levonás (ld. a
-    // backend resolveTradeAsClosed() 409-esét) - a gomb kiírása csak hamis
-    // reményt keltene.
     let actions = '';
     if (offer.status === 'pending' && kind === 'incoming') {
       actions = `
@@ -7123,8 +6083,6 @@ function renderTradeSendForm() {
   updateTradePayoutPreview();
 }
 
-// Ugyanaz az élő adó-bontás, mint a piacon - itt is az a legfontosabb szám,
-// hogy a küldő MENNYIT KAP KÉZHEZ, nem az, amit beírt.
 function updateTradePayoutPreview() {
   const el = $('#tradePayoutPreview');
   if (!el) return;
@@ -7144,9 +6102,6 @@ function updateTradePayoutPreview() {
 }
 $('#tradePriceInput')?.addEventListener('input', updateTradePayoutPreview);
 
-// A beérkezett ajánlatok száma az oldalsávon. MIÉRT KELL: a "Csere ajánlatok"
-// egy alapból CSUKOTT csoportban van - enélkül észrevétlen maradna, hogy
-// valaki ajánlatot küldött.
 function setTradeBadge(count) {
   const badge = $('#navTradeBadge');
   if (!badge) return;
@@ -7162,7 +6117,7 @@ async function refreshTradeBadge() {
     });
     const data = await res.json();
     if (data.ok) setTradeBadge(data.incoming || 0);
-  } catch { /* a jelvény elmaradása nem hiba, csak nem jelenik meg */ }
+  } catch {  }
 }
 
 $('#tradeSendBtn')?.addEventListener('click', async () => {
@@ -7180,8 +6135,6 @@ $('#tradeSendBtn')?.addEventListener('click', async () => {
   if (rawPrice === '' || !Number.isInteger(priceSc) || priceSc < 0) return setError('Adj meg egy érvényes árat (0 = ajándék).');
 
   const payout = Math.floor(priceSc * (100 - tradeTaxPercent) / 100);
-  // Ugyanaz a figyelmeztetés, mint a piacnál: az ajánlat LETÉTBE teszi a
-  // kiegészítőt, tehát addig nem viselhető - ezt előre kimondjuk.
   const confirmed = await confirmModal(
     'Csere ajánlat küldése',
     priceSc === 0
@@ -7262,21 +6215,10 @@ async function tradeAction(path, offerId, successToast, onError) {
   }
 }
 
-// ── Admin: katalógus ─────────────────────────────────────────────────────
 let cosmeticsAdminItems = [];
 let cosmeticEditingId = null;
 let cosmeticSelectedTextureFile = null;
 
-// ── A RÉSZ-ALAPÚ SZERKESZTŐ ÁLLAPOTA ────────────────────────────────────
-// Egy kiegészítő több modellből (RÉSZBŐL) állhat, amik EGY KÖZÖS textúrán
-// osztoznak - egy szárny jellemzően két félből. Az illesztés-mezők (eltolás/
-// forgatás/méret) MINDIG az ÉPPEN KIVÁLASZTOTT célt szerkesztik:
-//   cosmeticTarget === -1  ->  a teljes kiegészítő ("assembly")
-//   cosmeticTarget >=  0   ->  a cosmeticParts[cosmeticTarget] rész
-//
-// MIÉRT EGY MEZŐKÉSZLET, ÉS NEM RÉSZENKÉNT KÜLÖN: nyolc rész x hét mező
-// egyszerre a képernyőn áttekinthetetlen lenne, ráadásul a húzás-gesztusok
-// (amik ugyanezeket a mezőket írják) sem tudnák, melyikre vonatkoznak.
 let cosmeticParts = [];
 let cosmeticTarget = -1;
 let cosmeticAssembly = null;
@@ -7297,18 +6239,15 @@ function emptyPart(idx) {
     scale: 1, anim: null,
     hasModel: false,
     elements: null, textureSize: null,
-    file: null,      // frissen kiválasztott, még fel nem töltött modellfájl
+    file: null,
     dirty: false
   };
 }
 
-/** Az éppen szerkesztett cél (teljes kiegészítő vagy egy rész). */
 function currentTargetRecord() {
   if (cosmeticTarget < 0) return cosmeticAssembly;
   return cosmeticParts[cosmeticTarget] || cosmeticAssembly;
 }
-// A játékos-profil admin paneljének kiegészítő-választója ebből olvas -
-// ugyanaz a minta, mint az allBadgesCache-nél (ld. ott a megjegyzést).
 let allCosmeticsCache = [];
 
 function resetCosmeticForm() {
@@ -7364,11 +6303,6 @@ function resetCosmeticForm() {
 $('#cosmeticModelPickBtn')?.addEventListener('click', () => $('#cosmeticModelInput').click());
 $('#cosmeticTexturePickBtn')?.addEventListener('click', () => $('#cosmeticTextureInput').click());
 
-// A kockaszám azonnali kiírása: a backend max. 48-at fogad el, és sokkal
-// jobb ezt a fájl kiválasztásakor látni, mint mentéskor hibaüzenetként.
-// Melyik részbe töltjük a most választott modellt. Az "1. rész" gombja a 0-t
-// állítja be, a "Rész hozzáadása" egy újat fűz a végére - a fájlválasztó
-// ugyanaz az egy input mindkét esetben.
 let cosmeticModelTargetPart = 0;
 
 $('#cosmeticModelInput')?.addEventListener('change', (e) => {
@@ -7403,9 +6337,6 @@ $('#cosmeticModelInput')?.addEventListener('change', (e) => {
     }
 
     if (isNewPart) {
-      // ÚJ RÉSZ: azonnal létre is hozzuk a backenden, mert a rész-végpontok
-      // rész-azonosítóra hivatkoznak - enélkül a mentésig nem lenne mihez
-      // kötni a beállításait.
       await createCosmeticPart(file, parsed);
       return;
     }
@@ -7418,11 +6349,6 @@ $('#cosmeticModelInput')?.addEventListener('change', (e) => {
     part.dirty = true;
     if (cosmeticModelTargetPart === 0) note.textContent = `${file.name} - ${count} kocka`;
 
-    // A frissen kiválasztott modell azonnal megjelenik a szerkesztőben, még
-    // mentés előtt - így a beillesztés a feltöltéssel EGY menetben
-    // elvégezhető. ÚJ kiegészítőnél rögtön a helyére is igazítjuk (ld.
-    // autoFitCosmetic indoklását) - szerkesztésnél NEM, mert ott a meglévő,
-    // már bevált értékeket nem szabad felülírni.
     if (!cosmeticEditingId) autoFitCosmetic();
     renderCosmeticPartsBar();
     restartCosmeticEditor();
@@ -7446,59 +6372,8 @@ $('#cosmeticTextureInput')?.addEventListener('change', (e) => {
   reader.readAsDataURL(file);
 });
 
-// ── Vállon ülő figura: modell-generálás skinből ──────────────────────────
-//
-// MIT CSINÁL: egy sima Minecraft-skinből előállítja ANNAK a kockamodellnek a
-// Blockbench-JSON-ját, ami a skint viselő, kicsinyített, ÜLŐ játékost adja -
-// és ezt a modellt + magát a skint pontosan úgy tölti be az űrlapba, mintha
-// az admin kézzel választott volna ki egy modellt és egy textúrát. Innentől
-// minden a megszokott úton megy (illesztés, animáció, mentés, piac, csere):
-// a figura egy TELJESEN SZABVÁNYOS kiegészítő, csak nem rajzolni kellett.
-//
-// ── A KOORDINÁTA-TÉR (ez a rész a kényes) ───────────────────────────────
-// A generált modell ITEM-modell térben van (Blockbench-alapértelmezés), mert
-// a szerkesztő és a kliens is erre van hangolva. Ebben a térben a "test"
-// helyre kötött kiegészítő leképezése (ld. skin3d.js cosmeticPartMatrix,
-// f = -1, csont-pivot [0,0,0]):
-//
-//     előnézet = ( -szerzői_x , 6 + szerzői_y , -szerzői_z )
-//
-// Ebből három dolog következik, és mindhárom számít:
-//   - szerzői +Y FELFELÉ mutat (ezért lehet a figurát "normálisan", fejjel
-//     felfelé megrajzolni);
-//   - szerzői +X a karakter JOBB oldala (az előnézetben a jobb kar a -X-en
-//     van, ld. skin3d.js buildGeometry "jobb kar" sorát);
-//   - szerzői -Z a karakter ELŐRE iránya (a néző felé).
-// A szerzői (0,0,0) pont az előnézet (0, 6, 0)-jára esik: ez a TÖRZS TETEJE,
-// vagyis pont a vállvonal - ezért ül a figura a 0-s magasságon.
-//
-// ── AZ UV (a másik kényes rész) ─────────────────────────────────────────
-// Item-modell térben a lap-UV-k MINDIG 0..16 tartományban vannak, a textúra
-// tényleges felbontásától függetlenül (ld. skin3d.js buildCosmeticParts
-// texW/texH = 16 ágát) - ezért a skin PIXEL-koordinátáit a 64 széles
-// elrendezéshez képest ARÁNYOSÍTVA írjuk be. Így a generált modell egy
-// 64x64-es, egy 64x32-es (régi) és egy HD (128x128, 256x256...) skinnel is
-// ugyanúgy helyes marad.
 const PET_LOCAL_ORIGIN = [0, 0, 0];
 
-/**
- * Egy doboz hat lapjának UV-je a SZABVÁNYOS Minecraft-skin kicsomagolás
- * szerint, a Blockbench lapnevein.
- *
- * A megfeleltetés (levezetve a fenti leképezésből, nem próbálgatva):
- *   north = elöl,  south = hátul,
- *   east  = a karakter JOBB oldala,  west = a BAL oldala,
- *   up    = felül, down = alul.
- *
- * Az "up" lap UV-je MEGFORDÍTVA megy be ([u2,v2,u1,v1]): a felülnézeti régió
- * a skinben 180 fokkal elfordulva áll ahhoz képest, ahogy a lap sarkai ebben
- * a térben körbejárnak (a "down" viszont épp egyezik - ez a skin-formátum
- * szabálya, ld. skin3d.js addBox "bottom" ágának megjegyzését).
- *
- * @param u,v    a doboz UV-origója a 64 széles elrendezés PIXELEIBEN
- * @param w,h,d  a doboz mérete (szélesség, magasság, mélység)
- * @param su,sv  pixel -> 0..16 item-tér szorzó vízszintesen / függőlegesen
- */
 function petFaceUvs(u, v, w, h, d, su, sv) {
   const rect = (x, y, rw, rh) => [x * su, y * sv, (x + rw) * su, (y + rh) * sv];
   const flip = (r) => [r[2], r[3], r[0], r[1]];
@@ -7512,12 +6387,6 @@ function petFaceUvs(u, v, w, h, d, su, sv) {
   };
 }
 
-/**
- * A figura modellje.
- *
- * @param opts {slim, legacy, scale, legAngle, side} - a "side" a KARAKTER
- *        melyik vállát jelenti ('left' / 'right').
- */
 function buildShoulderPetModel(opts) {
   const slim = !!opts.slim;
   const legacy = !!opts.legacy;
@@ -7525,23 +6394,13 @@ function buildShoulderPetModel(opts) {
   const S = opts.scale;
   const legAngle = opts.legAngle;
 
-  // A textúra függőleges aránya a régi (64x32) skineknél a kétszerese - ott
-  // a 32 pixel magas kép ugyanazt a 0..16 tartományt fedi le.
   const su = 16 / 64;
   const sv = legacy ? 16 / 32 : 16 / 64;
 
-  // A VISELŐ vállának félszélessége: a törzs fele (4) + a kar fele. A viselő
-  // karmodelljét itt nem ismerjük (játékosonként más lehet), ezért a
-  // klasszikus, 4 széles karral számolunk - az eltérés fél pixel, amit az
-  // admin az illesztő-szerkesztőben úgyis pontosít.
   const shoulderX = 4 + 4 / 2;
-  // szerzői +X = a karakter JOBB oldala (ld. a fenti levezetést)
   const tx = opts.side === 'right' ? shoulderX : -shoulderX;
 
   const elements = [];
-  // A figura SAJÁT terében rajzolunk (y = 0 az ülepe), és csak a végén
-  // kicsinyítünk + toljuk a vállra - így a kockák koordinátái olvashatók
-  // maradnak, és egy helyen dől el, hova kerül az egész.
   const place = (p) => [
     Math.round((p[0] * S + tx) * 1000) / 1000,
     Math.round((p[1] * S) * 1000) / 1000,
@@ -7556,27 +6415,18 @@ function buildShoulderPetModel(opts) {
     };
     if (extra && extra.inflate) el.inflate = Math.round(extra.inflate * S * 1000) / 1000;
     if (extra && typeof extra.legRotation === 'number' && extra.legRotation !== 0) {
-      // A comb a CSÍPŐNÉL hajlik előre - a forgáspont ezért a figura ülepe
-      // (a saját terében a [0,0,0]), a végleges koordinátákra átszámolva.
       el.rotation = { angle: extra.legRotation, axis: 'x', origin: place(PET_LOCAL_ORIGIN) };
     }
     elements.push(el);
   }
 
-  // ── Alapréteg ────────────────────────────────────────────────────────
-  box([-4, 12, -4], [4, 20, 4], [0, 0], 8, 8, 8);                       // fej
-  box([-4, 0, -2], [4, 12, 2], [16, 16], 8, 12, 4);                     // törzs
-  box([4, 0, -2], [4 + armW, 12, 2], [40, 16], armW, 12, 4);            // jobb kar
-  box([-4 - armW, 0, -2], [-4, 12, 2], legacy ? [40, 16] : [32, 48], armW, 12, 4); // bal kar
-  box([0, -12, -2], [4, 0, 2], [0, 16], 4, 12, 4, { legRotation: legAngle });      // jobb láb
-  box([-4, -12, -2], [0, 0, 2], legacy ? [0, 16] : [16, 48], 4, 12, 4, { legRotation: legAngle }); // bal láb
+  box([-4, 12, -4], [4, 20, 4], [0, 0], 8, 8, 8);
+  box([-4, 0, -2], [4, 12, 2], [16, 16], 8, 12, 4);
+  box([4, 0, -2], [4 + armW, 12, 2], [40, 16], armW, 12, 4);
+  box([-4 - armW, 0, -2], [-4, 12, 2], legacy ? [40, 16] : [32, 48], armW, 12, 4);
+  box([0, -12, -2], [4, 0, 2], [0, 16], 4, 12, 4, { legRotation: legAngle });
+  box([-4, -12, -2], [0, 0, 2], legacy ? [0, 16] : [16, 48], 4, 12, 4, { legRotation: legAngle });
 
-  // ── Külső (overlay) réteg ────────────────────────────────────────────
-  // A haj/sapka nélkül a legtöbb skin FELISMERHETETLEN lenne - a fej
-  // overlay-e ezért a régi formátumban is megvan; a többi csak a modernben
-  // létezik. Az "inflate" a kliensben és az előnézetben is ugyanazt jelenti,
-  // és a figurával EGYÜTT kicsinyedik (különben egy 0,45-re zsugorított
-  // figurán aránytalanul vastag lenne).
   const INFLATE = 0.3;
   box([-4, 12, -4], [4, 20, 4], [32, 0], 8, 8, 8, { inflate: INFLATE });
   if (!legacy) {
@@ -7589,13 +6439,10 @@ function buildShoulderPetModel(opts) {
 
   return {
     model: { texture_size: [64, legacy ? 32 : 64], elements },
-    // A lebegés forgáspontja a figura ÜLEPE: onnan billegjen, ne a saját
-    // befoglaló dobozának közepe körül (az a hasa magasságában lenne).
     seatPivot: place(PET_LOCAL_ORIGIN)
   };
 }
 
-/** Finom, "él a figura" alapmozgás - nem hullám, tehát nagyon olcsó. */
 function shoulderPetAnim(seatPivot) {
   return {
     pivot: seatPivot,
@@ -7608,18 +6455,6 @@ function shoulderPetAnim(seatPivot) {
 
 let petSkinFile = null;
 let petSkinIsLegacy = false;
-/**
- * A NYITOTT űrlap figura-mivolta: null = sima kiegészítő, egyébként a
- * generátor négy beállítása ({side, scale, legAngle, slim, anim}).
- *
- * MIÉRT KELL KÜLÖN ÁLLAPOT (és miért nem elég a doboz láthatósága): ezt
- * küldjük vissza a backendnek "petMeta" néven, és ebből tudja a szerkesztő
- * legközelebbi megnyitása, hogy ki kell tennie a generátor dobozát. A
- * MENTÉSKOR SZÁNDÉKOSAN EZT küldjük, nem a mezők pillanatnyi állását: az
- * eltárolt beállításnak azt a geometriát kell leírnia, ami ténylegesen ott
- * van. Egy elállított, de le nem generált mező különben azt hazudná, hogy a
- * figura már az új méretben/vállon van.
- */
 let cosmeticPetMeta = null;
 
 $('#petSkinPickBtn')?.addEventListener('click', () => $('#petSkinInput').click());
@@ -7637,18 +6472,12 @@ $('#petSkinInput')?.addEventListener('change', (e) => {
     loadImage(reader.result).then((img) => {
       const w = img?.naturalWidth || 0;
       const h = img?.naturalHeight || 0;
-      // A skin-elrendezés két aránya: a modern 1:1 (64x64, 128x128...) és a
-      // régi 2:1 (64x32). Bármi más nem skin, és a generált UV-k rossz
-      // helyre mutatnának - ezt jobb itt megmondani, mint a kész
-      // kiegészítőn látni.
       if (!w || !h || w < 64 || (h !== w && h * 2 !== w)) {
         if (note) note.textContent = `${file.name} - FIGYELEM: ez nem szabványos skin (${w}x${h}). 64x64 (vagy nagyobb, azonos arányú) illetve 64x32 kell.`;
         return;
       }
       petSkinIsLegacy = h * 2 === w;
       petSkinFile = file;
-      // A vékony kar felismerése nem lehetséges a képből (ugyanaz a felbontás
-      // mindkét modellnél), ezért az maradt kapcsolónak.
       if (note) note.textContent = `${file.name} - ${w}x${h}${petSkinIsLegacy ? ' (régi formátum)' : ''}`;
       if (btn) btn.disabled = false;
     });
@@ -7656,7 +6485,6 @@ $('#petSkinInput')?.addEventListener('change', (e) => {
   reader.readAsDataURL(file);
 });
 
-/** A figura-mezők aktuális állása - ezt mentjük el a kiegészítőhöz. */
 function readPetMeta() {
   return {
     side: $('#petSideSelect').value === 'right' ? 'right' : 'left',
@@ -7667,7 +6495,6 @@ function readPetMeta() {
   };
 }
 
-/** Egy elmentett figura-beállítás visszatöltése a mezőkbe. */
 function writePetMeta(meta) {
   if (!meta || !$('#petSideSelect')) return;
   $('#petSideSelect').value = meta.side === 'right' ? 'right' : 'left';
@@ -7677,18 +6504,6 @@ function writePetMeta(meta) {
   $('#petAnimCheckbox').checked = meta.anim !== false;
 }
 
-/**
- * Egy MEGLÉVŐ figura textúrájának betöltése skin-forrásként.
- *
- * MIÉRT MŰKÖDIK EZ: a generátor a skint VÁLTOZATLANUL teszi be a kiegészítő
- * textúrájának (ld. buildShoulderPetModel UV-megjegyzését) - a kiegészítő
- * textúrája tehát bitre az eredeti skin. Így az admin újragenerálhat anélkül,
- * hogy elő kellene kerítenie az eredeti fájlt.
- *
- * Hibát SZÁNDÉKOSAN csak jelzünk, nem dobunk: a szerkesztés minden más része
- * enélkül is működik, csak a "Figura generálása" gomb marad letiltva, amíg az
- * admin nem választ kézzel egy skint.
- */
 async function loadPetSkinFromCosmetic(item) {
   const note = $('#petSkinNote');
   const btn = $('#petGenerateBtn');
@@ -7700,9 +6515,6 @@ async function loadPetSkinFromCosmetic(item) {
   }
   if (note) note.textContent = 'A jelenlegi skin betöltése...';
   try {
-    // "no-store": a textúra-végpont max-age=60-at küld (minden néző kliens
-    // ezt kéri), és a böngésző azt tiszteletben tartja - egy frissen mentett
-    // textúra után a régit kapnánk vissza. Ld. cosmeticAssetBust.
     const res = await fetch(cosmeticTextureUrl(item.id), { cache: 'no-store' });
     if (!res.ok) throw new Error(String(res.status));
     const blob = await res.blob();
@@ -7714,8 +6526,6 @@ async function loadPetSkinFromCosmetic(item) {
       if (note) note.textContent = 'A jelenlegi textúra nem szabványos skin (' + w + 'x' + h + ') - válassz egy skint az újrageneráláshoz.';
       return;
     }
-    // Ha közben már másik kiegészítőre váltottak, ez a válasz elavult - ne
-    // írjuk felül vele az új űrlap állapotát (a betöltés aszinkron).
     if (String(cosmeticEditingId) !== String(item.id)) return;
     petSkinIsLegacy = h * 2 === w;
     petSkinFile = file;
@@ -7743,20 +6553,9 @@ $('#petGenerateBtn')?.addEventListener('click', async () => {
     side: $('#petSideSelect').value === 'right' ? 'right' : 'left'
   });
 
-  // Az űrlap kitöltése ugyanazokra a mezőkre, amiket egy kézi feltöltés is
-  // használ - innentől semmi nem tud a figuráról, minden "sima kiegészítő".
-  // Az EGYETLEN, ami megmarad: a generátor beállításai (ld. cosmeticPetMeta),
-  // hogy egy meglévő figura később is újragenerálható legyen.
   cosmeticPetMeta = readPetMeta();
   cosmeticAssembly.itemModelSpace = true;
   $('#cosmeticItemSpaceCheckbox').checked = true;
-  // ÚJ figuránál tiszta lappal indulunk: a slot a test, az illesztés nulla
-  // (a generátor koordinátái MÁR a vállon vannak, így az admin egy tiszta
-  // alapról hangol, és az "Automatikus beillesztés" sem rántja el).
-  //
-  // MEGLÉVŐ figura ÚJRAGENERÁLÁSAKOR viszont mindezt MEGTARTJUK: az admin
-  // illesztése/forgatása/mérete a saját, kézzel beállított munkája - egy
-  // "legyen kicsit kisebb a figura" kérés nem dobhatja el.
   if (!cosmeticEditingId) {
     $('#cosmeticSlotSelect').value = 'body';
     cosmeticAssembly.offsetX = 0;
@@ -7767,9 +6566,6 @@ $('#petGenerateBtn')?.addEventListener('click', async () => {
     cosmeticAssembly.rotationZ = 0;
     cosmeticAssembly.scale = 1;
   }
-  // A lebegő alapmozgás forgáspontja a figura ülepéhez kötött, ami a
-  // MÉRETTŐL függ - ezért újragenerálásnál is frissíteni kell. Ha a kapcsoló
-  // ki van kapcsolva, a meglévő (akár kézzel szerkesztett) mozgás marad.
   if ($('#petAnimCheckbox').checked) cosmeticAssembly.anim = shoulderPetAnim(built.seatPivot);
 
   if (!cosmeticParts.length) cosmeticParts.push(emptyPart(0));
@@ -7801,22 +6597,12 @@ $('#petGenerateBtn')?.addEventListener('click', async () => {
     : 'A figura elkészült - nézd meg az előnézetben, és állíts rajta, ha kell.');
 });
 
-// ── AURA + JÁTÉKBELI EFFEKTEK + SZERVER-HATÓKÖR ─────────────────────────
-//
-// A választók tartalmát MIND a backend adja (GET /api/admin/cosmetics
-// "meta.auraTypes" / "meta.gameEffects" és "servers") - ld. a backend
-// AURA_PRESETS-jének indoklását arról, miért ott élnek a típusok. Enélkül egy
-// új aura-típushoz a Centert is ki kellene adni, és a két lista előbb-utóbb
-// szétcsúszna.
 let cosmeticAuraTypes = [];
 let cosmeticEffectTypes = [];
 let cosmeticServers = [];
 
-/** A NYITOTT űrlap aura-beállítása (a tárolt, nem a feloldott alak). */
 let cosmeticAura = null;
-/** A NYITOTT űrlap játékbeli effektjei: [{effect, amplifier}]. */
 let cosmeticGameEffects = [];
-/** A hatókör: szerver-azonosítók. Üres tömb = MINDEN szerveren hat. */
 let cosmeticEffectServers = [];
 
 function renderCosmeticAuraEditor() {
@@ -7836,25 +6622,17 @@ function renderCosmeticAuraEditor() {
   $('#cosmeticAuraSizeInput').value = Number.isFinite(a.size) ? a.size : '';
   $('#cosmeticAuraLifeInput').value = Number.isFinite(a.life) ? a.life : '';
   $('#cosmeticAuraSpeedInput').value = Number.isFinite(a.speed) ? a.speed : '';
-  // A színválasztónak MINDIG kell érték (üres string esetén feketét mutatna,
-  // ami azt hazudná, hogy fekete aurát állítottunk be). Ha nincs felülírás, a
-  // mező a semleges fehéret mutatja, de nem kerül be a mentésbe - ezt a
-  // readCosmeticAura() dönti el a "dirty" jelölőből.
   $('#cosmeticAuraColorAInput').value = a.colorA || '#ffffff';
   $('#cosmeticAuraColorBInput').value = a.colorB || '#ffffff';
   $('#cosmeticAuraColorAInput').dataset.set = a.colorA ? '1' : '';
   $('#cosmeticAuraColorBInput').dataset.set = a.colorB ? '1' : '';
   $('#cosmeticAuraReactSelect').value = a.react || 'none';
-  // ILLESZTÉS: a meg nem adott mező ÜRESEN marad (nem 0-t mutat), mert a
-  // 0 itt érvényes, beállított érték - a kettőt a felületen is meg kell
-  // tudni különböztetni.
   $('#cosmeticAuraOffsetXInput').value = Number.isFinite(a.offsetX) ? a.offsetX : '';
   $('#cosmeticAuraOffsetYInput').value = Number.isFinite(a.offsetY) ? a.offsetY : '';
   $('#cosmeticAuraOffsetZInput').value = Number.isFinite(a.offsetZ) ? a.offsetZ : '';
   $('#cosmeticAuraExtentInput').value = Number.isFinite(a.extent) ? a.extent : '';
 }
 
-/** A mezőkből összeállított aura-beállítás, vagy null. */
 function readCosmeticAura() {
   const type = $('#cosmeticAuraTypeSelect')?.value || 'none';
   if (type === 'none') return null;
@@ -7881,14 +6659,6 @@ function readCosmeticAura() {
   if (react && react !== 'none') out.react = react;
   return out;
 }
-
-
-// ── A kiegészítő .bbmodel feltöltése ─────────────────────────────────────
-//
-// MIÉRT EGY KÉRÉSBEN A GEOMETRIA, A TEXTÚRA ÉS AZ ANIMÁCIÓ: a .bbmodel
-// mindhármat tartalmazza, és külön kérésekben egy megszakadt feltöltés
-// felemás állapotot hagyna (új geometria, régi textúra), amit semmi nem
-// jelezne. Ld. a backend /api/admin/cosmetics/:id/bbmodel végpontját.
 
 $('#cosmeticBbmodelPickBtn')?.addEventListener('click', () => {
   if (!cosmeticEditingId) {
@@ -7948,22 +6718,6 @@ async function uploadCosmeticBbmodel(file) {
   }
 }
 
-/**
- * A szerkesztő frissítése egy .bbmodel feltöltés után.
- *
- * A geometria és a textúra a SZERVEREN változott meg, tehát onnan kell
- * visszaolvasni. Az ILLESZTÉS mezőit SZÁNDÉKOSAN nem írjuk felül: az admin
- * épp azokat hangolja, egy modell-csere nem dobhatja el a munkáját.
- */
-/**
- * A szerkesztő geometriájának és textúrájának újraolvasása a szerverről.
- *
- * A MEZŐKET (illesztés, animáció-sávok, aura) SZÁNDÉKOSAN nem írjuk felül:
- * az admin épp azokat hangolja, egy modell-csere nem dobhatja el a munkáját.
- * A GYORSÍTÓTÁRAT viszont törni KELL: a modell- és a textúra-végpont is
- * gyorsítótárazható, enélkül a böngésző a RÉGIT adná vissza, és úgy tűnne,
- * hogy nem történt semmi.
- */
 async function reloadCosmeticEditorAssets() {
   if (!cosmeticEditingId) return;
   cosmeticAssetBust++;
@@ -7979,8 +6733,6 @@ async function reloadCosmeticEditorAssets() {
     if (!model) return;
     cosmeticEditorTexture = img;
 
-    // A RÉSZEK LISTÁJA is változhatott (egy üres kiegészítőnél a .bbmodel
-    // hozza létre az első részt).
     if (item && Array.isArray(item.parts) && item.parts.length) {
       const known = new Map(cosmeticParts.map((pp) => [pp.id, pp]));
       cosmeticParts = item.parts.map((raw, i) => {
@@ -8006,7 +6758,6 @@ async function reloadCosmeticEditorAssets() {
     renderCosmeticPartsBar();
     restartCosmeticEditor();
   } catch {
-    /* a szerkesztő ilyenkor a korábbi állapotában marad */
   }
 }
 
@@ -8019,9 +6770,6 @@ async function refreshCosmeticAfterBbmodel(fresh) {
   await reloadCosmeticEditorAssets();
 }
 
-/**
- * A csontváz-doboz (kapcsoló + animáció-lista) kirajzolása.
- */
 function renderCosmeticRigBox() {
   const box = $('#cosmeticRigBox');
   if (!box) return;
@@ -8042,9 +6790,6 @@ function renderCosmeticRigBox() {
       + 'egyet, mentsd újra a .bbmodel fájlt, és töltsd fel ismét.</p>';
     return;
   }
-  // A kliens ugyanezekből a kulcsszavakból ismeri fel, melyik animáció
-  // melyik állapothoz tartozik (ld. SolarClient MobRig.resolveStates) - itt
-  // ugyanazt mutatjuk, hogy az admin lássa, mi indul majd magától.
   const HINTS = [
     { label: 'nyugalom', words: ['idle', 'stand', 'nyugalom'] },
     { label: 'járás', words: ['walk', 'move', 'jaras'] },
@@ -8129,9 +6874,6 @@ function renderCosmeticEffectEditor() {
 
 $('#cosmeticAuraTypeSelect')?.addEventListener('change', () => {
   const type = $('#cosmeticAuraTypeSelect').value;
-  // Típusváltáskor a finomhangolást ELDOBJUK: a számok az előző típus
-  // léptékéhez voltak hangolva (egy 26 db/mp-es láng és egy 8 db/mp-es rúna
-  // nem ugyanaz a nagyságrend), átvinni őket félrevezető lenne.
   cosmeticAura = type === 'none' ? null : { type };
   renderCosmeticAuraEditor();
   queueEditorRefresh();
@@ -8145,8 +6887,6 @@ $('#cosmeticAuraResetBtn')?.addEventListener('click', () => {
   showToast('A finomhangolás törölve - a típus alapértékei érvényesek.');
 });
 
-// A finomhangoló mezők bármelyikének változása azonnal beíródik az
-// állapotba, hogy egy fülváltás ne dobja el.
 ['#cosmeticAuraRateInput', '#cosmeticAuraSizeInput', '#cosmeticAuraLifeInput',
  '#cosmeticAuraSpeedInput', '#cosmeticAuraReactSelect',
  '#cosmeticAuraOffsetXInput', '#cosmeticAuraOffsetYInput', '#cosmeticAuraOffsetZInput',
@@ -8155,8 +6895,6 @@ $('#cosmeticAuraResetBtn')?.addEventListener('click', () => {
 });
 ['#cosmeticAuraColorAInput', '#cosmeticAuraColorBInput'].forEach((id) => {
   $(id)?.addEventListener('input', (e) => {
-    // Amint hozzányúlnak, a szín FELÜLÍRÁSNAK számít - ld. a
-    // renderCosmeticAuraEditor() megjegyzését a "set" jelölőről.
     e.target.dataset.set = '1';
     cosmeticAura = readCosmeticAura();
     queueEditorRefresh();
@@ -8166,8 +6904,6 @@ $('#cosmeticAuraResetBtn')?.addEventListener('click', () => {
 $('#cosmeticEffectAddBtn')?.addEventListener('click', () => {
   if (!cosmeticEffectTypes.length) { showToast('A backend nem adott effekt-listát.', true); return; }
   if (cosmeticGameEffects.length >= 4) { showToast('Egy kiegészítő legfeljebb 4 effektet adhat.', true); return; }
-  // Az első OLYAN effektet ajánljuk fel, ami még nincs a listában - ugyanazt
-  // kétszer felvenni a backend úgyis elutasítaná.
   const used = new Set(cosmeticGameEffects.map((e) => e.effect));
   const next = cosmeticEffectTypes.find((t) => !used.has(t.id));
   if (!next) { showToast('Minden effekt szerepel már a listában.', true); return; }
@@ -8202,7 +6938,6 @@ document.addEventListener('change', (e) => {
   }
 });
 
-// ── Szerver-katalógus ───────────────────────────────────────────────────
 function renderCosmeticServerList() {
   const wrap = $('#cosmeticServerList');
   if (!wrap) return;
@@ -8279,15 +7014,8 @@ async function loadCosmeticsAdmin() {
       const data = await res.json();
       cosmeticsAdminItems = data.ok ? (data.cosmetics || []) : [];
       if (data.ok) {
-        // A választók tartalma a BACKENDTŐL jön - ld. a fenti magyarázatot.
-        // A "limits" a backend meglévő, minden korlátot és választható
-        // listát tartalmazó blokkja - az aura- és effekt-típusok is oda
-        // kerültek, hogy ne legyen két párhuzamos meta-mező.
         cosmeticAuraTypes = data.limits?.auraTypes || [];
         cosmeticEffectTypes = data.limits?.gameEffects || [];
-        // Az előnézet ugyanezekből a presetekből rajzolja az aurát - így a
-        // szerkesztőben látott kép és az in-game kép ugyanabból a forrásból
-        // származik.
         SkinPreview.setAuraPresets(cosmeticAuraTypes);
         cosmeticServers = data.servers || [];
         renderCosmeticServerList();
@@ -8307,42 +7035,24 @@ async function loadCosmeticsAdmin() {
   if (hasPerm('global.cosmeticsMarketManage')) loadCosmeticsMarketAdmin();
 }
 
-// ── Admin: lista- és szerkesztő-nézet váltása ────────────────────────────
-// Ld. index.html indoklását: a szerkesztő-űrlap ALAPÉRTELMEZÉSBEN nincs
-// kitéve, mert a gyakori művelet a meglévők átnézése/szerkesztése, nem az új
-// felvétele. A váltás egy osztály a nézet-szekción (NEM a "hidden", mert azt
-// az applyPermVisibility() kezeli a data-perm alapján).
 function cosmeticAdminSection() {
   return document.querySelector('.view[data-view="cosmeticsAdmin"]');
 }
 
-/**
- * @param mode 'new' (üres űrlap) | 'pet' (üres űrlap + figura-generátor)
- *             | 'edit' (a hívó már betöltötte a mezőket)
- */
 function openCosmeticEditor(mode) {
   const section = cosmeticAdminSection();
   if (!section) return;
   if (mode === 'new' || mode === 'pet') resetCosmeticForm();
   section.classList.add('editing');
-  // A figura-generátor CSAK a saját gombjából nyitva látszik: egy sima
-  // kiegészítő felvételénél csak zaj lenne.
   $('#cosmeticPetBox')?.classList.toggle('hidden', mode !== 'pet');
-  // SZERKESZTÉSNÉL a hívó (openCosmeticForEdit) teszi ki újra a dobozt, ha a
-  // kiegészítő figuraként készült - ld. ott. A cím itt áll vissza az
-  // alapértelmezettre, hogy egy korábbi szerkesztés után ne az
-  // "újragenerálás" felirat maradjon.
   const petTitle = $('#cosmeticPetTitle');
   if (petTitle) petTitle.textContent = 'Figura készítése skinből';
   if (mode === 'pet') {
     $('#cosmeticFormTitle').textContent = 'Új vállon ülő figura';
-    // A figura mindig a testhez kapcsolódik - ld. a generátor indoklását.
     const slotSel = $('#cosmeticSlotSelect');
     if (slotSel) slotSel.value = 'body';
   }
   setCosmeticTab('basics');
-  // A szerkesztő tetejére ugrunk: hosszú listáról érkezve a görgetés
-  // különben a lap közepén hagyna.
   section.scrollIntoView({ block: 'start', behavior: 'smooth' });
 }
 
@@ -8363,9 +7073,6 @@ $('#cosmeticNewBtn')?.addEventListener('click', () => openCosmeticEditor('new'))
 $('#cosmeticNewPetBtn')?.addEventListener('click', () => openCosmeticEditor('pet'));
 $('#cosmeticBackBtn')?.addEventListener('click', closeCosmeticEditor);
 
-// A kereső SZÁNDÉKOSAN kliens-oldali: a katalógus már úgyis itt van, egy
-// szerverkérés csak lassítana (ugyanaz az elv, mint a játékos-oldali
-// kiegészítő-szűrőnél).
 let cosmeticAdminSearch = '';
 $('#cosmeticAdminSearch')?.addEventListener('input', (e) => {
   cosmeticAdminSearch = e.target.value.trim().toLowerCase();
@@ -8419,17 +7126,10 @@ function renderCosmeticsAdminList() {
   hydrateCosmeticThumbs(wrap);
 }
 
-// ── Admin illesztő- és animáció-szerkesztő ───────────────────────────────
-// A húzás a TÉNYLEGES eltolás-mezőket állítja, és a karakteren azonnal
-// látszik az eredmény - ugyanazzal a transzformáció-lánccal, amit a
-// SolarClient is használ (ld. skin3d.js buildCosmeticParts levezetését).
-// Ez a funkció LÉNYEGE: ha az előnézet és az in-game render eltérne, a
-// húzogatással beállított értékek használhatatlanok lennének.
 let stopCosmeticEditor = null;
-let cosmeticEditorTexture = null;  // Image objektum
+let cosmeticEditorTexture = null;
 let cosmeticEditorRefreshQueued = false;
 
-// ── A cél (teljes kiegészítő / rész) és a mezők összekötése ─────────────
 function readTargetFromInputs() {
   const rec = currentTargetRecord();
   if (!rec || !$('#cosmeticOffsetXInput')) return;
@@ -8441,9 +7141,6 @@ function readTargetFromInputs() {
   rec.rotationZ = Number($('#cosmeticRotZInput').value) || 0;
   rec.scale = Number($('#cosmeticScaleInput').value) || 1;
   if (cosmeticTarget >= 0) rec.dirty = true;
-  // Az "item-modell tér" MINDIG a kiegészítő egészére vonatkozik: az egy
-  // koordináta-rendszer-konvenció, nem illesztési finomhangolás - a részek
-  // ugyanabban a térben készültek.
   cosmeticAssembly.itemModelSpace = $('#cosmeticItemSpaceCheckbox').checked;
 }
 
@@ -8481,7 +7178,6 @@ function setCosmeticTarget(target) {
   queueEditorRefresh();
 }
 
-// ── Részek felülete ────────────────────────────────────────────────────
 function renderCosmeticPartsBar() {
   const bar = $('#cosmeticPartsBar');
   if (!bar) return;
@@ -8491,9 +7187,6 @@ function renderCosmeticPartsBar() {
     const anim = (part.anim && part.anim.tracks && part.anim.tracks.length) ? ' <span class="cosmetic-part-chip-anim" title="Van animációja">~</span>' : '';
     chips.push(`<button type="button" class="cosmetic-part-chip${cosmeticTarget === i ? ' active' : ''}" data-cosmetic-target="${i}">${escapeHtml(cosmeticPartLabel(i))}${anim}${warn}</button>`);
   });
-  // A "+ Rész hozzáadása" gomb KIVEZETVE: egy kiegészítő EGY modell, és a
-  // .bbmodel úgyis a teljes alakot hordozza. A meglévő, több részes
-  // kiegészítők részei továbbra is látszanak és törölhetők.
   bar.innerHTML = chips.join('');
   renderCosmeticPartPanel();
 }
@@ -8526,9 +7219,6 @@ function renderCosmeticPartPanel() {
     </div>`;
 }
 
-// ── Animáció-szerkesztő ────────────────────────────────────────────────
-// A sáv-mezők jelentése SZÓ SZERINT a kliens CosmeticAnim-jéé (Java) - ha itt
-// más lenne, a beállított mozgás in-game máshogy nézne ki.
 const ANIM_TYPE_LABELS = { rotate: 'Forgatás', translate: 'Eltolás', scale: 'Méret' };
 const ANIM_WAVE_LABELS = {
   sine: 'Lágy (szinusz)',
@@ -8542,46 +7232,6 @@ const ANIM_REACT_LABELS = {
 };
 const ANIM_ALONG_LABELS = { auto: 'Automatikus', x: 'X', y: 'Y', z: 'Z' };
 
-// Kész mozgások.
-//
-// MIÉRT TÖBBSÁVOSAK (ez a 2026-09-12-i újratervezés lényege): egyetlen
-// tengely körüli forgatás - bármilyen jól hangolva - CSUKLÓ marad. A szárny
-// fel-le billeg, és a szem azonnal kiszúrja, hogy gépi. Egy élő szárnycsapást
-// nem a KITÉRÉS NAGYSÁGA tesz hitelessé, hanem három, egymáshoz RÖGZÍTETT
-// FÁZISÚ mozgás együttállása:
-//
-//   Z körül (csapás)    a tő alig, a hegy teljesen mozdul, és a mozgás
-//                       végigfut a szárnyon           -> falloff + spread
-//   X körül (csavarás)  a csapás LEGGYORSABB pontján tetőzik: ekkor fordul
-//                       bele a szárny a levegőbe. A helyes fázis a hullám
-//                       ALAKJÁTÓL függ: az aszimmetrikus "flap"-nél a
-//                       leggyorsabb pont a ciklus 17%-ánál van -> phase 30,
-//                       sima szinusznál a ciklus elején -> phase 95. Ezt a
-//                       különbséget numerikus teszt fogta meg, nem szemre
-//                       hangoltuk.
-//   Y körül (söprés)    KÉTSZERES ütemben, kicsit - ettől lesz a szárnyhegy
-//                       pályája 8-as alakú            -> speed x2
-//
-// A kétszeres ütem szándékosan EGÉSZ SZÁMÚ arány: egy 1,7-szeres sebesség a
-// főmozgáshoz képest lassan szétcsúszna, és a csapkodás "dülöngélne".
-//
-// KÉT ÉRTÉK VÁLTOZOTT ÉRDEMBEN a korábbi készletből:
-//   - sebesség 1,15 -> 0,6 ciklus/mp. A régi 0,87 másodpercenként egy teljes
-//     csapás, ami egy nagy szárnytól kapkodó; 1,6 mp a nyugodt, lebegő ütem.
-//   - késés (spread) 130 -> 55 fok. A 130 fok a ciklus több mint harmada: a
-//     szárny töve és hegye ennyire eltérő fázisban gumiszerűen hullámzott,
-//     csapás helyett.
-//
-// AZ "ELLENTÉTES ÜTEM" változatot nem kézzel írjuk le: a mirrorAnimTracks()
-// a test síkjára tükröz, ami a helyes átalakítás (ld. ott).
-//
-// JAVÍTVA: ez a változat korábban "(tükrözött)" néven szerepelt, és arra
-// kellett, hogy a MÁSIK szárnyra rakva a két fél egyformán csapjon. A kliens
-// (és az előnézet) azóta a forgáspont túloldalát MAGÁTÓL tükrözi, tehát ha a
-// mozgást a TELJES kiegészítőre teszed, a két szárny eleve együtt mozog -
-// ehhez a változathoz nem kell hozzányúlni. Ami megmaradt neki: az az eset,
-// amikor SZÁNDÉKOSAN ellentétes ütemet akarsz (pl. két, egymással szemben
-// mozgó szegmens). A név ezért mondja meg, mit csinál, nem azt, hogyan.
 const ANIM_PRESET_DEFS = [
   {
     label: 'Szárnycsapás',
@@ -8623,9 +7273,6 @@ const ANIM_PRESET_DEFS = [
     ]
   },
   {
-    // Köpenynél a hullám a VÁLLTÓL lefelé fut, és két tengely körül egyszerre
-    // (negyed ciklus eltéréssel) - ettől "lobog" ahelyett, hogy egy síkban
-    // előre-hátra lengene.
     label: 'Köpeny-hullám',
     replace: true,
     tracks: [
@@ -8646,20 +7293,6 @@ const ANIM_PRESET_DEFS = [
   { label: 'Lüktetés', tracks: [{ type: 'scale', axis: 'x', amp: 0.06, speed: 0.8, phase: 0, wave: 'sine', react: 'none', falloff: 0, spread: 0, along: 'auto' }] }
 ];
 
-/**
- * Egy mozgás TÜKÖRKÉPE - a másik szárnyfélre.
- *
- * MIÉRT NEM ELÉG MINDEN KITÉRÉST NEGÁLNI (ez volt a régi, egysávos készlet
- * megoldása, és egysávosan véletlenül helyes is volt): a tükrözés a test
- * síkjára (x -> -x) történik. Ez egy IRÁNYVÁLTÓ leképezés, amiben
- *   - a FORGATÁS tengelyvektora (axiális) így viselkedik: az X körüli szög
- *     VÁLTOZATLAN, az Y és Z körüli NEGÁLÓDIK,
- *   - az ELTOLÁS (poláris vektor) fordítva: az X negálódik, az Y és Z nem,
- *   - a MÉRET (skalár) egyáltalán nem változik.
- * Ha a csavarást (X körüli forgás) is negálnánk, a két szárnyfél a csapás
- * közben EGYMÁSSAL SZEMBE fordulna bele a levegőbe - pont a mozgás lelke
- * veszne el.
- */
 function mirrorAnimTracks(tracks) {
   return tracks.map((t) => {
     const m = Object.assign({}, t);
@@ -8670,8 +7303,6 @@ function mirrorAnimTracks(tracks) {
   });
 }
 
-// A gomblistába a tükrözött változatok is bekerülnek - a szerkesztő
-// index alapján hivatkozik rájuk, ezért itt egy LAPOS listát építünk.
 const ANIM_PRESETS = ANIM_PRESET_DEFS.flatMap((def) => {
   const base = { label: def.label, replace: !!def.replace, tracks: def.tracks };
   if (!def.mirror) return [base];
@@ -8692,43 +7323,8 @@ function animField(label, inner, title) {
   return `<label class="cosmetic-anim-field"${title ? ` title="${escapeHtml(title)}"` : ''}><span>${escapeHtml(label)}</span>${inner}</label>`;
 }
 
-/**
- * A rész TÖVE: az a pont, ahol a csukló van.
- *
- * MIÉRT KELL AUTOMATIKUSAN: a forgáspont alapértéke a rész befoglaló
- * dobozának KÖZEPE, egy szárny viszont a TÖVÉNÉL csuklik. Aki csak rákattint
- * egy kész mozgásra, az középen csuklóra hajló szárnyat kapna, és azt hinné,
- * hogy a hullám nem működik - pedig csak a forgáspont rossz.
- *
- * A HEURISZTIKA: a hullám tengelye mentén a rész két széle közül az, amelyik
- * KÖZELEBB van a modell-tér középpontjához - vagyis a testhez. Egy Blockbench
- * item-modell a (8,8,8) blokk-középpont köré készül (minden vásárolt csomag
- * ilyen), egy entitás-modell pedig a (0,0,0) köré; a szárny ettől a ponttól
- * FELÉ nyúlik ki, tehát a közelebbi vége a töve. A másik két koordináta a
- * rész közepe marad - ott nincs mit eltalálni.
- *
- * KIVÉTEL - A SZÁRNYPÁR (élesben visszajelzett hiba: "az egyik szárny sokkal
- * jobban mozog, mint a másik"): ha a geometria a test vonalának MINDKÉT
- * oldalára átnyúlik, akkor ez nem EGY szárny, hanem egy jobb+bal PÁR egyetlen
- * modellben - és ilyenkor a töve nem a befoglaló doboz valamelyik SZÉLE,
- * hanem a KÖZEPE, ahol a két fél a háthoz ér. A szélre tett forgáspont mellett
- * a közeli szárny hegye a forgáspontra esne (nulla kitérés), a távolié pedig a
- * skála 1-es végére - pontosan az a "az egyik alig mozog" tünet.
- */
-
-/**
- * A tő koordinátája a hullám tengelye mentén - ld. suggestRootPivot() fenti
- * magyarázatát. Külön függvény, mert a TELJES kiegészítőnél és egy RÉSZNÉL is
- * szó szerint ugyanez a szabály.
- *
- * @param reference a test vonala a szerzői térben (item-modellnél 8, entitás-
- *                  modellnél 0)
- */
 function rootPivotCoord(min, max, reference) {
   const span = max - min;
-  // Mennyi geometria esik a test vonalának a KESKENYEBBIK oldalára. A 25%-os
-  // küszöb választja el a "pár" esetet attól, amikor a modell csak épphogy
-  // átlóg a testen (pl. egy szárnytő beleér a hátba).
   const overhang = Math.min(reference - min, max - reference);
   if (span > 0 && overhang > span * 0.25) return (min + max) / 2;
   return Math.abs(min - reference) <= Math.abs(max - reference) ? min : max;
@@ -8737,11 +7333,6 @@ function suggestRootPivot(partIndex) {
   const model = buildEditorModel();
   if (!model) return null;
 
-  // A TELJES kiegészítőnél ugyanaz a gondolat, csak a MINDEN rész együttes
-  // befoglaló dobozára: a hullám tengelye mentén az a vég, amelyik közelebb
-  // van a testhez. A tengelyt itt a RÉSZKÖZÉPPONTOK leghosszabb kiterjedése
-  // adja (ugyanaz a szabály, mint a kliens CosmeticModel.computePartDistances
-  // "automatikus" ágában).
   if (partIndex < 0) {
     const withModelAll = cosmeticParts.filter((p) => Array.isArray(p.elements) && p.elements.length);
     if (!withModelAll.length) return null;
@@ -8768,8 +7359,6 @@ function suggestRootPivot(partIndex) {
 
   let built;
   try { built = SkinPreview.buildCosmeticParts(model, $('#cosmeticSlotSelect').value || 'head'); } catch { return null; }
-  // A buildEditorModel csak a modellel rendelkező részeket adja tovább, ezért
-  // a sorszámot azok között kell megkeresni.
   const withModel = cosmeticParts.filter((p) => Array.isArray(p.elements) && p.elements.length);
   const builtIndex = withModel.indexOf(part);
   const builtPart = built.parts[builtIndex];
@@ -8793,10 +7382,6 @@ function suggestRootPivot(partIndex) {
 }
 
 function applyRootPivot() {
-  // JAVÍTVA: korábban ez a TELJES kiegészítőnél elutasított ("válassz ki egy
-  // részt"). Amióta a hullám a kiegészítő egészére is hat (részenként), ott
-  // is pontosan ugyanolyan fontos, hogy a forgáspont a TŐNÉL legyen, ne a
-  // befoglaló doboz közepén - különben a szegmensek középen csuklanának.
   const pivot = suggestRootPivot(cosmeticTarget);
   if (!pivot) { showToast('Előbb tölts fel modellt.', true); return false; }
   const anim = ensureAnim();
@@ -8880,15 +7465,11 @@ function readAnimPivotFromInputs() {
   const xs = $('#cosmeticAnimPivotXInput').value.trim();
   const ys = $('#cosmeticAnimPivotYInput').value.trim();
   const zs = $('#cosmeticAnimPivotZInput').value.trim();
-  // MIND A HÁROM mező kell: egy fél-megadott forgáspont (csak X) csendben
-  // rossz helyre tenné a tengelyt, ami "elrepül a szárny" tünetként jönne
-  // vissza - ezért ilyenkor inkább a modell közepe marad (üres = nincs).
   if (!xs || !ys || !zs) return null;
   const v = [Number(xs), Number(ys), Number(zs)];
   return v.every(Number.isFinite) ? v : null;
 }
 
-// ── Rész létrehozása / törlése (azonnali backend-művelet) ──────────────
 async function createCosmeticPart(file, parsed) {
   if (!cosmeticEditingId) {
     showToast('Előbb mentsd el a kiegészítőt, utána adhatsz hozzá további részeket.', true);
@@ -8952,7 +7533,6 @@ async function deleteCosmeticPart(index) {
   showToast('Rész törölve.');
 }
 
-// ── Az előnézeti modell összeállítása a szerkesztő állapotából ──────────
 function buildEditorModel() {
   readTargetFromInputs();
   const parts = cosmeticParts
@@ -8975,8 +7555,6 @@ function buildEditorModel() {
       scale: cosmeticAssembly.scale,
       itemModelSpace: cosmeticAssembly.itemModelSpace !== false,
       anim: cosmeticAssembly.anim,
-      // Az AURA a mezők PILLANATNYI állásából, nem a mentett értékből: a
-      // szerkesztőben mentés előtt is látni kell, mit csinál a beállítás.
       aura: readCosmeticAura()
     },
     parts
@@ -8987,10 +7565,6 @@ function hasEditorModel() {
   return cosmeticParts.some((p) => Array.isArray(p.elements) && p.elements.length);
 }
 
-// Ennyi világ-egység esik egy képpontra a megadott kamera-távolságnál
-// (PI/5 látószög). Enélkül a húzás sebessége a vászon méretétől ÉS a
-// nagyítástól függetlenül fix lenne, ami ránagyítva használhatatlanul
-// durva lépéseket adna.
 function editorUnitsPerPixel(canvas, camDistance) {
   const dist = typeof camDistance === 'number' && camDistance > 0 ? camDistance : 46;
   const visibleHeight = 2 * dist * Math.tan(Math.PI / 10);
@@ -8999,42 +7573,18 @@ function editorUnitsPerPixel(canvas, camDistance) {
 
 function round2(n) { return Math.round(n * 100) / 100; }
 
-// A forgatás-mezők -180..180 közé csavarva. MIÉRT KELL: a húzás
-// mozdulatonként ad hozzá, tehát korlátozás nélkül percek alatt ezres
-// értékek jönnének ki - amiket a backend (-360..360) már el sem fogadna,
-// és a mezőben sem lehetne értelmezni.
 function wrapDegrees(n) {
   let d = ((Number(n) || 0) % 360 + 360) % 360;
   if (d > 180) d -= 360;
   return round2(d);
 }
 
-// ── Automatikus beillesztés ──────────────────────────────────────────────
-// MIÉRT KELL: egy Blockbench ITEM-modell (minden vásárolt csomag ilyen) a
-// (8,8,8) blokk-középpont körül van megrajzolva, nem a (0,0,0) csont-pivot
-// körül. Nulla eltolással ezért a modell jellemzően a fej fölé és oldalra
-// csúszik - mérve: a példacsomagok szárnyai x-ben 8 egységgel, y-ban 6-13
-// egységgel el voltak tolva. Ez nem hiba, hanem a két konvenció különbsége.
-//
-// Ahelyett, hogy ezt az adminra hagynánk, feltöltéskor kiszámoljuk azt az
-// eltolást, amitől a modell a csontra KÖZÉPRE kerül - onnan már csak
-// finomhangolás a húzogatás. A Z-t SZÁNDÉKOSAN nem nyúljuk: a mélység
-// (szárny hátul, sapka fölül) a modell szerzői szándéka.
-//
-// MINDIG a TELJES kiegészítőt igazítja (nem az épp kiválasztott részt): a
-// részek egymáshoz képesti helyzete a modell szerzői szándéka, azt egy
-// automatikus középre-igazítás elrontaná.
 function autoFitCosmetic() {
   const model = buildEditorModel();
   if (!model) return false;
   const slot = $('#cosmeticSlotSelect').value || 'head';
   const pivot = SkinPreview.COSMETIC_PIVOTS[slot] || [0, 0, 0];
 
-  // Nulla eltolással felépítjük a geometriát, és megnézzük, hol landol.
-  // A szonda az AKTUÁLIS forgatással készül (csak az eltolás nulla): egy
-  // elforgatott modell befoglaló doboza más, tehát forgatás után újra
-  // beillesztve mást kell kapni - különben a gomb egy elfordított kardot
-  // a forgatás ELŐTTI helyzete szerint középre igazítana.
   const probe = { ...model, assembly: { ...model.assembly, offset: [0, 0, 0] } };
   let g;
   try { g = SkinPreview.buildCosmeticGeometry(probe, slot); } catch { return false; }
@@ -9047,20 +7597,12 @@ function autoFitCosmetic() {
   }
   const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
 
-  // A csont horgonypontja az előnézeti térben (ld. skin3d.js levezetését):
-  //   (pivotX, 6 - pivotY, -pivotZ)
-  // Az eltolás előjelei ugyanonnan jönnek.
   cosmeticAssembly.offsetX = round2(cx - pivot[0]);
   cosmeticAssembly.offsetY = round2((6 - pivot[1]) - cy);
   if (cosmeticTarget < 0) writeTargetToInputs();
   return true;
 }
 
-// Az újraindítás EGYSZERRE csak egyszer futhat: két aszinkron betöltés
-// (modell FileReader + textúra Image) versenyezhet érte, és ha közben egy
-// második hívás is elindulna, a régi példány leállítása után a másik
-// beragadhatna egy félkész állapotban. Az "újra kell futni" jelzést itt is
-// elraktározzuk, nem eldobjuk.
 let cosmeticEditorStarting = false;
 let cosmeticEditorRestartAgain = false;
 
@@ -9094,9 +7636,6 @@ async function doRestartCosmeticEditor() {
   if (empty) empty.hidden = true;
   canvas.style.visibility = '';
 
-  // A SAJÁT skined jelenik meg a szerkesztőben, nem egy általános alak - így
-  // rögtön a valódi karaktereden látod az illesztést. Ha nincs feltöltött
-  // skined, a generált alapkarakter a tartalék.
   const skinImg = await loadSkinImage(session.username) || await SkinPreview.getSteveImage();
   if (!skinImg) return;
 
@@ -9107,18 +7646,6 @@ async function doRestartCosmeticEditor() {
     [{ model, slot, img: cosmeticEditorTexture }],
     (dx, dy, angle, camDistance, dragMode) => {
       if (dragMode === 'rotate') {
-        // A KIEGÉSZÍTŐ (vagy a kiválasztott RÉSZ) forgatása (Ctrl + húzás) -
-        // nem a kameráé. Vízszintes mozdulat = Y (függőleges) tengely,
-        // függőleges = X.
-        //
-        // AZ ELŐJELEK LEVEZETVE, nem próbálgatva (a skin3d.js
-        // transzformáció-láncából, alap-kameraállásnál):
-        //  - a kiegészítő kamera felé néző pontja szerzői (0,0,-1); Y körül
-        //    theta-val forgatva az előnézeti x-e sin(theta) lesz, tehát a
-        //    JOBBRA húzás (dx>0) NÖVELI az Y-szöget;
-        //  - a teteje szerzői (0,1,0); X körül forgatva az előnézeti z-je
-        //    -sin(theta), és a LEFELÉ húzás (dy>0) a tetejét a néző felé
-        //    (pozitív előnézeti z) dönti, ami CSÖKKENTI az X-szöget.
         const inRX = $('#cosmeticRotXInput');
         const inRY = $('#cosmeticRotYInput');
         inRY.value = wrapDegrees(Number(inRY.value || 0) + dx * 0.5);
@@ -9126,24 +7653,12 @@ async function doRestartCosmeticEditor() {
         queueEditorRefresh();
         return;
       }
-      // A húzás sebességét a KAMERA AKTUÁLIS TÁVOLSÁGÁHOZ igazítjuk -
-      // nagyításkor finomabb, kizoomolva durvább lépés. Enélkül a
-      // ránagyított nézetben egyetlen pixelnyi mozdulat is átdobná a
-      // modellt a karakter másik oldalára.
       const upp = editorUnitsPerPixel(canvas, camDistance);
 
-      // A képernyőn látott vízszintes irány a modell terében a kamera
-      // Y-forgásától függ - ezért bontjuk X és Z komponensre, hogy a
-      // kiegészítő akkor is a húzás irányába menjen, ha a karaktert
-      // közben eloldalaztuk.
       const c = Math.cos(angle), s = Math.sin(angle);
       const worldDX = dx * upp * c;
       const worldDZ = dx * upp * s;
 
-      // Az előjelek a transzformáció-láncból következnek (ld. skin3d.js):
-      //   preview_x = pivotX - offX + ...   -> jobbra húzás = offX csökken
-      //   preview_y = 6 - (pivotY - offY)   -> felfelé      = offY nő
-      //   preview_z = -(pivotZ + offZ)      -> előrébb      = offZ csökken
       const inX = $('#cosmeticOffsetXInput');
       const inY = $('#cosmeticOffsetYInput');
       const inZ = $('#cosmeticOffsetZInput');
@@ -9156,16 +7671,6 @@ async function doRestartCosmeticEditor() {
   );
 }
 
-// A geometriát minden mozdulatnál újra kell építeni - de CSAK a geometriát:
-// a teljes előnézet újraindítása elvágná a folyamatban lévő húzást (ld.
-// skin3d.js updateCosmetics megjegyzését). Ezért ha már fut a szerkesztő,
-// csak a puffereket cseréljük.
-// A "dirty" jelző NEM elhagyható: a modell és a textúra KÜLÖN, aszinkron
-// úton töltődik be (FileReader + Image). Ha a második közülük épp akkor
-// készül el, amikor már ütemezve van egy frissítés, egy sima
-// "ha ütemezve van, lépj ki" őrfeltétel ELDOBNÁ a kérést - és a szerkesztő
-// örökre az "előbb válassz modellt" állapotban ragadna, holott minden
-// betöltődött. Élesben pontosan ez történt.
 let cosmeticEditorRefreshDirty = false;
 
 function queueEditorRefresh() {
@@ -9197,7 +7702,6 @@ function queueEditorRefresh() {
   $(sel)?.addEventListener('change', queueEditorRefresh);
 });
 
-// ── Rész- és animáció-vezérlők ─────────────────────────────────────────
 $('#cosmeticPartsBar')?.addEventListener('click', (e) => {
   const chip = e.target.closest('[data-cosmetic-target]');
   if (chip) { setCosmeticTarget(Number(chip.dataset.cosmeticTarget)); return; }
@@ -9206,7 +7710,7 @@ $('#cosmeticPartsBar')?.addEventListener('click', (e) => {
       showToast('Előbb mentsd el a kiegészítőt, utána adhatsz hozzá további részeket.', true);
       return;
     }
-    cosmeticModelTargetPart = cosmeticParts.length;   // "új rész" jelzés
+    cosmeticModelTargetPart = cosmeticParts.length;
     $('#cosmeticModelInput').value = '';
     $('#cosmeticModelInput').click();
   }
@@ -9228,8 +7732,6 @@ $('#cosmeticPartPanel')?.addEventListener('input', (e) => {
   if (!part) return;
   part.name = e.target.value.trim() || null;
   part.dirty = true;
-  // A csík újrarajzolása a nevet is frissíti - a beviteli mezőt viszont NEM
-  // építjük újra (elveszne a kurzor), ezért csak a gomb-feliratokat.
   const chip = $('#cosmeticPartsBar')?.querySelector(`[data-cosmetic-target="${cosmeticTarget}"]`);
   if (chip) chip.firstChild && (chip.firstChild.textContent = cosmeticPartLabel(cosmeticTarget));
   const t1 = $('#cosmeticTargetLabel');
@@ -9245,30 +7747,12 @@ $('#cosmeticAnimPresets')?.addEventListener('click', (e) => {
   if (!preset) return;
   const wavy = preset.tracks.some((t) => (Number(t.falloff) || 0) !== 0 || (Number(t.spread) || 0) !== 0);
 
-  // JAVÍTVA (élesben visszajelzett hiba: "miért ne lehetne a teljes
-  // kiegészítőre?... csak a fele mozog"). Korábban a hullámos mozgás a
-  // "Teljes kiegészítő" célról AUTOMATIKUSAN átkerült az ELSŐ részre, mert a
-  // kliens a kiegészítő szintjén tényleg nem tudott hullámozni - egy
-  // jobb+bal szárnyból álló kiegészítőnél ettől csak az egyik szárny mozgott.
-  //
-  // A kliens (és ez az előnézet) azóta a TELJES kiegészítőt is egyetlen,
-  // összefüggő testként hajlítja: a távolságot a kiegészítő egészén, a
-  // részek illesztésén átvive méri, és csúcsonként deformál. Egy közös
-  // forgásponttól mindkét szárnyhegy azonos távolságot kap, tehát a két
-  // szárny EGYÜTT csap - épp ezt akarta a felhasználó. Ezért az
-  // átirányításnak nincs többé se oka, se értelme; csak modell meglétét
-  // ellenőrizzük.
   if (wavy && cosmeticTarget < 0) {
     const hasAnyModel = cosmeticParts.some((p) => Array.isArray(p.elements) && p.elements.length);
     if (!hasAnyModel) {
       showToast('Előbb tölts fel modellt, utána állítható be a mozgás.', true);
       return;
     }
-    // A forgáspont a hullámnál a LEGFONTOSABB beállítás: ha a kiegészítő
-    // közepén marad, a szárny nem csuklik, hanem billeg. Ha az admin még nem
-    // állította be, itt magától a tőre kerül (ugyanaz a heurisztika, mint a
-    // "Forgáspont a tőre" gombé), hogy a kész mozgás ELSŐ kattintásra jól
-    // nézzen ki.
     const existing = currentAnim();
     if (!existing || !Array.isArray(existing.pivot)) {
       const pivot = suggestRootPivot(-1);
@@ -9281,11 +7765,6 @@ $('#cosmeticAnimPresets')?.addEventListener('click', (e) => {
 
   const anim = ensureAnim();
 
-  // EGY KÉSZ MOZGÁS EGY EGÉSZ. A sávjai egymás fázisához vannak hangolva
-  // (a csavarás negyed ciklussal késik a csapáshoz képest, a söprés kétszeres
-  // ütemű) - a meglévő sávok MELLÉ fűzve nem kiegészítenék, hanem összevesznének
-  // velük, és megint az lenne az eredmény, hogy "nem jó". Ezért lecseréljük
-  // őket, és ezt ki is írjuk, hogy ne tűnjön el csendben a korábbi munka.
   const hadTracks = anim.tracks.length > 0;
   if (preset.replace) anim.tracks = [];
 
@@ -9295,9 +7774,6 @@ $('#cosmeticAnimPresets')?.addEventListener('click', (e) => {
   }
   for (const t of preset.tracks) anim.tracks.push(Object.assign({}, t));
 
-  // HULLÁMZÓ mozgásnál a forgáspont dönti el, hogy szárnycsapást vagy egy
-  // közepén hajló deszkát kapunk - ha még nincs beállítva, a rész tövére
-  // tesszük. Egy MÁR beállított forgáspontot sose írunk felül.
   if (wavy && cosmeticTarget >= 0 && !Array.isArray(anim.pivot)) {
     const pivot = suggestRootPivot(cosmeticTarget);
     if (pivot) anim.pivot = pivot;
@@ -9354,15 +7830,11 @@ function onAnimTrackFieldChange(e) {
   const track = anim.tracks[Number(row.dataset.animIndex)];
   if (!track) return;
   track[field] = ANIM_NUMBER_FIELDS.includes(field) ? (Number(e.target.value) || 0) : e.target.value;
-  // A csúszka melletti szám azonnal kövesse a húzást - teljes újrarajzolás
-  // NÉLKÜL, mert az elvágná a folyamatban lévő húzást.
   if (field === 'falloff') {
     const out = e.target.parentElement && e.target.parentElement.querySelector('output');
     if (out) out.textContent = (Number(e.target.value) || 0).toFixed(2);
   }
   if (cosmeticTarget >= 0 && cosmeticParts[cosmeticTarget]) cosmeticParts[cosmeticTarget].dirty = true;
-  // A típusváltás a tengely-mező elérhetőségét is befolyásolja (a "Méret"
-  // egyenletes), ezért ott újra kell rajzolni a sort.
   if (field === 'type') renderCosmeticAnimEditor();
   queueEditorRefresh();
 }
@@ -9381,17 +7853,9 @@ $('#cosmeticAnimTracks')?.addEventListener('change', onAnimTrackFieldChange);
   });
 });
 
-// SHIFT + görgő: a Z-tengely (előre/hátra). Húzással ezt nem lehetne
-// egyértelműen megadni, mert a képernyőn a mélység nem különböztethető meg a
-// vízszintes mozgástól. A CSUPASZ görgő SZÁNDÉKOSAN nem ide tartozik: azt a
-// nagyítás kapja (ld. skin3d.js), mert egy 3D szerkesztőben a görgőtől azt
-// várja az ember.
 $('#cosmeticEditorPreview')?.addEventListener('wheel', (e) => {
   if (!hasEditorModel()) return;
   if (e.ctrlKey || e.metaKey) {
-    // CTRL + görgő: a Z tengely körüli forgatás ("roll"). Húzással ezt sem
-    // lehetne megadni: a képernyőn a két húzás-irány már a másik két
-    // tengelyt vezérli.
     e.preventDefault();
     e.stopImmediatePropagation();
     const inRZ = $('#cosmeticRotZInput');
@@ -9426,8 +7890,6 @@ $('#cosmeticEditorResetBtn')?.addEventListener('click', () => {
   queueEditorRefresh();
 });
 
-// Az "Elvetés" a listához is visszavisz - a kiürített űrlapon ülve nincs mit
-// csinálni, és a felhasználó úgyis oda akar visszajutni.
 $('#cosmeticDiscardBtn')?.addEventListener('click', () => { resetCosmeticForm(); closeCosmeticEditor(); });
 
 $('#cosmeticSaveBtn')?.addEventListener('click', async () => {
@@ -9436,9 +7898,6 @@ $('#cosmeticSaveBtn')?.addEventListener('click', async () => {
   const name = $('#cosmeticNameInput').value.trim();
   const slug = $('#cosmeticSlugInput').value.trim().toLowerCase();
 
-  // A mezők értékei a MEGJELENÍTETT célhoz tartoznak - mentés előtt vissza
-  // kell írni őket a saját rekordjukba, különben az utoljára szerkesztett
-  // cél változtatásai elvesznének.
   readTargetFromInputs();
 
   resultEl.className = 'redeem-result';
@@ -9456,8 +7915,6 @@ $('#cosmeticSaveBtn')?.addEventListener('click', async () => {
   }
 
   function animField(anim) {
-    // Üres animációnál üres sztringet küldünk - a backend ezt "nincs
-    // animáció"-ként értelmezi (ld. validateAnim), így a TÖRLÉS is működik.
     if (!anim || !Array.isArray(anim.tracks) || (!anim.tracks.length && !anim.pivot)) return '';
     return JSON.stringify({ tracks: anim.tracks, pivot: anim.pivot || null });
   }
@@ -9481,25 +7938,15 @@ $('#cosmeticSaveBtn')?.addEventListener('click', async () => {
   formData.append('scale', String(cosmeticAssembly.scale));
   formData.append('itemModelSpace', cosmeticAssembly.itemModelSpace !== false ? 'true' : 'false');
   formData.append('anim', animField(cosmeticAssembly.anim));
-  // A figura generátor-beállításai. Üres string = "ez nem (már nem) figura" -
-  // ezt a backend a mező TÖRLÉSEKÉNT értelmezi (ld. validatePetMeta); a
-  // hiányzó mező viszont a meglévőt hagyná érintetlenül.
   formData.append('petMeta', cosmeticPetMeta ? JSON.stringify(cosmeticPetMeta) : '');
-  // Aura / játékbeli effektek / hatókör. Az üres string itt is TÖRLÉST
-  // jelent (ld. a backend három-állapotú szabályát).
   const auraToSave = readCosmeticAura();
   formData.append('aura', auraToSave ? JSON.stringify(auraToSave) : '');
   formData.append('gameEffects', cosmeticGameEffects.length ? JSON.stringify(cosmeticGameEffects) : '');
   formData.append('effectServers', cosmeticEffectServers.length ? JSON.stringify(cosmeticEffectServers) : '');
-  // A CSONTVÁZAS mód kapcsolója. Csak akkor küldjük, ha a doboz egyáltalán
-  // látszik (tehát van csontváz) - a backend a hiányzó mezőt érintetlenül
-  // hagyja, egy mindig elküldött érték viszont felülírná.
   const rigBox = $('#cosmeticRigBox');
   if (rigBox && !rigBox.classList.contains('hidden')) {
     formData.append('rigEnabled', $('#cosmeticRigEnabledCheckbox')?.checked ? '1' : '0');
   }
-  // Az ELSŐ rész modellje a kiegészítő-végponton megy fel (a backend oda
-  // teszi, ld. src/cosmetics.js) - a többi részé a saját végpontján.
   if (firstPart && firstPart.file) formData.append('model', firstPart.file);
   if (cosmeticSelectedTextureFile) formData.append('texture', cosmeticSelectedTextureFile);
 
@@ -9523,9 +7970,6 @@ $('#cosmeticSaveBtn')?.addEventListener('click', async () => {
     const savedId = cosmeticEditingId || data.cosmetic?.id;
     const wasCreate = !cosmeticEditingId;
 
-    // A RÉSZEK mentése. Az elsőé is kell (a modellje már fent van, de a neve,
-    // az illesztése és az animációja a rész-végponton él). Új kiegészítőnél a
-    // 0. rész azonosítóját a válaszból vesszük.
     if (wasCreate && data.cosmetic?.parts?.length && cosmeticParts[0]) {
       cosmeticParts[0].id = data.cosmetic.parts[0].id;
       cosmeticParts[0].hasModel = true;
@@ -9543,8 +7987,6 @@ $('#cosmeticSaveBtn')?.addEventListener('click', async () => {
       pf.append('rotationZ', String(part.rotationZ));
       pf.append('scale', String(part.scale));
       pf.append('anim', animField(part.anim));
-      // A 0. rész modellje MÁR feltöltődött a kiegészítő-végponton - ide
-      // csak a többi rész frissen választott fájlja kerül.
       if (part.file && part !== cosmeticParts[0]) pf.append('model', part.file);
       try {
         const pres = await fetch(BACKEND_URL + '/api/admin/cosmetics/' + savedId + '/parts/' + part.id, {
@@ -9565,10 +8007,6 @@ $('#cosmeticSaveBtn')?.addEventListener('click', async () => {
       return;
     }
 
-    // A bélyegkép- és modell-gyorsítótár SZÁNDÉKOSAN ürül: a modell/illesztés/
-    // animáció változása után a régi kép már mást mutatna. A "bust" számláló
-    // emelése a BÖNGÉSZŐ HTTP-gyorsítótárát is megkerüli - a memóriabeli
-    // ürítés önmagában nem lenne elég (ld. cosmeticAssetBust).
     cosmeticAssetBust++;
     if (savedId) cosmeticThumbCache.delete(savedId);
     if (savedId) cosmeticModelCache.delete(savedId);
@@ -9576,8 +8014,6 @@ $('#cosmeticSaveBtn')?.addEventListener('click', async () => {
     showToast(wasCreate ? 'Kiegészítő létrehozva.' : 'Kiegészítő frissítve.');
     await loadCosmeticsAdmin();
     if (wasCreate && savedId) {
-      // Létrehozás után RÖGTÖN szerkesztő módba lépünk: további részt csak
-      // létező kiegészítőhöz lehet adni, és ez a leggyakoribb következő lépés.
       openCosmeticForEdit(savedId);
     } else {
       renderCosmeticPartsBar();
@@ -9590,24 +8026,15 @@ $('#cosmeticSaveBtn')?.addEventListener('click', async () => {
   }
 });
 
-/**
- * Egy meglévő kiegészítő betöltése a szerkesztő űrlapba - a részeivel,
- * illesztésével és animációjával együtt.
- */
 async function openCosmeticForEdit(id) {
   const item = cosmeticsAdminItems.find((c) => String(c.id) === String(id));
   if (!item) return;
 
   cosmeticEditingId = item.id;
   cosmeticSelectedTextureFile = null;
-  // A szerkesztőt MÁR ITT kinyitjuk, nem a függvény végén: lentebb van egy
-  // korai kilépés (modell/textúra nélküli kiegészítőnél), és onnan a
-  // megnyitás kimaradna - a szerkesztés némán nem történne meg.
   openCosmeticEditor('edit');
   $('#cosmeticFormTitle').textContent = 'Kiegészítő szerkesztése';
   $('#cosmeticNameInput').value = item.name;
-  // A slug SZÁNDÉKOSAN nem módosítható (a kliens gyorsítótárazza - ld.
-  // SolarBackend src/cosmetics.js PUT végpontjának megjegyzését).
   $('#cosmeticSlugInput').value = item.slug;
   $('#cosmeticSlugInput').disabled = true;
   $('#cosmeticSlotSelect').value = item.slot;
@@ -9633,16 +8060,8 @@ async function openCosmeticForEdit(id) {
   $('#cosmeticFormResult').className = 'redeem-result';
   $('#cosmeticSaveBtn').textContent = 'Frissítés';
 
-  // VÁLLON ÜLŐ FIGURA (a felhasználó kérésére: eddig egy figurát is csak
-  // "sima kiegészítőként" lehetett szerkeszteni, a figura-részét nem).
-  //
-  // Ha a kiegészítő figuraként készült, itt kitesszük ugyanazt a generátort,
-  // amivel létrehozták, a MENTETT beállításaival - így a "legyen kisebb",
-  // "üljön a másik vállra", "más skinnel" kérések egy gombnyomásból mennek,
-  // nem kell nulláról újra felvenni a kiegészítőt.
   cosmeticAura = (item.aura && typeof item.aura === 'object') ? { ...item.aura } : null;
   cosmeticGameEffects = Array.isArray(item.gameEffects) ? item.gameEffects.map((e) => ({ ...e })) : [];
-  // null = MINDEN szerveren hat; a felületen ez "egy sincs bejelölve".
   cosmeticEffectServers = Array.isArray(item.effectServers) ? item.effectServers.slice() : [];
   renderCosmeticAuraEditor();
   renderCosmeticEffectEditor();
@@ -9652,9 +8071,6 @@ async function openCosmeticForEdit(id) {
     $('#cosmeticPetBox')?.classList.remove('hidden');
     $('#cosmeticPetTitle') && ($('#cosmeticPetTitle').textContent = 'Figura újragenerálása');
     writePetMeta(cosmeticPetMeta);
-    // A figura TEXTÚRÁJA maga a skin, amiből készült - ezért a meglévőt
-    // betöltjük skin-forrásként. Enélkül minden apró változtatáshoz (pl.
-    // "legyen kisebb") újra elő kellene keresni az eredeti .png-t.
     loadPetSkinFromCosmetic(item);
   }
 
@@ -9694,23 +8110,17 @@ async function openCosmeticForEdit(id) {
 
   $('#cosmeticFormTitle').scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-  // A geometriát és a textúrát a PUBLIKUS modell-végpontról töltjük - így a
-  // szerkesztő a TÉNYLEGESEN kiszolgált adatot mutatja, nem egy külön,
-  // esetleg elcsúszó admin-változatot.
   if (!item.hasModel || !item.hasTexture) return;
   try {
     const [model, img] = await Promise.all([
       fetchCosmeticModel(item.id, { fresh: true, flat: true }),
       loadImage(cosmeticTextureUrl(item.id))
     ]);
-    if (String(cosmeticEditingId) !== String(item.id)) return;  // közben másra váltottak
+    if (String(cosmeticEditingId) !== String(item.id)) return;
     cosmeticEditorTexture = img;
     const rawParts = (model && Array.isArray(model.parts) && model.parts.length)
       ? model.parts
       : (model ? [{ elements: model.elements, texture_size: model.texture_size }] : []);
-    // A modell-végpont CSAK a modellel rendelkező részeket adja vissza, a
-    // sorrendjük viszont ugyanaz (idx szerint) - ezért a modellel rendelkező
-    // rekordokra osztjuk ki őket sorban.
     const withModel = cosmeticParts.filter((pp) => pp.hasModel);
     rawParts.forEach((raw, i) => {
       const target = withModel[i];
@@ -9721,7 +8131,6 @@ async function openCosmeticForEdit(id) {
     renderCosmeticPartsBar();
     restartCosmeticEditor();
   } catch {
-    /* a szerkesztő ilyenkor egyszerűen üres marad - a mezők használhatók */
   }
 }
 
@@ -9732,8 +8141,6 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
-  // Ugyanaz a megnyitás, csak egyből az Animáció fülön - ez a leggyakoribb ok,
-  // amiért egy MÁR kész kiegészítőt újra elő kell venni.
   const animBtn = e.target.closest('[data-cosmetic-anim]');
   if (animBtn) {
     await openCosmeticForEdit(animBtn.dataset.cosmeticAnim);
@@ -9747,7 +8154,7 @@ document.addEventListener('click', async (e) => {
     if (!item) return;
     const confirmed = await confirmModal(
       'Kiegészítő végleges törlése',
-      `Biztosan törlöd a(z) "${item.name}" kiegészítőt? Elvonja mind a ${item.ownerCount} tulajdonosától, és törli a hozzá tartozó piaci hirdetéseket is. Ez nem vonható vissza.`,
+      `Biztosan törlöd a(z) "${escapeHtml(item.name)}" kiegészítőt? Elvonja mind a ${item.ownerCount} tulajdonosától, és törli a hozzá tartozó piaci hirdetéseket is. Ez nem vonható vissza.`,
       'Igen, törlés'
     );
     if (!confirmed) return;
@@ -9767,7 +8174,6 @@ document.addEventListener('click', async (e) => {
   }
 });
 
-// ── Admin: piac moderálása ───────────────────────────────────────────────
 let cosmeticsMarketAdminItems = [];
 
 async function loadCosmeticsMarketAdmin() {
@@ -9827,28 +8233,10 @@ document.addEventListener('click', async (e) => {
   }
 });
 
-// ── Admin: kiegészítő adása/elvétele egy játékostól ──────────────────────
-//
-// ÚJRAÍRVA (a felhasználó kérésére: "legyen egyszerűbben megoldva, hogy
-// könnyebben lehessen adni, elvenni, és lehessen 1 gombbal az összeset
-// elvenni meg odaadni is").
-//
-// A korábbi felület egy legördülő + "Adás" gomb volt, alatta külön listával
-// arról, mije van meg a játékosnak. Két gond volt vele: a legördülőben egy
-// nagyobb katalógusban nem lehetett megtalálni semmit, és a "mi van meg" meg
-// a "mit adhatok" két külön helyen állt, tehát fejben kellett összevetni.
-//
-// Most EGY rács van: a teljes katalógus, keresővel és szűrővel, ahol a
-// birtokolt tételek meg vannak jelölve, és egy kattintás a művelet (megvan ->
-// elvétel, nincs meg -> adás).
 let currentAdminPlayerCosmetics = [];
 let adminCosmeticSearch = '';
 let adminCosmeticFilter = 'all';
 
-// A választó a katalógus TELJES listájából épül (a kikapcsoltakat is
-// beleértve - egy admin adhat olyat is, ami épp nincs élesítve), ezért kell
-// hozzá a cosmeticsManage/cosmeticGrant bármelyikével elérhető admin
-// katalógus-végpont, nem a publikus /catalog.
 async function ensureAllCosmeticsLoaded() {
   if (allCosmeticsCache.length) return allCosmeticsCache;
   try {
@@ -9884,8 +8272,6 @@ function renderAdminPlayerCosmeticsList(owned) {
 
   const canGrant = hasPerm('player.action.cosmeticGrant');
   const canRevoke = hasPerm('player.action.cosmeticRevoke');
-  // A birtoklás a kiegészítő AZONOSÍTÓJA szerint, nem név szerint: két
-  // kiegészítő neve lehet ugyanaz, az azonosítójuk sosem.
   const ownedById = new Map(currentAdminPlayerCosmetics.map((c) => [String(c.id), c]));
 
   const q = adminCosmeticSearch;
@@ -9918,8 +8304,6 @@ function renderAdminPlayerCosmeticsList(owned) {
   el.innerHTML = visible.map((c) => {
     const own = ownedById.get(String(c.id));
     const isOwned = !!own;
-    // A gomb letiltva marad, ha a staffnak épp az ADOTT irányhoz nincs joga -
-    // a kettő két külön jogosultság (adás / elvétel).
     const disabled = isOwned ? !canRevoke : !canGrant;
     const meta = isOwned
       ? (own.expiresAt ? formatLedgerDate(own.expiresAt) + '-ig' : 'örök')
@@ -9952,7 +8336,6 @@ $('#adminCosmeticFilter')?.addEventListener('change', (e) => {
   renderAdminPlayerCosmeticsList(currentAdminPlayerCosmetics);
 });
 
-/** A művelet eredményének egységes kiírása + a lista frissítése. */
 function adminCosmeticResult(data, okText) {
   const statusEl = $('#adminCosmeticGrantStatus');
   if (!data || !data.ok) {
@@ -9970,11 +8353,6 @@ function adminCosmeticResult(data, okText) {
   return true;
 }
 
-// EGY kattintás = egy művelet. Az elvételnél SZÁNDÉKOSAN nincs megerősítés:
-// a művelet egyetlen kattintással visszavonható (a tétel ott marad a
-// rácsban, csak "+"-ra vált), tehát egy párbeszédablak itt csak lassítana.
-// A TÖMEGES műveletek viszont kérnek megerősítést - azok nem vonhatók vissza
-// egy kattintással.
 document.addEventListener('click', async (e) => {
   const btn = e.target.closest('[data-admin-cosmetic-id]');
   if (!btn || btn.disabled) return;
@@ -10051,12 +8429,6 @@ $('#adminCosmeticRevokeAllBtn')?.addEventListener('click', async () => {
   }
 });
 
-// ── Vizsgálat elleni alapvédelem ──
-// FONTOS: ez KIZÁRÓLAG visszatartó jellegű - a jobb klikk és a leggyakoribb
-// DevTools-gyorsbillentyűk letiltása bárkit, aki tényleg meg akarja nézni az
-// oldal kódját vagy hálózati forgalmát (pl. a böngésző saját menüjéből nyitva
-// meg a DevTools-t, vagy JS-t letiltva), pár másodperc alatt megkerül - ez NEM
-// valódi biztonsági határ, ne bízz rá tényleg érzékeny adatot.
 document.addEventListener('contextmenu', (e) => e.preventDefault());
 document.addEventListener('keydown', (e) => {
   const key = e.key;
@@ -10070,76 +8442,25 @@ document.addEventListener('keydown', (e) => {
 const versionEl = document.querySelector('#centerVersion');
 if (versionEl) versionEl.textContent = 'v' + CENTER_VERSION;
 
-
-
-// ═════════════════════════════════════════════════════════════════════════
-//  MOBOK (admin) - a SolarMobs plugin mobjainak MEGJELENÉSE
-//
-//  A mobok DEFINÍCIÓJA (élet, sebzés, képességek, drop, spawner) a szerveren,
-//  a plugin YAML-jeiben él, és INGAME szerkeszthető (/solarmob ...). Ide csak
-//  az kerül, amit ott láthatóra kapcsoltak - a felhasználó kifejezett kérése
-//  szerint. Itt KIZÁRÓLAG a megjelenést állítjuk: modell, textúra, illesztés,
-//  animáció, aura, hitbox.
-//
-//  MIÉRT UGYANAZOK A FÜGGVÉNYEK, MINT A KIEGÉSZÍTŐKNÉL: a modell-, animáció-
-//  és aura-formátum bitre azonos (ld. SolarBackend src/mobs.js fejlécét), és
-//  az előnézet is a közös skin3d.js-t hívja. Ami itt új, az csak a MOB-ra
-//  jellemző rész: a talpponthoz illesztés és a hitbox.
-// ═════════════════════════════════════════════════════════════════════════
-
 let mobsAdminItems = [];
 let mobAuraTypes = [];
 let mobLimits = { maxElements: 256, maxParts: 8 };
 
 let mobEditingId = null;
-/** A mob EGÉSZÉRE vonatkozó mezők (a részeké a mobParts-ban). */
 let mobAssembly = null;
 let mobParts = [];
-/** -1 = a teljes mob, 0.. = a kijelölt rész (ugyanaz a minta, mint a kiegészítőknél). */
 let mobTarget = -1;
 let mobTextureFile = null;
 let mobTextureImg = null;
 let mobPreviewStop = null;
-/**
- * A szerverre MENTETT csontváz (a .bbmodel animációival) - pontosan az, amit
- * a kliens is letölt. Ebből játszik le az előnézet.
- *
- * MIÉRT KÜLÖN A SZERKESZTŐI MODELLTŐL: a szerkesztő a LAPOS alakon dolgozik,
- * és minden mezőváltozásnál újraépíti - a csontváz viszont a mentett
- * állapot, és csak feltöltéskor/törléskor változik.
- */
 let mobRigData = null;
-/** Melyik animáció megy épp az előnézetben (-1 = a szerkesztői nézet). */
 let mobRigPlaying = -1;
 let mobPreviewQueued = false;
 let mobPreviewDirty = false;
-/** Gyorsítótár-törő: mentés után a böngésző különben a RÉGI modellt szolgálná ki. */
 let mobAssetBust = 0;
 const mobThumbCache = new Map();
 const mobModelCache = new Map();
 
-
-// ── KÉSZ MOZGÁSOK MOBOKRA ───────────────────────────────────────────────
-//
-// MIÉRT KÜLÖN KÉSZLET A KIEGÉSZÍTŐKÉTŐL: azok SZÁRNYAKRA vannak hangolva -
-// gyors, nagy kitérésű csapások, tővel a testnél. Egy boss ettől
-// bohóckodni látszik. Amitől egy mob fenyegetőnek hat, az épp a fordítottja:
-// LASSÚ, NAGY TÖMEGŰ mozgás, kis kitéréssel, és a súlypont körül.
-//
-// HÁROM DOLOG KÜLÖNBÖZTETI MEG ŐKET:
-//  - SEBESSÉG: 0,15-0,6 ciklus/mp (a szárnyaknál 0,6-1,2). Egy nagy test
-//    lassan mozdul - ez adja a "súlyt".
-//  - FORGÁSPONT: alapból a TALP ("base"), nem a befoglaló doboz közepe. Egy
-//    a közepén billegő mob úgy néz ki, mintha lebegne; a talpánál dőlő
-//    viszont áll a földön.
-//  - RÉTEGZÉS: 2-3 sáv, EGÉSZ SZÁMÚ arányú sebességekkel. Nem egész arány
-//    mellett a sávok lassan szétcsúsznak, és a mozgás "dülöngélni" kezd -
-//    ugyanaz a hiba, amit a szárny-mozgásoknál is ki kellett mérni.
-//
-// A "pivot" mező mondja meg, hova tegyük a forgáspontot az alkalmazáskor:
-//   base   - a modell talpa (álló, földön lévő mobok)
-//   center - a befoglaló doboz közepe (lebegő, repülő mobok)
-//   root   - a rész TÖVE (szárny/csáp jellegű részek)
 const MOB_ANIM_PRESETS = [
   { label: 'Légzés', pivot: 'base',
     hint: 'Alig látható, lassú mozgás - ettől nem néz ki élettelen szobornak egy álló boss.',
@@ -10241,17 +8562,6 @@ function mobsAdminSection() {
   return document.querySelector('.view[data-view="mobsAdmin"]');
 }
 
-/**
- * A SZERKESZTŐ geometriája: az ADMIN végpont, ami MINDIG a lapos modellt
- * adja vissza.
- *
- * MIÉRT NEM A NYILVÁNOS /api/mobs/model/:id: az a kliensnek szól, és ha a
- * mobnak van csontvázas (.bbmodel-ből származó) modellje, AZT küldi -
- * abban csontok vannak, nem "parts". A szerkesztő viszont részenként,
- * kockánként dolgozik, tehát tőle üres előnézet lenne. Ráadásul a
- * nyilvános végpont csak bekapcsolt mobot ad ki, az admin pedig épp egy
- * kikapcsoltat hangol.
- */
 function mobModelUrl(id) {
   return BACKEND_URL + '/api/admin/mobs/' + id + '/model' + (mobAssetBust ? ('?v=' + mobAssetBust) : '');
 }
@@ -10289,9 +8599,6 @@ function renderMobsAdmin() {
   const query = ($('#mobAdminSearch')?.value || '').trim().toLowerCase();
   const showHidden = !!$('#mobShowHiddenCheckbox')?.checked;
 
-  // Az ELHAGYOTT mobok mindig látszanak: azokat épp azért kell megtalálni,
-  // hogy törölni lehessen őket (a "centerVisible" náluk már nem mond semmit,
-  // hiszen nincs szerver, ami frissítené).
   let list = mobsAdminItems.filter((m) => showHidden || m.centerVisible || m.orphan);
   if (query) {
     list = list.filter((m) => (m.name || '').toLowerCase().includes(query)
@@ -10308,8 +8615,6 @@ function renderMobsAdmin() {
     return;
   }
 
-  // A takarító gomb CSAK akkor látszik, ha tényleg van elhagyott mob -
-  // egy mindig kint lévő "töröl mindent" gomb fölösleges kockázat.
   const orphans = mobsAdminItems.filter((m) => m.orphan).length;
   const pruneBtn = $('#mobPruneBtn');
   if (pruneBtn) {
@@ -10360,10 +8665,6 @@ function mobThumbHtml(m) {
   return `<div class="mob-thumb mob-thumb-empty" data-mob-thumb="${m.id}" data-mob-name="${escapeHtml(m.name || m.slug)}"></div>`;
 }
 
-/**
- * A bélyegképek SOROSAN készülnek - ugyanaz az indok, mint a kiegészítőknél:
- * a megosztott, rejtett WebGL-kontextus egyszerre egy modellt tud kirajzolni.
- */
 async function hydrateMobThumbs(root) {
   const slots = [...(root || document).querySelectorAll('[data-mob-thumb]')];
   for (const el of slots) {
@@ -10388,12 +8689,6 @@ function replaceMobThumb(el, url) {
   el.parentNode.replaceChild(img, el);
 }
 
-/**
- * A mentett csontváz letöltése a szerkesztőhöz.
- *
- * Ugyanazt a választ kéri, amit a kliens is megkap - ez teszi az előnézetet
- * hitelessé: nem egy "hasonló" alakot rajzolunk, hanem UGYANAZT.
- */
 async function fetchMobRig(id) {
   try {
     const res = await fetch(BACKEND_URL + '/api/admin/mobs/' + id + '/rig', {
@@ -10423,8 +8718,6 @@ async function fetchMobModel(id, opts) {
     return null;
   }
 }
-
-// ── Szerkesztő ──────────────────────────────────────────────────────────
 
 function emptyMobPart(idx) {
   return {
@@ -10486,10 +8779,6 @@ async function openMobEditor(id) {
   setMobTab('model');
   mobsAdminSection()?.classList.add('editing');
 
-  // A geometriát a modell-végpontról töltjük vissza: a szerkesztőnek a
-  // KOCKÁK is kellenek (előnézet), amiket a katalógus-lista nem hoz le.
-  // cache: no-store - ld. a kiegészítőknél leírt, élesben előjött hibát:
-  // mentés után a böngésző a max-age=60 miatt a RÉGI modellt adná vissza.
   if (mob.hasModel) {
     const model = await fetchMobModel(mob.id, { fresh: true });
     if (model && Array.isArray(model.parts)) {
@@ -10511,9 +8800,6 @@ async function openMobEditor(id) {
     $('#mobTexturePreviewWrap').hidden = true;
   }
 
-  // A MENTETT csontváz: ebből játssza le az előnézet az animációkat.
-  // A modell UTÁN töltjük, mert a lista-kártyák és a kamera a lapos alakból
-  // állnak be - a csontváz csak akkor kell, ha lejátszásra kattintanak.
   mobRigPlaying = -1;
   mobRigData = mob.hasRig ? await fetchMobRig(mob.id) : null;
 
@@ -10557,8 +8843,6 @@ function renderMobStats(mob) {
     <p class="cosmetic-file-note" style="margin-top:8px;">Ezek a mob VISELKEDÉSÉNEK adatai, és csak tájékoztatásul látszanak &ndash; a szerveren, a <code>/solarmob</code> paranccsal állíthatók.</p>`;
 }
 
-// ── Rész-sáv és a cél kijelölése ────────────────────────────────────────
-
 function renderMobPartsBar() {
   const bar = $('#mobPartsBar');
   if (!bar) return;
@@ -10566,8 +8850,6 @@ function renderMobPartsBar() {
   mobParts.forEach((p, i) => {
     chips.push(`<button type="button" class="cosmetic-part-chip${mobTarget === i ? ' active' : ''}" data-mob-target="${i}">${i + 1}. rész${p.hasModel ? '' : ' ⚠'}</button>`);
   });
-  // A "+ rész" gomb KIVEZETVE: egy mob EGY modell (ld. a kiegészítőknél
-  // ugyanezt). A .bbmodel a teljes alakot hordozza, csontokkal együtt.
   bar.innerHTML = chips.join('');
 
   const panel = $('#mobPartPanel');
@@ -10587,23 +8869,12 @@ function renderMobPartsBar() {
   $('#mobPartDeleteBtn')?.addEventListener('click', () => deleteMobPart(mobTarget));
 }
 
-/**
- * @param skipRead IGAZ a szerkesztő MEGNYITÁSAKOR. Ilyenkor a beviteli
- *   mezőkben még az ELŐZŐ mob (vagy a HTML alapértékei) állnak, és a
- *   beolvasásuk felülírná a most betöltött értékeket nullákkal.
- *   ÉLESBEN PONTOSAN EZ TÖRTÉNT: az elmentett illesztés a szerkesztő
- *   újranyitásakor 0-ra ugrott vissza, miközben az adatbázisban helyesen
- *   ott volt (a böngészős próba fogta meg).
- */
 function setMobTarget(index, skipRead) {
   if (!skipRead) readMobTargetFromInputs();
   mobTarget = index;
   const label = index < 0 ? 'teljes mob' : (index + 1) + '. rész';
   $('#mobTargetLabel').textContent = label;
   $('#mobAnimTargetLabel').textContent = label;
-  // A tér-konvenció a MODELL egészére vonatkozik (a részek ugyanabban a
-  // térben vannak), ezért résznél elrejtjük - különben azt sugallná, hogy
-  // részenként más lehet.
   const itemRow = $('#mobItemSpaceRow');
   if (itemRow) itemRow.style.display = index < 0 ? '' : 'none';
   writeMobTargetToInputs();
@@ -10653,16 +8924,6 @@ function writeMobDisplayFields() {
   updateMobHitboxUi();
 }
 
-// ── HITBOX ──────────────────────────────────────────────────────────────
-//
-// A számítás SZÁNDÉKOSAN a backend modelBounds() függvényének pontos mása
-// (SolarBackend src/mobs.js). MIÉRT MÁSOLAT, ÉS NEM KÉRDEZZÜK MEG A SZERVERT:
-// az admin mentés ELŐTT állítgatja az eltolást és a méretet, és azonnal
-// látnia kell, mekkora lesz a találati doboz - egy mentésenkénti kérdezés
-// használhatatlanná tenné a hangolást. A mentés válasza utána úgyis a
-// SZERVER által számolt értéket írja vissza, tehát egy elcsúszás azonnal
-// látszana.
-
 function mobRotatePoint(p, deg) {
   const rx = deg[0] * Math.PI / 180, ry = deg[1] * Math.PI / 180, rz = deg[2] * Math.PI / 180;
   let x = p[0], y = p[1], z = p[2];
@@ -10677,11 +8938,6 @@ function mobRotatePoint(p, deg) {
   return [x1, y1, z];
 }
 
-/**
- * Egy kocka forgatásai EGYSÉGES alakban. Pontos mása a backend
- * elementRotations()-jének (src/mobs.js) - a kettőnek EGYEZNIE kell, mert a
- * szerkesztőben kiírt hitbox mentés után a szerver által számolt értékre vált.
- */
 function mobElementRotations(el) {
   if (Array.isArray(el.rotations) && el.rotations.length) {
     return el.rotations.filter((r) => r && Array.isArray(r.angles) && Array.isArray(r.origin));
@@ -10707,8 +8963,6 @@ function mobPartPoints(part) {
         for (const z of [el.from[2], el.to[2]]) corners.push([x, y, z]);
       }
     }
-    // A kocka forgatás-lánca (ld. mobElementRotations): a .bbmodel importból
-    // érkező modelleknél a kocka saját forgatása ÉS a csontjaié is benne van.
     const chain = mobElementRotations(el);
     if (chain.length) {
       for (const c of corners) {
@@ -10810,8 +9064,6 @@ function updateMobHitboxUi() {
     + (ratio && (ratio < 0.0625 || ratio > 16) ? ' <span style="color:var(--danger)">A szorzó a megengedett tartományon kívül esik, a szerver levágja.</span>' : '');
 }
 
-// ── Animáció ────────────────────────────────────────────────────────────
-
 function mobCurrentAnim() {
   const rec = mobCurrentRecord();
   return rec ? rec.anim : null;
@@ -10826,34 +9078,6 @@ function ensureMobAnim() {
   return rec.anim;
 }
 
-/**
- * A .BBMODEL SAJÁT ANIMÁCIÓINAK LISTÁJA.
- *
- * MIÉRT KELL EZ A LISTA: a pluginban NÉV szerint lehet animációt kiváltani
- * ("animation name=slam"), a nevet viszont a Blockbench-projekt adja - az
- * adminnak semmi más módja nem lenne megtudni, mi került be a feltöltéskor,
- * csak ha visszanyitja a .bbmodel fájlt. Így viszont itt látja, és a
- * bemásolható parancsrészletet is megkapja.
- *
- * MIÉRT KÜLÖN A LENTI MOZGÁS-SÁVOKTÓL: azok a Center saját, egyszerű
- * lengető rendszere (a kiegészítőkből), ami a CSONTOK NÉLKÜLI modellekhez
- * való. A kettő nem ugyanaz, és a legkönnyebben úgy lehet összekeverni
- * őket, ha egy felületen jelennek meg.
- */
-/**
- * A RÉGI, HIBÁS IMPORTÁLÓVAL készült csontváz felismerése.
- *
- * MIÉRT KELL: a Blockbench 5.0-s projektformátumában a csontok forgáspontja
- * egy külön "groups" tömbbe került, amit a korábbi feldolgozó nem olvasott -
- * így MINDEN csont forgáspontja a világ origójába esett, és az animációk a
- * modell origója körül kaszáltak. A hiba a feltöltéskor keletkezett, tehát a
- * MÁR ELTÁROLT csontvázakat a javítás nem gyógyítja meg: azokat újra fel kell
- * tölteni.
- *
- * A jel egyértelmű: több csont van, van animáció, és MINDEGYIK csont
- * forgáspontja pontosan a nulla pont. Egy valódi, több csontos rigben ez
- * gyakorlatilag lehetetlen (a fej, a váll, a csípő mind máshol van).
- */
 function mobRigLooksStale(rig) {
   if (!rig || !Array.isArray(rig.bones) || rig.bones.length < 2) return false;
   if (!Array.isArray(rig.animations) || !rig.animations.length) return false;
@@ -10882,9 +9106,6 @@ function renderMobRigAnimations() {
     return;
   }
 
-  // A kliens ugyanezekből a kulcsszavakból ismeri fel az ÁLLAPOT-animációkat
-  // (ld. SolarClient MobRig.resolveStates) - itt ugyanazt mutatjuk meg, hogy
-  // az admin lássa, melyik animáció indul majd magától.
   const STATE_HINTS = [
     { label: 'nyugalom', words: ['idle', 'stand', 'nyugalom'] },
     { label: 'járás', words: ['walk', 'move', 'jaras'] },
@@ -10936,12 +9157,6 @@ function renderMobRigAnimations() {
     + '</code></p>';
 }
 
-/**
- * Egy animáció lejátszása (vagy leállítása) az előnézetben.
- *
- * A LEÁLLÍTÁS visszakapcsol a szerkesztői (lapos) modellre, mert az mutatja
- * AZONNAL a mezőkön végzett változtatásokat - a csontváz a mentett állapot.
- */
 function toggleMobAnimation(index) {
   if (!mobPreviewStop || !mobPreviewStop.playAnimation) return;
   if (mobRigPlaying === index) {
@@ -10956,7 +9171,6 @@ function toggleMobAnimation(index) {
   renderMobRigAnimations();
 }
 
-/** Egy animáció VÉGLEGES törlése a modellből. */
 async function deleteMobAnimation(index) {
   const mob = mobsAdminItems.find((m) => m.id === mobEditingId);
   if (!mob || !Array.isArray(mob.animations) || !mob.animations[index]) return;
@@ -10973,9 +9187,6 @@ async function deleteMobAnimation(index) {
     const data = await res.json();
     if (!data.ok) { showToast(data.message || 'Nem sikerült törölni az animációt.', true); return; }
 
-    // A SORSZÁMOK ELTOLÓDNAK a törlés után: ami utána jött, eggyel előrébb
-    // kerül. Ezért a lejátszást leállítjuk, nem "igazítjuk" - egy elcsúszott
-    // sorszám csendben MÁS animációt játszana le, mint amit a lista mutat.
     if (mobRigPlaying >= 0) {
       mobRigPlaying = -1;
       if (mobPreviewStop && mobPreviewStop.stopAnimation) mobPreviewStop.stopAnimation();
@@ -10998,7 +9209,6 @@ function renderMobAnimEditor() {
   const tracksWrap = $('#mobAnimTracks');
   if (!presetsWrap || !tracksWrap) return;
 
-  // A .bbmodel saját animációi külön kártyán - ld. renderMobRigAnimations().
   renderMobRigAnimations();
 
   presetsWrap.innerHTML = MOB_ANIM_PRESETS
@@ -11045,14 +9255,10 @@ function readMobAnimPivot() {
   const xs = $('#mobAnimPivotXInput').value.trim();
   const ys = $('#mobAnimPivotYInput').value.trim();
   const zs = $('#mobAnimPivotZInput').value.trim();
-  // MIND A HÁROM kell - egy fél-megadott forgáspont csendben rossz tengelyt
-  // adna (ugyanaz az indoklás, mint a kiegészítőknél).
   if (!xs || !ys || !zs) return null;
   const v = [Number(xs), Number(ys), Number(zs)];
   return v.every(Number.isFinite) ? v : null;
 }
-
-// ── Aura ────────────────────────────────────────────────────────────────
 
 function renderMobAuraSelect() {
   const sel = $('#mobAuraTypeSelect');
@@ -11071,8 +9277,6 @@ function writeMobAuraToInputs() {
   $('#mobAuraSpeedInput').value = aura && Number.isFinite(aura.speed) ? aura.speed : '';
   if (aura && typeof aura.colorA === 'string') $('#mobAuraColorAInput').value = aura.colorA;
   if (aura && typeof aura.colorB === 'string') $('#mobAuraColorBInput').value = aura.colorB;
-  // ILLESZTÉS: a meg nem adott mező ÜRESEN marad (nem 0-t mutat), mert a 0
-  // itt érvényes, beállított érték.
   $('#mobAuraOffsetXInput').value = aura && Number.isFinite(aura.offsetX) ? aura.offsetX : '';
   $('#mobAuraOffsetYInput').value = aura && Number.isFinite(aura.offsetY) ? aura.offsetY : '';
   $('#mobAuraOffsetZInput').value = aura && Number.isFinite(aura.offsetZ) ? aura.offsetZ : '';
@@ -11105,8 +9309,6 @@ function readMobAura() {
   if (cb) out.colorB = cb;
   return out;
 }
-
-// ── Előnézet ────────────────────────────────────────────────────────────
 
 function buildMobEditorModel() {
   readMobTargetFromInputs();
@@ -11152,26 +9354,14 @@ function restartMobPreview() {
   mobPreviewStop = SkinPreview.startMob(canvas, {
     model, img: mobTextureImg, hitbox: currentMobHitbox(), rig: mobRigData
   });
-  // A GL-kontextus újraindulásakor az animáció-lejátszás is elölről kezdődik -
-  // ha épp ment egy, folytatjuk, hogy egy mezőváltozás ne állítsa le.
   if (mobRigPlaying >= 0) mobPreviewStop.playAnimation(mobRigPlaying);
 }
 
-/**
- * Az előnézet frissítése a GL-kontextus újraindítása NÉLKÜL, ha lehet.
- * Ugyanaz az indok, mint a kiegészítő-szerkesztőnél: egy teljes újraindítás
- * elvágná a folyamatban lévő húzást és elvesztené a kamera-állást.
- */
 function queueMobPreview() {
   if (mobPreviewQueued) { mobPreviewDirty = true; return; }
   mobPreviewQueued = true;
   requestAnimationFrame(() => {
     mobPreviewQueued = false;
-    // A MEZŐK BEOLVASÁSA ELŐSZÖR. A hitbox-kiírás a mobAssembly/mobParts
-    // értékeiből számol, a mezőket viszont a buildMobEditorModel() olvassa
-    // be - ha az utána futna, a hitbox EGY SZERKESZTÉSSEL LEMARADNA.
-    // (Élesben pontosan ez történt: a méret 2x-re állítása után a kiírt
-    // hitbox változatlan maradt.)
     readMobTargetFromInputs();
     updateMobHitboxUi();
     const model = mobTextureImg ? buildMobEditorModel() : null;
@@ -11184,11 +9374,7 @@ function queueMobPreview() {
   });
 }
 
-// ── Mentés / részek ─────────────────────────────────────────────────────
-
 function mobAnimField(anim) {
-  // Üres animációnál ÜRES sztring - a backend ezt "nincs animáció"-ként
-  // értelmezi (ld. validateAnim), így a törlés is működik.
   if (!anim || !Array.isArray(anim.tracks) || (!anim.tracks.length && !anim.pivot)) return '';
   return JSON.stringify({ tracks: anim.tracks, pivot: anim.pivot || null });
 }
@@ -11249,9 +9435,6 @@ async function saveMob() {
       return;
     }
 
-    // A RÉSZEK külön kérésekben mennek (ld. a backend indoklását: egy
-    // multipart kérésben nem lehet több, egyenként megnevezett modellfájlt
-    // megbízhatóan a saját mezőihez párosítani).
     for (const part of mobParts) {
       if (!part.id) continue;
       const pf = new FormData();
@@ -11277,9 +9460,6 @@ async function saveMob() {
       part.dirty = false;
     }
 
-    // GYORSÍTÓTÁR-TÖRÉS: enélkül a böngésző a modell-végpont max-age=60-ja
-    // miatt a RÉGI geometriát adná vissza, és úgy tűnne, "nem változott
-    // semmi" (ez a kiegészítőknél élesben elő is jött).
     mobAssetBust++;
     mobThumbCache.delete(mobEditingId);
     mobModelCache.delete(mobEditingId);
@@ -11290,8 +9470,6 @@ async function saveMob() {
     await loadMobsAdmin();
     const fresh = mobsAdminItems.find((m) => m.id === mobEditingId);
     if (fresh) {
-      // A SZERVER által számolt hitboxot írjuk vissza - ha a helyi becslés
-      // elcsúszna tőle, ez azonnal látszik.
       mobAssembly.hitboxWidth = fresh.hitboxWidth;
       mobAssembly.hitboxHeight = fresh.hitboxHeight;
       renderMobStats(fresh);
@@ -11324,16 +9502,6 @@ function parseMobModelFile(file) {
   });
 }
 
-/**
- * A TELJES Blockbench-projekt feltöltése.
- *
- * MIÉRT EGY KÉRÉSBEN A GEOMETRIA ÉS A TEXTÚRA: a .bbmodel mindkettőt
- * tartalmazza, és két külön kérésből felemás állapot maradhatna (új
- * geometria, régi textúra). A szerver egyben dolgozza fel - ld. a backend
- * /api/admin/mobs/:id/bbmodel végpontját.
- *
- * @param target  a rész azonosítója, 'new' (új rész), vagy null (az első rész)
- */
 async function uploadMobBbmodel(file, target) {
   if (!mobEditingId) return;
   const note = $('#mobBbmodelNote');
@@ -11359,8 +9527,6 @@ async function uploadMobBbmodel(file, target) {
       return;
     }
 
-    // GYORSÍTÓTÁR-TÖRÉS: a modell- és textúra-végpont is gyorsítótárazható,
-    // enélkül a böngésző a RÉGIT adná vissza, és úgy tűnne, nem történt semmi.
     mobAssetBust++;
     mobThumbCache.delete(mobEditingId);
     mobModelCache.delete(mobEditingId);
@@ -11377,8 +9543,6 @@ async function uploadMobBbmodel(file, target) {
         .map((w) => `<p class="cosmetic-file-note mob-bbmodel-warning">${escapeHtml(w)}</p>`).join('');
     }
 
-    // A szerkesztő állapotának újratöltése: a geometria és a textúra is a
-    // szerveren változott meg, tehát onnan kell visszaolvasni.
     await reloadMobEditorAssets(data.mob);
     showToast('A Blockbench modell betöltve.');
   } catch {
@@ -11387,21 +9551,13 @@ async function uploadMobBbmodel(file, target) {
   }
 }
 
-/**
- * A szerkesztő geometriájának és textúrájának újraolvasása a szerverről.
- * A mezőket (illesztés, animáció) SZÁNDÉKOSAN nem írjuk felül: az admin
- * épp azokat hangolja, egy modell-csere nem dobhatja el a munkáját.
- */
 async function reloadMobEditorAssets(freshMob) {
   const mob = freshMob || mobsAdminItems.find((m) => m.id === mobEditingId);
   if (!mob) return;
 
-  // A lista-beli példány frissítése, hogy a rész-sáv és a jelvények stimmeljenek.
   const idx = mobsAdminItems.findIndex((m) => m.id === mob.id);
   if (idx >= 0) mobsAdminItems[idx] = mob;
 
-  // A részek listája változhatott (új rész), az illesztésüket viszont a
-  // szerkesztőben tartjuk - a szerver oldali értéket csak az ÚJ résznél vesszük át.
   const known = new Map(mobParts.filter((pp) => pp.id).map((pp) => [pp.id, pp]));
   mobParts = (mob.parts || []).map((pp) => {
     const existing = known.get(pp.id);
@@ -11440,8 +9596,6 @@ async function reloadMobEditorAssets(freshMob) {
 
   if (mobTarget >= mobParts.length) mobTarget = -1;
   renderMobPartsBar();
-  // A CSONTVÁZ IS ÚJ: a feltöltött .bbmodel hozhatott új animációkat, és a
-  // régiek sorszáma is eltolódhatott - a lejátszást ezért leállítjuk.
   mobRigPlaying = -1;
   mobRigData = mob.hasRig ? await fetchMobRig(mob.id) : null;
   renderMobRigAnimations();
@@ -11568,8 +9722,6 @@ async function deleteMobAppearance() {
   }
 }
 
-// ── Események ───────────────────────────────────────────────────────────
-
 function setMobTab(name) {
   $$('[data-mob-tab]').forEach((b) => b.classList.toggle('active', b.dataset.mobTab === name));
   $$('[data-mob-pane]').forEach((p) => p.classList.toggle('active', p.dataset.mobPane === name));
@@ -11595,7 +9747,6 @@ $('#mobsAdminList')?.addEventListener('click', (e) => {
 
 $('#mobPruneBtn')?.addEventListener('click', deleteMobOrphans);
 
-// A .bbmodel SAJÁT animációi: lejátszás az előnézetben, illetve törlés.
 $('#mobRigAnimList')?.addEventListener('click', (e) => {
   const play = e.target.closest('[data-mob-anim-play]');
   if (play) { toggleMobAnimation(Number(play.dataset.mobAnimPlay)); return; }
@@ -11603,14 +9754,6 @@ $('#mobRigAnimList')?.addEventListener('click', (e) => {
   if (del) deleteMobAnimation(Number(del.dataset.mobAnimDel));
 });
 
-/**
- * Egy mob megjelenésének törlése a LISTÁBÓL (nem csak a szerkesztőből).
- *
- * MIÉRT KELL IDE IS: a felhasználó jelezte, hogy "ami egyszer már hozzá volt
- * adva, az ottmarad, és nem lehet eltávolítani" - a törlés ugyanis csak a
- * szerkesztőn belül volt elérhető, egy modell nélküli mobnál viszont oda be
- * sem igazán érdemes menni.
- */
 async function deleteMobById(id) {
   const mob = mobsAdminItems.find((m) => m.id === id);
   if (!mob) return;
@@ -11634,7 +9777,6 @@ async function deleteMobById(id) {
   }
 }
 
-/** Az összes olyan mob törlése, amit egyetlen szerver sem jelent már. */
 async function deleteMobOrphans() {
   const orphans = mobsAdminItems.filter((m) => m.orphan);
   if (!orphans.length) return;
@@ -11666,8 +9808,6 @@ $('#mobBbmodelPickBtn')?.addEventListener('click', () => $('#mobBbmodelInput')?.
 $('#mobBbmodelInput')?.addEventListener('change', (e) => {
   const file = e.target.files && e.target.files[0];
   e.target.value = '';
-  // A KIJELÖLT részbe tölt (alapból az elsőbe) - így egy több részes mobnál
-  // is egyértelmű, melyiket cseréljük.
   if (file) uploadMobBbmodel(file, mobTarget >= 0 && mobParts[mobTarget] ? mobParts[mobTarget].id : null);
 });
 
@@ -11757,7 +9897,6 @@ $('#mobAuraResetBtn')?.addEventListener('click', () => {
   queueMobPreview();
 });
 
-// Animáció-vezérlők
 $('#mobAnimPresets')?.addEventListener('click', (e) => {
   const btn = e.target.closest('[data-mob-anim-preset]');
   if (!btn) return;
@@ -11775,11 +9914,6 @@ $('#mobAnimPresets')?.addEventListener('click', (e) => {
   const anim = ensureMobAnim();
   if (!anim) return;
   anim.tracks = JSON.parse(JSON.stringify(preset.tracks));
-  // A FORGÁSPONT a mozgás JELLEGÉHEZ igazodik (ld. MOB_ANIM_PRESETS):
-  // egy álló boss a TALPA körül dől, egy lebegő szellem a KÖZEPE körül
-  // forog, egy szárny pedig a TÖVÉNÉL csuklik. Rossz forgáspont mellett a
-  // legjobb mozgás is hibásnak látszik - ezt a kiegészítőknél már egyszer
-  // meg kellett tanulni.
   const pivot = preset.pivot === 'root'
     ? suggestMobRootPivot(mobTarget)
     : mobPresetPivot(preset.pivot, mobTarget);
@@ -11846,23 +9980,9 @@ $('#mobAnimClearBtn')?.addEventListener('click', () => {
   });
 });
 
-/**
- * "A talpára állítás": a modellt úgy tolja el, hogy az ALJA a 0 szintre
- * kerüljön, vízszintesen pedig a talppont fölé.
- *
- * MIÉRT KELL: a Blockbench item-modellek a (8, 8, 8) blokk-középpont köré
- * épülnek, ezért nulla eltolással a mob a FÖLDBE SÜLLYEDVE és oldalra
- * csúszva jelenne meg. Ugyanez a probléma jött elő a kiegészítőknél is -
- * ott a csontra centrálás volt a megoldás, itt a talppont.
- */
 $('#mobAutoFitBtn')?.addEventListener('click', () => {
   if (!mobAssembly) return;
-  // A MEZŐK BEOLVASÁSA ELŐSZÖR: az előnézet frissítése egy rAF-ban fut, ami
-  // még nem biztos, hogy lefutott, amikor a felhasználó gépelés UTÁN azonnal
-  // ide kattint. Enélkül a beillesztés a KORÁBBI méretből számolna.
   readMobTargetFromInputs();
-  // Az eltolást előbb nullázzuk: a befoglaló doboz így a modell SAJÁT
-  // helyzetét mutatja, nem a korábbi igazítással együtt.
   const savedX = mobAssembly.offsetX, savedY = mobAssembly.offsetY, savedZ = mobAssembly.offsetZ;
   mobAssembly.offsetX = 0; mobAssembly.offsetY = 0; mobAssembly.offsetZ = 0;
   const b = computeMobBounds();
@@ -11891,13 +10011,6 @@ $('#mobFitResetBtn')?.addEventListener('click', () => {
   queueMobPreview();
 });
 
-
-/**
- * "Mennyivel ezelőtt szinkronizált" - a backend UTC-ben adja, szóközzel
- * elválasztva ("2026-09-20 18:12:03"). A Date ezt böngészőnként MÁSKÉNT
- * értelmezné (a Safari NaN-t ad), ezért alakítjuk át ISO-ra, és tesszük ki a
- * "Z"-t - ugyanaz a csapda, mint a kiegészítők lejáratánál.
- */
 function mobSyncAgo(raw) {
   if (!raw) return 'ismeretlen';
   const ms = Date.parse(String(raw).replace(' ', 'T') + 'Z');
@@ -11909,23 +10022,6 @@ function mobSyncAgo(raw) {
   return Math.round(diff / 86400) + ' napja';
 }
 
-/**
- * A forgáspont a KIJELÖLT cél TÖVÉRE.
- *
- * Ugyanaz a szabály, mint a kiegészítőknél (ld. suggestRootPivot): a hullám
- * tengelye mentén az a vég, amelyik közelebb van a modell-tér középpontjához
- * (item-modellnél 8, entitás-modellnél 0) - egy szárny ugyanis a testtől
- * KIFELÉ nyúlik. A többi tengelyen a befoglaló doboz közepe marad.
- *
- * MIÉRT KELL: a forgáspont alapértéke a doboz KÖZEPE, ott viszont a rész a
- * közepén csuklana, és a legjobb mozgás is "hajló deszkának" látszana. Ez a
- * kiegészítőknél élesben derült ki - itt ugyanaz a geometria, ugyanaz a hiba.
- */
-/**
- * A kijelölt cél befoglaló doboza a SZERZŐI térben, vagy null.
- * A hitbox-számítástól eltérően ITT nincs illesztés/méretezés: a forgáspont
- * a modell saját koordinátáiban értendő (a renderer is ott alkalmazza).
- */
 function mobTargetBounds(partIndex) {
   const source = partIndex < 0
     ? mobParts.filter((p) => Array.isArray(p.elements) && p.elements.length)
@@ -11943,7 +10039,6 @@ function mobTargetBounds(partIndex) {
   return Number.isFinite(mn[0]) ? { min: mn, max: mx } : null;
 }
 
-/** "base" = a talp közepe, "center" = a doboz közepe (null: az alapértelmezett). */
 function mobPresetPivot(kind, partIndex) {
   if (kind !== 'base') return null;
   const b = mobTargetBounds(partIndex);
@@ -11981,6 +10076,5 @@ function suggestMobRootPivot(partIndex) {
   pivot[axis] = rootPivotCoord(mn[axis], mx[axis], ref);
   return pivot.map((n) => Math.round(n * 100) / 100);
 }
-
 
 tryAutoLogin();

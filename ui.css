@@ -1,21 +1,3 @@
-/* ═══════════════════════════════════════════════════════════════════════
-   ★ SOLARCENTER VIZUÁLIS RÉTEG (2026-09-03)
-   ───────────────────────────────────────────────────────────────────────
-   SZÁNDÉKOSAN külön fájl, és az index.html-ben a style.css UTÁN töltődik
-   be: kizárólag a style.css-ben már definiált osztályokra épít rá (nagyobb
-   glow, mozgás, üveg-hatás), így a CSS-kaszkád miatt felülír ott, ahol
-   kell - a meglévő, működő szabályokhoz nem kellett hozzányúlni, és egy
-   esetleges visszavonás is egyetlen <link> sor törlése.
-
-   Minden szín tokenből (var(--gold) stb.) jön, amit a style.css teteje
-   definiál - így mind a 6 téma (ld. theme.js) automatikusan öröklődik ide.
-
-   MOZGÁS-ALAPELV: minden animáció opacity/transform/filter alapú (a
-   compositor szálon fut, nem okoz újra-elrendezést), és a fájl legvégén
-   EGYETLEN prefers-reduced-motion blokk kikapcsolja őket azoknak, akik ezt
-   a rendszerükben kérték.
-   ═══════════════════════════════════════════════════════════════════════ */
-
 :root {
   --ease-out: cubic-bezier(.22, 1, .36, 1);
   --ease-spring: cubic-bezier(.34, 1.56, .64, 1);
@@ -26,10 +8,6 @@
   --glass: color-mix(in srgb, var(--panel) 72%, transparent);
 }
 
-/* ── 1. Ambiens háttér ──────────────────────────────────────────────────
-   Két-három lassan sodródó, erősen elmosott színfolt a parázs-szemcsék
-   MÖGÖTT. Egyetlen pszeudó-elemből, radial-gradientekkel - így nincs plusz
-   DOM-elem és nincs plusz festési réteg sem. */
 body::before {
   content: '';
   position: fixed; inset: -20vmax;
@@ -46,27 +24,13 @@ body::before {
   50%  { transform: translate3d(2.5%, -2%, 0) scale(1.07); }
   100% { transform: translate3d(-2%, 2.5%, 0) scale(1.03); }
 }
-/* Finom filmszemcse a nagy, lapos színfelületek "banding"-je ellen. */
+
 body::after {
   content: '';
   position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .022;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-/* ── 1/b. Belépő-animációk kitöltési módja (FONTOS) ─────────────────────
-   A style.css belépő-animációi `animation: fadeSlideUp .4s ... both`-tal
-   futnak. A `both` kitöltési mód azt jelenti, hogy az animáció ZÁRÓ
-   képkockájának értékei (`transform: translateY(0)`) az animáció LEFUTÁSA
-   UTÁN IS érvényben maradnak - a CSS-kaszkádban pedig az animáció erősebb,
-   mint bármely sima szabály. Ezért minden `transform`-ot használó
-   hover-effekt (kártya-emelkedés, menüpont-elcsúszás) és a mobil oldalsáv
-   `translateX(-102%)` alaphelyzete is NÉMÁN hatástalan maradt volna.
-
-   A `backwards` ugyanúgy elrejti az elemet az animáció ELINDULÁSA ELŐTT
-   (tehát nincs "felvillanás"), de a lefutás után visszaadja az irányítást
-   a normál szabályoknak. Mivel az érintett animációk záró képkockája
-   pontosan az alapállapot (opacity: 1, transform: none), a váltás
-   vizuálisan semmit nem változtat - csak a hover/drawer újra működik. */
 .auth-split,
 .app-shell:not(.hidden) .app-sidebar,
 .app-shell:not(.hidden) .app-nav-item,
@@ -77,7 +41,6 @@ body::after {
   animation-fill-mode: backwards;
 }
 
-/* ── 2. Görgetősáv (globális) ───────────────────────────────────────── */
 * { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--gold) 45%, transparent) transparent; }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -86,30 +49,15 @@ body::after {
   border-radius: 999px; border: 3px solid transparent; background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, var(--gold), var(--gold-2)); background-clip: content-box; }
-/* JAVÍTVA: a korábbi globális `html { scroll-behavior: smooth }` minden
-   programozott görgetést (scrollIntoView, horgony-ugrás) elnyújtott -
-   beleértve azokat is, amikhez semmi közünk (pl. böngésző/kiterjesztés
-   saját scrollIntoView hívásai). Ha egy ilyen elnyújtott görgetés még
-   folyamatban volt, amikor a felhasználó rákattintott valamire, a kattintás
-   koordinátája és a cél tényleges, még mozgásban lévő pozíciója szétcsúszott
-   - a kattintás "a levegőbe" ment, látszólag történés nélkül. A SAJÁT
-   görgetéseink (ld. ui.js switchView-csomagolása, app.js markFieldInvalid
-   melletti scrollIntoView) ettől függetlenül is simák maradnak, mert ott
-   MAGA a hívás kéri a `behavior: 'smooth'`-ot - ez a CSS-tulajdonság csak
-   azokra a görgetésekre hatott, amik NEM adtak meg explicit behavior-t. */
+
 ::selection { background: color-mix(in srgb, var(--gold) 32%, transparent); color: var(--text); }
 
-/* ── 3. Fókusz-gyűrű (akadálymentesség) ─────────────────────────────────
-   A projektben több elem is `outline: none`-t kapott. Itt EGYSÉGES, csak
-   billentyűzetes fókusznál (:focus-visible) látszó gyűrűt adunk vissza -
-   egérrel kattintva nem zavar, TAB-bal viszont mindig pontosan látszik,
-   hol jár a fókusz (WCAG 2.4.7). */
 :where(a, button, input, select, textarea, [tabindex]):focus-visible {
   outline: 2px solid var(--gold);
   outline-offset: 2px;
   border-radius: 8px;
 }
-/* "Ugrás a tartalomra" link - csak fókuszban látszik, a TAB legelső eleme. */
+
 .skip-link {
   position: fixed; top: -100px; left: 12px; z-index: 999;
   background: linear-gradient(180deg, var(--gold), var(--gold-2)); color: var(--btn-ink);
@@ -118,13 +66,12 @@ body::after {
   transition: top var(--dur) var(--ease-spring);
 }
 .skip-link:focus { top: 0; }
-/* Csak képernyőolvasónak szánt szöveg. */
+
 .sr-only {
   position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
 }
 
-/* ── 4. Oldalsáv: üveg + kinyíló aktív-jelölő ───────────────────────── */
 .app-sidebar {
   background: linear-gradient(180deg,
     color-mix(in srgb, var(--panel) 78%, transparent),
@@ -153,7 +100,7 @@ body::after {
     transparent 100%);
   box-shadow: none;
 }
-/* A bal oldali aktív-csík magassága 0-ról nő fel, így "kinyílik". */
+
 .app-nav-item.active::before {
   content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
   width: 3px; height: 0; border-radius: 0 3px 3px 0;
@@ -164,8 +111,6 @@ body::after {
 @keyframes navBarGrow { to { height: 62%; } }
 .app-nav-item.active svg { filter: drop-shadow(0 0 6px var(--gold-glow)); }
 
-/* Kattintás-hullám. A ::after eddig is létezett a style.css-ben - itt
-   simábbra és a kattintás pontjához igazítottra hangoljuk. */
 .app-nav-item::after {
   content: ''; position: absolute; inset: 0; border-radius: inherit;
   background: radial-gradient(circle at var(--rx, 50%) var(--ry, 50%),
@@ -182,8 +127,6 @@ body::after {
 }
 .app-nav-divider:first-of-type::before { display: none; }
 
-/* Belépő-animáció: a menüpontok egymás után úsznak be (a --i indexet az
-   app.js osztja ki, ld. initStaggerIndexes). */
 .app-shell:not(.hidden) .app-nav-item,
 .app-shell:not(.hidden) .app-nav-divider {
   animation: navSlideIn .42s var(--ease-out) backwards;
@@ -194,7 +137,6 @@ body::after {
   to   { opacity: 1; transform: translateX(0); }
 }
 
-/* ── 5. Felső sáv: ragadós üveg ─────────────────────────────────────── */
 .app-topbar {
   position: sticky; top: 0; z-index: 25;
   background: color-mix(in srgb, var(--bg) 72%, transparent);
@@ -203,7 +145,7 @@ body::after {
   border-bottom: 1px solid color-mix(in srgb, var(--gold) 8%, var(--line));
   transition: box-shadow var(--dur) var(--ease-smooth), background var(--dur);
 }
-/* Görgetéskor árnyékot kap (az osztályt az app.js teszi rá). */
+
 .app-topbar.scrolled {
   box-shadow: 0 8px 30px rgba(0,0,0,.35);
   background: color-mix(in srgb, var(--bg) 88%, transparent);
@@ -217,7 +159,7 @@ body::after {
 }
 .topbar-pp-badge { transition: transform var(--dur) var(--ease-spring), filter var(--dur); }
 .topbar-user:hover .topbar-pp-badge { transform: translateX(2px); }
-/* Az érték változásakor az app.js ráteszi a .value-bump osztályt. */
+
 .value-bump { animation: valueBump .5s var(--ease-spring); }
 @keyframes valueBump {
   0%   { transform: scale(1); }
@@ -240,7 +182,6 @@ body::after {
 .topbar-dropdown button, .topbar-theme-option { transition: background var(--dur-fast), color var(--dur-fast), transform var(--dur-fast) var(--ease-out); }
 .topbar-dropdown button:hover, .topbar-theme-option:hover { transform: translateX(3px); }
 
-/* ── 6. Kártyák: fény-perem + emelkedés + egérkövető fényfolt ───────── */
 .card {
   position: relative;
   background: linear-gradient(180deg,
@@ -252,13 +193,13 @@ body::after {
               border-color var(--dur) var(--ease-out);
   overflow: hidden;
 }
-/* Halvány arany "fénytörés" a kártya felső peremén. */
+
 .card::before {
   content: ''; position: absolute; top: 0; left: 10%; right: 10%; height: 1px;
   background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--gold) 55%, transparent), transparent);
   opacity: .55; pointer-events: none;
 }
-/* Egérkövető fényfolt - az app.js írja a --mx/--my/--spot változókat. */
+
 .card::after {
   content: ''; position: absolute; inset: 0; pointer-events: none;
   background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 0%),
@@ -271,11 +212,10 @@ body::after {
   border-color: color-mix(in srgb, var(--gold) 22%, var(--line));
   box-shadow: 0 22px 50px rgba(0,0,0,.4), 0 0 26px -12px var(--gold-glow), 0 1px 0 rgba(255,255,255,.05) inset;
 }
-/* Nagy, űrlapos/táblázatos kártyákon az emelkedés gépelés közben zavarna. */
+
 .card.card-static:hover { transform: none; }
 .card.card-static::after { display: none; }
 
-/* ── 7. Statisztika-jelvények ────────────────────────────────────────── */
 .stat-badge {
   position: relative; overflow: hidden;
   transition: transform var(--dur) var(--ease-out), border-color var(--dur), box-shadow var(--dur);
@@ -295,7 +235,6 @@ body::after {
 .stat-badge:hover .stat-badge-icon { transform: scale(1.1) rotate(-6deg); }
 .stat-badge-value { font-variant-numeric: tabular-nums; }
 
-/* ── 8. Gombok: fénypászma, ripple, töltés ───────────────────────────── */
 .btn-glow, .btn-outline, .btn-buy, .btn-discord, .legal-tab, .perms-mode-tab {
   position: relative; overflow: hidden; isolation: isolate;
 }
@@ -320,8 +259,6 @@ body::after {
 }
 .btn-outline:active { transform: translateY(0) scale(.99); }
 
-/* Kattintás-hullám: az app.js szúr be egy <span class="ripple"> elemet a
-   kattintás pontjára (ld. initRipples). */
 .ripple {
   position: absolute; border-radius: 50%; pointer-events: none; z-index: 3;
   background: radial-gradient(circle, rgba(255,255,255,.5), rgba(255,255,255,0) 70%);
@@ -330,8 +267,6 @@ body::after {
 }
 @keyframes rippleGrow { to { transform: translate(-50%, -50%) scale(1); opacity: 0; } }
 
-/* Töltő állapot: a gomb felirata eltűnik, helyette pörgő gyűrű (ld.
-   app.js setButtonLoading). */
 .is-loading { color: transparent !important; pointer-events: none; position: relative; }
 .is-loading::after {
   content: ''; position: absolute; top: 50%; left: 50%; width: 17px; height: 17px;
@@ -342,13 +277,12 @@ body::after {
 .btn-outline.is-loading::after { border-color: color-mix(in srgb, var(--gold) 25%, transparent); border-top-color: var(--gold); }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ── 9. Űrlapmezők ───────────────────────────────────────────────────── */
 .auth-form input:hover, .gift-modal-input:hover { border-color: color-mix(in srgb, var(--gold) 25%, var(--line)); }
 .auth-form input:focus, .auth-form select:focus, .gift-modal-input:focus {
   border-color: var(--gold);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 14%, transparent), 0 0 24px -8px var(--gold-glow);
 }
-/* Hibás mező: piros perem + rövid rázás (ld. app.js markFieldInvalid). */
+
 .field-invalid {
   border-color: var(--danger) !important;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 16%, transparent) !important;
@@ -361,7 +295,7 @@ body::after {
   58% { transform: translateX(-3px); }
   78% { transform: translateX(2px); }
 }
-/* Mező alatti hibaüzenet (ld. app.js setFieldError). */
+
 .field-error-msg {
   color: var(--danger); font-size: 11.5px; margin: 5px 2px 0; line-height: 1.4;
   animation: fadeSlideUp .22s var(--ease-out) both;
@@ -370,7 +304,6 @@ body::after {
 .check-row input[type="checkbox"]:checked { transform: scale(1.14); }
 .check-row:hover { color: var(--text); }
 
-/* ── 10. Nézetváltás + oldalcím ──────────────────────────────────────── */
 .view.active { animation: viewEnter .42s var(--ease-out) backwards; }
 @keyframes viewEnter {
   from { opacity: 0; transform: translateY(14px); filter: blur(3px); }
@@ -384,21 +317,18 @@ body::after {
   animation: titleSheen 7s linear infinite;
 }
 @keyframes titleSheen { to { background-position: 200% center; } }
-/* A .text-accent a címen belüli kiemelés - a gradiens miatt külön kell
-   visszaadni neki a saját színét. */
+
 .page-title .text-accent {
   -webkit-text-fill-color: var(--gold); color: var(--gold);
   text-shadow: 0 0 24px var(--gold-glow);
 }
 
-/* ── 11. Görgetésre megjelenő elemek (IntersectionObserver, app.js) ──── */
 .reveal { opacity: 0; transform: translateY(22px); }
 .reveal.revealed {
   animation: fadeSlideUp .55s var(--ease-out) forwards;
   animation-delay: calc(var(--i, 0) * 45ms);
 }
 
-/* ── 12. Csontváz-betöltés (skeleton) ────────────────────────────────── */
 .skeleton {
   position: relative; overflow: hidden; border-radius: 12px;
   background: color-mix(in srgb, var(--text) 6%, transparent);
@@ -417,7 +347,6 @@ body::after {
 .skeleton-line.w-80 { width: 80%; }
 .skeleton-card { height: 96px; margin-top: 14px; border-radius: 16px; }
 
-/* ── 13. Felső betöltés-csík (globális hálózati jelző) ───────────────── */
 .top-progress {
   position: fixed; top: 0; left: 0; height: 2.5px; width: 0; z-index: 999;
   background: linear-gradient(90deg, var(--gold), var(--orange), var(--gold-2));
@@ -427,7 +356,6 @@ body::after {
 }
 .top-progress.active { opacity: 1; }
 
-/* ── 14. Értesítés (toast) - átdolgozva ──────────────────────────────── */
 .shop-toast {
   left: auto; right: 26px; bottom: 26px; transform: translate(0, 18px) scale(.96);
   display: flex; align-items: center; gap: 11px; text-align: left;
@@ -442,7 +370,7 @@ body::after {
   overflow: hidden;
 }
 .shop-toast.visible { transform: translate(0, 0) scale(1); }
-/* A hátralévő időt mutató, lefutó csík. */
+
 .shop-toast::after {
   content: ''; position: absolute; left: 0; bottom: 0; height: 2px; width: 100%;
   background: linear-gradient(90deg, var(--gold), var(--gold-2));
@@ -464,22 +392,16 @@ body::after {
   .shop-toast { left: 14px; right: 14px; bottom: 14px; max-width: none; }
 }
 
-/* ── 15. Modálok ─────────────────────────────────────────────────────── */
 .modal-overlay {
   backdrop-filter: blur(7px) saturate(.9);
   -webkit-backdrop-filter: blur(7px) saturate(.9);
   animation: overlayIn .24s var(--ease-smooth) both;
-  /* JAVÍTVA: a hosszabb modálok (süti-beállítások, fiókkezelés) alacsony
-     ablakmagasságnál kilógtak a képernyő tetején ÉS alján is - a "flex
-     center" ilyenkor levágja a tetejét, és görgetni sem lehetett hozzá.
-     A megoldás: az átfedő réteg görgethető, a kártya pedig `margin: auto`
-     -val középre kerül, ha elfér, és felülre igazodik, ha nem. */
+
   align-items: flex-start;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 20px 16px;
-  /* A süti-sáv (400) fölé, hogy a sávról nyitott beállítások ne kerüljenek
-     alá. Az értesítések (toast) ennél is feljebb vannak - ld. lentebb. */
+
   z-index: 500;
 }
 .modal-overlay > .modal-card { margin: auto; }
@@ -497,13 +419,12 @@ body::after {
   from { opacity: 0; transform: translateY(22px) scale(.94); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
-/* Bezáráskor az app.js ráteszi a .modal-closing osztályt az overlayre. */
+
 .modal-overlay.modal-closing { animation: overlayOut .2s var(--ease-smooth) both; }
 .modal-overlay.modal-closing .modal-card { animation: modalOut .2s var(--ease-smooth) both; }
 @keyframes overlayOut { to { opacity: 0; } }
 @keyframes modalOut { to { opacity: 0; transform: translateY(10px) scale(.97); } }
 
-/* ── 16. Vásárlás/rang/kozmetikum kártyák ────────────────────────────── */
 .pkg-card, .rank-card, .cosmetic-card, .market-card {
   transition: transform var(--dur) var(--ease-out), border-color var(--dur), box-shadow var(--dur);
 }
@@ -514,13 +435,11 @@ body::after {
 }
 .cosmetic-card:hover { transform: translateY(-5px) scale(1.015); }
 
-/* ── 17. Jogi fülek + GYIK ───────────────────────────────────────────── */
 .legal-tab { transition: all var(--dur) var(--ease-out); }
 .legal-tab:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--gold) 40%, var(--line)); color: var(--text); }
 .legal-tab.active { box-shadow: 0 8px 22px var(--gold-glow); }
 .legal-panel.active { animation: fadeSlideUp .34s var(--ease-out) backwards; }
 
-/* GYIK (accordion) - ld. index.html data-view="faq" */
 .faq-list { display: flex; flex-direction: column; gap: 12px; }
 .faq-item {
   border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
@@ -542,8 +461,7 @@ body::after {
 .faq-item.open .faq-q { color: var(--gold); }
 .faq-chevron { flex-shrink: 0; transition: transform var(--dur) var(--ease-spring); color: var(--text-faint); }
 .faq-item.open .faq-chevron { transform: rotate(180deg); color: var(--gold); }
-/* A magasság-animáció grid-template-rows 0fr -> 1fr - így nem kell JS-ből
-   pixelben mért magasság, és a tartalom szabadon nőhet. */
+
 .faq-a-wrap { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .34s var(--ease-out); }
 .faq-item.open .faq-a-wrap { grid-template-rows: 1fr; }
 .faq-a { overflow: hidden; }
@@ -552,14 +470,6 @@ body::after {
 .faq-search-wrap { position: relative; margin-bottom: 20px; }
 .faq-empty { text-align: center; padding: 30px 16px; color: var(--text-faint); font-size: 13px; }
 
-/* ── 17/b. Látogatottság (admin) ────────────────────────────────────────
-   SZÁNDÉKOSAN EGY adatsor (napi látogatók) van a napi diagramon, nem kettő
-   (látogatók + megtekintések). Két sorozathoz két, egymástól színvakság
-   mellett is megkülönböztethető szín kellene - a SolarCenternek viszont 6
-   témája van, tehát nincs egyetlen fix párosítás, ami mind a hatban
-   működne. Az oszlopdiagram így egyetlen hue-ból (var(--gold)) épül fel,
-   a megtekintés-szám pedig ott jelenik meg, ahol tényleg kell: a felső
-   összesítő csempéken és az oszlop rátét-buborékjában (title). */
 .analytics-range { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 26px; }
 .analytics-chart {
   display: flex; align-items: flex-end; gap: 3px;
@@ -572,7 +482,7 @@ body::after {
   flex: 1 1 0; min-width: 5px; position: relative;
   display: flex; align-items: flex-end; height: 100%;
 }
-/* A tényleges oszlop: az aljához tapad, a teteje lekerekített. */
+
 .analytics-bar > i {
   display: block; width: 100%; border-radius: 4px 4px 0 0;
   background: linear-gradient(180deg, var(--gold), var(--gold-2));
@@ -581,17 +491,13 @@ body::after {
   min-height: 2px;
 }
 .analytics-bar:hover > i { filter: brightness(1.25); }
-/* A dátum csak minden n-edik oszlop alatt jelenik meg (a --lbl változót a
-   app.js állítja), különben 90 napnál egymásra csúsznának a feliratok. */
+
 .analytics-bar > small {
   position: absolute; bottom: -22px; left: 50%; transform: translateX(-50%);
   font-size: 10px; color: var(--text-faint); white-space: nowrap;
 }
 .analytics-empty-note { margin-top: 12px; }
 
-/* Rangsorolt lista (legnézettebb oldalak / eszközök / hivatkozók): a sáv a
-   sor HÁTTERÉBEN fut, nem külön oszlopban - így a címke és az érték is
-   olvasható marad a legszűkebb kártyában is. */
 .analytics-row {
   position: relative; display: flex; align-items: center; justify-content: space-between;
   gap: 14px; padding: 10px 12px; border-radius: 9px; margin-top: 6px;
@@ -609,7 +515,6 @@ body::after {
 .analytics-row > b { color: var(--gold); font-variant-numeric: tabular-nums; flex-shrink: 0; }
 .analytics-row-empty { color: var(--text-faint); font-size: 12.5px; padding: 10px 2px; }
 
-/* ── 18. Süti-sáv (cookie banner) ────────────────────────────────────── */
 .cookie-banner {
   position: fixed; left: 50%; bottom: 22px; transform: translate(-50%, 140%);
   width: min(94vw, 720px); z-index: 400;
@@ -657,7 +562,6 @@ body::after {
   .cookie-banner-actions button { flex: 1 1 100%; }
 }
 
-/* Süti-modál: kategóriánként kapcsolóval (nem sima checkbox). */
 .cookie-cat {
   display: flex; align-items: flex-start; gap: 14px;
   padding: 15px 16px; border: 1px solid var(--line); border-radius: 14px;
@@ -670,11 +574,10 @@ body::after {
 .cookie-cat-desc { font-size: 12px; color: var(--text-dim); line-height: 1.6; }
 .cookie-cat-req { font-size: 11px; color: var(--gold); font-weight: 700; }
 .cookie-modal-note { font-size: 11.5px; color: var(--text-faint); line-height: 1.6; margin-top: 14px; }
-/* Három gomb egy 420px-es modálban egy sorban túl szűk lenne (a feliratok
-   két sorba törnének), ezért itt törhet a sor. */
+
 .cookie-modal .modal-actions { flex-wrap: wrap; }
 .cookie-modal .modal-actions button { flex: 1 1 150px; }
-/* Kapcsoló (switch) */
+
 .switch { position: relative; flex-shrink: 0; width: 42px; height: 24px; cursor: pointer; }
 .switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
 .switch-track {
@@ -698,10 +601,6 @@ body::after {
 .switch input:disabled { cursor: not-allowed; }
 .switch input:focus-visible ~ .switch-track { outline: 2px solid var(--gold); outline-offset: 2px; }
 
-/* ── 19. Mobil: valódi oldalsáv-fiók (drawer) ─────────────────────────────
-   A korábbi megoldás vízszintesen görgethető sávvá lapította a 25 elemes
-   menüt - használhatatlan volt. Helyette balról becsúszó fiók + hamburger
-   gomb + elsötétítő háttér. */
 .mobile-menu-btn {
   display: none; align-items: center; justify-content: center;
   width: 40px; height: 40px; flex-shrink: 0; border-radius: 12px;
@@ -728,10 +627,7 @@ body::after {
     box-shadow: 24px 0 60px rgba(0,0,0,.5);
   }
   .app-sidebar.open { transform: translateX(0); }
-  /* A style.css belépő-animációja (fadeSlideUp) a lefutása ALATT felülírja
-     a fiók becsukott alaphelyzetét (translateX(-102%)) - mobilon ez azt
-     jelentené, hogy belépéskor fél másodpercre "felvillan" a nyitott menü.
-     A fióknak amúgy is saját becsúszó átmenete van, itt nem kell a másik. */
+
   .app-shell:not(.hidden) .app-sidebar { animation: none; }
   .app-brand { display: flex; }
   .app-nav-spacer { display: block; }
@@ -745,7 +641,7 @@ body::after {
   .page-note { font-size: 13.5px; margin-bottom: 24px; }
   .card { padding: 22px 18px; border-radius: 16px; }
   .card + .card { margin-top: 16px; }
-  /* Érintésnél a hover-emelkedés csak "beragadna". */
+
   .card:hover, .stat-badge:hover, .pkg-card:hover, .rank-card:hover,
   .cosmetic-card:hover, .market-card:hover { transform: none; }
   .card::after { display: none; }
@@ -759,7 +655,7 @@ body::after {
   .auth-screen { padding: 20px 12px; }
   .page-title { font-size: 21px; }
   .modal-card { padding: 22px 18px; border-radius: 16px; }
-  /* Érintésre méretezett célfelületek (WCAG 2.5.5). */
+
   .app-nav-item { padding: 14px 16px; }
   .btn-glow, .btn-outline { min-height: 46px; }
 }
@@ -768,7 +664,6 @@ body::after {
   .legal-tab, .faq-q { min-height: 44px; }
 }
 
-/* ── 20. Egyéb finomítás ─────────────────────────────────────────────── */
 .app-footer {
   background: color-mix(in srgb, var(--bg) 55%, transparent);
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
@@ -782,8 +677,7 @@ body::after {
 }
 .app-footer a:hover::after { transform: scaleX(1); transform-origin: left center; }
 .footer-links { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
-/* A "Süti beállítások" <button>, mert műveletet indít - de a lábléc többi
-   linkjével azonosan kell festenie. */
+
 .footer-link-btn {
   background: none; border: none; padding: 0; cursor: pointer;
   font: inherit; font-size: 12.5px; color: var(--text-faint);
@@ -802,9 +696,6 @@ img { max-width: 100%; }
 .news-card-image { transition: transform var(--dur-slow) var(--ease-out); }
 .news-card:hover .news-card-image { transform: scale(1.03); }
 
-/* Beágyazott, külső iframe-ek helyőrzője: adatvédelmi okból csak akkor
-   töltjük be a Discord-widgetet, ha a felhasználó a "beágyazott tartalom"
-   süti-kategóriát elfogadta (ld. app.js applyCookieConsent). */
 .embed-placeholder {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 12px; text-align: center; padding: 34px 22px; min-height: 220px;
@@ -813,10 +704,6 @@ img { max-width: 100%; }
 }
 .embed-placeholder .btn-outline { width: auto; }
 
-/* ── 21. Mozgáscsökkentés (WCAG 2.3.3 / prefers-reduced-motion) ─────────
-   Aki a rendszerében kikapcsolta az animációkat, MINDENT statikusan kap -
-   de az elemek láthatóak maradnak: a .reveal-nak külön vissza kell adni az
-   opacity/transform alapállapotát, különben animáció nélkül láthatatlan. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: .01ms !important;

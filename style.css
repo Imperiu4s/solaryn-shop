@@ -1,9 +1,3 @@
-/* ── Témák (ld. theme.js) - a data-theme attribútumot a <html>-re a
-   theme.js állítja be, minél korábban (a stíluslap betöltése előtt), hogy
-   ne legyen látható "villanás" az alap témáról. Mind a 4 blokk UGYANAZT a
-   18 tokent definiálja - a fájl többi része kizárólag var(--x)-en keresztül
-   hivatkozik rájuk, tehát máshol semmit nem kell módosítani egy új téma
-   hozzáadásakor, csak egy újabb ilyen blokkot felvenni. ── */
 :root,
 :root[data-theme="solaryn"] {
   --bg: #0a0a0d;
@@ -137,10 +131,7 @@ html, body {
   min-height: 100%;
   font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
   color: var(--text);
-  /* JAVÍTVA: a háttér ambiens fénylése korábban nyers narancs rgba()-kkal volt
-     beégetve, ezért minden témán (pl. Jégkék, Türkiz) ugyanaz a meleg narancs
-     izzás látszott a háttérben, függetlenül az aktív témától - a color-mix()
-     a var(--gold)/var(--orange)-ból számol, témánként a megfelelő árnyalatot adva. */
+
   background:
     radial-gradient(1100px 600px at 78% -10%, color-mix(in srgb, var(--gold) 10%, transparent), transparent 60%),
     radial-gradient(900px 500px at 12% 120%, color-mix(in srgb, var(--orange) 6%, transparent), transparent 55%),
@@ -150,7 +141,6 @@ html, body {
 .hidden { display: none !important; }
 a { color: inherit; }
 
-/* ── Hulló parázs-szemcse háttéranimáció (ugyanaz, mint a SolarLauncherben) ── */
 .particle-canvas {
   position: fixed; inset: 0; width: 100%; height: 100%;
   pointer-events: none; z-index: 0;
@@ -159,7 +149,6 @@ a { color: inherit; }
 
 .brand-logo-img { width: 34px; height: 34px; flex-shrink: 0; filter: drop-shadow(0 0 10px var(--gold-glow)); }
 
-/* ── Bejelentkező képernyő ── */
 .auth-screen {
   min-height: 100vh;
   display: flex; align-items: center; justify-content: center;
@@ -184,7 +173,6 @@ a { color: inherit; }
 .auth-brand-name { font-weight: 800; letter-spacing: 1.5px; font-size: 15px; }
 .auth-brand-name small { display: block; font-size: 10px; color: var(--text-faint); letter-spacing: 2px; font-weight: 600; }
 
-/* ── Zárolt fiók képernyő (owner-i zárolás, ld. app.js) ── */
 .locked-split { grid-template-columns: 1fr; max-width: 480px; }
 .locked-form-side { text-align: center; padding: 46px 40px; }
 .locked-form-side .auth-brand { justify-content: center; }
@@ -230,10 +218,6 @@ a { color: inherit; }
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 12%, transparent);
 }
 
-/* Jelszó megjelenítés (szem-ikon) - ld. app.js initPasswordToggles. Minden
-   input[type="password"]-t automatikusan becsomagol egy ilyen wrapperbe
-   induláskor (bejelentkezés, regisztráció, fiók hozzáadása, 2FA/PIN,
-   jelszó-csere stb. - mindenhol, ahol jelszómező van). */
 .pw-field-wrap { position: relative; }
 .pw-field-wrap .pw-field-input { padding-right: 40px !important; }
 .pw-toggle-btn {
@@ -300,7 +284,6 @@ a { color: inherit; }
   .auth-info-side { border-left: none; border-top: 1px solid var(--line); }
 }
 
-/* ── App-héj (bejelentkezés után) ── */
 .app-shell { min-height: 100vh; display: flex; }
 .app-sidebar {
   width: 270px; flex-shrink: 0;
@@ -309,11 +292,7 @@ a { color: inherit; }
   display: flex; flex-direction: column;
   padding: 28px 18px;
   position: sticky; top: 0; height: 100vh;
-  /* JAVÍTVA: a felhasználó kérésére - az "Admin" szekció (Napló/Csapat
-     statisztika/Havi bevétel/Felhívások/Jelvények/Akciók) a teljes navigációs
-     listát magasabbra nőtte, mint a viewport 100%-os nagyításnál rendelkezésre
-     álló hely - "overflow-y: auto" nélkül ez korábban egyszerűen levágódott
-     (a "Discord" alsó link is emiatt tűnt el), görgetési lehetőség nélkül. */
+
   overflow-y: auto; overflow-x: hidden;
 }
 .app-sidebar::-webkit-scrollbar { width: 6px; }
@@ -337,10 +316,7 @@ a { color: inherit; }
   background: linear-gradient(90deg, color-mix(in srgb, var(--gold) 14%, transparent) 0%, color-mix(in srgb, var(--gold) 0%, transparent) 100%);
   color: var(--gold); box-shadow: inset 3px 0 0 var(--gold);
 }
-/* Kategória-fejléc az oldalsávban. A vékony felső vonal a csoportokat
-   VIZUÁLISAN is elválasztja - a puszta térköz egy 25 elemes menüben nem elég
-   ahhoz, hogy szkennelve is összeálljon a csoport. Az első fejléc előtt
-   nincs vonal (a Főoldal amúgy is önálló). */
+
 .app-nav-divider {
   padding: 18px 16px 6px; margin-top: 6px;
   font-size: 10.5px; font-weight: 800; text-transform: uppercase;
@@ -349,21 +325,13 @@ a { color: inherit; }
 }
 .app-nav-divider:first-of-type { border-top: none; margin-top: 2px; }
 
-/* ── Lenyitható navigációs csoport ──────────────────────────────────────
-   A csoportfej ugyanaz a .app-nav-item, csak egy forgó nyíllal a végén; az
-   alatta lévő .app-nav-sub magasságban animálva nyílik. A max-height-os
-   megoldás SZÁNDÉKOS: a "height: auto" nem animálható, a konkrét pixelérték
-   pedig elemszámtól függene - a bőven elég nagy felső korlát mindkettőt
-   megkerüli, és mivel a lista magassága ismert nagyságrendű (max ~13 elem),
-   a nyílás így sem tűnik lassúnak. */
 .app-nav-group { display: flex; flex-direction: column; }
 .app-nav-group-head .app-nav-caret {
   margin-left: auto; width: 15px; height: 15px; fill: none;
   opacity: .55; transition: transform .22s cubic-bezier(.2,.7,.3,1), opacity .16s;
 }
 .app-nav-group.open > .app-nav-group-head .app-nav-caret { transform: rotate(180deg); opacity: .9; }
-/* A csoportfej akkor emelkedik ki, ha az AKTUÁLIS nézet benne van, de a
-   csoport épp csukva - így egy csukott csoportban sem vész el, hol vagyunk. */
+
 .app-nav-group-head.holds-active { color: var(--gold); }
 .app-nav-sub {
   display: grid; gap: 2px;
@@ -376,9 +344,7 @@ a { color: inherit; }
   padding: 10px 16px 10px 48px; font-size: 13px; font-weight: 600;
   letter-spacing: .01em;
 }
-/* Pötty a szöveg előtt: az elemek ikon nélküliek (egy behúzott alsó szint
-   nem bír el még egy ikonoszlopot), a pötty viszont megadja a listajelleget
-   és a behúzás vizuális kapaszkodóját. */
+
 .app-nav-sub .app-nav-item::before {
   content: ""; position: absolute; left: 30px; top: 50%; transform: translateY(-50%);
   width: 5px; height: 5px; border-radius: 999px;
@@ -386,7 +352,6 @@ a { color: inherit; }
 }
 .app-nav-sub .app-nav-item.active::before { opacity: 1; box-shadow: 0 0 8px var(--gold-glow); }
 
-/* Számláló-jelvény (pl. beérkezett csere ajánlatok) */
 .app-nav-badge {
   margin-left: auto; min-width: 20px; padding: 2px 6px; border-radius: 999px;
   background: var(--danger); color: #12121a;
@@ -438,8 +403,6 @@ a { color: inherit; }
 }
 .topbar-dropdown button:hover { background: rgba(255,90,60,.12); color: var(--danger); }
 
-/* ÚJ: téma-választó (ld. theme.js) - ugyanaz a panel/dropdown minta, mint a
-   .topbar-user/.topbar-dropdown-nél, hogy natív testvér-elemnek hasson. */
 .topbar-theme {
   position: relative; display: flex; align-items: center; justify-content: center;
   width: 38px; height: 38px; border-radius: 12px; cursor: pointer;
@@ -460,14 +423,11 @@ a { color: inherit; }
 }
 .topbar-theme-option:hover { background: color-mix(in srgb, var(--gold) 12%, transparent); color: var(--gold); }
 
-/* ÚJ: "Jogok" admin nézet jogosultság-checkboxok, ld. app.js loadPermsEditor() */
 .perms-checkbox-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 6px 16px; margin-bottom: 18px;
 }
-/* ÚJ: "Jogok" admin nézet Játékos/Rang mód-váltója - vizuálisan a .legal-tab
-   mintáját követi, de SAJÁT osztály (ld. index.html megjegyzését arról,
-   hogy a .legal-tab-hoz kötött kattintás-figyelővel összeakadna). */
+
 .perms-mode-tab {
   background: var(--panel); border: 1px solid var(--line); color: var(--text-dim);
   padding: 10px 20px; border-radius: 11px; cursor: pointer; font-weight: 700;
@@ -500,15 +460,12 @@ a { color: inherit; }
 }
 .card + .card { margin-top: 24px; }
 
-/* Főoldali "Legfrissebb hír" kártya (ld. src/news.js) */
 .news-card-title { font-size: 17px; font-weight: 800; margin-top: 4px; }
 .news-card-meta { font-size: 12px; color: var(--text-faint); margin-top: 4px; }
 .news-card-content { font-size: 13.5px; color: var(--text-dim); line-height: 1.7; margin-top: 12px; white-space: pre-wrap; }
-/* ÚJ: a felhívás mellé csatolható kép (ld. app.js loadHomeNews) - a
-   card-title UTÁN, a cím ELŐTT jelenik meg. */
+
 .news-card-image { display: block; width: 100%; max-height: 260px; object-fit: cover; border-radius: 12px; margin-top: 10px; }
 
-/* Admin "Felhívások" lista (ld. index.html data-view="newsAdmin") */
 .news-admin-item {
   background: rgba(255,255,255,.02); border: 1px solid var(--line); border-radius: 14px;
   padding: 18px 20px; margin-top: 14px;
@@ -519,14 +476,7 @@ a { color: inherit; }
 .news-admin-item-meta { font-size: 12px; color: var(--text-faint); margin-top: 3px; }
 .news-admin-item-content { font-size: 13px; color: var(--text-dim); line-height: 1.7; margin-top: 10px; white-space: pre-wrap; }
 .news-admin-item-actions { display: flex; gap: 8px; flex-shrink: 0; }
-/* JAVÍTVA: korábban ez a szabály KIZÁRÓLAG a ".news-admin-item-actions"
-   konténerre vonatkozott - mivel a Jelvények lista (ld. lentebb
-   ".badges-admin-item-actions") a PONTOSAN UGYANAZT a ".news-edit-btn"/
-   ".news-delete-btn" osztálypárt használja saját Szerkesztés/Törlés
-   gombjaihoz (ld. app.js renderBadgesAdminList), de a saját konténerének
-   nem volt hozzá tartozó "button" szabálya, ott a natív, stílusozatlan
-   böngésző-gomb jelent meg. Most mindkét konténer megkapja ugyanazt a
-   stílust egyetlen, megosztott szabályból. */
+
 .news-admin-item-actions button, .badges-admin-item-actions button {
   padding: 7px 12px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer;
   background: transparent; border: 1px solid var(--line); color: var(--text-dim); transition: border-color .16s, color .16s;
@@ -534,18 +484,11 @@ a { color: inherit; }
 .news-admin-item-actions button:hover, .badges-admin-item-actions button:hover { color: var(--text); border-color: var(--gold-2); }
 .news-admin-item-actions .news-delete-btn:hover, .badges-admin-item-actions .news-delete-btn:hover { color: var(--danger); border-color: var(--danger); }
 
-/* ÚJ: kép-feltöltés az "Új felhívás" űrlapon (ld. index.html #newsImageInput) */
 .news-image-preview-wrap { display: flex; align-items: center; gap: 14px; margin-top: 10px; }
 .news-image-preview { width: 90px; height: 90px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); }
 
-/* ÚJ: kompakt, a design-hoz illő kiváltó gomb a natív <input type="file">
-   helyett (ami rejtve marad, "hidden") - ld. index.html #newsImagePickBtn/
-   #badgeIconPickBtn, app.js kattintás-továbbítását a rejtett inputra.
-   Ugyanaz az elv, mint a skin/köpeny #skinDrop/#capeDrop-jánál, csak
-   kompakt gomb formájában, mert ez a form szűk, egysoros mezőkből áll. */
 .file-picker-btn { width: auto; margin-top: 6px; padding: 8px 16px; font-size: 12.5px; }
 
-/* ÚJ: Jelvények (ld. SolarBackend src/badges.js, index.html data-view="badges") */
 .badge-color-input {
   display: block; width: 64px; height: 34px; padding: 3px; margin-top: 6px;
   border-radius: 8px; border: 1px solid var(--line); background: var(--bg); cursor: pointer;
@@ -561,18 +504,10 @@ a { color: inherit; }
 .badges-admin-item-name { font-size: 14px; font-weight: 800; }
 .badges-admin-item-meta { font-size: 12px; color: var(--text-faint); margin-top: 2px; }
 
-/* ÚJ: Akciók (ld. SolarBackend src/discounts.js, index.html data-view="discounts") -
-   a lista maga a ".badges-admin-item" mintát újrahasznosítja (ugyanaz az elrendezés,
-   csak ikon nélkül), csak az aktív/lejárt-kikapcsolt állapotjelzéshez kell saját szín. */
 .discount-status-on { color: var(--gold); font-weight: 700; }
 .discount-status-off { color: var(--text-faint); font-weight: 700; }
 .badges-admin-item-actions { display: flex; gap: 8px; flex-shrink: 0; }
 
-/* ÚJ: jelvények a névtábla mellett (Profilod kártya / Játékos-profil).
-   JAVÍTVA: korábban az ikon kicsi volt (20px), keretezett, és a jelvény
-   NEVE csak hoverkor, egy tooltipben jelent meg - most az ikon nagyobb,
-   keret nélküli (hogy animált/átlátszó GIF-ikonok se törjenek meg egy
-   dobozkerettől), és a név MINDIG, közvetlenül az ikon mellett látszik. */
 .profile-name-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .profile-name-row .profile-name { margin-bottom: 0; }
 .name-badges { display: inline-flex; flex-wrap: wrap; gap: 10px; }
@@ -580,7 +515,6 @@ a { color: inherit; }
 .name-badge-icon { width: 32px; height: 32px; border-radius: 8px; object-fit: cover; cursor: default; }
 .name-badge-label { font-size: 13.5px; font-weight: 800; white-space: nowrap; }
 
-/* ÚJ: jelvény adása/elvétele a játékos-profil admin paneljén */
 .admin-badge-grant-row { display: flex; gap: 8px; margin-top: 6px; }
 .admin-badge-grant-row select { flex: 1; }
 .admin-badge-grant-row .device-link { flex-shrink: 0; }
@@ -597,7 +531,6 @@ a { color: inherit; }
 }
 .admin-player-badge-chip button:hover { color: var(--danger); }
 
-/* Havi bevétel - naptár nézet (ld. index.html data-view="revenue"/"revenueDetail") */
 .revenue-calendar-year { margin-top: 30px; }
 .revenue-calendar-year:first-child { margin-top: 0; }
 .revenue-calendar-year-title {
@@ -626,7 +559,6 @@ a { color: inherit; }
 .revenue-detail-divider { height: 1px; background: var(--line); margin: 24px 0; }
 .card-title { font-size: 17px; font-weight: 700; margin-bottom: 18px; display: flex; align-items: center; gap: 8px; }
 
-/* Profil kártya (Főoldal) */
 .profile-card { display: flex; gap: 32px; align-items: center; flex-wrap: wrap; }
 .profile-skin-col { display: flex; flex-direction: column; align-items: center; gap: 8px; flex-shrink: 0; }
 #homeSkinCanvas { border-radius: 16px; background: var(--panel-2); border: 1px solid var(--line); }
@@ -634,9 +566,6 @@ a { color: inherit; }
 .profile-name { font-size: 24px; font-weight: 800; margin-bottom: 8px; }
 .profile-empty-skin { color: var(--text-faint); font-size: 13px; }
 
-/* ── Discord-fiók összekötés jelvénye - a Főoldal saját profiljában ÉS a
-   tulajdonosi admin-panelben is ugyanez a minta jelenik meg (ld. app.js
-   renderDiscordLinkBadge()). ── */
 .discord-link-badge {
   display: flex; align-items: center; gap: 8px; margin-top: 10px;
   font-size: 12.5px; padding: 6px 10px; border-radius: 999px; width: fit-content;
@@ -654,22 +583,11 @@ a { color: inherit; }
   width: 20px; height: 20px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
 }
 
-/* ÚJ: aktív némítás-/kitiltás-/kliens-tiltás-/fiók-zárolás jelzés - a Főoldal
-   saját profiljában ÉS a játékos-kereső profil-nézetében is (ld. app.js
-   renderSanctionStatus()) - üres marad, ha nincs aktív szankció.
-   JAVÍTVA (2): korábban mindegyik szankció egy-egy nagy, mindig kinyitott
-   kártya volt; a felhasználó kérésére most csak egy-egy kis SVG-ikon látszik
-   (NEM emoji - az platformonként más képet adna és nem venné fel a téma
-   színét), a részletek pedig egy rákattintásra, animációval előugró kis
-   panelben (.sanction-popover) olvashatók. */
 .profile-sanction-status { margin-top: 12px; width: 100%; }
 .profile-sanction-status:empty { margin-top: 0; }
 
 .sanction-icon-row { display: flex; flex-wrap: wrap; gap: 8px; }
 
-/* Minden szankciótípus a saját színét kapja (a téma tokenjeiből, hogy a 4
-   téma mindegyikében illeszkedjen) - így az ikon alakja MELLETT a szín is
-   megkülönbözteti őket. */
 .sanction-icon-btn[data-sanction-type="mute"],
 .sanction-popover[data-sanction-type="mute"] { --sanction-color: var(--gold); }
 .sanction-icon-btn[data-sanction-type="ban"],
@@ -688,11 +606,7 @@ a { color: inherit; }
   background: color-mix(in srgb, var(--sanction-color) 13%, transparent);
   border: 1px solid color-mix(in srgb, var(--sanction-color) 40%, transparent);
   transition: transform .18s cubic-bezier(.2,.7,.3,1), background .18s, border-color .18s, box-shadow .18s;
-  /* Betöltéskor egymás után "pattannak be" (ld. a fájl végi Animációk
-     szekció ugyanezt a mintát követő szabályait). */
-  /* "backwards" (nem "both"): a betöltő-animáció kitöltött végállapota
-     egyébként FELÜLÍRNÁ a :hover/.active transformját, mivel az animációk
-     erősebbek a szokásos deklarációknál. */
+
   animation: sanctionIconPop .4s cubic-bezier(.2,.9,.3,1.5) backwards;
   animation-delay: calc(var(--i, 0) * .07s);
 }
@@ -714,10 +628,6 @@ a { color: inherit; }
   to   { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-/* A rákattintásra megjelenő kis panel ("GUI") - a megnyitott ikon közepéből
-   nő ki (a pozíciót és a --arrow-x-et az app.js positionSanctionPopover()
-   számolja ki). A panel a <body> végén él, FIX pozícióval: a profil-kártya
-   overflow: hidden-je (ld. ui.css .card) egyébként elvágná. */
 .sanction-popover {
   --sanction-color: var(--danger);
   position: fixed; z-index: 120; top: 0; left: 0;
@@ -731,8 +641,7 @@ a { color: inherit; }
   transform-origin: var(--arrow-x, 24px) top;
 }
 .sanction-popover[hidden] { display: none; }
-/* Ha alul nem fér ki, az ikon FÖLÉ fordul - ilyenkor a nyíl és az animáció
-   origója is alulra kerül. */
+
 .sanction-popover.above { transform-origin: var(--arrow-x, 24px) bottom; }
 .sanction-popover.open { animation: sanctionPopIn .24s cubic-bezier(.2,.8,.3,1.15) both; }
 .sanction-popover.closing { animation: sanctionPopOut .14s ease-in both; }
@@ -755,7 +664,6 @@ a { color: inherit; }
   to   { opacity: 0; transform: scale(.94) translateY(6px); }
 }
 
-/* A nyíl pontosan a megnyitott ikonra mutat. */
 .sanction-pop-arrow {
   position: absolute; top: -6px; left: var(--arrow-x, 24px);
   width: 11px; height: 11px; margin-left: -5.5px;
@@ -786,7 +694,7 @@ a { color: inherit; }
 .sanction-pop-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 12.5px; }
 .sanction-pop-row > span { color: var(--text-faint); flex-shrink: 0; }
 .sanction-pop-row > strong { color: var(--text-dim); font-weight: 700; text-align: right; }
-/* A sorok a panel megnyílása UTÁN, egymás után úsznak be. */
+
 .sanction-popover.open .sanction-pop-row { animation: fadeSlideUp .3s cubic-bezier(.2,.7,.3,1) both; }
 .sanction-popover.open .sanction-pop-row:nth-child(1) { animation-delay: .08s; }
 .sanction-popover.open .sanction-pop-row:nth-child(2) { animation-delay: .13s; }
@@ -800,11 +708,6 @@ a { color: inherit; }
 .sanction-pop-reason > p { margin-top: 4px; font-size: 12.5px; color: var(--text-dim); line-height: 1.5; }
 .sanction-pop-note { margin-top: 11px; font-size: 11.5px; color: var(--text-faint); line-height: 1.5; }
 
-/* ── Casino (SolarLucky nyerőgép) - státusz-oldal, a tényleges pörgetés
-   in-game történik, ez csak a "van hány pörgetésed" kijelzés + egy dísz-
-   nyerőgép (ld. app.js loadCasino()). A jobb oldali oszlopban a stat-kártya
-   és a támogató side-rail egymás alatt jelenik meg (a .content-grid csak
-   2 oszlopos, ez a wrapper foglalja el a második oszlopot). ── */
 .side-rail-col { display: flex; flex-direction: column; gap: 20px; }
 
 .casino-machine-card { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 32px 24px; }
@@ -879,7 +782,6 @@ a { color: inherit; }
 
 .casino-stat-grid { grid-template-columns: 1fr; }
 
-/* Statisztika-jelvények (Rangok/PrémiumPont/Online töltött idő). */
 .stat-badge-grid {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 18px; margin-bottom: 28px;
@@ -897,33 +799,18 @@ a { color: inherit; }
 .stat-badge-icon svg { width: 24px; height: 24px; fill: currentColor; }
 .stat-badge-icon img { width: 30px; height: 30px; object-fit: contain; }
 .stat-badge-label { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-faint); margin-bottom: 4px; }
-/* JAVÍTVA: a LuckPerms rang-prefixek gyakran fonetikus KIS KAPITÁLIS Unicode
-   karaktereket használnak (pl. "ᴛᴜʟᴀᴊᴅᴏɴᴏꜱ") a stilizált kinézethez - az
-   alap "Segoe UI" ezeknek csak egy részét (Phonetic Extensions) fedi le, a
-   ritkább Latin Extended-D karakterekre (pl. a "ꜱ" kis kapitális S-re)
-   Windows-on egy MÁSIK, vizuálisan eltérő betűtípusra esik vissza - emiatt
-   tűnt "más betűtípusúnak"/hibásnak pont az utolsó betű. A "Segoe UI
-   Historic" a Windows saját, kifejezetten ezekhez a blokkokhoz csomagolt
-   betűtípusa - előre véve a láncban egységesen fedi az egész prefixet. */
+
 .stat-badge-value { font-size: 22px; font-weight: 800; color: var(--text); font-family: "Segoe UI Historic", "Segoe UI", system-ui, -apple-system, sans-serif; }
 .stat-note {
   color: var(--text-faint); font-size: 12px; margin: -10px 0 22px;
 }
 
-/* A főoldal felső csempesora: a statisztika-csempék ÉS az egyenleg EGY
-   rácsban (ld. index.html .home-stat-row indoklását). A #statBadgeGrid
-   "display: contents"-szel adja át a saját gyerekeit ennek a rácsnak, így az
-   ott generált csempék és az egyenleg-kártya egyenrangú elemek lesznek. */
 .home-stat-row {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 18px; margin-bottom: 28px;
 }
 .home-stat-row > .stat-badge-grid { display: contents; }
 
-/* ÚJ: nagyban kiírt egyenleg a főoldalon (ld. index.html #homeWalletBalance).
-   A felépítése SZÁNDÉKOSAN a .stat-badge-é (ikon + szöveg egymás mellett):
-   ugyanabban a csempesorban áll, mint a rang/PP/játékidő, ott egy ikon
-   nélküli csempe hiányosnak látszana. */
 .wallet-highlight-card {
   padding: 22px 24px; margin-bottom: 0;
   display: flex; align-items: center; gap: 18px;
@@ -936,8 +823,6 @@ a { color: inherit; }
 }
 .wallet-highlight-value { font-size: 26px; font-weight: 900; color: var(--gold); line-height: 1.1; }
 
-/* Discord kártya - a Discord saját hivatalos iframe-widgetjét ágyazza be
-   (élő, valós tag-lista, ugyanaz, mint amit a felhasználó referenciaként küldött). */
 .discord-card { overflow: hidden; padding: 0; }
 .discord-card-header {
   background: var(--discord); padding: 16px 22px; font-weight: 700;
@@ -952,13 +837,9 @@ a { color: inherit; }
 }
 .btn-discord:hover { filter: brightness(1.1); }
 
-/* Csomag kártyák (SolarynCoin / Kitiltáscsökkentés) */
 .pkg-category { font-size: 13px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--gold); font-weight: 700; margin: 26px 0 14px; }
 .pkg-category:first-child { margin-top: 0; }
-/* JAVÍTVA: a felhasználó kérésére nagyobb minimum-szélesség (180px -> 230px)
-   és nagyobb belső hely (padding), hogy a mostantól KÉT fizetési gomb
-   (kártya + egyenleg) + az esetleges ajándékozás-gomb kényelmesen elférjen,
-   ne legyenek egymáshoz túl közel/összepréselve. */
+
 .pkg-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 18px; }
 .pkg-card {
   position: relative;
@@ -967,8 +848,6 @@ a { color: inherit; }
   transition: transform .16s, border-color .16s, background .16s;
 }
 
-/* ÚJ: aktív akció jelvénye a csomag-/rangkártya sarkában (ld. app.js
-   renderPkgCard/renderRankCard "discountBadge") + az áthúzott eredeti ár. */
 .discount-badge {
   position: absolute; top: 10px; right: 10px;
   background: linear-gradient(135deg, #ff6a4d, #ff2f5e);
@@ -1001,11 +880,7 @@ a { color: inherit; }
 }
 .btn-buy:hover { filter: brightness(1.06); }
 .btn-buy:disabled { cursor: default; opacity: .7; filter: none; }
-/* ÚJ: "Fizetés egyenlegből" gomb - a felhasználó kérésére UGYANOLYAN széles
-   és UGYANAKKORA térközzel legyen elválasztva a fölötte lévő "Vásárlás"
-   gombtól, mint amilyen a .btn-gift-nél már bevált mintát követi (korábban
-   a puszta .btn-outline osztály nem adott sem width:100%-ot, sem margint,
-   ezért a gomb keskenyebb volt és a fölötte lévőhöz tapadt). */
+
 .btn-buy-wallet {
   width: 100%; padding: 10px 0; margin-top: 8px; border-radius: 9px;
   font-size: 12px; text-transform: uppercase; font-weight: 700;
@@ -1017,10 +892,6 @@ a { color: inherit; }
 }
 .btn-gift:disabled { cursor: default; opacity: .5; }
 
-/* ÚJ: automatikus PP-előfizetéses rangrendszer (ld. app.js
-   subscribeRank/cancelSubscription, SolarBackend src/subscriptions.js) - a
-   .btn-gift-hez hasonló, keskeny másodlagos gomb, plusz egy kis állapotsáv,
-   ha a rangra már van aktív előfizetés. */
 .btn-subscribe, .btn-cancel-subscription {
   width: 100%; padding: 8px 0; margin-top: 8px; border-radius: 9px;
   font-size: 11px; text-transform: uppercase; font-weight: 700;
@@ -1037,22 +908,11 @@ a { color: inherit; }
   text-align: center; line-height: 1.4;
 }
 
-/* ÚJ: némítás-/kitiltás-/kliens-tiltás-csökkentés kártya, ha a
-   bejelentkezett játékosnak épp NINCS aktív szankciója az adott típusból
-   (ld. app.js renderPkgCard "locked" paramétere) - a "Vásárlás" gomb
-   letiltva, egy kis magyarázó felirat jelenik meg helyette. Az
-   "Ajándékozás" gomb SZÁNDÉKOSAN nem tiltott itt - egy másik játékosnak,
-   akinek van aktív szankciója, továbbra is vehető csökkentés (ld. shop.js
-   /checkout gate, ami a giftTo célpont állapotát nézi ilyenkor). */
 .pkg-card-locked { opacity: .8; }
 .pkg-locked-note {
   font-size: 11px; color: var(--text-faint); margin-top: 8px; line-height: 1.4;
 }
 
-/* Rangkártyák (PrémiumPontból vásárolhatók, nem Stripe-fizetéssel) - a
-   .pkg-card-hoz hasonló alapstílus, de magasabb, hogy elférjen benne a
-   jogosultság-lista is. Szándékosan a SolarCenter saját, meleg arany/sötét
-   témáját követi, nem egy máshonnan átvett dizájnt. */
 .rank-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
 .rank-card {
   position: relative;
@@ -1069,8 +929,6 @@ a { color: inherit; }
 .rank-card-duration { font-size: 12px; color: var(--text-dim); margin: 4px 0 10px; }
 .rank-perm-list { width: 100%; text-align: left; margin: 4px 0 18px; flex: 1; }
 
-/* Vásárlás visszajelzés (toast) - a Stripe checkoutból való visszatéréskor
-   és a vásárlás indításakor felugró üzenetek. */
 .shop-toast {
   position: fixed; left: 50%; bottom: 26px; transform: translate(-50%, 12px);
   background: var(--panel); border: 1px solid var(--gold-2); color: #f4e6c8;
@@ -1081,7 +939,6 @@ a { color: inherit; }
 .shop-toast.visible { opacity: 1; transform: translate(-50%, 0); }
 .shop-toast-error { border-color: #e05252; }
 
-/* SolarynCoin - információs dobozok (fizetés/figyelmeztetés/GYIK) */
 .info-box {
   background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
   padding: 22px 26px; margin-top: 18px;
@@ -1099,7 +956,6 @@ a { color: inherit; }
 .info-list li b { color: var(--text); }
 .info-text { font-size: 13px; color: var(--text-dim); line-height: 1.7; }
 
-/* Kódbeváltás */
 .redeem-card { max-width: 420px; margin: 0 auto; text-align: center; padding: 40px 34px; }
 .redeem-icon {
   width: 56px; height: 56px; border-radius: 16px; margin: 0 auto 18px;
@@ -1115,7 +971,6 @@ a { color: inherit; }
 .redeem-result { min-height: 18px; font-size: 13px; margin-top: 14px; color: var(--text-dim); }
 .redeem-result.error { color: var(--danger); }
 
-/* Átutalás */
 .transfer-card { max-width: 440px; margin: 0 auto; padding: 40px 34px; }
 .transfer-card label {
   display: block; font-size: 11px; color: var(--text-dim); margin: 16px 2px 6px;
@@ -1134,7 +989,6 @@ a { color: inherit; }
 .transfer-fee-note b { color: var(--orange); }
 .transfer-card .btn-glow { width: 100%; margin-top: 20px; }
 
-/* Napló */
 .ledger-filters { padding: 20px 24px; margin-bottom: 20px; }
 .ledger-filter-row { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 14px; }
 .ledger-filter-field label {
@@ -1148,8 +1002,6 @@ a { color: inherit; }
 }
 .ledger-filter-field input:focus { border-color: var(--gold); }
 
-/* ÚJ: Csapat statisztika - kártya-rács a korábbi sima táblázat helyett (ld.
-   app.js loadStaffStats()), a stat-badge/rank-card vizuális nyelvét követve. */
 .staff-stats-summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; margin-bottom: 22px; }
 .staff-stat-summary-tile {
   display: flex; align-items: center; gap: 12px;
@@ -1181,10 +1033,7 @@ a { color: inherit; }
 
 .ledger-table-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; overflow-x: auto; }
 .ledger-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-/* A Napló táblának (6 oszlop) van szüksége minimum szélességre, hogy ne
-   zsúfolódjon össze - az Admin/Gép-panelek 2-3 oszlopos táblái viszont NEM
-   kaphatják meg ugyanezt, mert egy fél-szélességű rácsban ez vízszintes
-   túlcsordulást ("kilógást") okozott. */
+
 [data-view="ledger"] .ledger-table { min-width: 720px; }
 .ledger-table th {
   text-align: left; padding: 14px 18px; font-size: 11px; text-transform: uppercase; letter-spacing: .5px;
@@ -1202,17 +1051,9 @@ a { color: inherit; }
   .ledger-filter-row { grid-template-columns: 1fr; }
 }
 
-/* Admin panel (játékos-profil, csak "tulajdonos" rangnak) + Gép-részletek */
 .admin-panel { border-top: 3px solid var(--orange); margin-top: 24px; }
 .admin-info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 24px; }
 
-/* ÚJ: a korábban egyetlen hosszú, felülről lefelé görgetendő oszlopban
-   sorjázó admin-alszekciók (zárolás/PP/egyenleg/kedvezmény/casino/jelvények/
-   skin-köpeny) most saját, önálló "kártyaként" jelennek meg egy reszponzív
-   rácsban - lényegesen rövidebbnek/áttekinthetőbbnek hat, mint a régi egy
-   hosszú lista. A "Kliens" (táblák) és a veszélyes "Fiók törlése" szekció
-   szándékosan .admin-card-wide (teljes szélesség), mert tartalmuk (táblák,
-   ill. a törlés súlya) nem fér/illik jól egy keskeny kártyába. */
 .admin-cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; margin-bottom: 18px; }
 .admin-card {
   background: var(--panel-2); border: 1px solid var(--line); border-radius: 16px;
@@ -1229,8 +1070,6 @@ a { color: inherit; }
 }
 .admin-info-label { font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: .5px; }
 
-/* Email megjelenítés/szerkesztés - alapból csak olvasható szöveg + egy
-   "Változtatás" link, ami felfedi a szerkeszthető mezőt (ld. app.js). */
 .admin-email-view { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .admin-email-edit-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
 .admin-email-edit-row input {
@@ -1246,23 +1085,14 @@ a { color: inherit; }
 }
 .link-btn:hover { color: var(--gold); }
 
-/* Fiók zárolása - a .ban-panel-t (ld. Gép-részletek nézet) ÚJRAHASZNÁLJUK
-   itt is, hogy a két hely (kliens-tiltás / fiók-zárolás) egységes, modern
-   megjelenést kapjon, nem külön-külön kialakított, eltérő stílust. */
 .admin-lock-panel { margin-bottom: 24px; }
-/* JAVÍTVA: a "Fiók végleges törlése" cím korábban közvetlenül a fenti
-   .content-grid táblák alá lógott (egyik oldalon sem volt margó közöttük),
-   emiatt vizuálisan egybefolyt velük - ez a felső margó választja el őket. */
+
 .admin-danger-title { color: var(--danger); margin-top: 32px; }
 .admin-delete-panel .btn-glow:disabled { cursor: not-allowed; opacity: .45; filter: none; }
 #adminDeleteUsernameHint { color: var(--text); font-weight: 700; }
 .ban-panel .btn-outline { width: 100%; margin-top: 10px; }
 .admin-subsection-title { font-size: 13px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--orange); font-weight: 700; margin: 28px 0 14px; }
 
-/* ÚJ: skin/köpeny törlés/tiltás sorai (ld. index.html #playerProfileAdminPanel) -
-   a .ban-panel .btn-outline fenti szabálya "width: 100%"-ot ír elő, ami itt
-   NEM kívánt (két gombnak kell egymás mellett elférnie), ezért a
-   .admin-media-actions gombjait felülírjuk. */
 .admin-media-row {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   padding: 10px 0; border-bottom: 1px solid var(--line);
@@ -1275,10 +1105,7 @@ a { color: inherit; }
 .admin-tables-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .admin-table-title { font-size: 13px; font-weight: 700; margin-bottom: 10px; color: var(--text); }
 .device-link {
-  /* JAVÍTVA: korábban nyers rgba(255,122,61,...) (a Solaryn téma narancsának
-     szó szerinti értéke) volt beégetve, ezért más témán váltva is mindig
-     narancssárga maradt - a color-mix() a var(--orange)-ból számol, tehát
-     témánként automatikusan a megfelelő árnyalatot adja. */
+
   background: transparent; border: 1px solid color-mix(in srgb, var(--orange) 40%, transparent); color: var(--orange);
   border-radius: 8px; padding: 4px 10px; font-size: 12.5px; font-weight: 700; cursor: pointer;
   transition: background .16s, border-color .16s;
@@ -1294,14 +1121,11 @@ a { color: inherit; }
   width: 100%; padding: 12px 14px; border-radius: 11px;
   background: var(--bg); border: 1px solid var(--line); color: var(--text); font-size: 14px; outline: none;
   transition: border-color .18s;
-  /* JAVÍTVA: a natív dátumválasztó ikonja alapból sötét (fekete-közeli), a
-     sötét témájú mezőn szinte láthatatlan volt - a böngésző saját ikonját
-     "invertáljuk" (fehér-közelire), hogy látszódjon. */
+
   color-scheme: dark;
 }
 .ban-panel input:focus, .ban-panel select:focus { border-color: var(--orange); }
-/* ÚJ: Kedvezmény alfejezet (ld. index.html #adminDiscountCurrent) - a
-   jelenleg beállított egyéni kedvezmény összefoglalója a form fölött. */
+
 .admin-discount-current { font-size: 12.5px; color: var(--text-dim); margin: 6px 2px 0; }
 .ban-duration-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .ban-panel .btn-glow { width: 100%; margin-top: 20px; background: linear-gradient(180deg, var(--danger), #c23a3a); box-shadow: 0 8px 26px rgba(255,90,90,.35); color: var(--btn-ink); }
@@ -1310,7 +1134,6 @@ a { color: inherit; }
   .admin-tables-grid { grid-template-columns: 1fr; }
 }
 
-/* Skin nézet */
 .skin-layout { display: flex; gap: 32px; align-items: flex-start; flex-wrap: wrap; }
 .skin-upload-col { flex: 1; min-width: 260px; }
 .skin-drop {
@@ -1335,7 +1158,6 @@ a { color: inherit; }
 .skin-status { font-size: 13px; margin-top: 14px; color: var(--text-dim); }
 .skin-status.error { color: var(--danger); }
 
-/* Játékosok */
 .text-accent { color: var(--gold); }
 
 .player-search-panel {
@@ -1389,9 +1211,6 @@ a { color: inherit; }
 .player-card-name { font-weight: 700; font-size: 15px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .player-result-note { color: var(--text-dim); font-size: 13px; text-align: center; margin-top: 10px; }
 
-/* ÚJ: főoldali "Barátok" kártya (ld. app.js loadHomeFriends) - a .player-card
-   mintáját újrahasznosítja, csak a névszín jelzi zölden az elérhető
-   barátokat (ugyanaz a zöld, mint a .ledger-amount-positive-nél). */
 .friend-card-name.online { color: var(--success); }
 #homeFriendsCard .player-result-grid { margin-top: 4px; }
 
@@ -1402,9 +1221,6 @@ a { color: inherit; }
 }
 .btn-back:hover { color: var(--gold); }
 
-/* ── Oldalsó "side rail" (Support + Gyors elérés) - minden alfülön ugyanaz a
-   komponens jelenik meg jobb oldalt, JS tölti fel (ld. renderSideRail()),
-   hogy a tartalomterület sose maradjon üresen jobbra. ── */
 .side-card { text-align: center; }
 .side-card-icon {
   width: 48px; height: 48px; margin: 0 auto 16px; border-radius: 14px;
@@ -1414,7 +1230,6 @@ a { color: inherit; }
 .side-card-title { font-weight: 800; font-size: 16px; margin-bottom: 8px; }
 .side-card-desc { color: var(--text-dim); font-size: 13px; line-height: 1.6; margin-bottom: 4px; }
 
-/* ── Kódbeváltás "hogyan működik" sáv ── */
 .how-it-works { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 18px; margin-top: 24px; }
 .how-step {
   background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
@@ -1428,7 +1243,6 @@ a { color: inherit; }
 .how-step-title { font-weight: 700; font-size: 14px; margin-bottom: 6px; }
 .how-step-desc { color: var(--text-dim); font-size: 12.5px; line-height: 1.6; }
 
-/* ── Jogi dokumentumok nézet ── */
 .legal-tabs { display: flex; gap: 10px; margin-bottom: 20px; }
 .legal-tab {
   background: var(--panel); border: 1px solid var(--line); color: var(--text-dim);
@@ -1447,7 +1261,6 @@ a { color: inherit; }
 .legal-panel ul { color: var(--text-dim); font-size: 13.5px; line-height: 1.9; padding-left: 20px; margin-bottom: 6px; }
 .legal-panel b { color: var(--text); }
 
-/* ── Modál (süti beállítások) ── */
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(5,5,7,.7); backdrop-filter: blur(3px);
   display: flex; align-items: center; justify-content: center; z-index: 100;
@@ -1464,14 +1277,9 @@ a { color: inherit; }
 .modal-actions { display: flex; gap: 10px; }
 .modal-actions button { flex: 1; margin-top: 0; }
 
-/* ÚJ: gyors fiókváltás modál (ld. app.js renderAccountList) - a
-   .player-card sorstílusát követi, kompaktabb (kisebb avatár/padding),
-   hogy a modálban több fiók is kényelmesen elférjen. */
 .account-modal-card {
   width: 380px;
-  /* ÚJ: a beágyazott regisztrációs form (#accountAddRegisterForm) sok mezőt
-     tartalmaz - kisebb ablakméretnél magasabb lehet a látható területnél,
-     ezért a kártya maga is görgethető, ahelyett hogy levágódna. */
+
   max-height: 90vh; overflow-y: auto;
 }
 .account-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; max-height: 260px; overflow-y: auto; }
@@ -1494,11 +1302,7 @@ a { color: inherit; }
   cursor: pointer; padding: 4px 6px; border-radius: 6px; transition: color .16s, background .16s;
 }
 .account-row-remove:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
-/* JAVÍTVA: a "+ Fiók hozzáadása" gomb korábban a tartalmához igazodó
-   (a ".modal-actions button"-tól eltérően nem "flex:1"-es) szélességű volt,
-   ezért keskenyebb lett, mint az alatta lévő "Bezárás", ÉS a kettő közt
-   nem volt margó - vizuálisan egymáson lógtak. Explicit szélesség +
-   alsó margó igazítja/választja szét őket. */
+
 #btnShowAddAccount { width: 100%; margin-bottom: 14px; }
 #addAccountForm:not(.hidden) { margin-bottom: 14px; }
 .btn-outline {
@@ -1508,7 +1312,6 @@ a { color: inherit; }
 }
 .btn-outline:hover { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 6%, transparent); }
 
-/* Vásárlás sikeres-visszaigazolás modál (Stripe checkoutból visszatérve) */
 .purchase-success-card { text-align: center; }
 .purchase-success-icon {
   width: 64px; height: 64px; margin: 0 auto 18px; color: var(--success);
@@ -1525,9 +1328,6 @@ a { color: inherit; }
   to { transform: scale(1); opacity: 1; }
 }
 
-/* Ajándékozás modál (címzett/üzenet bekérése) és az ajándék-értesítés
-   idézett üzenete - a .transfer-card input-hoz hasonló mezőstílus, de a
-   modal-card-on belül is használható (nem csak a .transfer-card-on belül). */
 .gift-modal-label {
   display: block; font-size: 11px; color: var(--text-dim); margin: 14px 2px 6px;
   letter-spacing: .5px; text-transform: uppercase; text-align: left;
@@ -1539,8 +1339,6 @@ a { color: inherit; }
 }
 .gift-modal-input:focus { border-color: var(--gold); }
 
-/* ÚJ: formázott szöveg eszköztár (Felhívások cím/tartalom, ld. app.js
-   initRichTextToolbar) */
 .richtext-toolbar {
   display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
   margin-top: 6px; margin-bottom: 6px;
@@ -1577,17 +1375,11 @@ a { color: inherit; }
   .app-sidebar { width: 100%; height: auto; position: relative; flex-direction: row; overflow-x: auto; padding: 12px; }
   .app-brand, .app-nav-spacer { display: none; }
   .app-nav { flex-direction: row; }
-  /* A CSOPORTOK mobilon SZÁNDÉKOSAN ugyanúgy viselkednek, mint asztali
-     gépen: a ui.css (19. szakasz) 900 pixel alatt egy balról becsúszó,
-     FÜGGŐLEGES fiókká alakítja az oldalsávot - abban a lenyitható csoport
-     pont ugyanolyan jó, sőt fontosabb, mert ott még kevesebb a hely. (A
-     fenti ".app-nav { flex-direction: row }" a fiók előtti, vízszintesen
-     görgethető sáv maradéka; a ui.css felülírja.) */
+
   .app-nav-bottom { border-top: none; border-left: 1px solid var(--line); padding-top: 0; padding-left: 12px; flex-direction: row; }
   .app-content { padding: 24px 18px; }
 }
 
-/* ── Animációk ── */
 @keyframes fadeSlideUp {
   from { opacity: 0; transform: translateY(14px); }
   to { opacity: 1; transform: translateY(0); }
@@ -1619,19 +1411,6 @@ a { color: inherit; }
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-/* ÚJ: a felhasználó kérésére ("sokkal több animáció... cleanebb, modernebb")
-   - a dinamikusan (innerHTML/.map(...).join('')) renderelt kártya-/lista-
-   elemek korábban egyáltalán nem animáltak be, csak egyszerűen "megjelentek"
-   a DOM-ban (nincs @keyframes rájuk kötve) - ellentétben pl. a ".stat-badge"
-   fentebbi, kézzel felsorolt nth-child-stagger mintájával, ami CSAK a
-   Kezdőlap fix számú (max 6) statisztika-dobozára volt megírva. Ez a szabály
-   egységesen minden dinamikus kártya-/lista-elem osztályra vonatkozik, hogy
-   egy lista/rács betöltésekor mindegyik elem egymás után, kis késleltetéssel
-   "úszzon be" - nem csak egyetlen tömbként felvillan. A nth-child-számlálás
-   MINDEN esetben egy DEDIKÁLT konténerbe (pl. #badgesAdminList, #rankGrid)
-   renderelt, egyfajta gyerek-elemekre vonatkozik, ezért helyesen sorszámozza
-   az elemeket akkor is, ha a szelektor önmagában nem "tudja", melyik
-   konténerben van éppen. */
 .pkg-card, .rank-card, .badges-admin-item, .news-admin-item, .player-card, .staff-stat-card {
   animation: fadeSlideUp .4s cubic-bezier(.2,.7,.3,1) both;
 }
@@ -1642,15 +1421,9 @@ a { color: inherit; }
 .pkg-card:nth-child(6), .rank-card:nth-child(6), .badges-admin-item:nth-child(6), .news-admin-item:nth-child(6), .player-card:nth-child(6), .staff-stat-card:nth-child(6) { animation-delay: .2s; }
 .pkg-card:nth-child(n+7), .rank-card:nth-child(n+7), .badges-admin-item:nth-child(n+7), .news-admin-item:nth-child(n+7), .player-card:nth-child(n+7), .staff-stat-card:nth-child(n+7) { animation-delay: .24s; }
 
-/* ÚJ: kártya-hover finomítás - a korábbi puszta translateY+border-szín-
-   váltás mellé egy lágy arany fényudvar (box-shadow) is társul, hogy a
-   hover állapot "emelkedettebbnek", prémiumabbnak hasson. */
 .pkg-card:hover, .rank-card:hover { box-shadow: 0 14px 34px color-mix(in srgb, var(--gold) 14%, transparent); }
 .player-card:hover { box-shadow: 0 10px 26px color-mix(in srgb, var(--gold) 12%, transparent); }
 
-/* ÚJ: ".btn-buy" prémium csillanás-effekt nyugalmi állapotban - ugyanaz a
-   minta, mint a SolarLauncher "JÁTÉK INDÍTÁSA" gombjáé, hogy a Solaryn-
-   termékcsalád vizuális nyelve konzisztens legyen. */
 .btn-buy { position: relative; overflow: hidden; transition: filter .16s, box-shadow .16s, transform .12s; }
 .btn-buy:hover { box-shadow: 0 8px 22px var(--gold-glow); }
 .btn-buy:active:not(:disabled) { transform: scale(.97); }
@@ -1666,16 +1439,6 @@ a { color: inherit; }
   22%, 100% { left: 140%; }
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
-   KIEGÉSZÍTŐK + PIAC (ld. SolarBackend src/cosmetics.js, index.html
-   data-view="cosmetics" / "market" / "cosmeticsAdmin")
-   Minden szín a fenti témabeli tokenekből jön - a ritkasági fokozatok is
-   csak a --gold/--orange/--discord/--text-dim tokenek árnyalatai, hogy egy
-   új téma hozzáadásakor itt se kelljen semmit módosítani.
-   ══════════════════════════════════════════════════════════════════════════ */
-
-/* Felső "mit viselsz most" sáv - a nézet elsődleges kérdésére válaszol,
-   ezért van a lista FÖLÖTT, nem alatta. */
 .cosmetic-slot-bar {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 14px; margin-bottom: 24px;
@@ -1706,8 +1469,6 @@ a { color: inherit; }
 .cosmetic-card:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(0,0,0,.35); }
 .cosmetic-card.equipped { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; }
 
-/* A ritkaság egy vékony felső sáv, nem a teljes keret - így az "épp viselem"
-   (arany keret) állapot nem versenyez vele. */
 .cosmetic-card { position: relative; overflow: hidden; }
 .cosmetic-card::before {
   content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
@@ -1719,36 +1480,15 @@ a { color: inherit; }
   background: linear-gradient(90deg, var(--gold-2), var(--gold), var(--gold-2));
 }
 
-/* ── MÍTIKUS: a legendás FÖLÖTT álló, legritkább fokozat ──────────────────
-
-   A felhasználó kérésére ez a fokozat kapott egy "démoni" megjelenést: ezt
-   kapják azok a kiegészítők, amikhez Aura vagy in-game effekt tartozik,
-   tehát a katalógusban is azonnal ki kell ugraniuk.
-
-   MIÉRT PARÁZS, ÉS MIÉRT NEM EGY ÚJ SZÍN: az oldal identitása az arany/
-   narancs (ld. a "vibecoded" ellenőrzőlistát - lila-kék gradiens KIZÁRVA).
-   A démoni hatást ezért nem egy idegen szín adja, hanem a MOZGÁS és a
-   MÉLYSÉG: egy lassan lélegző, mélyvörös parázs a kártya alján, fölötte
-   felszálló szikrákkal, és egy körbefutó izzás a szegélyen.
-
-   MINDEN CSS - nincs se JS, se kép. Egy katalógus-oldalon több tucat ilyen
-   kártya lehet egyszerre; egy JS-es részecske-rendszer ott mérhető
-   FPS-veszteség lenne, ezt viszont a böngésző a kompozitorban futtatja.
-   A "ránéz" állapot (hover/fókusz) felerősíti: mélyebb izzás, gyorsabb
-   szikrák - ez az, amit a felhasználó "amikor ránéznek"-ként kért. */
 .cosmetic-card.rarity-mythic,
 .cosmetic-admin-card.rarity-mythic {
   position: relative;
   isolation: isolate;
   border-color: rgba(214, 64, 42, .45);
-  /* A lélegző parázs-fény: kifelé egy mély vörös derengés, befelé egy
-     finom, meleg perem. A box-shadow SZÁNDÉKOSAN nem blur-os háttér
-     (backdrop-filter) - az a listában scrollozáskor akadna. */
+
   animation: mythic-breathe 5.5s ease-in-out infinite;
 }
 
-/* A kártya ALJÁN parázsló köd + fölötte felszálló szikrák. A ::after azért
-   jó ide, mert a ::before-t a felső ritkaság-sáv már használja. */
 .cosmetic-card.rarity-mythic::after,
 .cosmetic-admin-card.rarity-mythic::after {
   content: '';
@@ -1758,12 +1498,12 @@ a { color: inherit; }
   pointer-events: none;
   z-index: -1;
   background:
-    /* szikrák - négy, eltérő méretű és fázisú pont */
+
     radial-gradient(2px 2px at 18% 88%, rgba(255, 176, 92, .95), transparent 60%),
     radial-gradient(1.6px 1.6px at 42% 94%, rgba(255, 120, 60, .85), transparent 60%),
     radial-gradient(2.4px 2.4px at 68% 90%, rgba(255, 205, 120, .9), transparent 60%),
     radial-gradient(1.4px 1.4px at 85% 96%, rgba(226, 88, 48, .8), transparent 60%),
-    /* a parázs maga: a kártya alján ülő, meleg derengés */
+
     radial-gradient(120% 60% at 50% 118%, rgba(214, 64, 42, .38), transparent 70%);
   background-repeat: no-repeat;
   animation: mythic-embers 6s linear infinite;
@@ -1774,16 +1514,12 @@ a { color: inherit; }
   50%      { box-shadow: 0 0 0 1px rgba(255, 138, 76, .34), 0 10px 40px -10px rgba(214, 64, 42, .85); }
 }
 
-/* A szikrák FELFELÉ úsznak és közben elhalványulnak. A háttér-pozíció
-   animálása (nem a méreté) azért fontos, mert csak az utóbbi kényszerítene
-   újrarajzolást minden képkockán. */
 @keyframes mythic-embers {
   0%   { background-position: 0 0, 0 0, 0 0, 0 0, 0 0; opacity: .35; }
   50%  { opacity: .9; }
   100% { background-position: 0 -34px, 0 -52px, 0 -42px, 0 -60px, 0 0; opacity: .35; }
 }
 
-/* A felső ritkaság-sáv: parázs-színek, gyorsabban futva, mint a legendásé. */
 .cosmetic-card.rarity-mythic::before,
 .cosmetic-admin-card.rarity-mythic::before {
   background: linear-gradient(90deg, var(--danger), var(--gold), var(--orange-2), var(--danger));
@@ -1795,9 +1531,6 @@ a { color: inherit; }
   to   { background-position: 250% 0; }
 }
 
-/* "AMIKOR RÁNÉZNEK": a hatás felerősödik - a parázs feljebb kúszik, a
-   szikrák gyorsulnak, a szegély izzik. Fókuszra ugyanez, hogy billentyűzettel
-   navigálva se vesszen el. */
 .cosmetic-card.rarity-mythic:hover,
 .cosmetic-card.rarity-mythic:focus-within,
 .cosmetic-admin-card.rarity-mythic:hover,
@@ -1823,16 +1556,12 @@ a { color: inherit; }
   animation-duration: 1.6s;
 }
 
-/* A mítikus NÉV is parázslik - egy statikus arany szövegnél ez adja meg,
-   hogy "nem csak egy újabb ritkaság". */
 .cosmetic-card.rarity-mythic .cosmetic-card-name,
 .cosmetic-admin-card.rarity-mythic .cosmetic-admin-card-name {
   color: #ffd9a8;
   text-shadow: 0 0 10px rgba(214, 64, 42, .55);
 }
 
-/* Csökkentett mozgás: MINDEN animáció áll, de a megkülönböztetés megmarad -
-   a parázs és a szegély statikusan is ott van. */
 @media (prefers-reduced-motion: reduce) {
   .cosmetic-card.rarity-mythic,
   .cosmetic-admin-card.rarity-mythic,
@@ -1850,26 +1579,12 @@ a { color: inherit; }
   }
 }
 
-/* A bélyegkép a nyers textúra - pixelesen élesen kell megjelenjen, mert
-   jellemzően 64x64 körüli, felnagyítva. */
 .cosmetic-thumb {
   width: 72px; height: 72px; border-radius: 12px; object-fit: contain;
   background: var(--panel-2); image-rendering: pixelated; flex-shrink: 0;
 }
 .cosmetic-thumb-empty { border: 1px dashed var(--line); background: transparent; }
 
-/* ── A RITKASÁG SZÍNE A BÉLYEGKÉP KÖRÜL ───────────────────────────────────
-
-   A ritkaságot eddig CSAK a kártya tetején futó vékony sáv mutatta. Felvett
-   állapotban viszont a kártya arany keretet és belső arany vonalat kap, ami
-   elnyomja azt a sávot – a felhasználó jelezte, hogy így alig látszik,
-   melyik ritkaságról van szó.
-
-   Ezért a szín ODA is kerül, ahova a szem amúgy is néz: a kirajzolt
-   kiegészítő KÖRÉ, gyűrűként. A gyűrű KÜLÖN ELEM (nem box-shadow a képen),
-   mert a legendás és a mítikus fokozat GRADIENST kap – azt csak háttérrel
-   lehet megadni. A --rarity-ring / --rarity-halo a kártyán ül, így a kétféle
-   kártya (saját és admin) ugyanazt az egy szabályt használja. */
 .cosmetic-card,
 .cosmetic-admin-card {
   --rarity-ring: var(--line);
@@ -1895,8 +1610,7 @@ a { color: inherit; }
   --rarity-ring: linear-gradient(135deg, var(--danger), var(--gold), var(--orange-2), var(--danger));
   --rarity-halo: rgba(214, 64, 42, .75);
 }
-/* Az általános (common) fokozat SZÁNDÉKOSAN halvány szegély: ha minden gyűrű
-   világít, egyik sem jelent semmit. */
+
 .cosmetic-thumb-ring {
   padding: 3px; border-radius: 15px; line-height: 0; flex-shrink: 0;
   background: var(--rarity-ring);
@@ -1928,8 +1642,6 @@ a { color: inherit; }
 }
 .cosmetic-action { width: 100%; margin-top: auto; }
 
-/* Piac: az adó-bontás a hirdetés feladása előtt. A "mennyit kapok kézhez"
-   a legfontosabb szám, ezért az kap kiemelést, nem a listaár. */
 .market-payout-preview { margin-top: 12px; display: grid; gap: 6px; }
 .market-payout-preview:empty { display: none; }
 .market-payout-row {
@@ -1944,7 +1656,6 @@ a { color: inherit; }
 .market-payout-total strong { color: var(--gold); font-weight: 900; }
 .market-status-reserved { color: var(--orange); font-weight: 700; }
 
-/* Admin: állapotjelző címkék a katalógus-listában */
 .cosmetic-badge-off, .cosmetic-badge-warn {
   font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
   border-radius: 999px; padding: 2px 7px; margin-left: 8px; vertical-align: middle;
@@ -1960,15 +1671,10 @@ a { color: inherit; }
 }
 .admin-cosmetic-chip-meta { color: var(--text-faint); font-weight: 600; }
 
-/* A tiltott gomb VIZUÁLISAN is tiltottnak látsszon - a .btn-glow-nak nem volt
-   :disabled állapota, így egy "nincs eladható kiegészítőd" esetén a piac
-   feladás-gombja teljesen aktívnak látszott, holott nem csinált semmit
-   (a .btn-buy/.btn-subscribe mintáját követve, ld. fentebb). */
 #marketListBtn:disabled, .cosmetic-action:disabled {
   cursor: default; opacity: .45; filter: none; box-shadow: none;
 }
 
-/* Illesztési finomhangolás az admin kiegészítő-űrlapon */
 .cosmetic-transform-box {
   margin-top: 18px; padding: 14px 16px;
   background: rgba(255,255,255,.02); border: 1px solid var(--line); border-radius: 12px;
@@ -1990,12 +1696,10 @@ a { color: inherit; }
   font-variant-numeric: tabular-nums;
 }
 
-/* Karakter-előnézet a Kiegészítők nézetben + admin illesztő-szerkesztő */
 .cosmetic-char-card { display: flex; flex-direction: column; align-items: center; }
 .cosmetic-char-card canvas { max-width: 100%; touch-action: none; cursor: grab; user-select: none; }
 .cosmetic-char-card canvas:active { cursor: grabbing; }
 
-/* Nagyítás-sáv az előnézet alatt (ld. skin3d.js stop.zoomBy/setZoomLevel) */
 .preview-zoom-bar {
   display: flex; align-items: center; gap: 8px;
   width: 100%; max-width: 260px; margin-top: 12px;
@@ -2024,7 +1728,6 @@ a { color: inherit; }
   background: var(--gold); box-shadow: 0 0 8px var(--gold-glow);
 }
 
-/* Gyűjtemény-összegző a Kiegészítők nézet jobb oszlopában */
 .cosmetic-summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .cosmetic-summary-stat {
   text-align: center; padding: 12px 6px; border-radius: 12px;
@@ -2045,9 +1748,7 @@ a { color: inherit; }
   font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums;
 }
 .cosmetic-summary-bar-track { height: 5px; border-radius: 999px; background: var(--line); overflow: hidden; }
-/* A sáv színe ugyanaz a ritkaság-paletta, mint a kártyák felső csíkjáé
-   (.cosmetic-card::before) - szándékosan, hogy a kettő ránézésre
-   összekapcsolódjon. */
+
 .cosmetic-summary-bar-fill { height: 100%; border-radius: 999px; background: var(--text-faint); }
 .rarity-rare .cosmetic-summary-bar-fill { background: var(--discord); }
 .rarity-epic .cosmetic-summary-bar-fill { background: var(--orange); }
@@ -2056,10 +1757,6 @@ a { color: inherit; }
 .cosmetic-summary-note { margin-top: 12px; font-size: 12px; color: var(--text-faint); line-height: 1.5; }
 .cosmetic-summary-note:empty { display: none; }
 
-/* ── Csere ajánlatok ─────────────────────────────────────────────────────
-   Egy ajánlat egy sor: bélyegkép + név/kitől-kinek + ár + műveletek. A
-   listás (nem rácsos) forma szándékos: itt a DÖNTÉS a feladat, nem a
-   böngészés, ahhoz pedig az egymás alatti, gyorsan végigfutható sor a jó. */
 .trade-list { display: grid; gap: 10px; }
 .trade-row {
   display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
@@ -2090,30 +1787,12 @@ a { color: inherit; }
 .trade-status.declined, .trade-status.cancelled { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
 .trade-status.reserved { color: var(--orange); border-color: color-mix(in srgb, var(--gold) 45%, transparent); }
 
-/* ── Admin kiegészítők: lista- és szerkesztő-nézet ──────────────────────
-   A kettő KIZÁRJA egymást: a szekcióra tett ".editing" osztály kapcsol
-   köztük (ld. index.html indoklását és app.js openCosmeticEditor-át). Azért
-   osztály és nem a "hidden", mert azt az applyPermVisibility() kezeli a
-   data-perm attribútumok alapján - a kettő felülírná egymást. */
-
-/* ── MOBOK (admin) ────────────────────────────────────────────────────────
-
-   A nézet SZÁNDÉKOSAN a kiegészítő-szerkesztő osztályait használja újra
-   (.cosmetic-admin-layout, .cosmetic-tab*, .cosmetic-transform-grid,
-   .cosmetic-editor-stage): a két felület ugyanaz a fajta munka - modell
-   feltöltése, illesztés, animáció -, és ha külön stíluskészletet kapnának,
-   a kettő előbb-utóbb elcsúszna egymástól. Itt csak az van, ami TÉNYLEG
-   más: a lista-kártya és a hitbox-előnézet jelmagyarázata. */
 .mob-admin-editor { display: none; }
 .view[data-view="mobsAdmin"].editing .mob-admin-list { display: none; }
 .view[data-view="mobsAdmin"].editing .mob-admin-editor { display: block; }
 
 .mob-filter-toggle { margin: 0; white-space: nowrap; }
 
-/* A .bbmodel feldolgozásának figyelmeztetései. NEM hibák (a modell betöltődött),
-   de olyan dolgok, amiket az adminnak látnia kell - pl. hogy a projekt doboz-UV-t
-   használ, vagy hogy nincs benne beágyazott textúra. Ezért figyelmeztetés-színűek,
-   de nem pirosak: egy piros üzenet azt sugallná, hogy valami elromlott. */
 .mob-bbmodel-warning {
   margin: 8px 0 0; padding: 8px 10px; border-radius: 10px;
   color: var(--text-dim);
@@ -2121,15 +1800,11 @@ a { color: inherit; }
   border-left: 3px solid var(--orange);
 }
 
-/* A mob-előnézet oszlopa: a vászon ALATT jelmagyarázat, súgó és a szerverről
-   érkező statisztika. Az örökölt .cosmetic-editor-stage egyetlen, középre
-   igazított gyereket feltételez (flex SOR) - itt ezért kell oszlop. */
 .mob-editor-stage {
   flex-direction: column; justify-content: flex-start; align-items: stretch;
   padding: 14px; gap: 4px;
 }
-/* A vászon saját, RELATÍV dobozt kap: az "üres" felirat abszolút pozíciójú,
-   és enélkül a teljes oszlopot takarná le. */
+
 .mob-preview-canvas-wrap {
   position: relative; align-self: center;
   display: flex; align-items: center; justify-content: center;
@@ -2147,15 +1822,11 @@ a { color: inherit; }
   transition: transform .12s, box-shadow .16s, border-color .16s;
 }
 .mob-admin-card:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(0,0,0,.35); }
-/* A kikapcsolt megjelenés HALVÁNY, de nem eltüntetett: az admin lássa, hogy
-   ott van, csak épp nem rajzolódik ki. */
+
 .mob-admin-card.is-off { opacity: .6; }
-/* A "nincs a Centerben" mobokat csak kérésre listázzuk - ott egy bal oldali
-   sáv jelzi, hogy nem a szokásos eset. NEM csak szín: a szaggatott keret
-   színtévesztéssel is látszik. */
+
 .mob-admin-card.is-hidden-server { border-style: dashed; }
-/* ELHAGYOTT: egyetlen szerver sem jelenti már. Nem hiba-állapot (a modell
-   megvan), de takarítani kell - ezért figyelmeztetés-színű a kerete. */
+
 .mob-admin-card.is-orphan { border-color: color-mix(in srgb, var(--orange) 45%, var(--line)); }
 
 .mob-admin-card-name { margin-top: 10px; font-size: 14.5px; font-weight: 800; }
@@ -2188,8 +1859,6 @@ a { color: inherit; }
   color: var(--orange); border: 1px solid color-mix(in srgb, var(--orange) 35%, var(--line));
 }
 
-/* Az előnézet jelmagyarázata. A két doboz szín-kódolt, ezért a SZÖVEG is ott
-   van mellette - egy pusztán színes négyzet színtévesztéssel semmit nem mond. */
 .mob-preview-legend {
   display: flex; gap: 14px; justify-content: center; flex-wrap: wrap;
   margin-top: 8px; font-size: 11.5px; color: var(--text-dim);
@@ -2202,8 +1871,6 @@ a { color: inherit; }
 .mob-legend-player { background: rgba(90, 190, 255, .45); }
 .mob-legend-hitbox { background: rgba(255, 198, 46, .45); }
 
-/* A plugin felől érkező statisztika: CSAK olvasható. Ezért nincs benne
-   egyetlen beviteli mező sem - a mob viselkedése a szerveren állítható. */
 .mob-stats-card { margin-top: 14px; text-align: left; }
 .mob-stats-row {
   display: flex; justify-content: space-between; gap: 10px;
@@ -2225,19 +1892,17 @@ a { color: inherit; }
 .admin-toolbar .btn-glow, .admin-toolbar .btn-outline {
   width: auto; margin-top: 0; padding: 11px 18px; font-size: 13.5px;
 }
-/* A kereső kitölti a maradék helyet, de nem nyomja ki a gombokat. */
+
 .admin-toolbar-search { flex: 1 1 220px; min-width: 180px; margin: 0; }
 
 .admin-editor-head { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; flex-wrap: wrap; }
 .admin-back-btn { width: auto; margin-top: 0; padding: 9px 16px; font-size: 13px; }
 .admin-editor-title { font-size: 20px; font-weight: 800; color: var(--text); }
 
-/* Bal oszlop: fülek; jobb oszlop: a végig látható előnézet. */
 .cosmetic-admin-layout { display: grid; grid-template-columns: 1fr 300px; gap: 24px; align-items: start; }
 @media (max-width: 1100px) { .cosmetic-admin-layout { grid-template-columns: 1fr; } }
 .cosmetic-admin-main { min-width: 0; }
-/* Ragadós: görgetés közben is látszik, mit állítasz. A "top" a felső sáv
-   magassága + egy kis levegő. */
+
 .cosmetic-admin-side { position: sticky; top: 20px; }
 @media (max-width: 1100px) { .cosmetic-admin-side { position: static; } }
 .cosmetic-stage-card { display: flex; flex-direction: column; align-items: center; }
@@ -2263,9 +1928,6 @@ a { color: inherit; }
 .cosmetic-editor-actions { margin-top: 20px; }
 .cosmetic-pet-card { border-color: color-mix(in srgb, var(--gold) 30%, var(--line)); }
 
-/* A katalógus KÁRTYÁS rácsa (ld. app.js renderCosmeticsAdminList) - a
-   korábbi, egysoros listánál ránézésre megmondható, melyik kiegészítő
-   micsoda, mert a bélyegkép nagy és a jelzők a kártyán vannak. */
 .cosmetic-admin-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 16px;
 }
@@ -2298,8 +1960,7 @@ a { color: inherit; }
   min-width: 240px; min-height: 320px;
   display: flex; align-items: center; justify-content: center;
 }
-/* A vászon a húzáshoz "megfogható" kell legyen - enélkül a böngésző
-   szövegkijelölésnek értelmezné a mozdulatot, és a modell nem követné. */
+
 .cosmetic-editor-stage canvas { cursor: grab; touch-action: none; user-select: none; }
 .cosmetic-editor-stage canvas:active { cursor: grabbing; }
 .cosmetic-editor-empty {
@@ -2311,18 +1972,11 @@ a { color: inherit; }
 .cosmetic-editor-controls { flex: 1 1 240px; min-width: 240px; }
 .cosmetic-editor-controls .btn-outline { width: 100%; margin-top: 12px; }
 
-/* Verzió-jelző az oldalsáv alján - szándékosan halvány és apró: a mindennapi
-   használatban ne vonja el a figyelmet, de egy 'nálam nem frissült' kérdésnél
-   azonnal megmondja, melyik app.js fut valójában. */
 .app-nav-version {
   padding: 8px 16px 2px; font-size: 10.5px; letter-spacing: .06em;
   color: var(--text-faint); font-variant-numeric: tabular-nums;
 }
 
-/* ── Kiegészítő-RÉSZEK és ANIMÁCIÓ (admin szerkesztő) ─────────────────────
-   A "rész" egy kiegészítő egy modellje: egy szárny bal és jobb fele közös
-   textúrán. A csík a szerkesztés CÉLJÁT váltja - az illesztés- és
-   animáció-mezők mindig az itt kiválasztottra vonatkoznak. */
 .cosmetic-parts-bar {
   display: flex;
   flex-wrap: wrap;
@@ -2365,9 +2019,6 @@ a { color: inherit; }
   color: var(--danger);
 }
 
-/* A hullámjel azt jelzi, hogy ennek a célnak VAN mozgása - így egy
-   nyolcrészes kiegészítőnél sem kell végigkattintani a részeket ahhoz, hogy
-   megtudd, melyik animált. */
 .cosmetic-part-chip-anim {
   font-size: 15px;
   line-height: 1;
@@ -2417,7 +2068,6 @@ a { color: inherit; }
 
 .cosmetic-part-panel-row .news-delete-btn { margin-left: auto; }
 
-/* ── Animáció-szerkesztő ───────────────────────────────────────────────── */
 .cosmetic-anim-presets {
   display: flex;
   flex-wrap: wrap;
@@ -2443,11 +2093,6 @@ a { color: inherit; }
   background: rgba(255,176,32,.12);
 }
 
-/* Egy animációs sáv KÉT sorból áll: a fő beállítások, alatta a hullám
-   (hajlás/késés/tengely). MIÉRT NEM EGY RÁCS: tíz vezérlő egy sorban
-   olvashatatlanul összenyomódik, a hullám-mezők pedig fogalmilag is
-   összetartoznak - egy blokként kezelve azonnal látszik, mi a merev
-   forgatás és mi teszi hullámzóvá. */
 .cosmetic-anim-track {
   margin-bottom: 10px; padding: 10px 12px;
   border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2);
@@ -2500,9 +2145,6 @@ a { color: inherit; }
 
 .cosmetic-anim-pivot .btn-outline { margin-top: 8px; }
 
-/* Keskeny képernyőn a rács oszlopai összenyomódnának olvashatatlanra -
-   ott inkább egymás alá kerülnek, a fejléc pedig elrejtve (a mezők
-   sorrendje ugyanaz marad). */
 @media (max-width: 860px) {
   .cosmetic-anim-head { display: none; }
   .cosmetic-anim-track {
@@ -2514,7 +2156,6 @@ a { color: inherit; }
   }
 }
 
-/* Szűrősáv a Kiegészítők nézeten (saját + megvásárolható rács közösen). */
 .cosmetic-filter-bar {
   display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
   margin: 0 0 16px;
@@ -2526,17 +2167,10 @@ a { color: inherit; }
 .cosmetic-filter-input:focus { outline: none; border-color: var(--gold); }
 .cosmetic-filter-check { margin: 0; white-space: nowrap; }
 
-/* Az "animált" címke. A bélyegkép ÁLLÓ kép, a mozgás rajta nem látszik -
-   ezért kell külön jelezni, hogy ez a kiegészítő mozog a játékban. */
 .cosmetic-tag-animated {
   border-color: var(--gold); color: var(--gold);
 }
 
-/* ── Csapattag saját havi statisztikája (főoldal, a barátlista alatt) ────
-   ÚJ: ld. app.js loadHomeStaffStats() és SolarBackend GET
-   /api/staff/my-stats. Szándékosan NEM a vezetői "Csapat statisztika"
-   nézet kártyáit használja újra: ez EGY ember négy száma, nem egy
-   összehasonlító táblázat - itt a négy szám gyors leolvashatósága a cél. */
 .staff-stats-card .card-title { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .staff-stats-rank {
   font-size: 11px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase;
@@ -2562,14 +2196,11 @@ a { color: inherit; }
   margin-top: 5px; font-size: 11px; font-weight: 600; letter-spacing: .3px;
   color: var(--text-dim);
 }
-/* Keskeny kijelzőn négy oszlop már olvashatatlanul szűk lenne. */
+
 @media (max-width: 720px) {
   .staff-stats-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
-/* ── Kiegészítők: szerver-hatókör ────────────────────────────────────────
-   A jelölőnégyzetek SORBAN, nem rácsban: a szerverek száma egy hálózaton
-   néhány darab, és a nevük rövid - egy rács itt csak üres helyet hagyna. */
 .cosmetic-server-list { display: flex; flex-wrap: wrap; gap: 8px; }
 .cosmetic-server-list label {
   display: inline-flex; align-items: center; gap: 7px;
@@ -2595,7 +2226,6 @@ a { color: inherit; }
 .cosmetic-server-row-id { font-family: ui-monospace, monospace; font-size: 12px; color: var(--text-faint); }
 .cosmetic-server-row-label { font-weight: 700; font-size: 13.5px; flex: 1; }
 
-/* Egy effekt-sor: típus + erősség + törlés. */
 .cosmetic-effect-row { display: flex; align-items: flex-end; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
 .cosmetic-effect-row label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--text-dim); }
 .cosmetic-effect-row select, .cosmetic-effect-row input {
@@ -2608,11 +2238,6 @@ a { color: inherit; }
 }
 .cosmetic-effect-remove:hover { color: var(--danger); border-color: var(--danger); }
 
-/* ── Admin: kiegészítő adása/elvétele egy játékosnak ─────────────────────
-   A korábbi legördülő helyett kereshető RÁCS: egy pillantásra látszik, mije
-   van meg a játékosnak, és egy kattintás a művelet. A rács szándékosan
-   görgethető, fix magassággal - egy nagy katalógus különben lenyomná a
-   panel többi részét a képernyőről. */
 .admin-cosmetic-toolbar { display: flex; gap: 8px; margin: 10px 0 8px; flex-wrap: wrap; }
 .admin-cosmetic-toolbar input[type="search"] { flex: 1; min-width: 160px; }
 .admin-cosmetic-toolbar input, .admin-cosmetic-toolbar select {
@@ -2640,8 +2265,7 @@ a { color: inherit; }
 }
 .admin-cosmetic-item:hover { border-color: var(--gold-2); background: var(--panel-2); }
 .admin-cosmetic-item:disabled { opacity: .5; cursor: default; }
-/* A BIRTOKOLT tételt a bal oldali arany sáv jelzi - szín önmagában nem lenne
-   elég megkülönböztető annak, aki nem látja jól a színeket. */
+
 .admin-cosmetic-item.is-owned { border-color: rgba(240,180,60,.55); box-shadow: inset 3px 0 0 var(--gold); }
 .admin-cosmetic-item-thumb {
   width: 34px; height: 34px; border-radius: 8px; flex: 0 0 auto;
@@ -2657,8 +2281,6 @@ a { color: inherit; }
 .admin-cosmetic-item.is-owned .admin-cosmetic-item-action { color: var(--danger); }
 .admin-cosmetic-item:not(.is-owned) .admin-cosmetic-item-action { color: var(--gold); }
 
-
-/* A .bbmodel saját animációinak listája a mob-szerkesztőben. */
 .mob-rig-anim-list {
   list-style: none;
   margin: 8px 0 0;
@@ -2688,7 +2310,6 @@ a { color: inherit; }
   white-space: nowrap;
 }
 
-/* A .bbmodel animációinak lejátszó- és törlő-gombja. */
 .mob-rig-anim-list li.is-playing {
   border-color: rgba(255, 190, 60, 0.55);
   background: rgba(255, 190, 60, 0.10);
@@ -2718,8 +2339,7 @@ a { color: inherit; }
   background: rgba(255, 190, 60, 0.22);
   border-color: rgba(255, 190, 60, 0.6);
 }
-/* A törlés a sor VÉGÉRE kerül, hogy ne essen a lejátszás mellé: a kettő
-   következménye nagyon eltérő, és egy elgépelt kattintás itt visszavonhatatlan. */
+
 .mob-rig-anim-del {
   margin-left: auto;
   font-size: 1.05rem;
@@ -2734,7 +2354,6 @@ a { color: inherit; }
   margin-top: 8px;
 }
 
-/* Figyelmeztetés a régi, hibás feldolgozással készült csontvázra. */
 .mob-rig-stale {
   margin: 0 0 10px;
 }
