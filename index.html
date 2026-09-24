@@ -35,9 +35,10 @@
   <link rel="dns-prefetch" href="https://api.overclockgame.hu" />
   <link rel="preload" as="image" href="assets/solaryn-icon.png" />
 
-  <script src="theme.js?v=20260922a"></script>
-  <link rel="stylesheet" href="style.css?v=20260922a" />
-  <link rel="stylesheet" href="ui.css?v=20260922a" />
+  <script src="theme.js?v=20260924b"></script>
+  <link rel="stylesheet" href="style.css?v=20260924b" />
+  <link rel="stylesheet" href="ui.css?v=20260924b" />
+  <link rel="stylesheet" href="design.css?v=20260924b" />
 
   <script type="application/ld+json">
   {
@@ -293,6 +294,8 @@
             <button class="app-nav-item admin-nav-item hidden" data-view="analytics" data-permission="global.analytics"><span>Látogatottság</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="newsAdmin" data-permission="global.newsManage"><span>Felhívások</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="badges" data-permission="global.badgesManage"><span>Jelvények</span></button>
+            <button class="app-nav-item admin-nav-item hidden" data-view="defaultMediaAdmin" data-permission="global.defaultMediaManage"><span>Alap skinek</span></button>
+            <button class="app-nav-item admin-nav-item hidden" data-view="nameRules" data-permission="global.nameRulesManage"><span>Tiltott nevek</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="cosmeticsAdmin" data-permission="global.cosmeticsManage,global.cosmeticsMarketManage"><span>Kiegészítők</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="mobsAdmin" data-permission="global.mobsManage"><span>Mobok</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="discounts" data-permission="global.discountsManage"><span>Akciók</span></button>
@@ -518,10 +521,10 @@
           <h1 class="page-title">Rangok</h1>
           <p class="page-note">Vásárolj rangot a felgyűjtött PrémiumPontodból - a rangot a plugin automatikusan beállítja, amint levonásra kerül a PP.</p>
 
-          <div class="content-grid">
-            <div>
-              <div class="rank-grid" id="rankGrid"></div>
+          <div class="rank-compare" id="rankGrid"></div>
 
+          <div class="content-grid rank-footer-grid">
+            <div>
               <div class="info-box">
                 <div class="info-box-title">
                   <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 15h-2v-6h2zm0-8h-2V7h2z"/></svg>
@@ -679,6 +682,25 @@
                 <p class="skin-status" id="capeStatus"></p>
               </div>
             </div>
+          </div>
+
+          <div class="card default-media-card hidden" id="defaultMediaCard">
+            <div class="card-title">Alap skinek és köpenyek</div>
+            <p class="page-note" style="margin-bottom:18px;">Nincs saját skined vagy köpenyed? Válassz a csapat által összeállított kínálatból - a <b>Kipróbálom</b> gombbal előbb megnézheted a fenti 3D előnézetben, a <b>Beállítom</b> gombbal pedig azonnal a tiéd lesz a szerveren és a launcherben is.</p>
+            <div class="dm-tabs" role="tablist" aria-label="Kategóriák">
+              <button type="button" class="dm-tab active" role="tab" aria-selected="true" data-dm-cat="skin">Skinek <span class="dm-tab-count" data-dm-count="skin">0</span></button>
+              <button type="button" class="dm-tab" role="tab" aria-selected="false" data-dm-cat="skin_hd">HD skinek <span class="dm-tab-count" data-dm-count="skin_hd">0</span></button>
+              <button type="button" class="dm-tab" role="tab" aria-selected="false" data-dm-cat="cape">Köpenyek <span class="dm-tab-count" data-dm-count="cape">0</span></button>
+              <button type="button" class="dm-tab" role="tab" aria-selected="false" data-dm-cat="cape_hd">HD köpenyek <span class="dm-tab-count" data-dm-count="cape_hd">0</span></button>
+            </div>
+            <div class="dm-grid" id="defaultMediaGrid"></div>
+          </div>
+
+          <div class="dm-try-bar hidden" id="dmTryBar" role="status">
+            <span class="dm-try-dot" aria-hidden="true"></span>
+            <span class="dm-try-text">Előnézet: <b id="dmTryName"></b></span>
+            <button type="button" class="btn-outline" id="dmTryCancel">Vissza a sajátomra</button>
+            <button type="button" class="btn-glow" id="dmTryApply">Beállítom</button>
           </div>
         </section>
 
@@ -1226,6 +1248,132 @@
 
           <div class="admin-subsection-title">Meglévő jelvények</div>
           <div id="badgesAdminList"></div>
+        </section>
+
+        <section class="view" data-view="defaultMediaAdmin">
+          <h1 class="page-title">Alap skinek és köpenyek</h1>
+          <p class="page-note">Az itt feltöltött skinek és köpenyek minden játékosnak megjelennek a Skin / köpeny oldalon, és egy kattintással beállíthatják maguknak. A kép átmásolódik a játékos saját helyére, így a szerveren és a launcherben is azonnal látszik.</p>
+
+          <div class="content-grid dm-admin-grid">
+            <div class="card">
+              <div class="card-title">Új feltöltés</div>
+              <span class="gift-modal-label" style="margin-top:0;">Kategória</span>
+              <div class="dm-cat-picker" id="dmAdminCategory" role="radiogroup" aria-label="Kategória">
+                <button type="button" class="dm-cat-option active" data-dm-admin-cat="skin" role="radio" aria-checked="true"><b>Skin</b><small>64x64 / 64x32</small></button>
+                <button type="button" class="dm-cat-option" data-dm-admin-cat="skin_hd" role="radio" aria-checked="false"><b>HD skin</b><small>128 - 2048 px</small></button>
+                <button type="button" class="dm-cat-option" data-dm-admin-cat="cape" role="radio" aria-checked="false"><b>Köpeny</b><small>64x32</small></button>
+                <button type="button" class="dm-cat-option" data-dm-admin-cat="cape_hd" role="radio" aria-checked="false"><b>HD köpeny</b><small>128x64 - 2048x1024</small></button>
+              </div>
+              <label class="gift-modal-label" for="dmAdminName">Megnevezés</label>
+              <input type="text" id="dmAdminName" class="gift-modal-input" placeholder="Pl. Napharcos" maxlength="40" />
+              <div id="dmAdminVariantWrap">
+                <span class="gift-modal-label">Kar-modell</span>
+                <div class="skin-model-toggle dm-admin-variant" style="margin-top:0;">
+                  <button type="button" class="pill active" data-dm-admin-variant="classic">Klasszikus</button>
+                  <button type="button" class="pill" data-dm-admin-variant="slim">Vékony (slim)</button>
+                </div>
+              </div>
+              <span class="gift-modal-label">PNG fájl</span>
+              <input type="file" id="dmAdminFile" accept=".png,image/png" hidden />
+              <div class="skin-drop dm-admin-drop" id="dmAdminDrop" role="button" tabindex="0">
+                <canvas id="dmAdminPreview" class="dm-admin-preview hidden" width="96" height="192"></canvas>
+                <span id="dmAdminDropText">Húzd ide a .png fájlt, vagy kattints a tallózáshoz</span>
+              </div>
+              <p class="redeem-result" id="dmAdminResult"></p>
+              <button type="button" class="btn-glow" id="dmAdminSave">Feltöltés</button>
+            </div>
+
+            <div class="card dm-admin-help">
+              <div class="card-title">Méretek</div>
+              <ul class="info-list">
+                <li><b>Skin:</b> 64x64 vagy a régi 64x32 formátum.</li>
+                <li><b>HD skin:</b> 64 többszöröse (128, 256 ... 2048), négyzetes vagy 2:1.</li>
+                <li><b>Köpeny:</b> pontosan 64x32.</li>
+                <li><b>HD köpeny:</b> 2:1 arány, 128x64-től 2048x1024-ig.</li>
+                <li>A rejtett elemeket a játékosok nem látják, de akik már beállították, azoknál megmarad.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="dm-tabs dm-admin-tabs" role="tablist" aria-label="Kategóriák">
+            <button type="button" class="dm-tab active" role="tab" aria-selected="true" data-dm-admin-filter="skin">Skinek <span class="dm-tab-count" data-dm-admin-count="skin">0</span></button>
+            <button type="button" class="dm-tab" role="tab" aria-selected="false" data-dm-admin-filter="skin_hd">HD skinek <span class="dm-tab-count" data-dm-admin-count="skin_hd">0</span></button>
+            <button type="button" class="dm-tab" role="tab" aria-selected="false" data-dm-admin-filter="cape">Köpenyek <span class="dm-tab-count" data-dm-admin-count="cape">0</span></button>
+            <button type="button" class="dm-tab" role="tab" aria-selected="false" data-dm-admin-filter="cape_hd">HD köpenyek <span class="dm-tab-count" data-dm-admin-count="cape_hd">0</span></button>
+          </div>
+          <div class="dm-grid dm-admin-list" id="dmAdminList"></div>
+        </section>
+
+        <section class="view" data-view="nameRules">
+          <h1 class="page-title">Tiltott felhasználónevek</h1>
+          <p class="page-note">Regisztrációkor minden új nevet ellenőrzünk: az automata szűrő több száz csúnya, sértő és gyűlöletkeltő kifejezést ismer fel (leet-írással és betűismétléssel együtt, pl. <code>K0cs0g</code>, <code>Fassz</code>), az itteni listával pedig bármilyen nevet vagy névrészletet külön tilthatsz. A kivételekkel a szűrő tévedéseit engedheted át.</p>
+
+          <div class="nr-stats" id="nameRulesStats"></div>
+
+          <div class="content-grid nr-top-grid">
+            <div class="card">
+              <div class="card-title">Új szabály</div>
+              <div class="nr-form">
+                <div class="nr-form-field nr-form-pattern">
+                  <label class="gift-modal-label" style="margin-top:0;" for="nrPattern">Név vagy névrészlet</label>
+                  <input type="text" id="nrPattern" class="gift-modal-input" placeholder="Pl. AlexCsiger" maxlength="32" autocomplete="off" spellcheck="false" />
+                </div>
+                <div class="nr-form-field">
+                  <span class="gift-modal-label" style="margin-top:0;">Egyezés</span>
+                  <div class="nr-seg" role="radiogroup" aria-label="Egyezés">
+                    <button type="button" class="nr-seg-btn active" data-nr-match="exact" role="radio" aria-checked="true">Pontos név</button>
+                    <button type="button" class="nr-seg-btn" data-nr-match="contains" role="radio" aria-checked="false">Tartalmazza</button>
+                  </div>
+                </div>
+                <div class="nr-form-field">
+                  <span class="gift-modal-label" style="margin-top:0;">Típus</span>
+                  <div class="nr-seg" role="radiogroup" aria-label="Típus">
+                    <button type="button" class="nr-seg-btn active is-danger" data-nr-action="block" role="radio" aria-checked="true">Tiltás</button>
+                    <button type="button" class="nr-seg-btn is-success" data-nr-action="allow" role="radio" aria-checked="false">Kivétel</button>
+                  </div>
+                </div>
+              </div>
+              <label class="gift-modal-label" for="nrNote">Megjegyzés (nem kötelező)</label>
+              <input type="text" id="nrNote" class="gift-modal-input" placeholder="Pl. rasszista utalás" maxlength="120" />
+              <p class="nr-hint" id="nrHint"></p>
+              <p class="redeem-result" id="nrResult"></p>
+              <button type="button" class="btn-glow" id="nrAddBtn">Hozzáadás</button>
+            </div>
+
+            <div class="card nr-test-card">
+              <div class="card-title">Név ellenőrzése</div>
+              <p class="nr-hint" style="margin-top:0;">Próbáld ki, hogy egy adott név most átmenne-e a regisztráción.</p>
+              <div class="nr-test-row">
+                <input type="text" id="nrTestInput" class="gift-modal-input" placeholder="Játékosnév" maxlength="32" autocomplete="off" spellcheck="false" />
+                <button type="button" class="btn-glow" id="nrTestBtn">Ellenőrzés</button>
+              </div>
+              <div class="nr-test-result hidden" id="nrTestResult" role="status"></div>
+            </div>
+          </div>
+
+          <div class="card nr-list-card">
+            <div class="nr-list-head">
+              <div class="card-title" style="margin-bottom:0;">Szabályok</div>
+              <div class="nr-filter" role="tablist" aria-label="Szűrés">
+                <button type="button" class="nr-filter-btn active" data-nr-filter="all">Mind</button>
+                <button type="button" class="nr-filter-btn" data-nr-filter="block">Tiltások</button>
+                <button type="button" class="nr-filter-btn" data-nr-filter="allow">Kivételek</button>
+              </div>
+              <input type="search" id="nrSearch" class="gift-modal-input nr-search" placeholder="Keresés a szabályok között..." aria-label="Keresés a szabályok között" />
+            </div>
+            <div id="nameRulesList" class="nr-list"></div>
+          </div>
+
+          <div class="card nr-scan-card">
+            <div class="nr-list-head">
+              <div>
+                <div class="card-title" style="margin-bottom:4px;">Meglévő fiókok átvizsgálása</div>
+                <p class="nr-hint" style="margin:0;">Megkeresi azokat a már regisztrált fiókokat, amelyeket a jelenlegi szabályokkal már nem lehetne létrehozni. A névre kattintva megnyílik a profil, ahol zárolhatod.</p>
+              </div>
+              <button type="button" class="btn-outline" id="nrScanBtn">Átvizsgálás indítása</button>
+            </div>
+            <div id="nameRulesScan" class="nr-scan-list"></div>
+          </div>
         </section>
 
         <section class="view" data-view="cosmeticsAdmin">
@@ -1926,6 +2074,11 @@
                 <div id="playerProfileSanctionStatus" class="profile-sanction-status"></div>
               </div>
             </div>
+          </div>
+
+          <div class="card profile-cosmetics-card" id="playerProfileCosmeticsCard">
+            <div class="card-title">Kiegészítők <span class="card-title-count" id="playerProfileCosmeticsCount"></span></div>
+            <div id="playerProfileCosmetics" class="profile-cosmetic-grid"></div>
           </div>
 
           <div class="card admin-panel hidden" id="playerProfileAdminPanel">
@@ -2656,8 +2809,9 @@
     </div>
   </div>
 
-  <script src="skin3d.js?v=20260922a" defer></script>
-  <script src="app.js?v=20260922a" defer></script>
-  <script src="ui.js?v=20260922a" defer></script>
+  <script src="skin3d.js?v=20260924b" defer></script>
+  <script src="app.js?v=20260924b" defer></script>
+  <script src="ui.js?v=20260924b" defer></script>
+  <script src="design.js?v=20260924b" defer></script>
 </body>
 </html>

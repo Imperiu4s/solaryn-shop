@@ -1,4 +1,4 @@
-const CENTER_VERSION = '20260922a';
+const CENTER_VERSION = '20260924b';
 
 const BACKEND_URL = 'https://api.overclockgame.hu:8908';
 
@@ -38,11 +38,12 @@ initPasswordToggles();
     return;
   }
   const ctx = canvas.getContext('2d');
-  let particles = [];
+  let dpr = Math.min(window.devicePixelRatio || 1, 2);
 
   function resize() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(window.innerWidth * dpr);
+    canvas.height = Math.round(window.innerHeight * dpr);
   }
   let resizePending = false;
   window.addEventListener('resize', () => {
@@ -52,35 +53,87 @@ initPasswordToggles();
   });
   resize();
 
-  function spawn() {
+  // Egy buborék előre megrajzolva (üveges perem + fényfolt), a téma színével.
+  // Képkockánként csak drawImage fut, így sok buborék sem terhel.
+  const SPRITE = 128;
+  const sprites = [];
+  function buildSprites() {
+    const css = getComputedStyle(document.documentElement);
+    const colors = [css.getPropertyValue('--gold').trim() || '#ffc42e', css.getPropertyValue('--orange').trim() || '#ff7a3d', '#ffffff'];
+    sprites.length = 0;
+    for (const color of colors) {
+      const c = document.createElement('canvas');
+      c.width = c.height = SPRITE;
+      const g = c.getContext('2d');
+      const r = SPRITE / 2;
+      // áttetsző belső, a perem felé erősödő színnel
+      const body = g.createRadialGradient(r, r, 0, r, r, r);
+      body.addColorStop(0, 'rgba(255,255,255,0.02)');
+      body.addColorStop(0.7, 'rgba(255,255,255,0.04)');
+      body.addColorStop(0.92, color);
+      body.addColorStop(1, 'rgba(255,255,255,0)');
+      g.globalAlpha = 0.45;
+      g.fillStyle = body;
+      g.beginPath(); g.arc(r, r, r, 0, Math.PI * 2); g.fill();
+      // vékony, fent világos perem
+      const rim = g.createLinearGradient(0, 0, SPRITE, SPRITE);
+      rim.addColorStop(0, 'rgba(255,255,255,0.95)');
+      rim.addColorStop(0.45, color);
+      rim.addColorStop(1, 'rgba(255,255,255,0.05)');
+      g.globalAlpha = 0.6;
+      g.strokeStyle = rim;
+      g.lineWidth = SPRITE * 0.022;
+      g.beginPath(); g.arc(r, r, r * 0.95, 0, Math.PI * 2); g.stroke();
+      // fényfolt bal fent + halvány tükröződés jobb lent
+      const shine = g.createRadialGradient(r * 0.62, r * 0.55, 0, r * 0.62, r * 0.55, r * 0.3);
+      shine.addColorStop(0, 'rgba(255,255,255,0.95)');
+      shine.addColorStop(1, 'rgba(255,255,255,0)');
+      g.globalAlpha = 0.75;
+      g.fillStyle = shine;
+      g.beginPath(); g.arc(r * 0.62, r * 0.55, r * 0.3, 0, Math.PI * 2); g.fill();
+      g.globalAlpha = 0.35;
+      g.strokeStyle = 'rgba(255,255,255,0.9)';
+      g.lineWidth = SPRITE * 0.018;
+      g.lineCap = 'round';
+      g.beginPath(); g.arc(r, r, r * 0.74, Math.PI * 0.15, Math.PI * 0.42); g.stroke();
+      sprites.push(c);
+    }
+  }
+  buildSprites();
+  new MutationObserver(buildSprites).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+  function spawn(initial) {
+    const small = Math.random() < 0.72;
+    const r = small ? 3 + Math.random() * 7 : 12 + Math.random() * 26;
     return {
-      x: Math.random() * canvas.width,
-      y: -10,
-      r: 1 + Math.random() * 2.2,
-      speed: 0.4 + Math.random() * 0.9,
-      drift: (Math.random() - 0.5) * 0.4,
-      alpha: 0.15 + Math.random() * 0.35,
-      hue: Math.random() < 0.5 ? '255,196,46' : '255,157,23'
+      x: Math.random() * window.innerWidth,
+      y: initial ? Math.random() * window.innerHeight : window.innerHeight + r + Math.random() * 60,
+      r,
+      speed: (small ? 0.22 : 0.12) + Math.random() * 0.35,
+      wobble: 0.4 + Math.random() * 1.2,
+      phase: Math.random() * Math.PI * 2,
+      freq: 0.004 + Math.random() * 0.008,
+      alpha: small ? 0.35 + Math.random() * 0.35 : 0.14 + Math.random() * 0.2,
+      sprite: Math.random() < 0.55 ? 0 : (Math.random() < 0.6 ? 1 : 2)
     };
   }
-  const COUNT = 55;
-  for (let i = 0; i < COUNT; i++) {
-    const p = spawn();
-    p.y = Math.random() * (window.innerHeight || 620);
-    particles.push(p);
-  }
+  const COUNT = window.innerWidth < 700 ? 16 : 30;
+  const bubbles = Array.from({ length: COUNT }, () => spawn(true));
 
+  let frame = 0;
   function tick() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    for (const p of particles) {
-      p.y += p.speed;
-      p.x += p.drift;
-      if (p.y > canvas.height + 10) Object.assign(p, spawn());
-      ctx.beginPath();
-      ctx.fillStyle = `rgba(${p.hue},${p.alpha})`;
-      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-      ctx.fill();
+    frame++;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+    for (const b of bubbles) {
+      b.y -= b.speed;
+      const x = b.x + Math.sin(frame * b.freq + b.phase) * b.wobble * 8;
+      if (b.y < -b.r * 2) Object.assign(b, spawn(false));
+      const fadeTop = Math.min(1, b.y / 160);
+      ctx.globalAlpha = b.alpha * Math.max(0, fadeTop);
+      ctx.drawImage(sprites[b.sprite] || sprites[0], x - b.r, b.y - b.r, b.r * 2, b.r * 2);
     }
+    ctx.globalAlpha = 1;
     requestAnimationFrame(tick);
   }
   requestAnimationFrame(tick);
@@ -490,7 +543,11 @@ async function submitRegistration(ids, errEl) {
     creatorCode: creatorCode || null,
     termsAccepted: termsOk
   });
-  if (!res.ok) { errEl.textContent = res.message || 'Sikertelen regisztráció.'; return null; }
+  if (!res.ok) {
+    if (res.field === 'username') return fail(res.message || 'Ez a felhasználónév nem választható.', ids.user);
+    errEl.textContent = res.message || 'Sikertelen regisztráció.';
+    return null;
+  }
   return res;
 }
 
@@ -1702,7 +1759,7 @@ function switchView(view) {
   $$('.app-nav-item[data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
   $$('.view').forEach((v) => v.classList.toggle('active', v.dataset.view === view));
   syncNavGroups(view);
-  if (view === 'skin') loadSkinPreview3d();
+  if (view === 'skin') { endDefaultMediaTry(false); loadSkinPreview3d(); loadDefaultMediaGallery(); }
   if (view === 'ranks') refreshPpBalance();
   if (view === 'wallet') refreshPpBalance();
   if (view === 'security') { loadSecurityStatus(); loadSecurityPinStatus(); }
@@ -1714,6 +1771,8 @@ function switchView(view) {
   if (view === 'revenue') loadRevenue();
   if (view === 'newsAdmin') { resetNewsForm(); loadNewsAdmin(); }
   if (view === 'badges') { resetBadgeForm(); loadBadgesAdmin(); }
+  if (view === 'defaultMediaAdmin') { resetDmAdminForm(); loadDefaultMediaAdmin(); }
+  if (view === 'nameRules') loadNameRules();
   if (view === 'discounts') { resetDiscountForm(); loadDiscountsAdmin(); }
   if (view === 'coupons') { resetCouponForm(); loadCouponsAdmin(); }
   if (view === 'creatorCodes') { resetCreatorCodeForm(); loadCreatorCodesAdmin(); }
@@ -2090,6 +2149,7 @@ async function openPlayerProfile(username) {
     renderSanctionStatus($('#playerProfileSanctionStatus'), profile.ok ? profile : null);
     renderNameBadges($('#playerProfileNameBadges'), profile.ok ? profile.badges : null);
   });
+  loadProfileCosmetics(username);
 
   lastAdminPlayerUsername = username;
   const canSeeAdminPanel = PLAYER_PANEL_KEYS.some(hasPerm);
@@ -2890,51 +2950,193 @@ function formatSubscriptionDate(iso) {
   return d.toLocaleDateString('hu-HU');
 }
 
-function renderRankCard(rank) {
-  const affordable = currentPpBalance >= rank.priceCoins;
-  const discountBadge = rank.discountPercent > 0 ? `<div class="discount-badge">-${rank.discountPercent}%</div>` : '';
-  const priceInner = rank.discountPercent > 0
-    ? `<span class="price-original">${formatPp(rank.originalPriceCoins)}</span>${formatPp(rank.priceCoins)}`
-    : formatPp(rank.priceCoins);
+// Rangonkénti színek és embléma - az ismeretlen (később felvett) rangok a
+// RANK_THEME_FALLBACK-et kapják, így a táblázat új ranggal sem törik el.
+const RANK_THEMES = {
+  helios: { c1: '#ffb347', c2: '#ff6a1a', ink: '#2b1203', tagline: 'Az első sugarak' },
+  chronovoid: { c1: '#b197fc', c2: '#5b4bdb', ink: '#ffffff', tagline: 'Az idő ura' },
+  immortal: { c1: '#ff6b86', c2: '#c8163f', ink: '#ffffff', tagline: 'Halhatatlan' },
+  young: { c1: '#5ee29a', c2: '#0fa3b8', ink: '#032a22', tagline: 'Friss energia' },
+  solaryn: { c1: '#ffe27a', c2: '#ff9d17', ink: '#2e1c02', tagline: 'A csúcs', featured: true }
+};
+const RANK_THEME_FALLBACK = { c1: '#ffc42e', c2: '#ff9d17', ink: '#1a1206', tagline: '' };
 
-  const mySub = mySubscriptions.find((s) => s.rankId === rank.id && s.active);
-  let subscriptionBlock = '';
-  if (rank.subscribable) {
-    if (mySub) {
-      const statusNote = mySub.lastChargeStatus === 'failed'
-        ? '<div class="subscription-status subscription-status-failed">Az utolsó terhelés sikertelen volt - pótold az egyenleged, a következő próbálkozás automatikus.</div>'
-        : '';
-      subscriptionBlock = `
-        <div class="subscription-info">Előfizetve - következő terhelés: ${formatSubscriptionDate(mySub.nextBillingAt)}</div>
-        ${statusNote}
-        <button type="button" class="btn-outline btn-cancel-subscription" data-cancel-sub-rank-id="${rank.id}">Előfizetés lemondása</button>
-      `;
-    } else {
-      subscriptionBlock = `
-        <button type="button" class="btn-outline btn-subscribe" data-subscribe-rank-id="${rank.id}"${affordable ? '' : ' disabled'}>Előfizetés (havonta ${formatPp(rank.priceCoins)})</button>
-      `;
-    }
-  }
-
-  return `
-    <div class="rank-card${rank.id === 'solaryn' ? ' featured' : ''}${affordable ? '' : ' insufficient'}">
-      ${discountBadge}
-      <div class="rank-card-head">
-        <div class="pkg-icon">${ICONS.crown}</div>
-        <div class="rank-card-name">${rank.label}</div>
-      </div>
-      <div class="rank-card-duration">${rank.duration}</div>
-      <div class="pkg-price rank-price"><img src="assets/pp-coin.png" alt="PP" class="rank-price-icon" /><span>${priceInner}</span></div>
-      <ul class="info-list rank-perm-list">${rank.perms.map((p) => `<li>${p}</li>`).join('')}</ul>
-      <button type="button" class="btn-buy" data-rank-id="${rank.id}"${affordable ? '' : ' disabled'}>${affordable ? 'Vásárlás' : 'Nincs elég PP'}</button>
-      <button type="button" class="btn-outline btn-gift" data-gift-rank-id="${rank.id}"${affordable ? '' : ' disabled'}>🎁 Ajándékozás</button>
-      ${subscriptionBlock}
-    </div>
-  `;
+function rankEmblemSvg(rankId) {
+  const g = `rkg-${rankId}`;
+  const defs = `<defs>
+    <linearGradient id="${g}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--rank-c1)"/><stop offset="1" style="stop-color:var(--rank-c2)"/></linearGradient>
+    <radialGradient id="${g}-glow" cx=".5" cy=".42" r=".6"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+  </defs>`;
+  const shapes = {
+    helios: `
+      <g class="rank-emblem-spin">${Array.from({ length: 12 }, (_, i) => `<path d="M32 3 L35 13 L29 13 Z" transform="rotate(${i * 30} 32 32)" fill="url(#${g})" opacity="${i % 2 ? 0.55 : 1}"/>`).join('')}</g>
+      <circle cx="32" cy="32" r="15" fill="url(#${g})"/>
+      <circle cx="32" cy="32" r="15" fill="url(#${g}-glow)"/>
+      <circle cx="32" cy="32" r="9.5" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="1.6"/>`,
+    chronovoid: `
+      <circle cx="32" cy="32" r="26" fill="none" stroke="url(#${g})" stroke-width="2.2" stroke-dasharray="4 5" class="rank-emblem-spin"/>
+      <ellipse cx="32" cy="32" rx="27" ry="9" fill="none" stroke="url(#${g})" stroke-width="1.6" opacity=".7" transform="rotate(-24 32 32)"/>
+      <path d="M22 14h20v4c0 5-5 9-8.5 12 3.5 3 8.5 7 8.5 12v4H22v-4c0-5 5-9 8.5-12C27 27 22 23 22 18z" fill="url(#${g})"/>
+      <path d="M22 14h20v4c0 5-5 9-8.5 12 3.5 3 8.5 7 8.5 12v4H22v-4c0-5 5-9 8.5-12C27 27 22 23 22 18z" fill="url(#${g}-glow)"/>
+      <path d="M26 45c1.5-4 4.5-6 6-6s4.5 2 6 6z" fill="#fff" opacity=".6"/>
+      <rect x="19" y="11" width="26" height="4" rx="2" fill="url(#${g})"/><rect x="19" y="45" width="26" height="4" rx="2" fill="url(#${g})"/>`,
+    immortal: `
+      <path d="M32 58c-11 0-19-8-19-18 0-8 5-13 8-18 1 5 4 7 6 8-1-9 3-18 10-25 0 8 4 12 8 17 4 5 6 10 6 16 0 12-8 20-19 20z" fill="url(#${g})"/>
+      <path d="M32 58c-11 0-19-8-19-18 0-8 5-13 8-18 1 5 4 7 6 8-1-9 3-18 10-25 0 8 4 12 8 17 4 5 6 10 6 16 0 12-8 20-19 20z" fill="url(#${g}-glow)"/>
+      <path d="M32 54c-5 0-9-4-9-9 0-4 3-7 5-10 1 3 3 4 4 4 0-4 2-8 5-11 1 5 5 8 5 14 0 7-4 12-10 12z" fill="#fff" opacity=".42"/>`,
+    young: `
+      <path d="M32 4l24 14v28L32 60 8 46V18z" fill="url(#${g})" opacity=".22"/>
+      <path d="M32 4l24 14v28L32 60 8 46V18z" fill="none" stroke="url(#${g})" stroke-width="2.4" stroke-linejoin="round"/>
+      <path d="M36 11L19 36h11l-4 18 19-27H34z" fill="url(#${g})"/>
+      <path d="M36 11L19 36h11l-4 18 19-27H34z" fill="url(#${g}-glow)"/>`,
+    solaryn: `
+      <g class="rank-emblem-spin rank-emblem-spin-slow">${Array.from({ length: 16 }, (_, i) => `<rect x="31" y="1" width="2" height="${i % 2 ? 6 : 9}" rx="1" transform="rotate(${i * 22.5} 32 32)" fill="url(#${g})" opacity=".85"/>`).join('')}</g>
+      <path d="M12 44l-2-22 11 9 11-17 11 17 11-9-2 22z" fill="url(#${g})"/>
+      <path d="M12 44l-2-22 11 9 11-17 11 17 11-9-2 22z" fill="url(#${g}-glow)"/>
+      <rect x="12" y="45" width="40" height="7" rx="3" fill="url(#${g})"/>
+      <circle cx="32" cy="34" r="5" fill="#fff" opacity=".9"/><circle cx="32" cy="34" r="3" style="fill:var(--rank-c2)"/>
+      <circle cx="10" cy="21" r="2.6" fill="url(#${g})"/><circle cx="54" cy="21" r="2.6" fill="url(#${g})"/><circle cx="32" cy="12" r="2.8" fill="url(#${g})"/>`
+  };
+  const body = shapes[rankId] || `
+      <path d="M8 24l12 9 12-17 12 17 12-9-4 26H12z" fill="url(#${g})"/>
+      <path d="M8 24l12 9 12-17 12 17 12-9-4 26H12z" fill="url(#${g}-glow)"/>`;
+  return `<svg class="rank-emblem" viewBox="0 0 64 64" aria-hidden="true">${defs}${body}</svg>`;
 }
 
+const RANK_INHERIT_RE = /^el[őo]z[őo] rangok? jogai$/i;
+
+// A backend rangonként egy sima szöveglistát ad (perms). Ebből építünk
+// összehasonlító mátrixot: a "<Rangnév> Napi Jutalom"-féle sorokat egy
+// közös "Napi Jutalom" sorba vonjuk össze, az "Előző rangok jogai" pedig
+// az összes korábbi rang jogát is megadja az adott rangnak.
+function buildRankMatrix(ranks) {
+  const rows = [];
+  const rowByKey = new Map();
+  const cells = ranks.map(() => new Map());
+  ranks.forEach((rank, i) => {
+    const label = String(rank.label || '').trim();
+    const prefixRe = label ? new RegExp('^' + label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s+', 'i') : null;
+    const perms = Array.isArray(rank.perms) ? rank.perms : [];
+    for (const raw of perms) {
+      const text = String(raw || '').trim();
+      if (!text || RANK_INHERIT_RE.test(text)) continue;
+      const own = prefixRe && prefixRe.test(text);
+      const rowLabel = own ? text.replace(prefixRe, '') : text;
+      const key = rowLabel.toLowerCase();
+      if (!rowByKey.has(key)) {
+        const row = { key, label: rowLabel.charAt(0).toUpperCase() + rowLabel.slice(1), perRank: !!own };
+        rowByKey.set(key, row);
+        rows.push(row);
+      } else if (own) {
+        rowByKey.get(key).perRank = true;
+      }
+      cells[i].set(key, text);
+    }
+    if (i > 0 && perms.some((p) => RANK_INHERIT_RE.test(String(p || '').trim()))) {
+      for (const [key, text] of cells[i - 1]) if (!cells[i].has(key)) cells[i].set(key, text);
+    }
+  });
+  return { rows, cells };
+}
+
+function rankActionsHtml(rank) {
+  const affordable = currentPpBalance >= rank.priceCoins;
+  const mySub = mySubscriptions.find((s) => s.rankId === rank.id && s.active);
+  let subscription = '';
+  if (rank.subscribable) {
+    if (mySub) {
+      subscription = `
+        <div class="rank-sub-info">Előfizetve · következő: ${formatSubscriptionDate(mySub.nextBillingAt)}</div>
+        ${mySub.lastChargeStatus === 'failed' ? '<div class="subscription-status-failed">Az utolsó terhelés sikertelen volt - pótold az egyenleged.</div>' : ''}
+        <button type="button" class="btn-outline rank-btn-small btn-cancel-subscription" data-cancel-sub-rank-id="${rank.id}">Lemondás</button>`;
+    } else {
+      subscription = `<button type="button" class="btn-outline rank-btn-small btn-subscribe" data-subscribe-rank-id="${rank.id}"${affordable ? '' : ' disabled'} title="Havonta automatikusan megújul">Előfizetés</button>`;
+    }
+  }
+  const price = rank.discountPercent > 0
+    ? `<span class="price-original">${formatPp(rank.originalPriceCoins)}</span><b>${formatPp(rank.priceCoins)}</b>`
+    : `<b>${formatPp(rank.priceCoins)}</b>`;
+  return `
+    <div class="rank-price-tag"><img src="assets/pp-coin.png" alt="" />${price}</div>
+    <button type="button" class="btn-buy rank-btn-buy" data-rank-id="${rank.id}"${affordable ? '' : ' disabled'}>${affordable ? 'Vásárlás' : 'Nincs elég PP'}</button>
+    <div class="rank-btn-row">
+      <button type="button" class="btn-outline rank-btn-small btn-gift" data-gift-rank-id="${rank.id}"${affordable ? '' : ' disabled'}>Ajándék</button>
+      ${subscription}
+    </div>`;
+}
+
+const RANK_CHECK_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const RANK_CROSS_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>';
+
 function renderRankGrid() {
-  $('#rankGrid').innerHTML = shopRanks.map(renderRankCard).join('');
+  const wrap = $('#rankGrid');
+  if (!shopRanks.length) {
+    wrap.innerHTML = '<div class="card card-static"><p class="redeem-result">A rangok most nem érhetők el - próbáld újra később.</p></div>';
+    return;
+  }
+  const { rows, cells } = buildRankMatrix(shopRanks);
+  const styleOf = (rank) => {
+    const t = RANK_THEMES[rank.id] || RANK_THEME_FALLBACK;
+    return `--rank-c1:${t.c1};--rank-c2:${t.c2};--rank-ink:${t.ink};`;
+  };
+  const colClass = (rank) => {
+    const t = RANK_THEMES[rank.id] || RANK_THEME_FALLBACK;
+    const affordable = currentPpBalance >= rank.priceCoins;
+    return `rank-col${t.featured ? ' is-featured' : ''}${affordable ? '' : ' is-insufficient'}`;
+  };
+  const headCells = (fn, cls) => shopRanks.map((r, i) => `<th scope="col" class="${colClass(r)} ${cls}" style="${styleOf(r)}" data-col="${i}">${fn(r)}</th>`).join('');
+
+  wrap.innerHTML = `
+    <div class="rank-table-scroll">
+      <table class="rank-table" style="--rank-count:${shopRanks.length}">
+        <thead>
+          <tr class="rank-row-emblem">
+            <th class="rank-corner" rowspan="4">
+              <div class="rank-corner-inner">
+                <span class="rank-corner-eyebrow">Összehasonlítás</span>
+                <span class="rank-corner-title">Válaszd ki a hozzád illő rangot</span>
+                <span class="rank-corner-balance">Egyenleged: <b>${formatPp(currentPpBalance)}</b></span>
+              </div>
+            </th>
+            ${headCells((r) => {
+              const t = RANK_THEMES[r.id] || RANK_THEME_FALLBACK;
+              return `${t.featured ? '<span class="rank-ribbon">Legjobb</span>' : ''}${r.discountPercent > 0 ? `<span class="discount-badge">-${r.discountPercent}%</span>` : ''}<div class="rank-emblem-wrap">${rankEmblemSvg(r.id)}</div>`;
+            }, 'rank-cell-emblem')}
+          </tr>
+          <tr class="rank-row-name">
+            ${headCells((r) => {
+              const t = RANK_THEMES[r.id] || RANK_THEME_FALLBACK;
+              return `<span class="rank-name">${escapeHtml(r.label)}</span>${t.tagline ? `<span class="rank-tagline">${escapeHtml(t.tagline)}</span>` : ''}`;
+            }, 'rank-cell-name')}
+          </tr>
+          <tr class="rank-row-duration">
+            ${headCells((r) => {
+              const days = Number(r.durationDays) || 0;
+              return `<span class="rank-duration"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>${days ? `${days} napig érvényes` : escapeHtml(r.duration || '')}</span>`;
+            }, 'rank-cell-duration')}
+          </tr>
+          <tr class="rank-row-actions">
+            ${headCells(rankActionsHtml, 'rank-cell-actions')}
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="rank-row-section"><th scope="row" colspan="${shopRanks.length + 1}">Jogosultságok</th></tr>
+          ${rows.map((row) => `
+            <tr class="rank-row-perm">
+              <th scope="row">${escapeHtml(row.label)}</th>
+              ${shopRanks.map((r, i) => {
+                const has = cells[i].has(row.key);
+                const full = cells[i].get(row.key);
+                return `<td class="${colClass(r)} ${has ? 'has' : 'no'}" style="${styleOf(r)}" data-col="${i}"${has && full ? ` title="${escapeHtml(full)}"` : ''}>
+                  <span class="rank-mark ${has ? 'rank-mark-yes' : 'rank-mark-no'}" aria-label="${has ? 'Elérhető' : 'Nem elérhető'}">${has ? RANK_CHECK_SVG : RANK_CROSS_SVG}</span>
+                </td>`;
+              }).join('')}
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <p class="rank-scroll-hint">Húzd oldalra a táblázatot a többi rang megtekintéséhez.</p>
+  `;
 }
 
 async function loadMySubscriptions() {
@@ -10076,5 +10278,779 @@ function suggestMobRootPivot(partIndex) {
   pivot[axis] = rootPivotCoord(mn[axis], mx[axis], ref);
   return pivot.map((n) => Math.round(n * 100) / 100);
 }
+
+// ---------------------------------------------------------------------------
+// Alap skinek és köpenyek (játékos oldal + admin)
+// ---------------------------------------------------------------------------
+
+const DM_CATEGORY_LABELS = { skin: 'Skin', skin_hd: 'HD skin', cape: 'Köpeny', cape_hd: 'HD köpeny' };
+
+function defaultMediaImageUrl(id) {
+  return BACKEND_URL + '/api/default-media/' + id + '/image';
+}
+
+// Egy skin elölnézete 2D-ben (fej, test, karok, lábak + a második réteg),
+// 16x32 "skin-pixel" rácsra rajzolva. HD és régi 64x32 skint is kezel.
+function drawSkinFront(canvas, img, slim) {
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const tw = img.naturalWidth || img.width;
+  const th = img.naturalHeight || img.height;
+  const s = tw / 64;
+  const legacy = th * 2 === tw;
+  const unit = Math.min(canvas.width / 16, canvas.height / 32);
+  const ox = (canvas.width - unit * 16) / 2;
+  const oy = (canvas.height - unit * 32) / 2;
+  const armW = slim ? 3 : 4;
+  function part(sx, sy, sw, sh, dx, dy, mirror) {
+    const x = ox + dx * unit, y = oy + dy * unit, w = sw * unit, h = sh * unit;
+    if (mirror) {
+      ctx.save();
+      ctx.translate(x + w, y);
+      ctx.scale(-1, 1);
+      ctx.drawImage(img, sx * s, sy * s, sw * s, sh * s, 0, 0, w, h);
+      ctx.restore();
+    } else {
+      ctx.drawImage(img, sx * s, sy * s, sw * s, sh * s, x, y, w, h);
+    }
+  }
+  const rArmX = 4 - armW;
+  part(8, 8, 8, 8, 4, 0);
+  part(20, 20, 8, 12, 4, 8);
+  part(44, 20, armW, 12, rArmX, 8);
+  part(4, 20, 4, 12, 4, 20);
+  if (legacy) {
+    part(44, 20, armW, 12, 12, 8, true);
+    part(4, 20, 4, 12, 8, 20, true);
+    part(40, 8, 8, 8, 4, 0);
+    return;
+  }
+  part(36, 52, armW, 12, 12, 8);
+  part(20, 52, 4, 12, 8, 20);
+  part(40, 8, 8, 8, 4, 0);
+  part(20, 36, 8, 12, 4, 8);
+  part(44, 36, armW, 12, rArmX, 8);
+  part(52, 52, armW, 12, 12, 8);
+  part(4, 36, 4, 12, 4, 20);
+  part(4, 52, 4, 12, 8, 20);
+}
+
+// A köpeny hátulról látszó oldala (a textúra 1,1-es 10x16-os mezője).
+function drawCapeFront(canvas, img) {
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const s = (img.naturalWidth || img.width) / 64;
+  const unit = Math.min(canvas.width / 10, canvas.height / 16);
+  const w = 10 * unit, h = 16 * unit;
+  ctx.drawImage(img, 1 * s, 1 * s, 10 * s, 16 * s, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
+}
+
+async function drawDefaultMediaThumb(canvas, item) {
+  const img = await loadImage(defaultMediaImageUrl(item.id));
+  if (!img || !canvas.isConnected) return;
+  if (item.kind === 'cape') drawCapeFront(canvas, img);
+  else drawSkinFront(canvas, img, item.variant === 'slim');
+  canvas.classList.add('is-ready');
+}
+
+function defaultMediaMetaHtml(item) {
+  const chips = [];
+  if (item.hd) chips.push(`<span class="dm-chip dm-chip-hd">HD · ${item.width}x${item.height}</span>`);
+  else chips.push(`<span class="dm-chip">${item.width}x${item.height}</span>`);
+  if (item.kind === 'skin') chips.push(`<span class="dm-chip">${item.variant === 'slim' ? 'Vékony kar' : 'Klasszikus'}</span>`);
+  return chips.join('');
+}
+
+let defaultMediaItems = [];
+let defaultMediaCategory = 'skin';
+let dmTrying = null;
+
+async function loadDefaultMediaGallery() {
+  const card = $('#defaultMediaCard');
+  if (!card) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/default-media', { cache: 'no-cache' });
+    const data = await res.json();
+    defaultMediaItems = data.ok && Array.isArray(data.items) ? data.items : [];
+  } catch {
+    defaultMediaItems = [];
+  }
+  card.classList.toggle('hidden', !defaultMediaItems.length);
+  if (!defaultMediaItems.length) return;
+  const counts = {};
+  for (const it of defaultMediaItems) counts[it.category] = (counts[it.category] || 0) + 1;
+  $$('[data-dm-count]').forEach((el) => {
+    el.textContent = counts[el.dataset.dmCount] || 0;
+    el.closest('.dm-tab').classList.toggle('is-empty', !counts[el.dataset.dmCount]);
+  });
+  if (!counts[defaultMediaCategory]) {
+    defaultMediaCategory = ['skin', 'skin_hd', 'cape', 'cape_hd'].find((c) => counts[c]) || 'skin';
+  }
+  renderDefaultMediaGallery();
+}
+
+function renderDefaultMediaGallery() {
+  $$('[data-dm-cat]').forEach((b) => {
+    const on = b.dataset.dmCat === defaultMediaCategory;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  const grid = $('#defaultMediaGrid');
+  const items = defaultMediaItems.filter((it) => it.category === defaultMediaCategory);
+  if (!items.length) {
+    grid.innerHTML = '<p class="dm-empty">Ebben a kategóriában még nincs elérhető elem.</p>';
+    return;
+  }
+  const isCape = defaultMediaCategory.startsWith('cape');
+  grid.innerHTML = items.map((it, i) => `
+    <div class="dm-item${dmTrying && dmTrying.id === it.id ? ' is-trying' : ''}" data-dm-id="${it.id}" style="--i:${i}">
+      <div class="dm-item-stage${isCape ? ' is-cape' : ''}">
+        <canvas class="dm-item-canvas" width="${isCape ? 80 : 96}" height="${isCape ? 128 : 192}" data-dm-thumb="${it.id}"></canvas>
+      </div>
+      <div class="dm-item-name" title="${escapeHtml(it.name)}">${escapeHtml(it.name)}</div>
+      <div class="dm-item-meta">${defaultMediaMetaHtml(it)}</div>
+      <div class="dm-item-actions">
+        <button type="button" class="btn-outline dm-btn" data-dm-try="${it.id}">Kipróbálom</button>
+        <button type="button" class="btn-glow dm-btn" data-dm-apply="${it.id}">Beállítom</button>
+      </div>
+    </div>`).join('');
+  grid.querySelectorAll('[data-dm-thumb]').forEach((c) => {
+    const item = items.find((it) => it.id === Number(c.dataset.dmThumb));
+    if (item) drawDefaultMediaThumb(c, item);
+  });
+}
+
+async function tryDefaultMedia(item) {
+  const [ownSkin, ownCape, candidate] = await Promise.all([
+    loadSkinImage(session.username),
+    loadCapeImage(session.username),
+    loadImage(defaultMediaImageUrl(item.id))
+  ]);
+  if (!candidate) { showToast('Nem sikerült betölteni az előnézetet.', true); return; }
+  let skinImg = ownSkin;
+  let capeImg = ownCape;
+  let slim = skinModel === 'slim';
+  if (item.kind === 'skin') { skinImg = candidate; slim = item.variant === 'slim'; }
+  else capeImg = candidate;
+  if (!skinImg) skinImg = await SkinPreview.getSteveImage();
+  if (stopSkinPreview) stopSkinPreview();
+  stopSkinPreview = SkinPreview.start($('#skinPreview3d'), skinImg, slim, capeImg);
+  dmTrying = item;
+  $('#dmTryName').textContent = `${item.name} (${DM_CATEGORY_LABELS[item.category] || ''})`;
+  $('#dmTryBar').classList.remove('hidden');
+  $$('.dm-item').forEach((el) => el.classList.toggle('is-trying', Number(el.dataset.dmId) === item.id));
+  $('#skinPreview3d').scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+
+function endDefaultMediaTry(reload) {
+  dmTrying = null;
+  $('#dmTryBar').classList.add('hidden');
+  $$('.dm-item.is-trying').forEach((el) => el.classList.remove('is-trying'));
+  if (reload) loadSkinPreview3d();
+}
+
+async function applyDefaultMedia(item, btn) {
+  const what = item.kind === 'skin' ? 'skinedet' : 'köpenyedet';
+  const ok = await confirmModal(
+    item.kind === 'skin' ? 'Skin beállítása' : 'Köpeny beállítása',
+    `A(z) <b>${escapeHtml(item.name)}</b> lecseréli a jelenlegi ${what}. Folytatod?`,
+    'Igen, beállítom'
+  );
+  if (!ok) return;
+  if (btn && typeof window.setButtonLoading === 'function') window.setButtonLoading(btn, true);
+  try {
+    const res = await fetch(BACKEND_URL + '/api/default-media/' + item.id + '/apply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: '{}'
+    });
+    const data = await res.json();
+    if (!data.ok) { showToast(data.message || 'Nem sikerült beállítani.', true); return; }
+    showToast(data.message || 'Beállítva!');
+    if (data.kind === 'skin') {
+      skinModel = data.variant === 'slim' ? 'slim' : 'classic';
+      $$('.skin-model-toggle .pill[data-model]').forEach((p) => p.classList.toggle('active', p.dataset.model === skinModel));
+    }
+    endDefaultMediaTry(false);
+    loadSkinPreview3d();
+    loadHomeSkinPreview();
+    loadTopbarAvatar();
+  } catch {
+    showToast('Nem sikerült elérni a szervert.', true);
+  } finally {
+    if (btn && typeof window.setButtonLoading === 'function') window.setButtonLoading(btn, false);
+  }
+}
+
+$$('[data-dm-cat]').forEach((b) => b.addEventListener('click', () => {
+  defaultMediaCategory = b.dataset.dmCat;
+  renderDefaultMediaGallery();
+}));
+$('#defaultMediaGrid').addEventListener('click', (e) => {
+  const tryBtn = e.target.closest('[data-dm-try]');
+  const applyBtn = e.target.closest('[data-dm-apply]');
+  const id = Number((tryBtn || applyBtn)?.dataset.dmTry || (tryBtn || applyBtn)?.dataset.dmApply);
+  const item = defaultMediaItems.find((it) => it.id === id);
+  if (!item) return;
+  if (tryBtn) tryDefaultMedia(item);
+  else applyDefaultMedia(item, applyBtn);
+});
+$('#dmTryCancel').addEventListener('click', () => endDefaultMediaTry(true));
+$('#dmTryApply').addEventListener('click', (e) => { if (dmTrying) applyDefaultMedia(dmTrying, e.currentTarget); });
+
+// --- admin ---
+
+let dmAdminItems = [];
+let dmAdminCategory = 'skin';
+let dmAdminFilter = 'skin';
+let dmAdminVariant = 'classic';
+let dmAdminFile = null;
+
+function dmAdminAuth() {
+  return { Authorization: 'Bearer ' + session.token };
+}
+
+function syncDmAdminForm() {
+  $$('[data-dm-admin-cat]').forEach((b) => {
+    const on = b.dataset.dmAdminCat === dmAdminCategory;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-checked', on ? 'true' : 'false');
+  });
+  $$('[data-dm-admin-variant]').forEach((b) => b.classList.toggle('active', b.dataset.dmAdminVariant === dmAdminVariant));
+  $('#dmAdminVariantWrap').classList.toggle('hidden', dmAdminCategory.startsWith('cape'));
+  renderDmAdminPreview();
+}
+
+async function renderDmAdminPreview() {
+  const canvas = $('#dmAdminPreview');
+  const text = $('#dmAdminDropText');
+  if (!dmAdminFile) {
+    canvas.classList.add('hidden');
+    text.textContent = 'Húzd ide a .png fájlt, vagy kattints a tallózáshoz';
+    return;
+  }
+  const url = URL.createObjectURL(dmAdminFile);
+  const img = await loadImage(url);
+  URL.revokeObjectURL(url);
+  if (!img) {
+    canvas.classList.add('hidden');
+    text.textContent = 'Ez a fájl nem olvasható PNG kép.';
+    return;
+  }
+  const isCape = dmAdminCategory.startsWith('cape');
+  canvas.width = isCape ? 80 : 96;
+  canvas.height = isCape ? 128 : 192;
+  if (isCape) drawCapeFront(canvas, img);
+  else drawSkinFront(canvas, img, dmAdminVariant === 'slim');
+  canvas.classList.remove('hidden');
+  text.textContent = `${dmAdminFile.name} · ${img.naturalWidth}x${img.naturalHeight}`;
+}
+
+function resetDmAdminForm() {
+  dmAdminFile = null;
+  $('#dmAdminName').value = '';
+  $('#dmAdminResult').textContent = '';
+  $('#dmAdminResult').classList.remove('error');
+  syncDmAdminForm();
+}
+
+async function loadDefaultMediaAdmin() {
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/default-media', { headers: dmAdminAuth() });
+    const data = await res.json();
+    dmAdminItems = data.ok && Array.isArray(data.items) ? data.items : [];
+  } catch {
+    dmAdminItems = [];
+  }
+  renderDefaultMediaAdmin();
+}
+
+function renderDefaultMediaAdmin() {
+  const counts = {};
+  for (const it of dmAdminItems) counts[it.category] = (counts[it.category] || 0) + 1;
+  $$('[data-dm-admin-count]').forEach((el) => { el.textContent = counts[el.dataset.dmAdminCount] || 0; });
+  $$('[data-dm-admin-filter]').forEach((b) => {
+    const on = b.dataset.dmAdminFilter === dmAdminFilter;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  const list = $('#dmAdminList');
+  const items = dmAdminItems.filter((it) => it.category === dmAdminFilter);
+  if (!items.length) {
+    list.innerHTML = `<p class="dm-empty">Még nincs feltöltött elem ebben a kategóriában (${escapeHtml(DM_CATEGORY_LABELS[dmAdminFilter])}).</p>`;
+    return;
+  }
+  const isCape = dmAdminFilter.startsWith('cape');
+  list.innerHTML = items.map((it, i) => `
+    <div class="dm-item dm-admin-item${it.enabled ? '' : ' is-hidden-item'}" data-dm-admin-id="${it.id}" style="--i:${i}">
+      ${it.enabled ? '' : '<span class="dm-hidden-flag">Rejtett</span>'}
+      <div class="dm-item-stage${isCape ? ' is-cape' : ''}">
+        <canvas class="dm-item-canvas" width="${isCape ? 80 : 96}" height="${isCape ? 128 : 192}" data-dm-admin-thumb="${it.id}"></canvas>
+      </div>
+      <input class="dm-rename" value="${escapeHtml(it.name)}" maxlength="40" aria-label="Megnevezés" data-dm-rename="${it.id}" />
+      <div class="dm-item-meta">${defaultMediaMetaHtml(it)}</div>
+      <div class="dm-item-actions dm-admin-actions">
+        ${it.kind === 'skin' ? `<button type="button" class="btn-outline dm-btn" data-dm-variant="${it.id}" title="Kar-modell váltása">${it.variant === 'slim' ? 'Slim → Klasszikus' : 'Klasszikus → Slim'}</button>` : ''}
+        <button type="button" class="btn-outline dm-btn" data-dm-toggle="${it.id}">${it.enabled ? 'Elrejtés' : 'Megjelenítés'}</button>
+        <button type="button" class="btn-outline dm-btn dm-btn-danger" data-dm-delete="${it.id}">Törlés</button>
+      </div>
+    </div>`).join('');
+  list.querySelectorAll('[data-dm-admin-thumb]').forEach((c) => {
+    const item = items.find((it) => it.id === Number(c.dataset.dmAdminThumb));
+    if (item) drawDefaultMediaThumb(c, item);
+  });
+}
+
+async function updateDefaultMediaItem(id, patch) {
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/default-media/' + id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...dmAdminAuth() },
+      body: JSON.stringify(patch)
+    });
+    const data = await res.json();
+    if (!data.ok) { showToast(data.message || 'Nem sikerült menteni.', true); return; }
+    dmAdminItems = dmAdminItems.map((it) => (it.id === id ? data.item : it));
+    renderDefaultMediaAdmin();
+  } catch {
+    showToast('Nem sikerült elérni a szervert.', true);
+  }
+}
+
+$$('[data-dm-admin-cat]').forEach((b) => b.addEventListener('click', () => {
+  dmAdminCategory = b.dataset.dmAdminCat;
+  syncDmAdminForm();
+}));
+$$('[data-dm-admin-variant]').forEach((b) => b.addEventListener('click', () => {
+  dmAdminVariant = b.dataset.dmAdminVariant;
+  syncDmAdminForm();
+}));
+$$('[data-dm-admin-filter]').forEach((b) => b.addEventListener('click', () => {
+  dmAdminFilter = b.dataset.dmAdminFilter;
+  renderDefaultMediaAdmin();
+}));
+$('#dmAdminDrop').addEventListener('click', () => $('#dmAdminFile').click());
+$('#dmAdminDrop').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('#dmAdminFile').click(); }
+});
+$('#dmAdminDrop').addEventListener('dragover', (e) => { e.preventDefault(); $('#dmAdminDrop').classList.add('is-drag'); });
+$('#dmAdminDrop').addEventListener('dragleave', () => $('#dmAdminDrop').classList.remove('is-drag'));
+$('#dmAdminDrop').addEventListener('drop', (e) => {
+  e.preventDefault();
+  $('#dmAdminDrop').classList.remove('is-drag');
+  const file = e.dataTransfer.files && e.dataTransfer.files[0];
+  if (file) { dmAdminFile = file; renderDmAdminPreview(); }
+});
+$('#dmAdminFile').addEventListener('change', () => {
+  const file = $('#dmAdminFile').files && $('#dmAdminFile').files[0];
+  if (file) {
+    dmAdminFile = file;
+    if (!$('#dmAdminName').value.trim()) $('#dmAdminName').value = file.name.replace(/\.png$/i, '').slice(0, 40);
+    renderDmAdminPreview();
+  }
+  $('#dmAdminFile').value = '';
+});
+$('#dmAdminSave').addEventListener('click', async () => {
+  const resultEl = $('#dmAdminResult');
+  resultEl.classList.remove('error');
+  const name = $('#dmAdminName').value.trim();
+  if (!name) {
+    resultEl.classList.add('error');
+    resultEl.textContent = 'Adj nevet a képnek.';
+    if (typeof window.markFieldInvalid === 'function') window.markFieldInvalid($('#dmAdminName'), 'Adj nevet a képnek.');
+    return;
+  }
+  if (!dmAdminFile) {
+    resultEl.classList.add('error');
+    resultEl.textContent = 'Válassz ki egy PNG fájlt.';
+    return;
+  }
+  const btn = $('#dmAdminSave');
+  if (typeof window.setButtonLoading === 'function') window.setButtonLoading(btn, true);
+  try {
+    const form = new FormData();
+    form.append('category', dmAdminCategory);
+    form.append('name', name);
+    form.append('variant', dmAdminVariant);
+    form.append('file', dmAdminFile, 'media.png');
+    const res = await fetch(BACKEND_URL + '/api/admin/default-media', { method: 'POST', headers: dmAdminAuth(), body: form });
+    const data = await res.json();
+    if (!data.ok) {
+      resultEl.classList.add('error');
+      resultEl.textContent = data.message || 'A feltöltés sikertelen.';
+      return;
+    }
+    showToast(`„${data.item.name}” feltöltve - a játékosok már választhatják.`);
+    dmAdminItems.unshift(data.item);
+    dmAdminFilter = data.item.category;
+    resetDmAdminForm();
+    renderDefaultMediaAdmin();
+  } catch {
+    resultEl.classList.add('error');
+    resultEl.textContent = 'Nem sikerült elérni a szervert.';
+  } finally {
+    if (typeof window.setButtonLoading === 'function') window.setButtonLoading(btn, false);
+  }
+});
+$('#dmAdminList').addEventListener('click', async (e) => {
+  const toggle = e.target.closest('[data-dm-toggle]');
+  const variant = e.target.closest('[data-dm-variant]');
+  const del = e.target.closest('[data-dm-delete]');
+  if (toggle) {
+    const it = dmAdminItems.find((x) => x.id === Number(toggle.dataset.dmToggle));
+    if (it) updateDefaultMediaItem(it.id, { enabled: !it.enabled });
+  } else if (variant) {
+    const it = dmAdminItems.find((x) => x.id === Number(variant.dataset.dmVariant));
+    if (it) updateDefaultMediaItem(it.id, { variant: it.variant === 'slim' ? 'classic' : 'slim' });
+  } else if (del) {
+    const it = dmAdminItems.find((x) => x.id === Number(del.dataset.dmDelete));
+    if (!it) return;
+    const ok = await confirmModal('Törlés', `Biztosan törlöd: <b>${escapeHtml(it.name)}</b>? Akik már beállították, azoknál megmarad, de többé nem lehet kiválasztani.`, 'Igen, törlés');
+    if (!ok) return;
+    try {
+      const res = await fetch(BACKEND_URL + '/api/admin/default-media/' + it.id, { method: 'DELETE', headers: dmAdminAuth() });
+      const data = await res.json();
+      if (!data.ok) { showToast(data.message || 'Nem sikerült törölni.', true); return; }
+      dmAdminItems = dmAdminItems.filter((x) => x.id !== it.id);
+      renderDefaultMediaAdmin();
+      showToast('Törölve.');
+    } catch {
+      showToast('Nem sikerült elérni a szervert.', true);
+    }
+  }
+});
+$('#dmAdminList').addEventListener('change', (e) => {
+  const input = e.target.closest('[data-dm-rename]');
+  if (!input) return;
+  const it = dmAdminItems.find((x) => x.id === Number(input.dataset.dmRename));
+  const name = input.value.trim();
+  if (!it || !name || name === it.name) { if (it) input.value = it.name; return; }
+  updateDefaultMediaItem(it.id, { name }).then(() => showToast('Átnevezve.'));
+});
+$('#dmAdminList').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && e.target.matches('[data-dm-rename]')) e.target.blur();
+});
+
+// ---------------------------------------------------------------------------
+// Tiltott felhasználónevek (admin)
+// ---------------------------------------------------------------------------
+
+let nameRules = [];
+let nameRulesFilter = 'all';
+let nrMatchType = 'exact';
+let nrAction = 'block';
+let nrFilterWordCount = 0;
+
+const NR_HINTS = {
+  'exact:block': 'A <b>Pontos név</b> csak ezt az egy nevet tiltja le (kis- és nagybetűtől függetlenül).',
+  'contains:block': 'A <b>Tartalmazza</b> minden olyan nevet tilt, amiben ez a részlet szerepel - a leet-írást (0→o, 1→i...) és az alávonást is figyelembe veszi.',
+  'exact:allow': 'A <b>Kivétel</b> ezt a pontos nevet akkor is átengedi, ha az automata szűrő vagy egy "Tartalmazza" szabály fennakadna rajta.'
+};
+
+function syncNameRuleForm() {
+  if (nrAction === 'allow') nrMatchType = 'exact';
+  $$('[data-nr-match]').forEach((b) => {
+    const on = b.dataset.nrMatch === nrMatchType;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-checked', on ? 'true' : 'false');
+    b.disabled = nrAction === 'allow' && b.dataset.nrMatch === 'contains';
+  });
+  $$('[data-nr-action]').forEach((b) => {
+    const on = b.dataset.nrAction === nrAction;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-checked', on ? 'true' : 'false');
+  });
+  $('#nrHint').innerHTML = NR_HINTS[`${nrMatchType}:${nrAction}`] || '';
+  $('#nrAddBtn').textContent = nrAction === 'allow' ? 'Kivétel hozzáadása' : 'Tiltás hozzáadása';
+}
+
+function nrAuthHeaders(json) {
+  return json
+    ? { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token }
+    : { Authorization: 'Bearer ' + session.token };
+}
+
+async function loadNameRules() {
+  $('#nameRulesList').innerHTML = '<div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>';
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/name-rules', { headers: nrAuthHeaders() });
+    const data = await res.json();
+    nameRules = data.ok && Array.isArray(data.rules) ? data.rules : [];
+    nrFilterWordCount = data.ok ? data.filterWordCount || 0 : 0;
+  } catch {
+    nameRules = [];
+  }
+  renderNameRules();
+}
+
+function renderNameRuleStats() {
+  const blocks = nameRules.filter((r) => r.action === 'block');
+  const active = blocks.filter((r) => r.enabled).length;
+  const allows = nameRules.filter((r) => r.action === 'allow').length;
+  const affected = blocks.reduce((n, r) => n + (r.enabled ? r.matchCount : 0), 0);
+  const tile = (value, label, tone) => `<div class="nr-stat nr-stat-${tone}"><b>${value}</b><span>${label}</span></div>`;
+  $('#nameRulesStats').innerHTML =
+    tile(nrFilterWordCount, 'kifejezés az automata szűrőben', 'gold') +
+    tile(active + (blocks.length > active ? ` <small>/ ${blocks.length}</small>` : ''), 'aktív tiltás', 'danger') +
+    tile(allows, 'kivétel', 'success') +
+    tile(affected, 'meglévő fiók érintett', 'orange');
+}
+
+function renderNameRules() {
+  renderNameRuleStats();
+  $$('[data-nr-filter]').forEach((b) => b.classList.toggle('active', b.dataset.nrFilter === nameRulesFilter));
+  const q = ($('#nrSearch').value || '').trim().toLowerCase();
+  const rows = nameRules.filter((r) =>
+    (nameRulesFilter === 'all' || r.action === nameRulesFilter) &&
+    (!q || r.pattern.toLowerCase().includes(q) || (r.note || '').toLowerCase().includes(q)));
+  const list = $('#nameRulesList');
+  if (!nameRules.length) {
+    list.innerHTML = '<div class="nr-empty"><b>Még nincs egyedi szabály.</b><span>Az automata szűrő ettől függetlenül már most is véd a csúnya nevek ellen.</span></div>';
+    return;
+  }
+  if (!rows.length) {
+    list.innerHTML = '<div class="nr-empty"><span>Nincs a szűrésnek megfelelő szabály.</span></div>';
+    return;
+  }
+  list.innerHTML = rows.map((r, i) => `
+    <div class="nr-row${r.enabled ? '' : ' is-off'} nr-row-${r.action}" style="--i:${i}">
+      <div class="nr-row-main">
+        <div class="nr-row-pattern"><code>${escapeHtml(r.pattern)}</code>
+          <span class="nr-chip nr-chip-${r.action}">${r.action === 'allow' ? 'Kivétel' : 'Tiltás'}</span>
+          <span class="nr-chip">${r.matchType === 'contains' ? 'Tartalmazza' : 'Pontos név'}</span>
+        </div>
+        <div class="nr-row-meta">
+          ${r.note ? `<span class="nr-row-note">${escapeHtml(r.note)}</span> · ` : ''}${escapeHtml(r.createdBy)} · ${escapeHtml(formatLedgerDate(r.createdAt))}
+        </div>
+        ${r.action === 'block' && r.matchCount ? `
+          <div class="nr-row-matches">
+            <span>${r.matchCount} meglévő fiók egyezik:</span>
+            ${r.matches.map((u) => `<button type="button" class="nr-user-link" data-nr-open="${escapeHtml(u)}">${escapeHtml(u)}</button>`).join('')}
+            ${r.matchCount > r.matches.length ? `<span class="nr-more">+${r.matchCount - r.matches.length}</span>` : ''}
+          </div>` : ''}
+      </div>
+      <div class="nr-row-actions">
+        <label class="nr-toggle" title="${r.enabled ? 'Aktív' : 'Kikapcsolva'}">
+          <span class="switch"><input type="checkbox" data-nr-toggle="${r.id}"${r.enabled ? ' checked' : ''} /><span class="switch-track"></span><span class="switch-thumb"></span></span>
+          <span class="nr-toggle-label">${r.enabled ? (r.action === 'allow' ? 'Engedélyezve' : 'Tiltva') : 'Kikapcsolva'}</span>
+        </label>
+        <button type="button" class="nr-delete" data-nr-delete="${r.id}" aria-label="Szabály törlése" title="Törlés">
+          <svg viewBox="0 0 24 24" width="16" height="16"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+    </div>`).join('');
+}
+
+async function addNameRule() {
+  const resultEl = $('#nrResult');
+  resultEl.classList.remove('error');
+  resultEl.textContent = '';
+  const input = $('#nrPattern');
+  const pattern = input.value.trim();
+  if (!/^[A-Za-z0-9_]{2,32}$/.test(pattern)) {
+    const msg = 'A minta 2-32 karakter lehet: betű, szám, alávonás.';
+    resultEl.classList.add('error');
+    resultEl.textContent = msg;
+    if (typeof window.markFieldInvalid === 'function') window.markFieldInvalid(input, msg);
+    return;
+  }
+  const btn = $('#nrAddBtn');
+  if (typeof window.setButtonLoading === 'function') window.setButtonLoading(btn, true);
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/name-rules', {
+      method: 'POST',
+      headers: nrAuthHeaders(true),
+      body: JSON.stringify({ pattern, matchType: nrMatchType, action: nrAction, note: $('#nrNote').value.trim() })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      resultEl.classList.add('error');
+      resultEl.textContent = data.message || 'Nem sikerült hozzáadni.';
+      return;
+    }
+    nameRules.unshift(data.rule);
+    input.value = '';
+    $('#nrNote').value = '';
+    renderNameRules();
+    showToast(data.rule.action === 'allow'
+      ? `„${data.rule.pattern}” felvéve a kivételek közé.`
+      : `„${data.rule.pattern}” letiltva${data.rule.matchCount ? ` - ${data.rule.matchCount} meglévő fiók egyezik vele` : ''}.`);
+  } catch {
+    resultEl.classList.add('error');
+    resultEl.textContent = 'Nem sikerült elérni a szervert.';
+  } finally {
+    if (typeof window.setButtonLoading === 'function') window.setButtonLoading(btn, false);
+  }
+}
+
+async function testUsernameAgainstRules() {
+  const name = $('#nrTestInput').value.trim();
+  const out = $('#nrTestResult');
+  if (!name) { $('#nrTestInput').focus(); return; }
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/name-rules/test', {
+      method: 'POST', headers: nrAuthHeaders(true), body: JSON.stringify({ name })
+    });
+    const data = await res.json();
+    if (!data.ok) { showToast(data.message || 'Nem sikerült ellenőrizni.', true); return; }
+    let detail;
+    if (data.allowed) {
+      detail = data.source === 'allow'
+        ? `Engedélyezve - kivétel: <code>${escapeHtml(data.rule.pattern)}</code>`
+        : 'Egyik szabályon és a szűrőn sem akad fenn.';
+    } else if (data.source === 'rule') {
+      detail = `Tiltva a(z) <code>${escapeHtml(data.rule.pattern)}</code> szabály miatt (${data.rule.matchType === 'contains' ? 'tartalmazza' : 'pontos név'}).`;
+    } else {
+      detail = `Az automata szűrő fogta meg${data.word ? `: <code>${escapeHtml(data.word)}</code>` : ''}.`;
+    }
+    out.className = 'nr-test-result ' + (data.allowed ? 'is-ok' : 'is-bad');
+    out.innerHTML = `
+      <span class="nr-test-icon">${data.allowed ? RANK_CHECK_SVG : RANK_CROSS_SVG}</span>
+      <div><b>${escapeHtml(name)}</b> - ${data.allowed ? 'regisztrálható' : 'nem regisztrálható'}<small>${detail}</small></div>
+      ${!data.allowed && data.source === 'filter' ? `<button type="button" class="link-btn" data-nr-allow-name="${escapeHtml(name)}">Kivétel felvétele</button>` : ''}`;
+  } catch {
+    showToast('Nem sikerült elérni a szervert.', true);
+  }
+}
+
+async function scanExistingUsernames() {
+  const btn = $('#nrScanBtn');
+  const out = $('#nameRulesScan');
+  if (typeof window.setButtonLoading === 'function') window.setButtonLoading(btn, true);
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/name-rules/scan', { headers: nrAuthHeaders() });
+    const data = await res.json();
+    const hits = data.ok && Array.isArray(data.hits) ? data.hits : [];
+    if (!hits.length) {
+      out.innerHTML = '<div class="nr-empty nr-empty-ok"><b>Minden rendben.</b><span>Egyetlen meglévő fiók neve sem sérti a jelenlegi szabályokat.</span></div>';
+      return;
+    }
+    out.innerHTML = `<p class="nr-scan-summary"><b>${hits.length}</b> fiók neve sértené a szabályokat:</p>
+      <div class="nr-scan-grid">${hits.map((h, i) => `
+        <button type="button" class="nr-scan-item" data-nr-open="${escapeHtml(h.username)}" style="--i:${i}">
+          <canvas width="28" height="28" data-nr-face="${escapeHtml(h.username)}"></canvas>
+          <span class="nr-scan-name">${escapeHtml(h.username)}</span>
+          <span class="nr-scan-why">${h.source === 'rule' ? `szabály: ${escapeHtml(h.pattern)}` : `szűrő: ${escapeHtml(h.word || '')}`}</span>
+        </button>`).join('')}</div>`;
+    out.querySelectorAll('[data-nr-face]').forEach((c) => drawFaceFromSkin(c, c.dataset.nrFace, 28));
+  } catch {
+    showToast('Nem sikerült elérni a szervert.', true);
+  } finally {
+    if (typeof window.setButtonLoading === 'function') window.setButtonLoading(btn, false);
+  }
+}
+
+$$('[data-nr-match]').forEach((b) => b.addEventListener('click', () => { nrMatchType = b.dataset.nrMatch; syncNameRuleForm(); }));
+$$('[data-nr-action]').forEach((b) => b.addEventListener('click', () => { nrAction = b.dataset.nrAction; syncNameRuleForm(); }));
+$$('[data-nr-filter]').forEach((b) => b.addEventListener('click', () => { nameRulesFilter = b.dataset.nrFilter; renderNameRules(); }));
+$('#nrSearch').addEventListener('input', renderNameRules);
+$('#nrAddBtn').addEventListener('click', addNameRule);
+$('#nrPattern').addEventListener('keydown', (e) => { if (e.key === 'Enter') addNameRule(); });
+$('#nrTestBtn').addEventListener('click', testUsernameAgainstRules);
+$('#nrTestInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') testUsernameAgainstRules(); });
+$('#nrScanBtn').addEventListener('click', scanExistingUsernames);
+
+document.querySelector('.view[data-view="nameRules"]').addEventListener('click', async (e) => {
+  const open = e.target.closest('[data-nr-open]');
+  if (open) { openPlayerProfile(open.dataset.nrOpen); return; }
+  const allowName = e.target.closest('[data-nr-allow-name]');
+  if (allowName) {
+    nrAction = 'allow';
+    nrMatchType = 'exact';
+    $('#nrPattern').value = allowName.dataset.nrAllowName;
+    syncNameRuleForm();
+    $('#nrPattern').scrollIntoView({ block: 'center', behavior: 'smooth' });
+    $('#nrPattern').focus();
+    return;
+  }
+  const del = e.target.closest('[data-nr-delete]');
+  if (del) {
+    const rule = nameRules.find((r) => r.id === Number(del.dataset.nrDelete));
+    if (!rule) return;
+    const ok = await confirmModal('Szabály törlése', `Biztosan törlöd ezt a szabályt: <b>${escapeHtml(rule.pattern)}</b>?`, 'Igen, törlés');
+    if (!ok) return;
+    try {
+      const res = await fetch(BACKEND_URL + '/api/admin/name-rules/' + rule.id, { method: 'DELETE', headers: nrAuthHeaders() });
+      const data = await res.json();
+      if (!data.ok) { showToast(data.message || 'Nem sikerült törölni.', true); return; }
+      nameRules = nameRules.filter((r) => r.id !== rule.id);
+      renderNameRules();
+    } catch {
+      showToast('Nem sikerült elérni a szervert.', true);
+    }
+  }
+});
+document.querySelector('.view[data-view="nameRules"]').addEventListener('change', async (e) => {
+  const toggle = e.target.closest('[data-nr-toggle]');
+  if (!toggle) return;
+  const id = Number(toggle.dataset.nrToggle);
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/name-rules/' + id, {
+      method: 'PUT', headers: nrAuthHeaders(true), body: JSON.stringify({ enabled: toggle.checked })
+    });
+    const data = await res.json();
+    if (!data.ok) { toggle.checked = !toggle.checked; showToast(data.message || 'Nem sikerült menteni.', true); return; }
+    nameRules = nameRules.map((r) => (r.id === id ? data.rule : r));
+    renderNameRules();
+  } catch {
+    toggle.checked = !toggle.checked;
+    showToast('Nem sikerült elérni a szervert.', true);
+  }
+});
+syncNameRuleForm();
+
+// ---------------------------------------------------------------------------
+// Játékosprofil: kiegészítők panel (mindenki láthatja)
+// ---------------------------------------------------------------------------
+
+let profileCosmeticsToken = 0;
+
+async function loadProfileCosmetics(username) {
+  const grid = $('#playerProfileCosmetics');
+  const countEl = $('#playerProfileCosmeticsCount');
+  const myToken = ++profileCosmeticsToken;
+  countEl.textContent = '';
+  grid.innerHTML = '<div class="skeleton skeleton-card"></div>';
+  let items = [];
+  try {
+    const res = await fetch(BACKEND_URL + '/api/cosmetics/owned/' + encodeURIComponent(username));
+    const data = await res.json();
+    items = data.ok && Array.isArray(data.items) ? data.items : [];
+  } catch {
+    items = null;
+  }
+  if (myToken !== profileCosmeticsToken) return;
+  if (items === null) {
+    grid.innerHTML = '<p class="redeem-result">Nem sikerült betölteni a kiegészítőket.</p>';
+    return;
+  }
+  const active = items.filter((c) => c.equipped).length;
+  countEl.innerHTML = items.length
+    ? `<span>${items.length} db</span><span class="pc-count-active">${active} aktív</span>`
+    : '';
+  if (!items.length) {
+    grid.innerHTML = '<div class="pc-empty"><span class="pc-empty-icon" aria-hidden="true">✦</span>Ennek a játékosnak még nincs egyetlen kiegészítője sem.</div>';
+    return;
+  }
+  grid.innerHTML = items.map((c, i) => `
+    <div class="pc-item rarity-${escapeHtml(c.rarity)}${c.equipped ? ' is-active' : ''}" style="--i:${i}">
+      <div class="pc-thumb">${c.hasModel ? cosmeticThumbHtml(c) : '<div class="cosmetic-thumb cosmetic-thumb-empty"></div>'}</div>
+      <div class="pc-info">
+        <div class="pc-name" title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</div>
+        <div class="pc-tags">
+          <span class="cosmetic-tag">${escapeHtml(c.slotLabel)}</span>
+          <span class="cosmetic-tag rarity">${escapeHtml(RARITY_LABELS[c.rarity] || c.rarity)}</span>
+        </div>
+        <div class="pc-status ${c.equipped ? 'on' : 'off'}">
+          <span class="pc-dot" aria-hidden="true"></span>${c.equipped ? 'Aktiválva' : 'Nincs aktiválva'}
+          ${c.expiresAt ? `<span class="pc-expiry">· ${cosmeticExpiryHtml(c.expiresAt)}</span>` : ''}
+        </div>
+      </div>
+    </div>`).join('');
+  hydrateCosmeticThumbs(grid);
+}
+
 
 tryAutoLogin();
