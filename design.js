@@ -90,6 +90,70 @@
     </svg>`;
   }
 
+  const DAYLIGHT = [
+    [7.5, 16.3], [7.0, 17.1], [6.1, 17.8], [6.2, 19.6], [5.3, 20.3], [4.8, 20.7],
+    [5.0, 20.7], [5.7, 20.0], [6.5, 19.0], [7.2, 18.0], [6.9, 16.3], [7.4, 15.9]
+  ];
+
+  function isNight(date) {
+    const d = date || new Date();
+    const [rise, set] = DAYLIGHT[d.getMonth()];
+    const h = d.getHours() + d.getMinutes() / 60;
+    return h < rise || h >= set;
+  }
+
+  let moonSeq = 0;
+  function moonSvg() {
+    const id = 'moon' + (++moonSeq);
+    const stars = [
+      [62, 92, 2.4, 0], [318, 70, 2, 1.2], [352, 214, 1.6, 2.1], [84, 300, 1.8, 0.7],
+      [128, 48, 1.3, 1.7], [290, 330, 1.5, 2.6], [40, 196, 1.2, 3.1], [236, 36, 1.4, 0.4]
+    ].map(([x, y, r, delay]) => `<circle class="moon-star" cx="${x}" cy="${y}" r="${r}" style="animation-delay:${delay}s"/>`).join('');
+    return `<svg class="sun-svg moon-svg" viewBox="0 0 400 400" aria-hidden="true" focusable="false">
+      <defs>
+        <radialGradient id="${id}-glow" cx="50%" cy="50%" r="50%">
+          <stop offset="0" style="stop-color:color-mix(in srgb, var(--gold) 30%, #dfe6ff);stop-opacity:.34"/>
+          <stop offset=".45" style="stop-color:color-mix(in srgb, var(--gold) 20%, #c9d4ff);stop-opacity:.1"/>
+          <stop offset="1" style="stop-color:#c9d4ff;stop-opacity:0"/>
+        </radialGradient>
+        <radialGradient id="${id}-body" cx="38%" cy="34%" r="70%">
+          <stop offset="0" style="stop-color:#ffffff"/>
+          <stop offset=".55" style="stop-color:color-mix(in srgb, var(--gold) 12%, #e9edf8)"/>
+          <stop offset="1" style="stop-color:color-mix(in srgb, var(--gold) 22%, #b9c2dc)"/>
+        </radialGradient>
+        <mask id="${id}-cut">
+          <rect width="400" height="400" fill="#fff"/>
+          <circle cx="228" cy="176" r="50" fill="#000"/>
+        </mask>
+        <filter id="${id}-haze" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="12"/></filter>
+      </defs>
+      <circle cx="200" cy="200" r="200" fill="url(#${id}-glow)"/>
+      <g class="moon-stars" style="fill:color-mix(in srgb, var(--gold) 25%, #fff)">${stars}</g>
+      <circle class="sun-halo moon-halo" cx="200" cy="200" r="62" style="fill:color-mix(in srgb, var(--gold) 25%, #dfe6ff)" opacity=".28" filter="url(#${id}-haze)"/>
+      <g mask="url(#${id}-cut)">
+        <circle cx="200" cy="200" r="52" fill="url(#${id}-body)"/>
+        <circle cx="178" cy="214" r="7" fill="#9aa4c2" opacity=".28"/>
+        <circle cx="194" cy="238" r="4.5" fill="#9aa4c2" opacity=".24"/>
+        <circle cx="166" cy="186" r="4" fill="#9aa4c2" opacity=".22"/>
+      </g>
+    </svg>`;
+  }
+
+  function skyBodySvg() {
+    return isNight() ? moonSvg() : sunSvg();
+  }
+
+  let skyIsNight = null;
+  function refreshSky(force) {
+    const night = isNight();
+    if (!force && night === skyIsNight) return;
+    skyIsNight = night;
+    document.documentElement.classList.toggle('sky-night', night);
+    $$('.page-hero-sun, .auth-sun').forEach((el) => { el.innerHTML = skyBodySvg(); });
+    const eyebrow = $('.page-hero[data-hero-view="home"] .page-hero-eyebrow');
+    if (eyebrow) eyebrow.textContent = greeting();
+  }
+
   function greeting() {
     const h = new Date().getHours();
     if (h < 5) return 'Szép éjszakát';
@@ -111,7 +175,7 @@
     hero.className = 'page-hero';
     hero.dataset.heroView = view;
     hero.innerHTML = `
-      <div class="page-hero-sun" aria-hidden="true">${sunSvg()}</div>
+      <div class="page-hero-sun" aria-hidden="true">${skyBodySvg()}</div>
       <div class="page-hero-icon" aria-hidden="true">${meta.iconHtml || FALLBACK_ICON}</div>
       <div class="page-hero-text">
         <div class="page-hero-eyebrow">${view === 'home' ? greeting() : (meta.groupLabel || 'SolarCenter')}</div>
@@ -170,7 +234,7 @@
       const sun = document.createElement('div');
       sun.className = 'auth-sun';
       sun.setAttribute('aria-hidden', 'true');
-      sun.innerHTML = sunSvg();
+      sun.innerHTML = skyBodySvg();
       side.insertBefore(sun, side.firstChild);
     });
   }
@@ -182,6 +246,10 @@
     wrapSwitchView();
     const active = $('.app-content > .view.active');
     updateCrumbs(active ? active.dataset.view : 'home');
+    skyIsNight = isNight();
+    document.documentElement.classList.toggle('sky-night', skyIsNight);
+    setInterval(() => refreshSky(false), 60000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshSky(false); });
     document.documentElement.classList.add('design-ready');
   }
 

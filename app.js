@@ -1,4 +1,4 @@
-const CENTER_VERSION = '20260924b';
+const CENTER_VERSION = '20260925a';
 
 const BACKEND_URL = 'https://api.overclockgame.hu:8908';
 
@@ -641,14 +641,15 @@ function escapeHtml(s) {
 
 function renderStatBadges(container, values, opts) {
   const showWallet = !!(opts && opts.showWallet);
+  const own = !!(opts && opts.own);
   const items = [
-    { icon: 'rank', label: 'Rang', html: escapeHtml(values.rank) },
-    { icon: 'coin', label: 'PrémiumPont', html: escapeHtml(values.coin) },
-    ...(showWallet ? [{ icon: 'wallet', label: 'Egyenleg', html: escapeHtml(values.wallet) }] : []),
-    { icon: 'time', label: 'Online töltött idő', html: escapeHtml(values.time) }
+    { key: 'rank', icon: 'rank', label: own ? 'Rangod' : 'Rangja', html: escapeHtml(values.rank) },
+    { key: 'coin', icon: 'coin', label: own ? 'Prémiumpontjaid' : 'Prémiumpontjai', html: escapeHtml(values.coin) },
+    ...(showWallet ? [{ key: 'wallet', icon: 'wallet', label: own ? 'Egyenleged' : 'Egyenlege', html: escapeHtml(values.wallet) }] : []),
+    { key: 'time', icon: 'time', label: own ? 'Online töltött időd' : 'Online töltött ideje', html: escapeHtml(values.time) }
   ];
   container.innerHTML = items.map((it) => `
-    <div class="stat-badge">
+    <div class="stat-badge" data-stat="${it.key}">
       <div class="stat-badge-icon">${STAT_ICONS[it.icon]}</div>
       <div>
         <div class="stat-badge-label">${it.label}</div>
@@ -1048,14 +1049,14 @@ async function loadCasinoState() {
     casinoState = data;
 
     const items = [
-      { icon: 'time', label: 'Bejelentkezési sorozat', html: `${data.loginStreakDays} nap` },
-      { icon: 'spin', label: 'Ingyenes pörgetés', html: String(data.freeSpinsAvailable) }
+      { icon: 'time', label: 'Bejelentkezési sorozatod', html: `${data.loginStreakDays} nap` },
+      { icon: 'spin', label: 'Ingyenes pörgetéseid', html: String(data.freeSpinsAvailable) }
     ];
     if (data.purchasedSpinsAvailable > 0) {
-      items.push({ icon: 'spin', label: 'Megvásárolt pörgetés', html: String(data.purchasedSpinsAvailable) });
+      items.push({ icon: 'spin', label: 'Megvásárolt pörgetéseid', html: String(data.purchasedSpinsAvailable) });
     }
     if (data.purchasesUnlocked) {
-      items.push({ icon: 'spin', label: 'Vásárolható próbálkozás', html: `${data.purchasesRemaining}/2 (200 PP/db)` });
+      items.push({ icon: 'spin', label: 'Még vásárolható próbálkozásaid', html: `${data.purchasesRemaining}/2 (200 PP/db)` });
     }
     grid.innerHTML = items.map((it) => `
       <div class="stat-badge">
@@ -1239,7 +1240,7 @@ async function enterApp(meData) {
   $('#profileName').textContent = session.username;
 
   if (!meData) meData = await apiGetMe(session.token);
-  renderStatBadges($('#statBadgeGrid'), formatStats(meData));
+  renderStatBadges($('#statBadgeGrid'), formatStats(meData), { own: true });
   renderDiscordLinkBadge($('#profileDiscordLink'), meData, { mode: 'self' });
   renderSanctionStatus($('#profileSanctionStatus'), meData);
   renderNameBadges($('#profileNameBadges'), meData?.badges);
@@ -1281,6 +1282,7 @@ async function enterApp(meData) {
   loadHomeFriends();
 
   loadHomeStaffStats();
+  loadHomePlaytimeWeek();
 
   refreshTradeBadge();
 }
@@ -1759,10 +1761,10 @@ function switchView(view) {
   $$('.app-nav-item[data-view]').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
   $$('.view').forEach((v) => v.classList.toggle('active', v.dataset.view === view));
   syncNavGroups(view);
-  if (view === 'skin') { endDefaultMediaTry(false); loadSkinPreview3d(); loadDefaultMediaGallery(); }
+  if (view === 'skin') { endDefaultMediaTry(false); loadSkinPreview3d(); loadDefaultMediaGallery(); loadMySkinSubmissions(); }
   if (view === 'ranks') refreshPpBalance();
   if (view === 'wallet') refreshPpBalance();
-  if (view === 'security') { loadSecurityStatus(); loadSecurityPinStatus(); }
+  if (view === 'security') { loadSecurityStatus(); loadSecurityPinStatus(); loadClientSettingsState(); }
   if (view === 'ledger') loadLedger();
   if (view === 'purchaseLogs') loadPurchaseLogsGlobal();
   if (view === 'staffActionLogs') loadStaffActionLogsGlobal();
@@ -1771,7 +1773,7 @@ function switchView(view) {
   if (view === 'revenue') loadRevenue();
   if (view === 'newsAdmin') { resetNewsForm(); loadNewsAdmin(); }
   if (view === 'badges') { resetBadgeForm(); loadBadgesAdmin(); }
-  if (view === 'defaultMediaAdmin') { resetDmAdminForm(); loadDefaultMediaAdmin(); }
+  if (view === 'defaultMediaAdmin') { resetDmAdminForm(); loadDefaultMediaAdmin(); loadSkinSubmissionsAdmin(); }
   if (view === 'nameRules') loadNameRules();
   if (view === 'discounts') { resetDiscountForm(); loadDiscountsAdmin(); }
   if (view === 'coupons') { resetCouponForm(); loadCouponsAdmin(); }
@@ -1786,6 +1788,21 @@ function switchView(view) {
 $$('.app-nav-item[data-view]').forEach((btn) => {
   btn.addEventListener('click', () => switchView(btn.dataset.view));
 });
+
+function drawSkinFace(ctx, img, size) {
+  ctx.clearRect(0, 0, size, size);
+  const scale = (img.naturalWidth || img.width) / 64;
+  ctx.drawImage(img, 8 * scale, 8 * scale, 8 * scale, 8 * scale, 0, 0, size, size);
+  if ((img.naturalHeight || img.height) > (img.naturalWidth || img.width) / 2) {
+    ctx.drawImage(img, 40 * scale, 8 * scale, 8 * scale, 8 * scale, 0, 0, size, size);
+  }
+}
+
+async function drawFallbackFace(ctx, size) {
+  const steve = await SkinPreview.getSteveImage();
+  if (steve) drawSkinFace(ctx, steve, size);
+  else drawDefaultFace(ctx, size);
+}
 
 function drawDefaultFace(ctx, size) {
   const px = size / 8;
@@ -1808,16 +1825,8 @@ async function drawFaceFromSkin(canvas, username, size) {
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingEnabled = false;
   const img = await loadSkinImage(username);
-  if (img) {
-    ctx.clearRect(0, 0, size, size);
-    const scale = (img.naturalWidth || img.width) / 64;
-    ctx.drawImage(img, 8 * scale, 8 * scale, 8 * scale, 8 * scale, 0, 0, size, size);
-    if ((img.naturalHeight || img.height) > (img.naturalWidth || img.width) / 2) {
-      ctx.drawImage(img, 40 * scale, 8 * scale, 8 * scale, 8 * scale, 0, 0, size, size);
-    }
-  } else {
-    drawDefaultFace(ctx, size);
-  }
+  if (img) drawSkinFace(ctx, img, size);
+  else await drawFallbackFace(ctx, size);
 }
 
 function loadSkinImage(username) {
@@ -1834,16 +1843,10 @@ let stopHomeSkinPreview = null;
 async function loadHomeSkinPreview() {
   const [img, capeImg] = await Promise.all([loadSkinImage(session.username), loadCapeImage(session.username)]);
   const noteEl = $('#profileSkinNote');
-  if (!img) {
-    if (stopHomeSkinPreview) { stopHomeSkinPreview(); stopHomeSkinPreview = null; }
-    const canvas = $('#homeSkinCanvas');
-    canvas.width = canvas.width;
-    noteEl.textContent = 'Még nincs feltöltött skinred - tölts fel egyet a Skin fülön!';
-    return;
-  }
-  noteEl.textContent = '';
+  noteEl.textContent = img ? '' : 'Még nincs saját skined, ezért az alap skin látszik - a Skin fülön feltölthetsz egyet, vagy választhatsz a kínálatból.';
+  const skin = img || await SkinPreview.getSteveImage();
   if (stopHomeSkinPreview) stopHomeSkinPreview();
-  stopHomeSkinPreview = SkinPreview.start($('#homeSkinCanvas'), img, false, capeImg);
+  stopHomeSkinPreview = SkinPreview.start($('#homeSkinCanvas'), skin, false, capeImg);
 }
 
 let stopSkinPreview = null;
@@ -1852,14 +1855,9 @@ let skinModel = 'classic';
 async function loadSkinPreview3d() {
   if (!session) return;
   const [img, capeImg] = await Promise.all([loadSkinImage(session.username), loadCapeImage(session.username)]);
-  if (!img) {
-    if (stopSkinPreview) { stopSkinPreview(); stopSkinPreview = null; }
-    const canvas = $('#skinPreview3d');
-    canvas.width = canvas.width;
-    return;
-  }
+  const skin = img || await SkinPreview.getSteveImage();
   if (stopSkinPreview) stopSkinPreview();
-  stopSkinPreview = SkinPreview.start($('#skinPreview3d'), img, skinModel === 'slim', capeImg);
+  stopSkinPreview = SkinPreview.start($('#skinPreview3d'), skin, img ? skinModel === 'slim' : false, capeImg);
 }
 
 $$('.skin-model-toggle .pill').forEach((p) => {
@@ -1899,6 +1897,8 @@ $('#skinResetBtn').addEventListener('click', async () => {
     const data = await res.json();
     if (data.ok) {
       statusEl.textContent = 'Alapértelmezett skin visszaállítva.';
+      skinModel = 'classic';
+      $$('.skin-model-toggle .pill[data-model]').forEach((p) => p.classList.toggle('active', p.dataset.model === 'classic'));
       loadSkinPreview3d();
       loadHomeSkinPreview();
       loadTopbarAvatar();
@@ -2123,16 +2123,8 @@ async function drawFaceForPlayer(canvas, player) {
   ctx.imageSmoothingEnabled = false;
   const size = canvas.width;
   const img = player.hasSkin ? await loadSkinImage(player.username) : null;
-  if (img) {
-    ctx.clearRect(0, 0, size, size);
-    const scale = (img.naturalWidth || img.width) / 64;
-    ctx.drawImage(img, 8 * scale, 8 * scale, 8 * scale, 8 * scale, 0, 0, size, size);
-    if ((img.naturalHeight || img.height) > (img.naturalWidth || img.width) / 2) {
-      ctx.drawImage(img, 40 * scale, 8 * scale, 8 * scale, 8 * scale, 0, 0, size, size);
-    }
-  } else {
-    drawDefaultFace(ctx, size);
-  }
+  if (img) drawSkinFace(ctx, img, size);
+  else await drawFallbackFace(ctx, size);
 }
 
 let lastAdminPlayerUsername = null;
@@ -2158,16 +2150,10 @@ async function openPlayerProfile(username) {
 
   const noteEl = $('#playerProfileSkinNote');
   const [img, capeImg] = await Promise.all([loadSkinImage(username), loadCapeImage(username)]);
-  if (!img) {
-    if (stopPlayerPreview) { stopPlayerPreview(); stopPlayerPreview = null; }
-    const canvas = $('#playerProfileSkinCanvas');
-    canvas.width = canvas.width;
-    noteEl.textContent = 'Ez a játékos még nem töltött fel skint.';
-    return;
-  }
-  noteEl.textContent = '';
+  noteEl.textContent = img ? '' : 'Ez a játékos még nem töltött fel skint - az alap skin látszik.';
+  const skin = img || await SkinPreview.getSteveImage();
   if (stopPlayerPreview) stopPlayerPreview();
-  stopPlayerPreview = SkinPreview.start($('#playerProfileSkinCanvas'), img, false, capeImg);
+  stopPlayerPreview = SkinPreview.start($('#playerProfileSkinCanvas'), skin, false, capeImg);
 }
 
 function renderAdminLockStatus(locked) {
@@ -3238,6 +3224,32 @@ async function cancelSubscription(rankId, buttonEl) {
   }
 }
 
+function textPromptModal(title, message, placeholder, okLabel) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal-card">
+        <h3>${title}</h3>
+        <p>${message}</p>
+        <input type="text" class="gift-modal-input" maxlength="200" placeholder="${escapeHtml(placeholder || '')}" />
+        <div class="modal-actions">
+          <button type="button" class="btn-outline" data-prompt-cancel>Mégse</button>
+          <button type="button" class="btn-glow" data-prompt-ok style="margin-top:0;">${okLabel || 'Rendben'}</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const input = overlay.querySelector('input');
+    const finish = (result) => { overlay.remove(); resolve(result); };
+    overlay.querySelector('[data-prompt-cancel]').addEventListener('click', () => finish(null));
+    overlay.querySelector('[data-prompt-ok]').addEventListener('click', () => finish(input.value.trim()));
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') finish(input.value.trim()); if (e.key === 'Escape') finish(null); });
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) finish(null); });
+    setTimeout(() => input.focus(), 30);
+  });
+}
+
 function confirmModal(title, message, okLabel) {
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
@@ -3520,8 +3532,9 @@ const LEDGER_TYPE_LABELS = {
 let ledgerEntries = [];
 
 function formatLedgerDate(sqliteDatetime) {
-  const d = new Date(sqliteDatetime.replace(' ', 'T') + 'Z');
-  if (Number.isNaN(d.getTime())) return sqliteDatetime;
+  const raw = String(sqliteDatetime || '');
+  const d = new Date(raw.includes('T') ? raw : raw.replace(' ', 'T') + 'Z');
+  if (Number.isNaN(d.getTime())) return raw;
   const pad = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}. ${pad(d.getMonth() + 1)}. ${pad(d.getDate())}. ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
@@ -3722,6 +3735,74 @@ $('#ledgerToInput').addEventListener('change', loadLedger);
 
 const STAFF_STAT_ICON_TICKET = '<svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" d="M3 9a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v1a1.5 1.5 0 0 0 0 3v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1a1.5 1.5 0 0 0 0-3z"/><path d="M9 7v10" stroke="currentColor" stroke-width="1.6" stroke-dasharray="2.5 2.5"/></svg>';
 
+const STAFF_STAT_ICON_STAR = '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2.8l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 16.8l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg>';
+let staffStatsMonth = null;
+let staffPointsConfigCache = null;
+
+function monthOptionLabel(month) {
+  const d = new Date(month + '-01T12:00:00');
+  return capitalizeFirst(d.toLocaleDateString('hu-HU', { year: 'numeric', month: 'long' }));
+}
+
+function fillStaffMonthSelect(current) {
+  const select = $('#staffStatsMonthSelect');
+  if (!select || select.options.length) return;
+  const [y, m] = current.split('-').map(Number);
+  const months = [];
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(Date.UTC(y, m - 1 - i, 1));
+    months.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`);
+  }
+  select.innerHTML = months.map((mo, i) => `<option value="${mo}">${monthOptionLabel(mo)}${i === 0 ? ' (aktuális)' : ''}</option>`).join('');
+}
+
+function renderStaffPointsConfig(cfg, currentMonth) {
+  if (!cfg) return;
+  staffPointsConfigCache = cfg;
+  const set = (id, v) => { const el = $(id); if (el && document.activeElement !== el) el.value = String(v); };
+  set('#staffPointsPerMute', cfg.perMute);
+  set('#staffPointsPerBan', cfg.perBan);
+  set('#staffPointsPerTicket', cfg.perTicket);
+  $('#staffPointsConfigMeta').textContent = cfg.updatedAt
+    ? `Utoljára módosította: ${cfg.updatedBy || 'ismeretlen'}, ${formatSanctionUntil(cfg.updatedAt)}`
+    : 'Még senki nem módosította - ezek az alapértékek.';
+  const month = staffStatsMonth || currentMonth;
+  $('#staffStatsMonthNote').textContent = month === currentMonth
+    ? 'A hónap még tart - a pontok a hónap végéig folyamatosan nőnek.'
+    : 'Lezárt hónap - ezt a pontszámot kell kiosztani.';
+}
+
+$('#staffStatsMonthSelect')?.addEventListener('change', (e) => {
+  staffStatsMonth = e.target.value;
+  loadStaffStats();
+});
+
+$('#staffPointsSaveBtn')?.addEventListener('click', async () => {
+  const btn = $('#staffPointsSaveBtn');
+  const read = (id) => Number(String($(id).value).replace(',', '.'));
+  const body = { perMute: read('#staffPointsPerMute'), perBan: read('#staffPointsPerBan'), perTicket: read('#staffPointsPerTicket') };
+  if (Object.values(body).some((v) => !Number.isFinite(v) || v < 0 || v > 1000)) {
+    showToast('A pontértékek 0 és 1000 közötti számok lehetnek.', true);
+    return;
+  }
+  if (typeof window.setButtonLoading === 'function') window.setButtonLoading(btn, true);
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/staff-points/config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!data.ok) { showToast(data.message || 'Nem sikerült menteni.', true); return; }
+    showToast('Pontozás elmentve.');
+    loadStaffStats();
+  } catch {
+    showToast('Nem sikerült elérni a szervert.', true);
+  } finally {
+    if (typeof window.setButtonLoading === 'function') window.setButtonLoading(btn, false);
+  }
+});
+
 function renderStaffStatsSummary(staff) {
   const container = $('#staffStatsSummary');
   if (!staff.length) {
@@ -3736,7 +3817,9 @@ function renderStaffStatsSummary(staff) {
     return acc;
   }, { onlineSeconds: 0, mutesIssued: 0, bansIssued: 0, ticketsClosed: 0 });
 
+  const totalPoints = staff.reduce((acc, s) => acc + (Number(s.points) || 0), 0);
   const tiles = [
+    { icon: STAFF_STAT_ICON_STAR, label: 'Összes kiosztandó pont', value: formatPoints(totalPoints) },
     { icon: STAT_ICONS.time, label: 'Összes online idő', value: formatPlaytime(totals.onlineSeconds) },
     { icon: ICONS.micMute, label: 'Összes kiadott mute', value: totals.mutesIssued.toLocaleString('hu-HU') },
     { icon: ICONS.ban, label: 'Összes kiadott ban', value: totals.bansIssued.toLocaleString('hu-HU') },
@@ -3756,15 +3839,21 @@ async function loadStaffStats() {
   const grid = $('#staffStatsGrid');
   let staff = [];
   try {
-    const res = await fetch(BACKEND_URL + '/api/admin/staff-stats', {
+    const query = staffStatsMonth ? '?month=' + encodeURIComponent(staffStatsMonth) : '';
+    const res = await fetch(BACKEND_URL + '/api/admin/staff-stats' + query, {
       headers: { Authorization: 'Bearer ' + session.token }
     });
     const data = await res.json();
     staff = data.ok && Array.isArray(data.staff) ? data.staff : [];
+    if (data.ok && data.currentMonth) {
+      fillStaffMonthSelect(data.currentMonth);
+      if (!staffStatsMonth) $('#staffStatsMonthSelect').value = data.month;
+      renderStaffPointsConfig(data.config, data.currentMonth);
+    }
   } catch {
     staff = [];
   }
-  staff.sort((a, b) => b.onlineSeconds - a.onlineSeconds);
+  staff.sort((a, b) => (Number(b.points) || 0) - (Number(a.points) || 0) || b.onlineSeconds - a.onlineSeconds);
 
   renderStaffStatsSummary(staff);
 
@@ -3773,6 +3862,10 @@ async function loadStaffStats() {
       <div class="staff-stat-card-head">
         <div class="staff-stat-card-name">${escapeHtml(s.username)}</div>
         <div class="staff-stat-card-rank">${escapeHtml(s.rank)}</div>
+      </div>
+      <div class="staff-stat-card-points">
+        <span>Pontok</span>
+        <b>${formatPoints(s.points)}</b>
       </div>
       <div class="staff-stat-rows">
         <div class="staff-stat-row">
@@ -5143,7 +5236,7 @@ async function loadHomeFriends() {
         <canvas class="player-card-canvas" data-idx="${i}" width="40" height="40"></canvas>
         <div class="player-card-info">
           <div class="player-card-label">Név</div>
-          <div class="player-card-name friend-card-name ${f.online ? 'online' : ''}">${escapeHtml(f.username)}</div>
+          <div class="player-card-name friend-card-name ${f.online ? 'online' : ''}">${f.online ? '<span class="online-dot" aria-hidden="true"></span><span class="sr-only">Online: </span>' : ''}<span class="friend-card-name-text">${escapeHtml(f.username)}</span></div>
         </div>
       </div>
     `).join('');
@@ -5174,11 +5267,150 @@ async function loadHomeStaffStats() {
     $('#homeStaffStatBans').textContent = String(data.bansIssued || 0);
     $('#homeStaffStatTickets').textContent = String(data.ticketsClosed || 0);
     $('#homeStaffStatsRank').textContent = data.rank || '';
+    renderHomeStaffPoints(data);
     $('#homeStaffStatsMonth').textContent =
       new Date().toLocaleDateString('hu-HU', { year: 'numeric', month: 'long' }) + ' - a hónap elejétől';
     card.classList.remove('hidden');
   } catch {
     card.classList.add('hidden');
+  }
+}
+
+function formatPoints(n) {
+  const v = Number(n) || 0;
+  return v.toLocaleString('hu-HU', { maximumFractionDigits: 2 });
+}
+
+function renderHomeStaffPoints(data) {
+  const strip = $('#homeStaffPoints');
+  if (!strip) return;
+  const cfg = data.config || {};
+  $('#homeStaffPointsValue').textContent = formatPoints(data.points);
+  const prevLabel = data.previousMonth
+    ? new Date(data.previousMonth + '-01T12:00:00').toLocaleDateString('hu-HU', { month: 'long' })
+    : 'előző hónap';
+  $('#homeStaffPointsPrev').textContent = `${capitalizeFirst(prevLabel)}: ${formatPoints(data.previousPoints)} pont`;
+  $('#homeStaffPointsRates').textContent =
+    `Némítás ${formatPoints(cfg.perMute)} · Kitiltás ${formatPoints(cfg.perBan)} · Ticket ${formatPoints(cfg.perTicket)} pont`;
+}
+
+const WEEKDAY_SHORT = ['V', 'H', 'K', 'Sze', 'Cs', 'P', 'Szo'];
+const WEEKDAY_LONG = ['vasárnap', 'hétfő', 'kedd', 'szerda', 'csütörtök', 'péntek', 'szombat'];
+
+function formatDuration(seconds) {
+  const s = Math.max(0, Math.round(Number(seconds) || 0));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (h && m) return `${h} óra ${m} perc`;
+  if (h) return `${h} óra`;
+  return `${m} perc`;
+}
+
+function niceHourStep(maxHours) {
+  if (maxHours <= 1) return 0.25;
+  if (maxHours <= 2) return 0.5;
+  if (maxHours <= 5) return 1;
+  if (maxHours <= 10) return 2;
+  if (maxHours <= 20) return 4;
+  return 6;
+}
+
+function renderPlaytimeChart(payload) {
+  const chart = $('#homePlaytimeChart');
+  if (!chart) return;
+  const days = Array.isArray(payload && payload.days) ? payload.days : [];
+  const total = days.reduce((acc, d) => acc + (Number(d.seconds) || 0), 0);
+  $('#homePlaytimeTotal').textContent = formatDuration(total);
+  $('#homePlaytimeEmpty').classList.toggle('hidden', total > 0);
+
+  const maxHours = Math.max(...days.map((d) => (Number(d.seconds) || 0) / 3600), 0);
+  const step = niceHourStep(maxHours);
+  const top = Math.max(step, Math.ceil(maxHours / step) * step);
+  const ticks = [];
+  for (let v = 0; v <= top + 1e-9; v += step) ticks.push(v);
+  const tickLabel = (v) => (v === 0 ? '0' : (Number.isInteger(v) ? `${v}ó` : `${Math.round(v * 60)}p`));
+
+  const parsed = days.map((d) => {
+    const date = new Date(d.day + 'T12:00:00');
+    return { ...d, date, isToday: d.day === payload.today };
+  });
+  if (parsed.length) {
+    const first = parsed[0].date.toLocaleDateString('hu-HU', { month: 'short', day: 'numeric' });
+    const last = parsed[parsed.length - 1].date.toLocaleDateString('hu-HU', { month: 'short', day: 'numeric' });
+    $('#homePlaytimeRange').textContent = `${first} - ${last}`;
+  }
+
+  chart.innerHTML = `
+    <div class="pt-grid" aria-hidden="true">
+      ${ticks.slice().reverse().map((v) => `<div class="pt-gridline"><span>${tickLabel(v)}</span></div>`).join('')}
+    </div>
+    <div class="pt-bars">
+      ${parsed.map((d, i) => {
+        const pct = top > 0 ? Math.min(100, ((Number(d.seconds) || 0) / 3600 / top) * 100) : 0;
+        const long = `${capitalizeFirst(WEEKDAY_LONG[d.date.getDay()])}, ${d.date.toLocaleDateString('hu-HU', { month: 'long', day: 'numeric' })}`;
+        return `
+        <div class="pt-col${d.isToday ? ' is-today' : ''}" style="--i:${i}" tabindex="0"
+             data-tip="${escapeHtml(long)}" data-value="${escapeHtml(formatDuration(d.seconds))}"
+             aria-label="${escapeHtml(long)}: ${escapeHtml(formatDuration(d.seconds))}">
+          <div class="pt-track"><div class="pt-bar${d.seconds > 0 ? '' : ' is-zero'}" style="--h:${pct.toFixed(2)}%"></div></div>
+          <span class="pt-day">${d.isToday ? 'Ma' : WEEKDAY_SHORT[d.date.getDay()]}</span>
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="pt-tooltip" hidden></div>
+  `;
+
+  const tbody = $('#homePlaytimeTable tbody');
+  if (tbody) {
+    tbody.innerHTML = parsed.map((d) =>
+      `<tr><td>${escapeHtml(d.date.toLocaleDateString('hu-HU', { weekday: 'long', month: 'long', day: 'numeric' }))}</td><td>${escapeHtml(formatDuration(d.seconds))}</td></tr>`
+    ).join('');
+  }
+}
+
+function bindPlaytimeTooltip() {
+  const chart = $('#homePlaytimeChart');
+  if (!chart || chart.__tipBound) return;
+  chart.__tipBound = true;
+  const show = (col) => {
+    const tip = $('.pt-tooltip', chart);
+    if (!tip || !col) return;
+    tip.innerHTML = `<span>${col.dataset.tip}</span><b>${col.dataset.value}</b>`;
+    tip.hidden = false;
+    const cr = chart.getBoundingClientRect();
+    const r = col.getBoundingClientRect();
+    const bar = $('.pt-bar', col);
+    const br = bar ? bar.getBoundingClientRect() : r;
+    const x = r.left + r.width / 2 - cr.left;
+    const half = tip.offsetWidth / 2;
+    tip.style.left = Math.max(half, Math.min(cr.width - half, x)) + 'px';
+    tip.style.top = Math.max(0, (br.top - cr.top) - 10) + 'px';
+    $$('.pt-col', chart).forEach((c) => c.classList.toggle('is-hover', c === col));
+  };
+  const hide = () => {
+    const tip = $('.pt-tooltip', chart);
+    if (tip) tip.hidden = true;
+    $$('.pt-col', chart).forEach((c) => c.classList.remove('is-hover'));
+  };
+  chart.addEventListener('pointerover', (e) => show(e.target.closest('.pt-col')));
+  chart.addEventListener('pointerleave', hide);
+  chart.addEventListener('focusin', (e) => show(e.target.closest('.pt-col')));
+  chart.addEventListener('focusout', hide);
+}
+
+async function loadHomePlaytimeWeek() {
+  const card = $('#homePlaytimeCard');
+  if (!card || !session || !session.token) return;
+  bindPlaytimeTooltip();
+  try {
+    const res = await fetch(BACKEND_URL + '/api/me/playtime/week', { headers: { Authorization: 'Bearer ' + session.token } });
+    const data = await res.json();
+    if (!data.ok) throw new Error('bad');
+    $('#homePlaytimeEmpty').textContent = 'Ezen a héten még nem játszottál - amint felcsatlakozol a szerverre, itt látod majd a napi bontást.';
+    renderPlaytimeChart(data);
+  } catch {
+    renderPlaytimeChart({ days: [], today: '' });
+    $('#homePlaytimeEmpty').textContent = 'A heti bontás most nem tölthető be - próbáld újra később.';
   }
 }
 
@@ -5696,9 +5928,31 @@ async function renderCosmeticCharacterPreview() {
   }
 
   const slim = myCosmeticsSkinSlim();
-  stopCosmeticCharPreview = SkinPreview.start(canvas, skinImg, slim, capeImg, cosmetics, null, { wheelZoom: true });
+  stopCosmeticCharPreview = SkinPreview.start(canvas, skinImg, slim, capeImg, cosmetics, null, { wheelZoom: true, spin: cosmeticPreviewSpin });
   syncCosmeticZoomRange();
+  syncCosmeticSpinButton();
 }
+
+let cosmeticPreviewSpin = (() => {
+  try { return localStorage.getItem('solaryn.cosmeticSpin') !== 'off'; } catch { return true; }
+})();
+
+function syncCosmeticSpinButton() {
+  const btn = $('#cosmeticSpinBtn');
+  if (!btn) return;
+  btn.classList.toggle('is-paused', !cosmeticPreviewSpin);
+  btn.setAttribute('aria-pressed', cosmeticPreviewSpin ? 'true' : 'false');
+  const label = cosmeticPreviewSpin ? 'Forgás megállítása' : 'Forgás indítása';
+  btn.setAttribute('aria-label', label);
+  btn.title = label;
+}
+
+$('#cosmeticSpinBtn')?.addEventListener('click', () => {
+  cosmeticPreviewSpin = !cosmeticPreviewSpin;
+  try { localStorage.setItem('solaryn.cosmeticSpin', cosmeticPreviewSpin ? 'on' : 'off'); } catch {}
+  stopCosmeticCharPreview?.setSpin?.(cosmeticPreviewSpin);
+  syncCosmeticSpinButton();
+});
 
 function syncCosmeticZoomRange() {
   const range = $('#cosmeticZoomRange');
@@ -10357,6 +10611,7 @@ async function drawDefaultMediaThumb(canvas, item) {
 
 function defaultMediaMetaHtml(item) {
   const chips = [];
+  if (item.submittedBy) chips.push(`<span class="dm-chip dm-chip-author" title="Beküldte: ${escapeHtml(item.submittedBy)}">${escapeHtml(item.submittedBy)}</span>`);
   if (item.hd) chips.push(`<span class="dm-chip dm-chip-hd">HD · ${item.width}x${item.height}</span>`);
   else chips.push(`<span class="dm-chip">${item.width}x${item.height}</span>`);
   if (item.kind === 'skin') chips.push(`<span class="dm-chip">${item.variant === 'slim' ? 'Vékony kar' : 'Klasszikus'}</span>`);
@@ -10733,6 +10988,318 @@ $('#dmAdminList').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && e.target.matches('[data-dm-rename]')) e.target.blur();
 });
 
+async function loadAuthImage(url) {
+  try {
+    const res = await fetch(url, { headers: { Authorization: 'Bearer ' + session.token } });
+    if (!res.ok) return null;
+    const objectUrl = URL.createObjectURL(await res.blob());
+    const img = await loadImage(objectUrl);
+    URL.revokeObjectURL(objectUrl);
+    return img;
+  } catch {
+    return null;
+  }
+}
+
+function submissionImageUrl(id) {
+  return BACKEND_URL + '/api/default-media/submissions/' + id + '/image';
+}
+
+const SUBMISSION_STATUS = {
+  pending: { label: 'Elbírálásra vár', cls: 'is-pending' },
+  approved: { label: 'Elfogadva', cls: 'is-approved' },
+  rejected: { label: 'Elutasítva', cls: 'is-rejected' }
+};
+
+let skinSubmitVariant = 'classic';
+let skinSubmitFile = null;
+let mySkinSubmissions = [];
+
+async function renderSkinSubmitPreview() {
+  const canvas = $('#skinSubmitPreview');
+  const text = $('#skinSubmitDropText');
+  if (!skinSubmitFile) {
+    canvas.classList.add('hidden');
+    text.textContent = 'Húzd ide a .png skint, vagy kattints a tallózáshoz';
+    return;
+  }
+  const url = URL.createObjectURL(skinSubmitFile);
+  const img = await loadImage(url);
+  URL.revokeObjectURL(url);
+  if (!img) {
+    canvas.classList.add('hidden');
+    text.textContent = 'Ez a fájl nem olvasható PNG kép.';
+    return;
+  }
+  drawSkinFront(canvas, img, skinSubmitVariant === 'slim');
+  canvas.classList.remove('hidden');
+  text.textContent = `${skinSubmitFile.name} · ${img.naturalWidth}x${img.naturalHeight}`;
+}
+
+function pickSkinSubmitFile(file) {
+  if (!file) return;
+  skinSubmitFile = file;
+  const nameInput = $('#skinSubmitName');
+  if (!nameInput.value.trim()) nameInput.value = file.name.replace(/\.png$/i, '').replace(/[_-]+/g, ' ').slice(0, 40);
+  $('#skinSubmitResult').textContent = '';
+  renderSkinSubmitPreview();
+}
+
+async function loadMySkinSubmissions() {
+  if (!session || !session.token) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/default-media/submissions/mine', { headers: { Authorization: 'Bearer ' + session.token } });
+    const data = await res.json();
+    mySkinSubmissions = data.ok && Array.isArray(data.items) ? data.items : [];
+  } catch {
+    mySkinSubmissions = [];
+  }
+  renderMySkinSubmissions();
+}
+
+function renderMySkinSubmissions() {
+  const list = $('#skinSubmitList');
+  if (!list) return;
+  if (!mySkinSubmissions.length) {
+    list.innerHTML = '<p class="dm-empty">Még nem küldtél be skint.</p>';
+    return;
+  }
+  list.innerHTML = mySkinSubmissions.map((it) => {
+    const st = SUBMISSION_STATUS[it.status] || SUBMISSION_STATUS.pending;
+    const when = formatSanctionUntil(it.reviewedAt || it.createdAt);
+    return `
+      <div class="skin-submit-row" data-submission-id="${it.id}">
+        <canvas class="skin-submit-thumb" width="36" height="72" data-submission-thumb="${it.id}"></canvas>
+        <div class="skin-submit-row-text">
+          <div class="skin-submit-row-name">${escapeHtml(it.name)}</div>
+          <div class="skin-submit-row-meta">${it.hd ? 'HD · ' : ''}${it.width}x${it.height} · ${escapeHtml(when)}</div>
+          ${it.status === 'rejected' && it.rejectReason ? `<div class="skin-submit-row-reason">Indok: ${escapeHtml(it.rejectReason)}</div>` : ''}
+        </div>
+        <div class="skin-submit-row-side">
+          <span class="submission-status ${st.cls}">${st.label}</span>
+          ${it.status === 'pending' ? `<button type="button" class="link-btn" data-submission-withdraw="${it.id}">Visszavonás</button>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+  list.querySelectorAll('[data-submission-thumb]').forEach(async (c) => {
+    const item = mySkinSubmissions.find((x) => x.id === Number(c.dataset.submissionThumb));
+    if (!item || item.status === 'rejected') { c.classList.add('is-empty'); return; }
+    const img = item.status === 'approved'
+      ? (item.mediaId ? await loadImage(defaultMediaImageUrl(item.mediaId)) : null)
+      : await loadAuthImage(submissionImageUrl(item.id));
+    if (img && c.isConnected) drawSkinFront(c, img, item.variant === 'slim');
+    else c.classList.add('is-empty');
+  });
+}
+
+$$('[data-submit-variant]').forEach((b) => b.addEventListener('click', () => {
+  skinSubmitVariant = b.dataset.submitVariant === 'slim' ? 'slim' : 'classic';
+  $$('[data-submit-variant]').forEach((x) => x.classList.toggle('active', x === b));
+  renderSkinSubmitPreview();
+}));
+$('#skinSubmitDrop').addEventListener('click', () => $('#skinSubmitFile').click());
+$('#skinSubmitDrop').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('#skinSubmitFile').click(); }
+});
+$('#skinSubmitDrop').addEventListener('dragover', (e) => { e.preventDefault(); $('#skinSubmitDrop').classList.add('is-drag'); });
+$('#skinSubmitDrop').addEventListener('dragleave', () => $('#skinSubmitDrop').classList.remove('is-drag'));
+$('#skinSubmitDrop').addEventListener('drop', (e) => {
+  e.preventDefault();
+  $('#skinSubmitDrop').classList.remove('is-drag');
+  pickSkinSubmitFile(e.dataTransfer.files && e.dataTransfer.files[0]);
+});
+$('#skinSubmitFile').addEventListener('change', () => {
+  pickSkinSubmitFile($('#skinSubmitFile').files && $('#skinSubmitFile').files[0]);
+  $('#skinSubmitFile').value = '';
+});
+$('#skinSubmitBtn').addEventListener('click', async () => {
+  const resultEl = $('#skinSubmitResult');
+  resultEl.classList.remove('error');
+  const name = $('#skinSubmitName').value.trim();
+  if (name.length < 2) {
+    resultEl.classList.add('error');
+    resultEl.textContent = 'Adj legalább 2 karakteres nevet a skinnek.';
+    if (typeof window.markFieldInvalid === 'function') window.markFieldInvalid($('#skinSubmitName'), 'Adj nevet a skinnek.');
+    return;
+  }
+  if (!skinSubmitFile) {
+    resultEl.classList.add('error');
+    resultEl.textContent = 'Válaszd ki a beküldendő PNG fájlt.';
+    return;
+  }
+  const btn = $('#skinSubmitBtn');
+  if (typeof window.setButtonLoading === 'function') window.setButtonLoading(btn, true);
+  try {
+    const form = new FormData();
+    form.append('name', name);
+    form.append('variant', skinSubmitVariant);
+    form.append('file', skinSubmitFile, 'skin.png');
+    const res = await fetch(BACKEND_URL + '/api/default-media/submissions', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + session.token },
+      body: form
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      resultEl.classList.add('error');
+      resultEl.textContent = data.message || 'A beküldés sikertelen.';
+      return;
+    }
+    skinSubmitFile = null;
+    $('#skinSubmitName').value = '';
+    renderSkinSubmitPreview();
+    resultEl.textContent = 'Beküldve! Amint a csapat elbírálja, itt látod az eredményt.';
+    loadMySkinSubmissions();
+  } catch {
+    resultEl.classList.add('error');
+    resultEl.textContent = 'Nem sikerült elérni a szervert.';
+  } finally {
+    if (typeof window.setButtonLoading === 'function') window.setButtonLoading(btn, false);
+  }
+});
+$('#skinSubmitList').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-submission-withdraw]');
+  if (!btn) return;
+  const it = mySkinSubmissions.find((x) => x.id === Number(btn.dataset.submissionWithdraw));
+  if (!it) return;
+  const ok = await confirmModal('Beküldés visszavonása', `Visszavonod a(z) <b>${escapeHtml(it.name)}</b> beküldését?`, 'Igen, visszavonom');
+  if (!ok) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/default-media/submissions/' + it.id, { method: 'DELETE', headers: { Authorization: 'Bearer ' + session.token } });
+    const data = await res.json();
+    if (!data.ok) { showToast(data.message || 'Nem sikerült visszavonni.', true); return; }
+    loadMySkinSubmissions();
+  } catch {
+    showToast('Nem sikerült elérni a szervert.', true);
+  }
+});
+
+let dmReviewPending = [];
+let dmReviewHistory = [];
+
+async function loadSkinSubmissionsAdmin() {
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/default-media/submissions', { headers: dmAdminAuth() });
+    const data = await res.json();
+    dmReviewPending = data.ok && Array.isArray(data.pending) ? data.pending : [];
+    dmReviewHistory = data.ok && Array.isArray(data.reviewed) ? data.reviewed : [];
+  } catch {
+    dmReviewPending = [];
+    dmReviewHistory = [];
+  }
+  renderSkinSubmissionsAdmin();
+}
+
+function renderSkinSubmissionsAdmin() {
+  $('#dmReviewCount').textContent = dmReviewPending.length;
+  const list = $('#dmReviewList');
+  if (!dmReviewPending.length) {
+    list.innerHTML = '<p class="dm-empty">Nincs elbírálásra váró beküldés.</p>';
+  } else {
+    list.innerHTML = dmReviewPending.map((it, i) => `
+      <div class="dm-item dm-admin-item dm-review-item" data-review-id="${it.id}" style="--i:${i}">
+        <div class="dm-item-stage">
+          <canvas class="dm-item-canvas" width="96" height="192" data-review-thumb="${it.id}"></canvas>
+        </div>
+        <input class="dm-rename" value="${escapeHtml(it.name)}" maxlength="40" aria-label="Megnevezés" data-review-name="${it.id}" />
+        <div class="dm-item-meta">
+          <span class="dm-chip dm-chip-author">${escapeHtml(it.username)}</span>
+          <span class="dm-chip${it.hd ? ' dm-chip-hd' : ''}">${it.hd ? 'HD · ' : ''}${it.width}x${it.height}</span>
+          <button type="button" class="dm-chip dm-chip-btn" data-review-variant="${it.id}" title="Kar-modell váltása">${it.variant === 'slim' ? 'Vékony kar' : 'Klasszikus'}</button>
+        </div>
+        <div class="dm-item-actions">
+          <button type="button" class="btn-outline dm-btn dm-btn-danger" data-review-reject="${it.id}">Elutasítás</button>
+          <button type="button" class="btn-glow dm-btn" data-review-approve="${it.id}">Elfogadás</button>
+        </div>
+      </div>`).join('');
+    list.querySelectorAll('[data-review-thumb]').forEach(async (c) => {
+      const item = dmReviewPending.find((x) => x.id === Number(c.dataset.reviewThumb));
+      if (!item) return;
+      const img = await loadAuthImage(submissionImageUrl(item.id));
+      if (!img || !c.isConnected) return;
+      c.__img = img;
+      drawSkinFront(c, img, item.variant === 'slim');
+      c.classList.add('is-ready');
+    });
+  }
+  const hist = $('#dmReviewHistory');
+  hist.innerHTML = dmReviewHistory.length
+    ? dmReviewHistory.map((it) => {
+      const st = SUBMISSION_STATUS[it.status] || SUBMISSION_STATUS.pending;
+      return `<div class="dm-review-history-row">
+        <span class="submission-status ${st.cls}">${st.label}</span>
+        <b>${escapeHtml(it.name)}</b>
+        <span>${escapeHtml(it.username)} · ${escapeHtml(it.reviewedBy || '-')} · ${escapeHtml(formatSanctionUntil(it.reviewedAt))}</span>
+        ${it.rejectReason ? `<em>${escapeHtml(it.rejectReason)}</em>` : ''}
+      </div>`;
+    }).join('')
+    : '<p class="dm-empty">Még nincs elbírált beküldés.</p>';
+}
+
+$('#dmReviewList').addEventListener('click', async (e) => {
+  const variantBtn = e.target.closest('[data-review-variant]');
+  const approveBtn = e.target.closest('[data-review-approve]');
+  const rejectBtn = e.target.closest('[data-review-reject]');
+  if (variantBtn) {
+    const it = dmReviewPending.find((x) => x.id === Number(variantBtn.dataset.reviewVariant));
+    if (!it) return;
+    it.variant = it.variant === 'slim' ? 'classic' : 'slim';
+    variantBtn.textContent = it.variant === 'slim' ? 'Vékony kar' : 'Klasszikus';
+    const c = $(`[data-review-thumb="${it.id}"]`);
+    if (c && c.__img) drawSkinFront(c, c.__img, it.variant === 'slim');
+    return;
+  }
+  if (approveBtn) {
+    const it = dmReviewPending.find((x) => x.id === Number(approveBtn.dataset.reviewApprove));
+    if (!it) return;
+    const nameInput = $(`[data-review-name="${it.id}"]`);
+    const name = (nameInput && nameInput.value.trim()) || it.name;
+    if (typeof window.setButtonLoading === 'function') window.setButtonLoading(approveBtn, true);
+    try {
+      const res = await fetch(BACKEND_URL + '/api/admin/default-media/submissions/' + it.id + '/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...dmAdminAuth() },
+        body: JSON.stringify({ name, variant: it.variant })
+      });
+      const data = await res.json();
+      if (!data.ok) { showToast(data.message || 'Nem sikerült elfogadni.', true); return; }
+      showToast(`„${data.item.name}” elfogadva - már választható az alap skinek között.`);
+      dmAdminItems.unshift(data.item);
+      renderDefaultMediaAdmin();
+      loadSkinSubmissionsAdmin();
+    } catch {
+      showToast('Nem sikerült elérni a szervert.', true);
+    } finally {
+      if (typeof window.setButtonLoading === 'function') window.setButtonLoading(approveBtn, false);
+    }
+    return;
+  }
+  if (rejectBtn) {
+    const it = dmReviewPending.find((x) => x.id === Number(rejectBtn.dataset.reviewReject));
+    if (!it) return;
+    const reason = await textPromptModal(
+      'Beküldés elutasítása',
+      `Elutasítod <b>${escapeHtml(it.username)}</b> „${escapeHtml(it.name)}” skinjét. Az indokot a játékos is látja (nem kötelező).`,
+      'Pl. túl hasonlít egy meglévőre',
+      'Elutasítás'
+    );
+    if (reason === null) return;
+    try {
+      const res = await fetch(BACKEND_URL + '/api/admin/default-media/submissions/' + it.id + '/reject', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...dmAdminAuth() },
+        body: JSON.stringify({ reason })
+      });
+      const data = await res.json();
+      if (!data.ok) { showToast(data.message || 'Nem sikerült elutasítani.', true); return; }
+      showToast('Beküldés elutasítva.');
+      loadSkinSubmissionsAdmin();
+    } catch {
+      showToast('Nem sikerült elérni a szervert.', true);
+    }
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Tiltott felhasználónevek (admin)
 // ---------------------------------------------------------------------------
@@ -11054,3 +11621,189 @@ async function loadProfileCosmetics(username) {
 
 
 tryAutoLogin();
+
+let nameSuggestSeq = 0;
+const suggestFaceCache = new Map();
+
+async function drawSuggestFace(canvas, player) {
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  const key = player.username.toLowerCase();
+  if (!suggestFaceCache.has(key)) {
+    suggestFaceCache.set(key, player.hasSkin ? loadSkinImage(player.username) : Promise.resolve(null));
+    if (suggestFaceCache.size > 200) suggestFaceCache.delete(suggestFaceCache.keys().next().value);
+  }
+  const img = await suggestFaceCache.get(key);
+  if (!canvas.isConnected) return;
+  if (img) drawSkinFace(ctx, img, canvas.width);
+  else await drawFallbackFace(ctx, canvas.width);
+}
+
+function attachNameSuggest(input, onPick) {
+  if (!input || input.__nameSuggest) return;
+  input.__nameSuggest = true;
+  const listId = 'nameSuggest' + (++nameSuggestSeq);
+  input.setAttribute('autocomplete', 'off');
+  input.setAttribute('role', 'combobox');
+  input.setAttribute('aria-autocomplete', 'list');
+  input.setAttribute('aria-expanded', 'false');
+  input.setAttribute('aria-controls', listId);
+
+  const box = document.createElement('div');
+  box.className = 'name-suggest';
+  box.id = listId;
+  box.setAttribute('role', 'listbox');
+  box.hidden = true;
+  document.body.appendChild(box);
+
+  let items = [];
+  let active = -1;
+  let requestSeq = 0;
+  let timer = null;
+
+  const place = () => {
+    const r = input.getBoundingClientRect();
+    box.style.left = Math.round(r.left) + 'px';
+    box.style.top = Math.round(r.bottom + 6) + 'px';
+    box.style.width = Math.round(Math.max(r.width, 200)) + 'px';
+  };
+  const hide = () => {
+    box.hidden = true;
+    active = -1;
+    input.setAttribute('aria-expanded', 'false');
+    input.removeAttribute('aria-activedescendant');
+  };
+  const highlight = (name, q) => {
+    const i = name.toLowerCase().indexOf(q.toLowerCase());
+    if (i < 0) return escapeHtml(name);
+    return escapeHtml(name.slice(0, i)) + '<b>' + escapeHtml(name.slice(i, i + q.length)) + '</b>' + escapeHtml(name.slice(i + q.length));
+  };
+  const setActive = (i) => {
+    active = i;
+    $$('.name-suggest-item', box).forEach((el, idx) => {
+      el.classList.toggle('is-active', idx === i);
+      el.setAttribute('aria-selected', idx === i ? 'true' : 'false');
+    });
+    if (i >= 0) {
+      input.setAttribute('aria-activedescendant', `${listId}-${i}`);
+      const el = $(`#${listId}-${i}`);
+      if (el) el.scrollIntoView({ block: 'nearest' });
+    } else {
+      input.removeAttribute('aria-activedescendant');
+    }
+  };
+  const pick = (i) => {
+    const p = items[i];
+    if (!p) return;
+    input.value = p.username;
+    hide();
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    hide();
+    if (onPick) onPick(p.username);
+  };
+  const render = (q) => {
+    if (!items.length || document.activeElement !== input) { hide(); return; }
+    if (items.length === 1 && items[0].username.toLowerCase() === q.toLowerCase()) { hide(); return; }
+    box.innerHTML = items.map((p, i) => `
+      <div class="name-suggest-item" id="${listId}-${i}" role="option" aria-selected="false" data-index="${i}">
+        <canvas class="name-suggest-face" width="20" height="20" data-suggest-face="${i}"></canvas>
+        <span>${highlight(p.username, q)}</span>
+      </div>`).join('');
+    $$('[data-suggest-face]', box).forEach((c) => drawSuggestFace(c, items[Number(c.dataset.suggestFace)]));
+    place();
+    box.hidden = false;
+    input.setAttribute('aria-expanded', 'true');
+    setActive(-1);
+  };
+  const query = async (q) => {
+    const my = ++requestSeq;
+    try {
+      const res = await fetch(BACKEND_URL + '/api/players/search?limit=8&q=' + encodeURIComponent(q));
+      const data = await res.json();
+      if (my !== requestSeq) return;
+      items = data.ok && Array.isArray(data.players) ? data.players : [];
+      render(q);
+    } catch {
+      if (my === requestSeq) hide();
+    }
+  };
+
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    const q = input.value.trim();
+    if (q.length < 2 || !/^[A-Za-z0-9_]+$/.test(q)) { requestSeq++; hide(); return; }
+    timer = setTimeout(() => query(q), 140);
+  });
+  input.addEventListener('keydown', (e) => {
+    if (box.hidden) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActive(Math.min(items.length - 1, active + 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(Math.max(-1, active - 1)); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); hide(); }
+    else if ((e.key === 'Enter' || e.key === 'Tab') && active >= 0) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      pick(active);
+    }
+  }, { capture: true });
+  input.addEventListener('blur', () => setTimeout(hide, 120));
+  box.addEventListener('mousedown', (e) => {
+    const item = e.target.closest('.name-suggest-item');
+    if (!item) return;
+    e.preventDefault();
+    pick(Number(item.dataset.index));
+  });
+  box.addEventListener('mousemove', (e) => {
+    const item = e.target.closest('.name-suggest-item');
+    if (item && Number(item.dataset.index) !== active) setActive(Number(item.dataset.index));
+  });
+  window.addEventListener('resize', () => { if (!box.hidden) place(); });
+  window.addEventListener('scroll', () => { if (!box.hidden) place(); }, true);
+}
+
+attachNameSuggest($('#transferRecipientInput'));
+attachNameSuggest($('#tradeRecipientInput'));
+attachNameSuggest($('#giftModalRecipient'));
+attachNameSuggest($('#playerSearchInput'), () => $('#playerSearchBtn')?.click());
+attachNameSuggest($('#purchaseLogsUserSearchInput'), () => $('#purchaseLogsUserSearchBtn')?.click());
+attachNameSuggest($('#staffActionLogsUserSearchInput'), () => $('#staffActionLogsUserSearchBtn')?.click());
+attachNameSuggest($('#permsPlayerSearchInput'), () => $('#permsPlayerSearchBtn')?.click());
+
+async function loadClientSettingsState() {
+  const state = $('#clientSettingsState');
+  const btn = $('#btnResetClientSettings');
+  if (!state || !session || !session.token) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/me/client-settings', { headers: { Authorization: 'Bearer ' + session.token } });
+    const data = await res.json();
+    if (!data.ok) throw new Error('bad');
+    if (!data.exists) {
+      state.textContent = 'Még nincs mentett beállításod - a SolarClient első indításakor automatikusan létrejön.';
+      btn.classList.add('hidden');
+      return;
+    }
+    const when = new Date(Number(data.updatedAt)).toLocaleString('hu-HU');
+    state.innerHTML = `Utoljára mentve: <b>${escapeHtml(when)}</b> <span class="client-settings-rev">(${escapeHtml(String(data.revision))}. változat)</span>`;
+    btn.classList.remove('hidden');
+  } catch {
+    state.textContent = 'Az állapot most nem tölthető be.';
+    btn.classList.add('hidden');
+  }
+}
+
+$('#btnResetClientSettings')?.addEventListener('click', async () => {
+  const ok = await confirmModal(
+    'Mentett kliens-beállítások törlése',
+    'A fiókodhoz mentett beállítások törlődnek. A gépeden lévő beállításokat ez nem érinti: a következő indításkor az aktuális gép beállításai kerülnek fel újra a fiókodra.',
+    'Igen, törlöm'
+  );
+  if (!ok) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/me/client-settings', { method: 'DELETE', headers: { Authorization: 'Bearer ' + session.token } });
+    const data = await res.json();
+    if (!data.ok) { showToast('Nem sikerült törölni.', true); return; }
+    showToast('A mentett beállítások törölve.');
+    loadClientSettingsState();
+  } catch {
+    showToast('Nem sikerült elérni a szervert.', true);
+  }
+});

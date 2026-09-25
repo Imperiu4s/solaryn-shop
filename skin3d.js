@@ -446,6 +446,40 @@ const SkinPreview = (() => {
     return anim.tracks.some((t) => t && ((Number(t.falloff) || 0) !== 0 || (Number(t.spread) || 0) !== 0));
   }
 
+  const WAVE_SEGMENT_LENGTH = 1.25;
+  const WAVE_MAX_SEGMENTS = 12;
+
+  function waveSegments(a, b) {
+    const d = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+    return Math.max(1, Math.min(WAVE_MAX_SEGMENTS, Math.ceil(d / WAVE_SEGMENT_LENGTH - 1e-6)));
+  }
+
+  function pushQuad(positions, uvs, indices, pts, us, vs, tessellate) {
+    const su = tessellate ? waveSegments(pts[0], pts[1]) : 1;
+    const sv = tessellate ? waveSegments(pts[1], pts[2]) : 1;
+    const base = positions.length / 3;
+    for (let j = 0; j <= sv; j++) {
+      const b = j / sv;
+      for (let i = 0; i <= su; i++) {
+        const a = i / su;
+        const w0 = (1 - a) * (1 - b), w1 = a * (1 - b), w2 = a * b, w3 = (1 - a) * b;
+        positions.push(
+          pts[0][0] * w0 + pts[1][0] * w1 + pts[2][0] * w2 + pts[3][0] * w3,
+          pts[0][1] * w0 + pts[1][1] * w1 + pts[2][1] * w2 + pts[3][1] * w3,
+          pts[0][2] * w0 + pts[1][2] * w1 + pts[2][2] * w2 + pts[3][2] * w3
+        );
+        uvs.push(us[0] * w0 + us[1] * w1 + us[2] * w2 + us[3] * w3, vs[0] * w0 + vs[1] * w1 + vs[2] * w2 + vs[3] * w3);
+      }
+    }
+    const row = su + 1;
+    for (let j = 0; j < sv; j++) {
+      for (let i = 0; i < su; i++) {
+        const q = base + j * row + i;
+        indices.push(q, q + 1, q + row + 1, q, q + row + 1, q + row);
+      }
+    }
+  }
+
   function animAlongAxis(anim, elements) {
     const AXIS = { x: 0, y: 1, z: 2 };
     if (anim && Array.isArray(anim.tracks)) {
@@ -577,6 +611,7 @@ const SkinPreview = (() => {
       const positions = [], uvs = [], indices = [];
       const FACE_DIRS = ['north', 'south', 'east', 'west', 'up', 'down'];
       const elementRanges = [];
+      const tessellate = animIsWave(raw.anim) || animIsWave(t.anim);
 
       for (const el of (raw.elements || [])) {
         if (!Array.isArray(el.from) || !Array.isArray(el.to)) continue;
@@ -605,17 +640,17 @@ const SkinPreview = (() => {
           const face = el.faces && el.faces[dir];
           if (!face || !Array.isArray(face.uv) || face.uv.length !== 4) continue;
           const [u1, v1, u2, v2] = face.uv;
-          const base = positions.length / 3;
           const pts = quads[dir];
           const baseU = [u1, u2, u2, u1];
           const baseV = [v1, v1, v2, v2];
           const steps = ((((face.rotation | 0) / 90) % 4) + 4) % 4;
+          const us = [], vs = [];
           for (let i = 0; i < 4; i++) {
             const src = ((i - steps) % 4 + 4) % 4;
-            positions.push(pts[i][0], pts[i][1], pts[i][2]);
-            uvs.push(baseU[src] / texW, baseV[src] / texH);
+            us.push(baseU[src] / texW);
+            vs.push(baseV[src] / texH);
           }
-          indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+          pushQuad(positions, uvs, indices, pts, us, vs, tessellate);
         }
 
         if (positions.length > rangeStart) {
@@ -1215,11 +1250,14 @@ const SkinPreview = (() => {
     function preventCtx(e) { e.preventDefault(); }
 
     let stopped = false;
-    const autoSpin = !onCosmeticDrag;
+    let spinning = !onCosmeticDrag && !(opts && opts.spin === false);
+    let lastFrameAt = 0;
 
-    function frame() {
+    function frame(now) {
       if (stopped) return;
-      if (!dragging && autoSpin) angle += 0.006;
+      const dt = lastFrameAt ? Math.min(0.1, (now - lastFrameAt) / 1000) : 1 / 60;
+      lastFrameAt = now;
+      if (!dragging && spinning) angle += 0.36 * dt;
 
       const w = canvas.width, h = canvas.height;
       gl.viewport(0, 0, w, h);
@@ -1282,6 +1320,8 @@ const SkinPreview = (() => {
       setCamDistance(CAM_FAR - Math.max(0, Math.min(1, t)) * (CAM_FAR - CAM_NEAR));
     };
     stop.resetView = () => { camDistance = DEFAULT_CAM; angle = 0.6; pitch = -0.15; };
+    stop.setSpin = (on) => { spinning = !!on && !onCosmeticDrag; };
+    stop.isSpinning = () => spinning;
 
     return stop;
   }
@@ -1539,7 +1579,7 @@ const SkinPreview = (() => {
         const channel = t.channel === 'position' ? 1 : (t.channel === 'scale' ? 2 : (t.channel === 'rotation' ? 0 : -1));
         if (channel < 0 || !Array.isArray(t.keys) || !t.keys.length) continue;
 
-        const times = [], values = [], step = [];
+        const times = [], values = [], step = [], smooth = [];
         for (const k of t.keys) {
           if (!k || !Array.isArray(k.v) || k.v.length !== 3) continue;
           let vx = Number(k.v[0]) || 0, vy = Number(k.v[1]) || 0, vz = Number(k.v[2]) || 0;
@@ -1548,9 +1588,10 @@ const SkinPreview = (() => {
           times.push(Number(k.t) || 0);
           values.push(vx, vy, vz);
           step.push(k.i === 'step');
+          smooth.push(k.i === 'smooth');
         }
         if (!times.length) continue;
-        anim.tracks.push({ bone, channel, times, values, step });
+        anim.tracks.push({ bone, channel, times, values, step, smooth });
       }
       if (!anim.tracks.length) continue;
       out.push(anim);
@@ -1676,6 +1717,11 @@ const SkinPreview = (() => {
     out[12] = 0; out[13] = 0; out[14] = 0; out[15] = 1;
   }
 
+  function catmullRom(p0, p1, p2, p3, t) {
+    const t2 = t * t, t3 = t2 * t;
+    return 0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (-p0 + 3 * p1 - 3 * p2 + p3) * t3);
+  }
+
   function rigSample(track, time, out, additive) {
     const n = track.times.length;
     let i = 0;
@@ -1692,9 +1738,17 @@ const SkinPreview = (() => {
       const t0 = track.times[i], t1 = track.times[i + 1];
       const span = t1 - t0;
       const k = (span <= 0 || track.step[i]) ? 0 : (time - t0) / span;
-      vx = track.values[i * 3] + (track.values[(i + 1) * 3] - track.values[i * 3]) * k;
-      vy = track.values[i * 3 + 1] + (track.values[(i + 1) * 3 + 1] - track.values[i * 3 + 1]) * k;
-      vz = track.values[i * 3 + 2] + (track.values[(i + 1) * 3 + 2] - track.values[i * 3 + 2]) * k;
+      const v = track.values;
+      if (k > 0 && track.smooth && (track.smooth[i] || track.smooth[i + 1])) {
+        const a = Math.max(0, i - 1) * 3, b = i * 3, c = (i + 1) * 3, d = Math.min(n - 1, i + 2) * 3;
+        vx = catmullRom(v[a], v[b], v[c], v[d], k);
+        vy = catmullRom(v[a + 1], v[b + 1], v[c + 1], v[d + 1], k);
+        vz = catmullRom(v[a + 2], v[b + 2], v[c + 2], v[d + 2], k);
+      } else {
+        vx = v[i * 3] + (v[(i + 1) * 3] - v[i * 3]) * k;
+        vy = v[i * 3 + 1] + (v[(i + 1) * 3 + 1] - v[i * 3 + 1]) * k;
+        vz = v[i * 3 + 2] + (v[(i + 1) * 3 + 2] - v[i * 3 + 2]) * k;
+      }
     }
 
     if (additive) { out[0] += vx; out[1] += vy; out[2] += vz; }
@@ -2386,6 +2440,16 @@ const SkinPreview = (() => {
   function getSteveImage() {
     if (steveImagePromise) return steveImagePromise;
     steveImagePromise = new Promise((resolve) => {
+      const asset = new Image();
+      asset.onload = () => resolve(asset);
+      asset.onerror = () => resolve(generatedSteveImage());
+      asset.src = 'assets/default-skin.png?v=20260924';
+    });
+    return steveImagePromise;
+  }
+
+  function generatedSteveImage() {
+    return new Promise((resolve) => {
       const c = document.createElement('canvas');
       c.width = 64; c.height = 64;
       const g = c.getContext('2d');
@@ -2430,7 +2494,6 @@ const SkinPreview = (() => {
       img.onload = () => resolve(img);
       img.src = c.toDataURL('image/png');
     });
-    return steveImagePromise;
   }
 
   return {

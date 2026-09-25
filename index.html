@@ -35,10 +35,10 @@
   <link rel="dns-prefetch" href="https://api.overclockgame.hu" />
   <link rel="preload" as="image" href="assets/solaryn-icon.png" />
 
-  <script src="theme.js?v=20260924b"></script>
-  <link rel="stylesheet" href="style.css?v=20260924b" />
-  <link rel="stylesheet" href="ui.css?v=20260924b" />
-  <link rel="stylesheet" href="design.css?v=20260924b" />
+  <script src="theme.js?v=20260925a"></script>
+  <link rel="stylesheet" href="style.css?v=20260925a" />
+  <link rel="stylesheet" href="ui.css?v=20260925a" />
+  <link rel="stylesheet" href="design.css?v=20260925a" />
 
   <script type="application/ld+json">
   {
@@ -401,7 +401,7 @@
               </div>
 
               <div class="card" id="homeFriendsCard">
-                <div class="card-title">Barátok</div>
+                <div class="card-title">Barátaid</div>
                 <div id="homeFriendsGrid" class="player-result-grid"></div>
                 <p class="player-result-note hidden" id="homeFriendsEmpty">Még nincs egyetlen barátod sem - a szerveren a /fr add &lt;név&gt; paranccsal küldhetsz barátkérelmet.</p>
               </div>
@@ -412,22 +412,49 @@
                 <div class="staff-stats-grid">
                   <div class="staff-stat">
                     <div class="staff-stat-value" id="homeStaffStatPlaytime">0ó</div>
-                    <div class="staff-stat-label">Játékidő</div>
+                    <div class="staff-stat-label">Játékidőd</div>
                   </div>
                   <div class="staff-stat">
                     <div class="staff-stat-value" id="homeStaffStatMutes">0</div>
-                    <div class="staff-stat-label">Némítás</div>
+                    <div class="staff-stat-label">Némításaid</div>
                   </div>
                   <div class="staff-stat">
                     <div class="staff-stat-value" id="homeStaffStatBans">0</div>
-                    <div class="staff-stat-label">Kitiltás</div>
+                    <div class="staff-stat-label">Kitiltásaid</div>
                   </div>
                   <div class="staff-stat">
                     <div class="staff-stat-value" id="homeStaffStatTickets">0</div>
-                    <div class="staff-stat-label">Lezárt ticket</div>
+                    <div class="staff-stat-label">Lezárt ticketjeid</div>
+                  </div>
+                </div>
+                <div class="staff-points-strip" id="homeStaffPoints">
+                  <div class="staff-points-main">
+                    <span class="staff-points-label">Pontjaid ebben a hónapban</span>
+                    <span class="staff-points-value" id="homeStaffPointsValue">0</span>
+                  </div>
+                  <div class="staff-points-side">
+                    <span class="staff-points-prev" id="homeStaffPointsPrev"></span>
+                    <span class="staff-points-rates" id="homeStaffPointsRates"></span>
                   </div>
                 </div>
               </div>
+            </div>
+
+            <div class="side-rail-col home-side-col">
+            <div class="card playtime-week-card" id="homePlaytimeCard">
+              <div class="playtime-week-head">
+                <div>
+                  <div class="card-title">Heti online időd</div>
+                  <div class="playtime-week-sub" id="homePlaytimeRange">Az elmúlt 7 nap</div>
+                </div>
+                <div class="playtime-week-total">
+                  <span class="playtime-week-total-value" id="homePlaytimeTotal">0 óra</span>
+                  <span class="playtime-week-total-label">összesen</span>
+                </div>
+              </div>
+              <div class="playtime-chart" id="homePlaytimeChart" role="img" aria-label="Heti online idő oszlopdiagram"></div>
+              <p class="playtime-week-note hidden" id="homePlaytimeEmpty">Ezen a héten még nem játszottál - amint felcsatlakozol a szerverre, itt látod majd a napi bontást.</p>
+              <table class="sr-only" id="homePlaytimeTable"><caption>Napi online idő az elmúlt 7 napban</caption><thead><tr><th scope="col">Nap</th><th scope="col">Online idő</th></tr></thead><tbody></tbody></table>
             </div>
 
             <div class="card discord-card">
@@ -446,6 +473,7 @@
                 </div>
                 <a href="https://dc.solaryn.hu" target="_blank" rel="noopener noreferrer" class="btn-discord">Csatlakozás</a>
               </div>
+            </div>
             </div>
           </div>
         </section>
@@ -668,13 +696,9 @@
               </div>
             </div>
 
-            <div class="side-rail" data-side-rail="skin"></div>
-          </div>
-
-          <div class="content-grid" style="margin-top:24px;">
-            <div class="card">
-              <div class="card-title">Köpeny</div>
-              <p class="page-note" style="margin-bottom:20px;">Egyedi köpeny feltöltés (.png, 64x32 vagy ennek HD többszöröse - pl. 128x64, 256x128, egészen 2048x1024-ig -, mindig pontosan 2:1 arányban) - nincs külön előnézete, a fenti skin 3D-modelljén jelenik meg, ugyanúgy, mint a szerveren.</p>
+            <div class="card skin-cape-card">
+              <div class="card-title">Köpenyed</div>
+              <p class="page-note" style="margin-bottom:20px;">Egyedi köpeny feltöltés (.png, 64x32 vagy ennek HD többszöröse - pl. 128x64, 256x128, egészen 2048x1024-ig -, mindig pontosan 2:1 arányban) - nincs külön előnézete, a skined 3D-előnézetén jelenik meg, ugyanúgy, mint a szerveren.</p>
               <div class="skin-upload-col">
                 <input type="file" id="capeFileInput" accept=".png,image/png" hidden />
                 <div class="skin-drop" id="capeDrop">Húzd ide a .png köpenyedet, vagy kattints a tallózáshoz</div>
@@ -694,6 +718,34 @@
               <button type="button" class="dm-tab" role="tab" aria-selected="false" data-dm-cat="cape_hd">HD köpenyek <span class="dm-tab-count" data-dm-count="cape_hd">0</span></button>
             </div>
             <div class="dm-grid" id="defaultMediaGrid"></div>
+          </div>
+
+          <div class="card skin-submit-card" id="skinSubmitCard">
+            <div class="card-title">Küldd be a saját skinedet</div>
+            <p class="page-note skin-submit-note">Készítettél egy jó skint? Küldd be, és ha a csapat elfogadja, bekerül az alap skinek közé - bárki kiválaszthatja, és a neved is ott lesz mellette. Egyszerre legfeljebb 3 beküldésed várhat elbírálásra.</p>
+            <div class="skin-submit-layout">
+              <div class="skin-submit-form">
+                <label class="gift-modal-label" for="skinSubmitName" style="margin-top:0;">A skin neve</label>
+                <input type="text" id="skinSubmitName" class="gift-modal-input" placeholder="Pl. Éjféli lovag" maxlength="40" autocomplete="off" />
+                <span class="gift-modal-label">Kar-modell</span>
+                <div class="skin-model-toggle" style="margin-top:0;">
+                  <button type="button" class="pill active" data-submit-variant="classic">Klasszikus</button>
+                  <button type="button" class="pill" data-submit-variant="slim">Vékony (slim)</button>
+                </div>
+                <span class="gift-modal-label">PNG fájl</span>
+                <input type="file" id="skinSubmitFile" accept=".png,image/png" hidden />
+                <div class="skin-drop dm-admin-drop" id="skinSubmitDrop" role="button" tabindex="0">
+                  <canvas id="skinSubmitPreview" class="dm-admin-preview hidden" width="96" height="192"></canvas>
+                  <span id="skinSubmitDropText">Húzd ide a .png skint, vagy kattints a tallózáshoz</span>
+                </div>
+                <p class="redeem-result" id="skinSubmitResult"></p>
+                <button type="button" class="btn-glow" id="skinSubmitBtn">Beküldés elbírálásra</button>
+              </div>
+              <div class="skin-submit-list-col">
+                <div class="skin-submit-list-title">Beküldéseid</div>
+                <div class="skin-submit-list" id="skinSubmitList"></div>
+              </div>
+            </div>
           </div>
 
           <div class="dm-try-bar hidden" id="dmTryBar" role="status">
@@ -732,6 +784,10 @@
           <div class="content-grid">
             <div>
               <div id="cosmeticsOwnedWrap"></div>
+
+              <div class="admin-subsection-title">Megvásárolható kiegészítők</div>
+              <p class="page-note">Ezeket közvetlenül PrémiumPontért veheted meg - a levonás a következő szerverre lépésedkor történik meg, utána azonnal megjelenik a kiegészítőid között.</p>
+              <div id="cosmeticsShopWrap"></div>
             </div>
             <div class="side-rail-col">
               <div class="card cosmetic-char-card">
@@ -744,6 +800,10 @@
                   <input type="range" class="preview-zoom-range" id="cosmeticZoomRange" min="0" max="100" value="50" aria-label="Nagyítás" />
                   <button type="button" class="preview-zoom-btn" id="cosmeticZoomInBtn" aria-label="Nagyítás" title="Nagyítás">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                  </button>
+                  <button type="button" class="preview-zoom-btn preview-spin-btn" id="cosmeticSpinBtn" aria-pressed="true" aria-label="Forgás megállítása" title="Forgás megállítása">
+                    <svg class="spin-icon-pause" viewBox="0 0 24 24" fill="currentColor"><rect x="6.5" y="5" width="3.6" height="14" rx="1.2"/><rect x="13.9" y="5" width="3.6" height="14" rx="1.2"/></svg>
+                    <svg class="spin-icon-play" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.6v12.8c0 .8.9 1.3 1.6.9l10-6.4c.6-.4.6-1.3 0-1.7l-10-6.4c-.7-.5-1.6 0-1.6.8z"/></svg>
                   </button>
                   <button type="button" class="preview-zoom-btn" id="cosmeticZoomResetBtn" aria-label="Nézet visszaállítása" title="Nézet visszaállítása">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11A8 8 0 1 0 18 16"/><path d="M20 5v6h-6"/></svg>
@@ -772,13 +832,9 @@
                 <p class="cosmetic-summary-note" id="cosmeticSummaryNote"></p>
               </div>
 
-              <div class="side-rail" data-side-rail="cosmetics"></div>
             </div>
           </div>
 
-          <div class="admin-subsection-title">Megvásárolható kiegészítők</div>
-          <p class="page-note">Ezeket közvetlenül PrémiumPontért veheted meg - a levonás a következő szerverre lépésedkor történik meg, utána azonnal megjelenik a kiegészítőid között.</p>
-          <div id="cosmeticsShopWrap"></div>
         </section>
 
         <section class="view" data-view="market">
@@ -789,6 +845,9 @@
             <div>
               <div class="admin-subsection-title" style="margin-top:0;">Saját hirdetéseim</div>
               <div id="marketMineWrap"></div>
+
+              <div class="admin-subsection-title">Piaci kínálat</div>
+              <div id="marketListingsWrap"></div>
             </div>
             <div class="side-rail-col">
               <div class="card">
@@ -801,12 +860,9 @@
                 <p class="redeem-result" id="marketListResult"></p>
                 <button type="button" class="btn-glow" id="marketListBtn">Hirdetés feladása</button>
               </div>
-              <div class="side-rail" data-side-rail="market"></div>
             </div>
           </div>
 
-          <div class="admin-subsection-title">Piaci kínálat</div>
-          <div id="marketListingsWrap"></div>
         </section>
 
         <section class="view" data-view="trades">
@@ -840,7 +896,6 @@
                 <p class="redeem-result" id="tradeSendResult"></p>
                 <button type="button" class="btn-glow" id="tradeSendBtn">Ajánlat küldése</button>
               </div>
-              <div class="side-rail" data-side-rail="trades"></div>
             </div>
           </div>
         </section>
@@ -896,7 +951,6 @@
                 <div class="card-title">Állapotod</div>
                 <div class="stat-badge-grid casino-stat-grid" id="casinoStatGrid"></div>
               </div>
-              <div class="side-rail" data-side-rail="casino"></div>
             </div>
           </div>
         </section>
@@ -996,6 +1050,13 @@
               <button type="button" class="btn-glow admin-delete-btn" id="btnDisableSecurityPin" style="margin-top:8px;">Biztonsági kód kikapcsolása</button>
                 </div>
               </div>
+
+              <div class="card client-settings-card">
+                <div class="card-title">Kliens-beállítások a fiókodon</div>
+                <p class="page-note" style="margin:-8px 0 14px;">A SolarClientben bekapcsolt modulok, a HUD-elemek helye és minden beállításod a fiókodhoz mentődik, így bármelyik gépen belépve ugyanúgy folytathatod. A mentés automatikus.</p>
+                <p class="client-settings-state" id="clientSettingsState">Betöltés...</p>
+                <button type="button" class="btn-outline hidden" id="btnResetClientSettings">Mentett beállítások törlése</button>
+              </div>
             </div>
             <div class="side-rail" data-side-rail="security"></div>
           </div>
@@ -1077,7 +1138,37 @@
 
         <section class="view" data-view="staffStats">
           <h1 class="page-title">Csapat statisztika</h1>
-          <p class="page-note">A jelen naptári hónap adatai (Jr. Moderátortól Admin+-ig) - minden hónap 1-jén automatikusan újraindul.</p>
+          <p class="page-note">A kiválasztott naptári hónap adatai (Jr. Moderátortól Admin+-ig). A pontokat a lent megadott értékekből számoljuk - a staff-tagok a főoldalon, a profiljuknál látják a saját pontjaikat.</p>
+
+          <div class="staff-points-admin">
+            <div class="card staff-points-config">
+              <div class="card-title">Pontozás</div>
+              <p class="staff-points-config-note">Ennyi pontot ér egy-egy kiadott büntetés vagy lezárt ticket. A módosítás azonnal érvényes, a korábbi hónapokat is az aktuális értékekkel számoljuk újra.</p>
+              <div class="staff-points-fields">
+                <label class="staff-points-field">
+                  <span>Némításonként</span>
+                  <input type="number" id="staffPointsPerMute" class="gift-modal-input" min="0" max="1000" step="0.5" inputmode="decimal" />
+                </label>
+                <label class="staff-points-field">
+                  <span>Kitiltásonként</span>
+                  <input type="number" id="staffPointsPerBan" class="gift-modal-input" min="0" max="1000" step="0.5" inputmode="decimal" />
+                </label>
+                <label class="staff-points-field">
+                  <span>Lezárt ticketenként</span>
+                  <input type="number" id="staffPointsPerTicket" class="gift-modal-input" min="0" max="1000" step="0.5" inputmode="decimal" />
+                </label>
+              </div>
+              <div class="staff-points-config-foot">
+                <span class="staff-points-config-meta" id="staffPointsConfigMeta"></span>
+                <button type="button" class="btn-glow" id="staffPointsSaveBtn">Mentés</button>
+              </div>
+            </div>
+            <div class="card staff-points-month">
+              <div class="card-title">Hónap</div>
+              <select id="staffStatsMonthSelect" class="gift-modal-input" aria-label="Hónap kiválasztása"></select>
+              <p class="staff-points-config-note" id="staffStatsMonthNote"></p>
+            </div>
+          </div>
 
           <div class="staff-stats-summary" id="staffStatsSummary"></div>
 
@@ -1253,6 +1344,16 @@
         <section class="view" data-view="defaultMediaAdmin">
           <h1 class="page-title">Alap skinek és köpenyek</h1>
           <p class="page-note">Az itt feltöltött skinek és köpenyek minden játékosnak megjelennek a Skin / köpeny oldalon, és egy kattintással beállíthatják maguknak. A kép átmásolódik a játékos saját helyére, így a szerveren és a launcherben is azonnal látszik.</p>
+
+          <div class="card dm-review-card" id="dmReviewCard">
+            <div class="card-title">Játékosok által beküldött skinek <span class="dm-tab-count" id="dmReviewCount">0</span></div>
+            <p class="page-note" style="margin-bottom:18px;">Az elfogadott skin azonnal megjelenik a játékosoknak az alap skinek között, a beküldő nevével. Elfogadás előtt átnevezheted és a kar-modellt is átállíthatod. Az elutasított beküldés képe törlődik, az indokot a játékos látja.</p>
+            <div class="dm-grid" id="dmReviewList"></div>
+            <details class="dm-review-history">
+              <summary>Legutóbb elbírált beküldések</summary>
+              <div class="dm-review-history-list" id="dmReviewHistory"></div>
+            </details>
+          </div>
 
           <div class="content-grid dm-admin-grid">
             <div class="card">
@@ -2809,9 +2910,9 @@
     </div>
   </div>
 
-  <script src="skin3d.js?v=20260924b" defer></script>
-  <script src="app.js?v=20260924b" defer></script>
-  <script src="ui.js?v=20260924b" defer></script>
-  <script src="design.js?v=20260924b" defer></script>
+  <script src="skin3d.js?v=20260925a" defer></script>
+  <script src="app.js?v=20260925a" defer></script>
+  <script src="ui.js?v=20260925a" defer></script>
+  <script src="design.js?v=20260925a" defer></script>
 </body>
 </html>
