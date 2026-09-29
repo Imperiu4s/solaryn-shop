@@ -2046,6 +2046,13 @@ $('#redeemSubmit').addEventListener('click', async () => {
     } else if (data.rewardType === 'rank') {
       const until = data.rankDurationDays ? ` ${data.rankDurationDays} napra` : ' véglegesen';
       resultEl.textContent = `Sikeres beváltás! A(z) ${data.rankLabel} rangot${until} a következő szerverre lépéskor kapod meg.`;
+    } else if (data.rewardType === 'badge') {
+      resultEl.textContent = `Sikeres beváltás! Megkaptad a(z) ${data.badgeName} jelvényt - a profilodon látható.`;
+    } else if (data.rewardType === 'casino_spin') {
+      resultEl.textContent = `Sikeres beváltás! +${data.rewardAmount} casino pörgetés jóváírva.`;
+    } else if (data.rewardType === 'discount') {
+      const until = data.discountDays ? ` ${data.discountDays} napig` : '';
+      resultEl.textContent = `Sikeres beváltás! ${data.rewardAmount}% egyedi kedvezményt kaptál${until} - vásárláskor automatikusan érvényesül.`;
     } else if (data.rewardType === 'wallet') {
       resultEl.textContent = `Sikeres beváltás! +${formatHuf(data.rewardAmount)} jóváírva az egyenlegeden.`;
       refreshPpBalance();
@@ -2246,6 +2253,8 @@ async function loadAdminPlayerPanel(username) {
   $('#adminDiscountReasonInput').value = '';
   $('#adminDiscountExpiresInput').value = '';
   renderAdminDiscountState(null);
+  $('#adminSecurityStatus').textContent = '';
+  renderAdminSecurityState(null);
   try {
     const res = await fetch(BACKEND_URL + '/api/admin/player/' + encodeURIComponent(username), {
       headers: { Authorization: 'Bearer ' + session.token }
@@ -2264,6 +2273,7 @@ async function loadAdminPlayerPanel(username) {
     renderAdminPlayerBadgesList(data.badges);
     renderAdminMediaState(data.hasSkin, data.hasCape);
     renderAdminDiscountState(data.discount);
+    renderAdminSecurityState(data.security);
     $('#adminPlayerLoginsBody').innerHTML = (data.logins || []).map((l) => `
       <tr>
         <td>${formatLedgerDate(l.created_at)}</td>
@@ -2630,6 +2640,76 @@ $('#adminCasinoAdjustBtn').addEventListener('click', async () => {
     statusEl.className = 'redeem-result error';
   }
 });
+
+let currentAdminSecurity = null;
+
+function renderAdminSecurityState(security) {
+  currentAdminSecurity = security || null;
+  const stateEl = $('#adminSecurityState');
+  const pinBtn = $('#adminSecurityResetPinBtn');
+  const totpBtn = $('#adminSecurityResetTotpBtn');
+  const bothBtn = $('#adminSecurityResetBothBtn');
+  if (!security) {
+    stateEl.textContent = '';
+    pinBtn.disabled = false;
+    totpBtn.disabled = false;
+    bothBtn.disabled = false;
+    return;
+  }
+  const totp = security.totpEnabled ? 'bekapcsolva' : 'kikapcsolva';
+  const pin = security.pinEnabled ? `bekapcsolva (${security.pinLength || '?'} számjegyű)` : 'kikapcsolva';
+  stateEl.textContent = `2FA: ${totp} - Biztonsági kód: ${pin}`;
+  pinBtn.disabled = !security.pinEnabled;
+  totpBtn.disabled = !security.totpEnabled;
+  bothBtn.disabled = !security.pinEnabled && !security.totpEnabled;
+}
+
+async function adminSecurityReset(what, title, body) {
+  if (!lastAdminPlayerUsername) return;
+  const statusEl = $('#adminSecurityStatus');
+  statusEl.className = 'redeem-result';
+  const confirmed = await confirmModal(title, body, 'Igen, visszaállítom');
+  if (!confirmed) return;
+  statusEl.textContent = 'Végrehajtás...';
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/player/' + encodeURIComponent(lastAdminPlayerUsername) + '/security/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ what })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      statusEl.classList.add('error');
+      statusEl.textContent = data.message || 'A művelet sikertelen.';
+      return;
+    }
+    statusEl.textContent = 'Kész - a játékos a jelszavával be tud lépni, és a Biztonság fülön újat állíthat be. A meglévő munkamenetei kiléptek.';
+    if (currentAdminSecurity) {
+      renderAdminSecurityState({
+        ...currentAdminSecurity,
+        totpEnabled: currentAdminSecurity.totpEnabled && !data.reset.totp,
+        pinEnabled: currentAdminSecurity.pinEnabled && !data.reset.pin
+      });
+    }
+    showToast('Biztonsági beállítás visszaállítva.');
+  } catch {
+    statusEl.classList.add('error');
+    statusEl.textContent = 'Nem sikerült elérni a szervert.';
+  }
+}
+
+$('#adminSecurityResetPinBtn').addEventListener('click', () => adminSecurityReset(
+  'pin', 'Biztonsági kód visszaállítása',
+  `Biztosan visszaállítod <b>${escapeHtml(lastAdminPlayerUsername)}</b> biztonsági kódját? A védelem kikapcsol, a játékos újat állíthat be. Csak akkor tedd, ha meggyőződtél róla, hogy tényleg ő kéri.`
+));
+$('#adminSecurityResetTotpBtn').addEventListener('click', () => adminSecurityReset(
+  '2fa', '2FA visszaállítása',
+  `Biztosan visszaállítod <b>${escapeHtml(lastAdminPlayerUsername)}</b> kétlépcsős azonosítását? A 2FA és a helyreállítási kódok törlődnek, a játékos újra beállíthatja. Csak akkor tedd, ha meggyőződtél róla, hogy tényleg ő kéri.`
+));
+$('#adminSecurityResetBothBtn').addEventListener('click', () => adminSecurityReset(
+  'both', '2FA és biztonsági kód visszaállítása',
+  `Biztosan visszaállítod <b>${escapeHtml(lastAdminPlayerUsername)}</b> 2FA-ját ÉS biztonsági kódját is? Mindkét védelem kikapcsol. Csak akkor tedd, ha meggyőződtél róla, hogy tényleg ő kéri.`
+));
 
 $('#adminBadgeGrantBtn').addEventListener('click', async () => {
   if (!lastAdminPlayerUsername) return;
@@ -3668,7 +3748,9 @@ const ADMIN_ACTION_LABELS = {
   'creatorCode.deactivate': 'Creator kód inaktiválása', 'creatorCode.redeem': 'Creator kód beváltva regisztrációkor',
   'creatorCode.rankExpired': 'Creator kód rang-jutalma lejárt',
   'news.create': 'Felhívás létrehozása', 'news.edit': 'Felhívás szerkesztése', 'news.delete': 'Felhívás törlése',
-  'discord.boost': 'Discord boost jóváírás'
+  'discord.boost': 'Discord boost jóváírás',
+  'player.securityReset': '2FA / biztonsági kód visszaállítása',
+  'playtime.milestone': 'Játékidő mérföldkő jutalom'
 };
 
 let staffActionLogsEntries = [];
@@ -4542,21 +4624,46 @@ function syncCouponRewardTypeUI() {
   const type = $('#couponRewardTypeSelect').value;
   const isCosmetic = type === 'cosmetic';
   const isRank = type === 'rank';
+  const isBadge = type === 'badge';
+  const isDiscount = type === 'discount';
   $('#couponCosmeticRow').classList.toggle('hidden', !isCosmetic);
   $('#couponRankRow')?.classList.toggle('hidden', !isRank);
+  $('#couponBadgeRow')?.classList.toggle('hidden', !isBadge);
+  $('#couponDiscountRow')?.classList.toggle('hidden', !isDiscount);
   const amount = $('#couponRewardAmountInput');
   const amountLabel = $('#couponRewardAmountLabel');
-  amount.classList.toggle('hidden', isRank);
-  amountLabel.classList.toggle('hidden', isRank);
+  amount.classList.toggle('hidden', isRank || isBadge);
+  amountLabel.classList.toggle('hidden', isRank || isBadge);
+  amount.removeAttribute('max');
   if (isCosmetic) {
     amountLabel.textContent = 'Érvényesség napokban (0 = örökre)';
     amount.min = '0';
     amount.placeholder = 'Pl. 30 vagy 0';
+  } else if (isDiscount) {
+    amountLabel.textContent = 'Kedvezmény (%)';
+    amount.min = '1';
+    amount.max = '100';
+    amount.placeholder = 'Pl. 20';
+  } else if (type === 'casino_spin') {
+    amountLabel.textContent = 'Pörgetések száma';
+    amount.min = '1';
+    amount.placeholder = 'Pl. 3';
   } else {
     amountLabel.textContent = 'Jutalom mennyisége';
     amount.min = '1';
     amount.placeholder = 'Pl. 500';
   }
+}
+
+async function populateCouponBadgeSelect(selectedId) {
+  const sel = $('#couponBadgeSelect');
+  if (!sel) return;
+  allBadgesCache = [];
+  const all = await ensureAllBadgesLoaded();
+  sel.innerHTML = all.length
+    ? all.map((b) => `<option value="${b.id}">${escapeHtml(b.name)}</option>`).join('')
+    : '<option value="">- nincs létrehozott jelvény -</option>';
+  if (selectedId) sel.value = String(selectedId);
 }
 
 function populateCouponRewardRankSelect(selectedId) {
@@ -4598,7 +4705,9 @@ function resetCouponForm() {
   populateCouponCosmeticSelect();
   $('#couponRewardAmountInput').value = '';
   populateCouponRewardRankSelect();
+  populateCouponBadgeSelect();
   $('#couponRankDurationInput').value = '';
+  $('#couponDiscountDaysInput').value = '';
   $('#couponMaxUsesInput').value = '';
   $('#couponStartsInput').value = '';
   $('#couponExpiresInput').value = '';
@@ -4625,6 +4734,16 @@ function couponRewardLabel(c) {
   if (c.reward_type === 'rank') {
     const days = Number(c.reward_duration_days) || 0;
     return `${escapeHtml(c.rewardRankLabel || c.reward_rank)} rang (${days > 0 ? days + ' nap' : 'végleges'})`;
+  }
+  if (c.reward_type === 'badge') {
+    return `${escapeHtml(c.rewardBadgeName || 'törölt jelvény')} jelvény`;
+  }
+  if (c.reward_type === 'casino_spin') {
+    return `${Number(c.reward_amount) || 0} casino pörgetés`;
+  }
+  if (c.reward_type === 'discount') {
+    const days = Number(c.reward_duration_days) || 0;
+    return `${Number(c.reward_amount) || 0}% kedvezmény${days > 0 ? ` (${days} napig)` : ''}`;
   }
   return c.reward_type === 'wallet' ? `${formatHuf(c.reward_amount)} egyenleg` : `${formatPp(c.reward_amount)} PP`;
 }
@@ -4680,6 +4799,7 @@ $('#couponRewardTypeSelect')?.addEventListener('change', () => {
   syncCouponRewardTypeUI();
   if ($('#couponRewardTypeSelect').value === 'cosmetic') populateCouponCosmeticSelect();
   if ($('#couponRewardTypeSelect').value === 'rank') populateCouponRewardRankSelect();
+  if ($('#couponRewardTypeSelect').value === 'badge') populateCouponBadgeSelect();
 });
 
 $('#couponSaveBtn').addEventListener('click', async () => {
@@ -4695,7 +4815,7 @@ $('#couponSaveBtn').addEventListener('click', async () => {
   const active = $('#couponActiveCheckbox').checked;
 
   if (!code) { resultEl.textContent = 'Adj meg egy kódot.'; resultEl.className = 'redeem-result error'; return; }
-  if (rewardType !== 'rank') {
+  if (rewardType !== 'rank' && rewardType !== 'badge') {
     const minAmount = rewardType === 'cosmetic' ? 0 : 1;
     if (!Number.isInteger(rewardAmount) || rewardAmount < minAmount) {
       resultEl.textContent = rewardType === 'cosmetic'
@@ -4704,6 +4824,24 @@ $('#couponSaveBtn').addEventListener('click', async () => {
       resultEl.className = 'redeem-result error';
       return;
     }
+    if (rewardType === 'discount' && rewardAmount > 100) {
+      resultEl.textContent = 'A kedvezmény legfeljebb 100% lehet.';
+      resultEl.className = 'redeem-result error';
+      return;
+    }
+  }
+  const rewardBadgeId = rewardType === 'badge' ? Number($('#couponBadgeSelect').value) : undefined;
+  if (rewardType === 'badge' && !Number.isInteger(rewardBadgeId)) {
+    resultEl.textContent = 'Válassz ki egy jelvényt.';
+    resultEl.className = 'redeem-result error';
+    return;
+  }
+  const discountDaysRaw = $('#couponDiscountDaysInput').value.trim();
+  const discountDays = rewardType === 'discount' && discountDaysRaw ? Number(discountDaysRaw) : undefined;
+  if (rewardType === 'discount' && discountDaysRaw && (!Number.isInteger(discountDays) || discountDays < 1)) {
+    resultEl.textContent = 'A kedvezmény érvényessége csak pozitív egész nap lehet (vagy hagyd üresen, ha nem jár le).';
+    resultEl.className = 'redeem-result error';
+    return;
   }
   const rewardCosmeticId = rewardType === 'cosmetic' ? Number($('#couponCosmeticSelect').value) : undefined;
   if (rewardType === 'cosmetic' && !Number.isInteger(rewardCosmeticId)) {
@@ -4731,7 +4869,7 @@ $('#couponSaveBtn').addEventListener('click', async () => {
     const res = await fetch(url, {
       method: couponEditingId ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
-      body: JSON.stringify({ code, rewardType, rewardAmount, rewardCosmeticId, rewardRank, rewardDurationDays, maxUses, requiredRank, startsAt, expiresAt, active })
+      body: JSON.stringify({ code, rewardType, rewardAmount, rewardCosmeticId, rewardRank, rewardBadgeId, rewardDurationDays: rewardType === 'discount' ? discountDays : rewardDurationDays, maxUses, requiredRank, startsAt, expiresAt, active })
     });
     const data = await res.json();
     if (!data.ok) {
@@ -4760,7 +4898,9 @@ document.addEventListener('click', (e) => {
     syncCouponRewardTypeUI();
     if (item.reward_type === 'cosmetic') populateCouponCosmeticSelect(item.reward_cosmetic_id);
     populateCouponRewardRankSelect(item.reward_rank);
-    $('#couponRankDurationInput').value = item.reward_duration_days || '';
+    $('#couponRankDurationInput').value = item.reward_type === 'rank' ? (item.reward_duration_days || '') : '';
+    $('#couponDiscountDaysInput').value = item.reward_type === 'discount' ? (item.reward_duration_days || '') : '';
+    if (item.reward_type === 'badge') populateCouponBadgeSelect(item.reward_badge_id);
     $('#couponRewardAmountInput').value = item.reward_amount;
     $('#couponMaxUsesInput').value = item.max_uses !== null ? item.max_uses : '';
     populateCouponRequiredRankSelect(item.required_rank);

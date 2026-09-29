@@ -2027,7 +2027,18 @@
               <option value="wallet">Egyenleg (Ft)</option>
               <option value="cosmetic">Kiegészítő</option>
               <option value="rank">Rang</option>
+              <option value="casino_spin">Casino pörgetés</option>
+              <option value="badge">Jelvény</option>
+              <option value="discount">Kedvezmény (%)</option>
             </select>
+            <div id="couponBadgeRow" class="hidden">
+              <label class="gift-modal-label">Melyik jelvény</label>
+              <select id="couponBadgeSelect" class="gift-modal-input"></select>
+            </div>
+            <div id="couponDiscountRow" class="hidden">
+              <label class="gift-modal-label">Érvényesség napokban (nem kötelező, üresen nem jár le)</label>
+              <input type="number" id="couponDiscountDaysInput" class="gift-modal-input" placeholder="Pl. 7" min="1" max="3650" step="1" />
+            </div>
             <div id="couponCosmeticRow" class="hidden">
               <label class="gift-modal-label">Melyik kiegészítő</label>
               <select id="couponCosmeticSelect" class="gift-modal-input"></select>
@@ -2267,6 +2278,18 @@
                   <label>Pörgetés mennyisége (negatív = elvétel)</label>
                   <input type="number" id="adminCasinoAdjustAmountInput" placeholder="Pl. 1 vagy -1" step="1" />
                   <button type="button" class="btn-glow admin-lock-btn" id="adminCasinoAdjustBtn">Módosítás végrehajtása</button>
+                </div>
+              </div>
+
+              <div class="admin-card" data-perm="player.view.security,player.action.securityReset">
+                <div class="admin-subsection-title">Biztonság (2FA és biztonsági kód)</div>
+                <div class="ban-panel admin-security-panel">
+                  <p class="redeem-result" id="adminSecurityStatus"></p>
+                  <p class="admin-discount-current" id="adminSecurityState" data-perm="player.view.security"></p>
+                  <p class="page-note">A biztonsági kód és a 2FA titka biztonsági okból nem megtekinthető (a kód egyirányúan titkosítva tárolódik). Ha a játékos elfelejtette, itt visszaállíthatod: kikapcsol a védelem, és ő maga állíthat be újat a Biztonság fülön. A visszaállítás minden aktív munkamenetét is kilépteti.</p>
+                  <button type="button" class="btn-outline" id="adminSecurityResetPinBtn" data-perm="player.action.securityReset">Biztonsági kód visszaállítása</button>
+                  <button type="button" class="btn-outline" id="adminSecurityResetTotpBtn" data-perm="player.action.securityReset">2FA visszaállítása</button>
+                  <button type="button" class="btn-glow admin-lock-btn" id="adminSecurityResetBothBtn" data-perm="player.action.securityReset">Mindkettő visszaállítása</button>
                 </div>
               </div>
 
