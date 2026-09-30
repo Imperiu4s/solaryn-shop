@@ -1,3 +1,11 @@
+:root {
+  --epic: #a855f7;
+  --epic-glow: rgba(168, 85, 247, 0.5);
+  --epic-anim: linear-gradient(135deg, #a855f7, #ec4899);
+  --epic-anim-mid: #cf52dd;
+  --epic-anim-glow: rgba(207, 82, 221, 0.55);
+}
+
 :root,
 :root[data-theme="solaryn"] {
   --bg: #0a0a0d;
@@ -1475,7 +1483,8 @@ a { color: inherit; }
   background: var(--text-faint);
 }
 .cosmetic-card.rarity-rare::before { background: var(--discord); }
-.cosmetic-card.rarity-epic::before { background: var(--orange); }
+.cosmetic-card.rarity-epic::before { background: var(--epic); }
+.cosmetic-card.rarity-epic.is-animated::before { background: var(--epic-anim); }
 .cosmetic-card.rarity-legendary::before {
   background: linear-gradient(90deg, var(--gold-2), var(--gold), var(--gold-2));
 }
@@ -1597,9 +1606,18 @@ a { color: inherit; }
 }
 .cosmetic-card.rarity-epic,
 .cosmetic-admin-card.rarity-epic {
-  --rarity-ring: var(--orange);
-  --rarity-halo: var(--orange-glow);
+  --rarity-ring: var(--epic);
+  --rarity-halo: var(--epic-glow);
 }
+.cosmetic-card.rarity-epic.is-animated,
+.cosmetic-admin-card.rarity-epic.is-animated {
+  --rarity-ring: var(--epic-anim);
+  --rarity-halo: var(--epic-anim-glow);
+}
+.cosmetic-card.rarity-epic .cosmetic-tag.rarity,
+.cosmetic-admin-card.rarity-epic .cosmetic-tag.rarity { color: var(--epic); border-color: color-mix(in srgb, var(--epic) 40%, var(--line)); }
+.cosmetic-card.rarity-epic.is-animated .cosmetic-tag.rarity,
+.cosmetic-admin-card.rarity-epic.is-animated .cosmetic-tag.rarity { color: var(--epic-anim-mid); border-color: color-mix(in srgb, var(--epic-anim-mid) 40%, var(--line)); }
 .cosmetic-card.rarity-legendary,
 .cosmetic-admin-card.rarity-legendary {
   --rarity-ring: linear-gradient(135deg, var(--gold-2), var(--gold), var(--gold-2));
@@ -1751,7 +1769,7 @@ a { color: inherit; }
 
 .cosmetic-summary-bar-fill { height: 100%; border-radius: 999px; background: var(--text-faint); }
 .rarity-rare .cosmetic-summary-bar-fill { background: var(--discord); }
-.rarity-epic .cosmetic-summary-bar-fill { background: var(--orange); }
+.rarity-epic .cosmetic-summary-bar-fill { background: var(--epic); }
 .rarity-legendary .cosmetic-summary-bar-fill { background: linear-gradient(90deg, var(--gold-2), var(--gold)); }
 .rarity-mythic .cosmetic-summary-bar-fill { background: linear-gradient(90deg, var(--danger), var(--gold), var(--orange-2)); }
 .cosmetic-summary-note { margin-top: 12px; font-size: 12px; color: var(--text-faint); line-height: 1.5; }

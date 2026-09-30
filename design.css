@@ -223,11 +223,14 @@ body::before {
   box-shadow: var(--shadow-soft);
   transition: border-color .25s, background .25s;
 }
-.stat-badge:hover { border-color: color-mix(in srgb, var(--accent) 30%, var(--stroke)); box-shadow: var(--shadow-soft); }
+.stat-badge:hover, .wallet-highlight-card:hover { border-color: color-mix(in srgb, var(--accent) 30%, var(--stroke)); box-shadow: var(--shadow-soft); }
 .stat-badge:nth-child(4n+2) { --accent: var(--orange); }
 .stat-badge:nth-child(4n+3) { --accent: var(--success); }
 .stat-badge:nth-child(4n+4) { --accent: var(--accent-blue); }
-.wallet-highlight-card { --accent: var(--success); }
+.stat-badge[data-stat="rank"] { --accent: var(--gold); }
+.stat-badge[data-stat="coin"] { --accent: var(--orange); }
+.stat-badge[data-stat="wallet"], .wallet-highlight-card { --accent: var(--success); }
+.stat-badge[data-stat="time"] { --accent: var(--accent-blue); }
 .stat-badge-icon, .wallet-highlight-card .stat-badge-icon {
   width: 46px; height: 46px; border-radius: 15px; color: var(--accent);
   background: color-mix(in srgb, var(--accent) 11%, transparent);
@@ -630,7 +633,9 @@ body::before {
   animation: fadeSlideUp .4s var(--ease-out) backwards; animation-delay: calc(min(var(--i, 0), 12) * 40ms);
 }
 .pc-item.rarity-rare { --rc: var(--discord); }
-.pc-item.rarity-epic { --rc: var(--orange); }
+.pc-item.rarity-epic { --rc: var(--epic); }
+.pc-item.rarity-epic.is-animated { --rc: var(--epic-anim-mid); }
+.pc-item.rarity-epic.is-animated .pc-thumb { border-color: transparent; background: linear-gradient(color-mix(in srgb, var(--epic-anim-mid) 10%, #0d0d12), color-mix(in srgb, var(--epic-anim-mid) 10%, #0d0d12)) padding-box, var(--epic-anim) border-box; }
 .pc-item.rarity-legendary { --rc: var(--gold); }
 .pc-item.rarity-mythic { --rc: #ff5a3c; }
 .pc-item:hover { border-color: var(--stroke-3); }
@@ -777,7 +782,6 @@ body::before {
 .staff-points-value { font-family: var(--font-display); font-size: 26px; font-weight: 800; color: var(--gold); line-height: 1.1; font-variant-numeric: tabular-nums; }
 .staff-points-side { display: flex; align-items: baseline; justify-content: space-between; gap: 6px 14px; flex-wrap: wrap; padding-top: 10px; border-top: 1px solid var(--brand-line); }
 .staff-points-prev { font-size: 12.5px; font-weight: 600; color: var(--text); }
-.staff-points-rates { font-size: 11.5px; color: var(--text-faint); }
 
 .dm-try-bar {
   position: fixed; left: 50%; bottom: 64px; margin: 0;

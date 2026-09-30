@@ -35,10 +35,10 @@
   <link rel="dns-prefetch" href="https://api.overclockgame.hu" />
   <link rel="preload" as="image" href="assets/solaryn-icon.png" />
 
-  <script src="theme.js?v=20260925a"></script>
-  <link rel="stylesheet" href="style.css?v=20260925a" />
-  <link rel="stylesheet" href="ui.css?v=20260925a" />
-  <link rel="stylesheet" href="design.css?v=20260925a" />
+  <script src="theme.js?v=20260930a"></script>
+  <link rel="stylesheet" href="style.css?v=20260930a" />
+  <link rel="stylesheet" href="ui.css?v=20260930a" />
+  <link rel="stylesheet" href="design.css?v=20260930a" />
 
   <script type="application/ld+json">
   {
@@ -434,7 +434,6 @@
                   </div>
                   <div class="staff-points-side">
                     <span class="staff-points-prev" id="homeStaffPointsPrev"></span>
-                    <span class="staff-points-rates" id="homeStaffPointsRates"></span>
                   </div>
                 </div>
               </div>
@@ -1143,19 +1142,19 @@
           <div class="staff-points-admin">
             <div class="card staff-points-config">
               <div class="card-title">Pontozás</div>
-              <p class="staff-points-config-note">Ennyi pontot ér egy-egy kiadott büntetés vagy lezárt ticket. A módosítás azonnal érvényes, a korábbi hónapokat is az aktuális értékekkel számoljuk újra.</p>
+              <p class="staff-points-config-note">Ennyi kiadott büntetés vagy lezárt ticket ér 1 pontot (0 = nem jár érte pont). A módosítás azonnal érvényes, a korábbi hónapokat is az aktuális értékekkel számoljuk újra.</p>
               <div class="staff-points-fields">
                 <label class="staff-points-field">
-                  <span>Némításonként</span>
-                  <input type="number" id="staffPointsPerMute" class="gift-modal-input" min="0" max="1000" step="0.5" inputmode="decimal" />
+                  <span>Némítás = 1 pont</span>
+                  <input type="number" id="staffPointsPerMute" class="gift-modal-input" min="0" max="1000" step="1" inputmode="numeric" />
                 </label>
                 <label class="staff-points-field">
-                  <span>Kitiltásonként</span>
-                  <input type="number" id="staffPointsPerBan" class="gift-modal-input" min="0" max="1000" step="0.5" inputmode="decimal" />
+                  <span>Kitiltás = 1 pont</span>
+                  <input type="number" id="staffPointsPerBan" class="gift-modal-input" min="0" max="1000" step="1" inputmode="numeric" />
                 </label>
                 <label class="staff-points-field">
-                  <span>Lezárt ticketenként</span>
-                  <input type="number" id="staffPointsPerTicket" class="gift-modal-input" min="0" max="1000" step="0.5" inputmode="decimal" />
+                  <span>Lezárt ticket = 1 pont</span>
+                  <input type="number" id="staffPointsPerTicket" class="gift-modal-input" min="0" max="1000" step="1" inputmode="numeric" />
                 </label>
               </div>
               <div class="staff-points-config-foot">
@@ -2933,9 +2932,9 @@
     </div>
   </div>
 
-  <script src="skin3d.js?v=20260925a" defer></script>
-  <script src="app.js?v=20260925a" defer></script>
-  <script src="ui.js?v=20260925a" defer></script>
-  <script src="design.js?v=20260925a" defer></script>
+  <script src="skin3d.js?v=20260930a" defer></script>
+  <script src="app.js?v=20260930a" defer></script>
+  <script src="ui.js?v=20260930a" defer></script>
+  <script src="design.js?v=20260930a" defer></script>
 </body>
 </html>

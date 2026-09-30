@@ -1,4 +1,4 @@
-const CENTER_VERSION = '20260925a';
+const CENTER_VERSION = '20260930a';
 
 const BACKEND_URL = 'https://api.overclockgame.hu:8908';
 
@@ -3842,9 +3842,9 @@ function renderStaffPointsConfig(cfg, currentMonth) {
   if (!cfg) return;
   staffPointsConfigCache = cfg;
   const set = (id, v) => { const el = $(id); if (el && document.activeElement !== el) el.value = String(v); };
-  set('#staffPointsPerMute', cfg.perMute);
-  set('#staffPointsPerBan', cfg.perBan);
-  set('#staffPointsPerTicket', cfg.perTicket);
+  set('#staffPointsPerMute', cfg.mutesPerPoint);
+  set('#staffPointsPerBan', cfg.bansPerPoint);
+  set('#staffPointsPerTicket', cfg.ticketsPerPoint);
   $('#staffPointsConfigMeta').textContent = cfg.updatedAt
     ? `Utoljára módosította: ${cfg.updatedBy || 'ismeretlen'}, ${formatSanctionUntil(cfg.updatedAt)}`
     : 'Még senki nem módosította - ezek az alapértékek.';
@@ -3861,10 +3861,10 @@ $('#staffStatsMonthSelect')?.addEventListener('change', (e) => {
 
 $('#staffPointsSaveBtn')?.addEventListener('click', async () => {
   const btn = $('#staffPointsSaveBtn');
-  const read = (id) => Number(String($(id).value).replace(',', '.'));
-  const body = { perMute: read('#staffPointsPerMute'), perBan: read('#staffPointsPerBan'), perTicket: read('#staffPointsPerTicket') };
-  if (Object.values(body).some((v) => !Number.isFinite(v) || v < 0 || v > 1000)) {
-    showToast('A pontértékek 0 és 1000 közötti számok lehetnek.', true);
+  const read = (id) => Number(String($(id).value).trim());
+  const body = { mutesPerPoint: read('#staffPointsPerMute'), bansPerPoint: read('#staffPointsPerBan'), ticketsPerPoint: read('#staffPointsPerTicket') };
+  if (Object.values(body).some((v) => !Number.isInteger(v) || v < 0 || v > 1000)) {
+    showToast('Az értékek 0 és 1000 közötti egész számok lehetnek.', true);
     return;
   }
   if (typeof window.setButtonLoading === 'function') window.setButtonLoading(btn, true);
@@ -5424,14 +5424,11 @@ function formatPoints(n) {
 function renderHomeStaffPoints(data) {
   const strip = $('#homeStaffPoints');
   if (!strip) return;
-  const cfg = data.config || {};
   $('#homeStaffPointsValue').textContent = formatPoints(data.points);
   const prevLabel = data.previousMonth
     ? new Date(data.previousMonth + '-01T12:00:00').toLocaleDateString('hu-HU', { month: 'long' })
     : 'előző hónap';
   $('#homeStaffPointsPrev').textContent = `${capitalizeFirst(prevLabel)}: ${formatPoints(data.previousPoints)} pont`;
-  $('#homeStaffPointsRates').textContent =
-    `Némítás ${formatPoints(cfg.perMute)} · Kitiltás ${formatPoints(cfg.perBan)} · Ticket ${formatPoints(cfg.perTicket)} pont`;
 }
 
 const WEEKDAY_SHORT = ['V', 'H', 'K', 'Sze', 'Cs', 'P', 'Szo'];
@@ -6208,7 +6205,7 @@ function renderOwnedCosmetics() {
     return;
   }
   wrap.innerHTML = `<div class="cosmetic-grid">${visible.map((c) => `
-    <div class="cosmetic-card ${c.equipped ? 'equipped' : ''} rarity-${escapeHtml(c.rarity)}">
+    <div class="cosmetic-card ${c.equipped ? 'equipped' : ''} rarity-${escapeHtml(c.rarity)}${c.animated ? ' is-animated' : ''}">
       ${cosmeticCardThumbHtml(c)}
       <div class="cosmetic-card-name">${escapeHtml(c.name)}</div>
       <div class="cosmetic-card-tags">
@@ -6251,7 +6248,7 @@ function renderCosmeticShopGrid() {
     return;
   }
   wrap.innerHTML = `<div class="cosmetic-grid">${buyable.map((c) => `
-    <div class="cosmetic-card rarity-${escapeHtml(c.rarity)}">
+    <div class="cosmetic-card rarity-${escapeHtml(c.rarity)}${c.animated ? ' is-animated' : ''}">
       ${cosmeticCardThumbHtml(c)}
       <div class="cosmetic-card-name">${escapeHtml(c.name)}</div>
       <div class="cosmetic-card-tags">
@@ -6413,7 +6410,7 @@ async function loadMarketListings() {
   wrap.innerHTML = `<div class="cosmetic-grid">${buyable.map((l) => {
     const alreadyOwned = ownedIds.has(l.cosmetic.id);
     return `
-    <div class="cosmetic-card rarity-${escapeHtml(l.cosmetic.rarity)}">
+    <div class="cosmetic-card rarity-${escapeHtml(l.cosmetic.rarity)}${l.cosmetic.animated ? ' is-animated' : ''}">
       ${cosmeticCardThumbHtml(l.cosmetic)}
       <div class="cosmetic-card-name">${escapeHtml(l.cosmetic.name)}</div>
       <div class="cosmetic-card-tags">
@@ -7692,7 +7689,7 @@ function renderCosmeticsAdminList() {
   }
 
   wrap.innerHTML = `<div class="cosmetic-admin-grid">${visible.map((c) => `
-    <div class="cosmetic-admin-card rarity-${escapeHtml(c.rarity)}${c.enabled ? '' : ' is-off'}">
+    <div class="cosmetic-admin-card rarity-${escapeHtml(c.rarity)}${c.animated ? ' is-animated' : ''}${c.enabled ? '' : ' is-off'}">
       ${cosmeticCardThumbHtml(c)}
       <div class="cosmetic-admin-card-name">${escapeHtml(c.name)}</div>
       <div class="cosmetic-admin-card-slug">${escapeHtml(c.slug)}</div>
@@ -11742,7 +11739,7 @@ async function loadProfileCosmetics(username) {
     return;
   }
   grid.innerHTML = items.map((c, i) => `
-    <div class="pc-item rarity-${escapeHtml(c.rarity)}${c.equipped ? ' is-active' : ''}" style="--i:${i}">
+    <div class="pc-item rarity-${escapeHtml(c.rarity)}${c.animated ? ' is-animated' : ''}${c.equipped ? ' is-active' : ''}" style="--i:${i}">
       <div class="pc-thumb">${c.hasModel ? cosmeticThumbHtml(c) : '<div class="cosmetic-thumb cosmetic-thumb-empty"></div>'}</div>
       <div class="pc-info">
         <div class="pc-name" title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</div>
