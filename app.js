@@ -218,15 +218,59 @@ async function apiGetMe(token) {
   }
 }
 
+const AUTH_HEADINGS = {
+  login: ['Üdv újra!', 'Jelentkezz be a Solaryn fiókoddal - ugyanazzal, amivel a launcherbe is belépsz.'],
+  register: ['Fiók létrehozása', 'Egy fiók a szerverhez, a launcherhez és a Centerhez - pár perc az egész.']
+};
+
 function setAuthMode(mode) {
-  $$('.auth-tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === mode));
+  $$('.auth-tab').forEach((t) => {
+    t.classList.toggle('active', t.dataset.tab === mode);
+    t.setAttribute('aria-selected', t.dataset.tab === mode ? 'true' : 'false');
+  });
   $('#loginForm').classList.toggle('hidden', mode !== 'login');
   $('#registerForm').classList.toggle('hidden', mode !== 'register');
+  $('#authScreen').dataset.authMode = mode;
+  const [heading, sub] = AUTH_HEADINGS[mode] || AUTH_HEADINGS.login;
+  $('#authHeading').textContent = heading;
+  $('#authSubheading').textContent = sub;
   $('#authError').textContent = '';
   $('#registerError').textContent = '';
 }
 $$('.auth-tab').forEach((tab) => tab.addEventListener('click', () => setAuthMode(tab.dataset.tab)));
 $('#switchToLogin').addEventListener('click', () => setAuthMode('login'));
+$('#switchToRegister').addEventListener('click', () => setAuthMode('register'));
+
+$('#authIpCopy').addEventListener('click', async () => {
+  const btn = $('#authIpCopy');
+  try {
+    await navigator.clipboard.writeText(btn.dataset.ip);
+    btn.classList.add('is-copied');
+    $('.auth-ip-label', btn).textContent = 'Kimásolva!';
+    setTimeout(() => { btn.classList.remove('is-copied'); $('.auth-ip-label', btn).textContent = 'Szerver IP'; }, 1600);
+  } catch {
+    showToast('Nem sikerült a vágólapra másolni - az IP: ' + btn.dataset.ip, true);
+  }
+});
+
+// Jelszóerősség-jelző a regisztrációnál (csak tájékoztató, a backend a
+// minimum 6 karaktert követeli meg).
+const PW_LEVELS = ['Adj meg egy jelszót', 'Gyenge', 'Közepes', 'Jó', 'Erős'];
+$('#regPass').addEventListener('input', () => {
+  const pw = $('#regPass').value;
+  let level = 0;
+  if (pw.length) {
+    level = 1;
+    if (pw.length >= 8) level++;
+    if (pw !== pw.toUpperCase() && pw !== pw.toLowerCase()) level++;
+    if (/\d/.test(pw) && /[^A-Za-z0-9áéíóöőúüűÁÉÍÓÖŐÚÜŰ]/.test(pw)) level++;
+    else if (/\d/.test(pw) && pw.length >= 10) level++;
+    if (pw.length < 6) level = 1;
+    level = Math.min(4, level);
+  }
+  $('#regPwMeter').dataset.level = String(level);
+  $('#regPwMeterText').textContent = pw.length && pw.length < 6 ? 'Túl rövid (legalább 6 karakter)' : PW_LEVELS[level];
+});
 
 $('#loginForm').addEventListener('submit', (e) => { e.preventDefault(); doLogin(); });
 
@@ -1764,7 +1808,7 @@ function switchView(view) {
   if (view === 'skin') { endDefaultMediaTry(false); loadSkinPreview3d(); loadDefaultMediaGallery(); loadMySkinSubmissions(); }
   if (view === 'ranks') refreshPpBalance();
   if (view === 'wallet') refreshPpBalance();
-  if (view === 'security') { loadSecurityStatus(); loadSecurityPinStatus(); loadClientSettingsState(); }
+  if (view === 'security') { loadSecurityStatus(); loadSecurityPinStatus(); loadClientSettingsState(); loadPrivacySettings(); }
   if (view === 'ledger') loadLedger();
   if (view === 'purchaseLogs') loadPurchaseLogsGlobal();
   if (view === 'staffActionLogs') loadStaffActionLogsGlobal();
@@ -3146,11 +3190,31 @@ let rankPerkFilter = 'all';
 const RANK_SERVER_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="17" height="6.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="3.5" y="13.5" width="17" height="6.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="7.5" cy="7.25" r="1.1" fill="currentColor"/><circle cx="7.5" cy="16.75" r="1.1" fill="currentColor"/></svg>';
 const RANK_GLOBE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M3.5 12h17M12 3.5c2.4 2.4 3.6 5.2 3.6 8.5s-1.2 6.1-3.6 8.5c-2.4-2.4-3.6-5.2-3.6-8.5s1.2-6.1 3.6-8.5z" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>';
 
+// A kiválasztott időtartam (30 / 60 nap) szerinti ár. A backend rangonként
+// durationOptions-t ad; ha egy régi backend nem ad, a 30 napos árat használjuk.
+let rankDurationDays = 30;
+
+function rankOffer(rank) {
+  const options = Array.isArray(rank.durationOptions) ? rank.durationOptions : [];
+  const opt = options.find((o) => o.days === rankDurationDays) || options[0];
+  if (!opt) return { days: Number(rank.durationDays) || 30, savePercent: 0, priceCoins: rank.priceCoins, originalPriceCoins: rank.originalPriceCoins };
+  return opt;
+}
+
+function rankDurationChoices() {
+  const seen = new Map();
+  for (const r of shopRanks) for (const o of r.durationOptions || []) if (!seen.has(o.days)) seen.set(o.days, o.savePercent || 0);
+  return [...seen.entries()].sort((a, b) => a[0] - b[0]).map(([days, savePercent]) => ({ days, savePercent }));
+}
+
 function rankActionsHtml(rank) {
-  const affordable = currentPpBalance >= rank.priceCoins;
+  const offer = rankOffer(rank);
+  const affordable = currentPpBalance >= offer.priceCoins;
   const mySub = mySubscriptions.find((s) => s.rankId === rank.id && s.active);
   let subscription = '';
-  if (rank.subscribable) {
+  if (rank.subscribable && offer.days !== 30 && !mySub) {
+    subscription = '';
+  } else if (rank.subscribable) {
     if (mySub) {
       subscription = `
         <div class="rank-sub-info">Előfizetve · következő: ${formatSubscriptionDate(mySub.nextBillingAt)}</div>
@@ -3161,8 +3225,8 @@ function rankActionsHtml(rank) {
     }
   }
   const price = rank.discountPercent > 0
-    ? `<span class="price-original">${formatPp(rank.originalPriceCoins)}</span><b>${formatPp(rank.priceCoins)}</b>`
-    : `<b>${formatPp(rank.priceCoins)}</b>`;
+    ? `<span class="price-original">${formatPp(offer.originalPriceCoins)}</span><b>${formatPp(offer.priceCoins)}</b>`
+    : `<b>${formatPp(offer.priceCoins)}</b>`;
   return `
     <div class="rank-price-tag"><img src="assets/pp-coin.svg" alt="" />${price}</div>
     <button type="button" class="btn-buy rank-btn-buy" data-rank-id="${rank.id}"${affordable ? '' : ' disabled'}>${affordable ? 'Vásárlás' : 'Nincs elég PP'}</button>
@@ -3181,6 +3245,8 @@ function renderRankGrid() {
     wrap.innerHTML = '<div class="card card-static"><p class="redeem-result">A rangok most nem érhetők el - próbáld újra később.</p></div>';
     return;
   }
+  const durationChoices = rankDurationChoices();
+  if (!durationChoices.some((c) => c.days === rankDurationDays) && durationChoices.length) rankDurationDays = durationChoices[0].days;
   const { groups, cells } = buildRankMatrix(shopRanks, shopPerkServers);
   const hasServers = groups.some((g) => g.id !== null);
   if (rankPerkFilter !== 'all' && !groups.some((g) => String(g.id ?? 'general') === rankPerkFilter)) rankPerkFilter = 'all';
@@ -3199,7 +3265,7 @@ function renderRankGrid() {
   };
   const colClass = (rank) => {
     const t = RANK_THEMES[rank.id] || RANK_THEME_FALLBACK;
-    const affordable = currentPpBalance >= rank.priceCoins;
+    const affordable = currentPpBalance >= rankOffer(rank).priceCoins;
     return `rank-col${t.featured ? ' is-featured' : ''}${affordable ? '' : ' is-insufficient'}`;
   };
   const headCells = (fn, cls) => shopRanks.map((r, i) => `<th scope="col" class="${colClass(r)} ${cls}" style="${styleOf(r)}" data-col="${i}">${fn(r)}</th>`).join('');
@@ -3214,6 +3280,10 @@ function renderRankGrid() {
                 <span class="rank-corner-eyebrow">Összehasonlítás</span>
                 <span class="rank-corner-title">Válaszd ki a hozzád illő rangot</span>
                 <span class="rank-corner-balance">Egyenleged: <b>${formatPp(currentPpBalance)}</b></span>
+                ${durationChoices.length > 1 ? `
+                <div class="rank-duration-switch" role="radiogroup" aria-label="Időtartam">
+                  ${durationChoices.map((c) => `<button type="button" class="${c.days === rankDurationDays ? 'active' : ''}" data-rank-duration="${c.days}" role="radio" aria-checked="${c.days === rankDurationDays}">${c.days} nap${c.savePercent ? ` <em>-${c.savePercent}%</em>` : ''}</button>`).join('')}
+                </div>` : ''}
               </div>
             </th>
             ${headCells((r) => {
@@ -3229,8 +3299,9 @@ function renderRankGrid() {
           </tr>
           <tr class="rank-row-duration">
             ${headCells((r) => {
-              const days = Number(r.durationDays) || 0;
-              return `<span class="rank-duration"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>${days ? `${days} napig érvényes` : escapeHtml(r.duration || '')}</span>`;
+              const offer = rankOffer(r);
+              const days = Number(offer.days) || Number(r.durationDays) || 0;
+              return `${offer.savePercent ? `<span class="rank-save-badge">${offer.savePercent}% megtakarítás</span>` : ''}<span class="rank-duration"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>${days ? `${days} napig érvényes` : escapeHtml(r.duration || '')}</span>`;
             }, 'rank-cell-duration')}
           </tr>
           <tr class="rank-row-actions">
@@ -3288,6 +3359,12 @@ async function loadRanks() {
 loadRanks();
 
 document.addEventListener('click', (e) => {
+  const durationBtn = e.target.closest('[data-rank-duration]');
+  if (durationBtn) {
+    rankDurationDays = Number(durationBtn.dataset.rankDuration);
+    renderRankGrid();
+    return;
+  }
   const perkFilter = e.target.closest('[data-rank-perk-filter]');
   if (perkFilter) {
     rankPerkFilter = perkFilter.dataset.rankPerkFilter;
@@ -3419,15 +3496,16 @@ async function buyRank(rankId, buttonEl, giftTo, giftMessage) {
     return;
   }
   const rank = shopRanks.find((r) => r.id === rankId);
-  if (rank && currentPpBalance < rank.priceCoins) {
+  const offer = rank ? rankOffer(rank) : null;
+  if (offer && currentPpBalance < offer.priceCoins) {
     showToast('Nincs elég PrémiumPontod ehhez a ranghoz.', true);
     return;
   }
   const confirmed = await confirmModal(
     'Biztosan megveszed?',
     giftTo
-      ? (rank ? `A(z) <b>${escapeHtml(rank.label)}</b> rangot ajándékozod <b>${escapeHtml(giftTo)}</b>-nak <b>${formatPp(rank.priceCoins)}</b>-ért - ez a TE egyenlegedből kerül levonásra.` : `Biztosan ajándékozod ezt a rangot ${escapeHtml(giftTo)}-nak?`)
-      : (rank ? `A(z) <b>${rank.label}</b> rangot vásárolod meg <b>${formatPp(rank.priceCoins)}</b>-ért. Ez levonásra kerül az egyenlegedből.` : 'Biztosan megveszed ezt a rangot?'),
+      ? (rank ? `A(z) <b>${escapeHtml(rank.label)}</b> rangot ajándékozod <b>${escapeHtml(giftTo)}</b>-nak <b>${offer.days} napra</b>, <b>${formatPp(offer.priceCoins)}</b>-ért - ez a TE egyenlegedből kerül levonásra.` : `Biztosan ajándékozod ezt a rangot ${escapeHtml(giftTo)}-nak?`)
+      : (rank ? `A(z) <b>${escapeHtml(rank.label)}</b> rangot vásárolod meg <b>${offer.days} napra</b>, <b>${formatPp(offer.priceCoins)}</b>-ért. Ez levonásra kerül az egyenlegedből.` : 'Biztosan megveszed ezt a rangot?'),
     giftTo ? 'Igen, ajándékozás' : 'Igen, vásárlás'
   );
   if (!confirmed) return;
@@ -3439,7 +3517,7 @@ async function buyRank(rankId, buttonEl, giftTo, giftMessage) {
     const res = await fetch(BACKEND_URL + '/api/shop/purchase-rank', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
-      body: JSON.stringify(giftTo ? { rankId, giftTo, giftMessage } : { rankId })
+      body: JSON.stringify({ rankId, durationDays: offer ? offer.days : undefined, ...(giftTo ? { giftTo, giftMessage } : {}) })
     });
     const data = await res.json();
     if (!data.ok) {
@@ -5599,8 +5677,12 @@ function bindPlaytimeTooltip() {
     if (tip) tip.hidden = true;
     $$('.pt-col', chart).forEach((c) => c.classList.remove('is-hover'));
   };
-  chart.addEventListener('pointerover', (e) => show(e.target.closest('.pt-col')));
+  chart.addEventListener('pointerover', (e) => {
+    const col = e.target.closest('.pt-col');
+    if (col) show(col); else hide();
+  });
   chart.addEventListener('pointerleave', hide);
+  chart.addEventListener('pointercancel', hide);
   chart.addEventListener('focusin', (e) => show(e.target.closest('.pt-col')));
   chart.addEventListener('focusout', hide);
 }
@@ -11790,10 +11872,15 @@ async function loadProfileCosmetics(username) {
   countEl.textContent = '';
   grid.innerHTML = '<div class="skeleton skeleton-card"></div>';
   let items = [];
+  let hidden = false;
+  let isPrivate = false;
   try {
-    const res = await fetch(BACKEND_URL + '/api/cosmetics/owned/' + encodeURIComponent(username));
+    const res = await fetch(BACKEND_URL + '/api/cosmetics/owned/' + encodeURIComponent(username),
+      session && session.token ? { headers: { Authorization: 'Bearer ' + session.token } } : undefined);
     const data = await res.json();
     items = data.ok && Array.isArray(data.items) ? data.items : [];
+    hidden = !!(data.ok && data.hidden);
+    isPrivate = !!(data.ok && data.isPrivate);
   } catch {
     items = null;
   }
@@ -11802,10 +11889,14 @@ async function loadProfileCosmetics(username) {
     grid.innerHTML = '<p class="redeem-result">Nem sikerült betölteni a kiegészítőket.</p>';
     return;
   }
+  if (hidden) {
+    grid.innerHTML = `<div class="pc-empty pc-hidden"><span class="pc-empty-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c5 0 8.5 4.2 9.5 7-.4 1.1-1.2 2.5-2.4 3.8M6.6 6.6C4.6 8 3.1 10 2.5 12c1 2.8 4.5 7 9.5 7 1.6 0 3-.4 4.3-1.1M9.9 9.9a3 3 0 0 0 4.2 4.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><b>${escapeHtml(username)}</b> kikapcsolta a kiegészítői láthatóságát.</div>`;
+    return;
+  }
   const active = items.filter((c) => c.equipped).length;
-  countEl.innerHTML = items.length
+  countEl.innerHTML = (items.length
     ? `<span>${items.length} db</span><span class="pc-count-active">${active} aktív</span>`
-    : '';
+    : '') + (isPrivate ? '<span class="pc-count-private" title="Mások elől rejtve - te (vagy adminként) látod">Rejtett</span>' : '');
   if (!items.length) {
     grid.innerHTML = '<div class="pc-empty"><span class="pc-empty-icon" aria-hidden="true">✦</span>Ennek a játékosnak még nincs egyetlen kiegészítője sem.</div>';
     return;
@@ -12340,3 +12431,49 @@ function openRankPerkEditor(rankId) {
   overlay.querySelector('[data-rp-new-text]').addEventListener('keydown', (e) => { if (e.key === 'Enter') addPerk(); });
   setTimeout(() => overlay.querySelector('[data-rp-new-text]').focus(), 40);
 }
+
+// ---------------------------------------------------------------------------
+// Adatvédelem (Biztonság oldal) - kiegészítők elrejtése a profilon
+// ---------------------------------------------------------------------------
+
+async function loadPrivacySettings() {
+  const toggle = $('#privacyCosmeticsToggle');
+  const result = $('#privacyCosmeticsResult');
+  if (!session || !session.token) return;
+  toggle.disabled = true;
+  result.textContent = '';
+  try {
+    const res = await fetch(BACKEND_URL + '/api/me/privacy', { headers: { Authorization: 'Bearer ' + session.token } });
+    const data = await res.json();
+    if (!data.ok) throw new Error();
+    toggle.checked = !!data.cosmeticsPrivate;
+    toggle.disabled = false;
+  } catch {
+    result.classList.add('error');
+    result.textContent = 'A beállítás most nem tölthető be.';
+  }
+}
+
+$('#privacyCosmeticsToggle').addEventListener('change', async (e) => {
+  const toggle = e.target;
+  const result = $('#privacyCosmeticsResult');
+  const wanted = toggle.checked;
+  toggle.disabled = true;
+  result.classList.remove('error');
+  try {
+    const res = await fetch(BACKEND_URL + '/api/me/privacy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ cosmeticsPrivate: wanted })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.message);
+    result.textContent = wanted ? 'Mostantól mások nem látják a kiegészítőidet.' : 'A kiegészítőid újra láthatók a profilodon.';
+  } catch (err) {
+    toggle.checked = !wanted;
+    result.classList.add('error');
+    result.textContent = (err && err.message) || 'Nem sikerült menteni.';
+  } finally {
+    toggle.disabled = false;
+  }
+});

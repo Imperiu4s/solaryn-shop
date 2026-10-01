@@ -35,10 +35,10 @@
   <link rel="dns-prefetch" href="https://api.overclockgame.hu" />
   <link rel="preload" as="image" href="assets/solaryn-icon.png" />
 
-  <script src="theme.js?v=20261001a"></script>
-  <link rel="stylesheet" href="style.css?v=20261001a" />
-  <link rel="stylesheet" href="ui.css?v=20261001a" />
-  <link rel="stylesheet" href="design.css?v=20261001a" />
+  <script src="theme.js?v=20261001b"></script>
+  <link rel="stylesheet" href="style.css?v=20261001b" />
+  <link rel="stylesheet" href="ui.css?v=20261001b" />
+  <link rel="stylesheet" href="design.css?v=20261001b" />
 
   <script type="application/ld+json">
   {
@@ -62,128 +62,165 @@
 
   <canvas id="particleCanvas" class="particle-canvas" aria-hidden="true"></canvas>
 
-  <section id="authScreen" class="auth-screen">
+  <section id="authScreen" class="auth-screen" data-auth-mode="login">
     <div class="auth-split">
-      <div class="auth-form-side">
+      <aside class="auth-info-side">
         <div class="auth-brand">
           <img class="brand-logo-img" src="assets/solaryn-icon.png" alt="Solaryn" />
           <div class="auth-brand-name">SOLARCENTER<small>Solaryn Network</small></div>
         </div>
 
-        <div class="auth-tabs">
-          <button class="auth-tab active" data-tab="login">Bejelentkezés</button>
-          <button class="auth-tab" data-tab="register">Regisztráció</button>
+        <div class="auth-info-body">
+          <span class="auth-eyebrow">Játékosportál</span>
+          <div class="auth-info-title">Minden egy helyen.</div>
+          <p class="auth-info-lead">Skin, rangok, PrémiumPont és a barátaid - egyetlen fiókkal a szerveren, a launcherben és itt is.</p>
+
+          <div class="auth-feature">
+            <div class="auth-feature-icon">
+              <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-4 0-8 2-8 5v1h16v-1c0-3-4-5-8-5z"/></svg>
+            </div>
+            <div>
+              <div class="auth-feature-title">Fiókod és a skined</div>
+              <div class="auth-feature-desc">Egyedi skin és köpeny, ami azonnal megjelenik a szerveren és a launcherben is.</div>
+            </div>
+          </div>
+
+          <div class="auth-feature">
+            <div class="auth-feature-icon">
+              <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 2l8 3.5v6c0 5-3.4 8.6-8 10.5-4.6-1.9-8-5.5-8-10.5v-6z"/></svg>
+            </div>
+            <div>
+              <div class="auth-feature-title">Kitiltáscsökkentés</div>
+              <div class="auth-feature-desc">Szankció feloldása vagy csökkentése gyors, automatikus jóváírással.</div>
+            </div>
+          </div>
+
+          <div class="auth-feature">
+            <div class="auth-feature-icon">
+              <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 21s-6.7-4.3-9.3-8.8C.6 8.7 2 4.9 5.6 4.1c2-.5 3.9.3 5 1.9C11.7 4.4 13.6 3.6 15.6 4.1c3.6.8 5 4.6 2.9 8.1C18.7 16.7 12 21 12 21z"/></svg>
+            </div>
+            <div>
+              <div class="auth-feature-title">Támogasd a szervert</div>
+              <div class="auth-feature-desc">PrémiumPonttal közvetlenül a szerver fejlesztését és a csapat munkáját támogatod.</div>
+            </div>
+          </div>
+        </div>
+
+        <button type="button" class="auth-ip-pill" id="authIpCopy" data-ip="play.solaryn.hu" title="Kattints a másoláshoz">
+          <span class="auth-ip-dot" aria-hidden="true"></span>
+          <span class="auth-ip-label">Szerver IP</span>
+          <b>play.solaryn.hu</b>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+        </button>
+      </aside>
+
+      <div class="auth-form-side">
+        <div class="auth-heading">
+          <h1 id="authHeading">Üdv újra!</h1>
+          <p id="authSubheading">Jelentkezz be a Solaryn fiókoddal - ugyanazzal, amivel a launcherbe is belépsz.</p>
+        </div>
+
+        <div class="auth-tabs" role="tablist">
+          <button class="auth-tab active" data-tab="login" role="tab">Bejelentkezés</button>
+          <button class="auth-tab" data-tab="register" role="tab">Regisztráció</button>
         </div>
 
         <form class="auth-form" id="loginForm">
-          <label>Felhasználónév</label>
-          <input id="authUser" type="text" autocomplete="username" placeholder="Játékosneved" />
-          <label>Jelszó</label>
-          <input id="authPass" type="password" autocomplete="current-password" placeholder="••••••••" />
-          <label class="check-row auth-remember-row">
-            <input type="checkbox" id="authRememberMe" />
-            <span>Maradj bejelentkezve</span>
-          </label>
+          <label for="authUser">Felhasználónév</label>
+          <input id="authUser" class="auth-input-icon auth-icon-user" type="text" autocomplete="username" placeholder="Játékosneved" />
+          <label for="authPass">Jelszó</label>
+          <input id="authPass" class="auth-input-icon auth-icon-lock" type="password" autocomplete="current-password" placeholder="••••••••" />
+          <div class="auth-login-row">
+            <label class="check-row auth-remember-row">
+              <input type="checkbox" id="authRememberMe" />
+              <span>Maradj bejelentkezve</span>
+            </label>
+            <a href="#" id="btnForgotPassword" class="auth-forgot-link">Elfelejtett jelszó?</a>
+          </div>
           <div id="authError" class="auth-error"></div>
           <button type="submit" id="authSubmit" class="btn-glow">Bejelentkezés</button>
-          <a href="#" id="btnForgotPassword" class="auth-forgot-link">Elfelejtett jelszó?</a>
+          <p class="auth-switch-hint">Még nincs fiókod? <span class="link-inline" id="switchToRegister">Regisztrálj ingyen!</span></p>
         </form>
 
         <div class="auth-form hidden" id="registerForm">
-          <label>Játékos név *</label>
-          <input id="regUser" type="text" autocomplete="username" placeholder="Játékos név" />
+          <div class="auth-section">
+            <div class="auth-section-title"><span>1</span>Fiókadatok</div>
+            <label for="regUser">Játékos név *</label>
+            <input id="regUser" class="auth-input-icon auth-icon-user" type="text" autocomplete="username" placeholder="Ezzel a névvel jelensz meg" />
 
-          <div class="form-row-2">
-            <div>
-              <label>Email cím *</label>
-              <input id="regEmail" type="email" autocomplete="email" placeholder="Valós email cím" />
+            <div class="form-row-2">
+              <div>
+                <label for="regEmail">Email cím *</label>
+                <input id="regEmail" class="auth-input-icon auth-icon-mail" type="email" autocomplete="email" placeholder="Valós email cím" />
+              </div>
+              <div>
+                <label for="regEmail2">Email cím újra *</label>
+                <input id="regEmail2" class="auth-input-icon auth-icon-mail" type="email" autocomplete="off" placeholder="Még egyszer" />
+              </div>
             </div>
-            <div>
-              <label>Email cím újra *</label>
-              <input id="regEmail2" type="email" autocomplete="off" placeholder="Valós email cím újra" />
+
+            <div class="form-row-2">
+              <div>
+                <label for="regPass">Jelszó *</label>
+                <input id="regPass" class="auth-input-icon auth-icon-lock" type="password" autocomplete="new-password" placeholder="Legalább 6 karakter" />
+              </div>
+              <div>
+                <label for="regPass2">Jelszó újra *</label>
+                <input id="regPass2" class="auth-input-icon auth-icon-lock" type="password" autocomplete="new-password" placeholder="Még egyszer" />
+              </div>
+            </div>
+            <div class="pw-meter" id="regPwMeter" data-level="0" aria-live="polite">
+              <div class="pw-meter-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+              <span class="pw-meter-text" id="regPwMeterText">Adj meg egy jelszót</span>
             </div>
           </div>
 
-          <label>Születési dátum *</label>
-          <div class="form-row-3">
-            <select id="regYear"><option value="">- év -</option></select>
-            <select id="regMonth"><option value="">- hónap -</option></select>
-            <select id="regDay"><option value="">- nap -</option></select>
+          <div class="auth-section">
+            <div class="auth-section-title"><span>2</span>Rólad</div>
+            <div class="auth-about-grid">
+              <div>
+                <label>Születési dátum *</label>
+                <div class="form-row-3">
+                  <select id="regYear" aria-label="Év"><option value="">Év</option></select>
+                  <select id="regMonth" aria-label="Hónap"><option value="">Hónap</option></select>
+                  <select id="regDay" aria-label="Nap"><option value="">Nap</option></select>
+                </div>
+              </div>
+              <div>
+                <label for="regCreatorCode">Support / Creator kód</label>
+                <input id="regCreatorCode" class="auth-input-icon auth-icon-gift" type="text" autocomplete="off" placeholder="Nem kötelező" />
+              </div>
+            </div>
           </div>
 
-          <div class="form-row-2">
-            <div>
-              <label>Jelszó *</label>
-              <input id="regPass" type="password" autocomplete="new-password" placeholder="Jelszó" />
+          <div class="auth-section">
+            <div class="auth-section-title"><span>3</span>Nyilatkozatok</div>
+            <div class="form-checks">
+              <label class="check-row">
+                <input type="checkbox" id="regTerms" />
+                <span>Elfogadom az <span class="link-inline" id="linkTerms">ÁSZF</span>-et és az Adatvédelmi nyilatkozatot. *</span>
+              </label>
+              <label class="check-row">
+                <input type="checkbox" id="regAge" />
+                <span>Megerősítem, hogy betöltöttem a 14. életévemet, vagy szülőm/törvényes képviselőm hozzájárult. *</span>
+              </label>
+              <label class="check-row">
+                <input type="checkbox" id="regMarketing" />
+                <span>Hozzájárulok a marketing célú
+                  <select id="regMarketingChannel" class="inline-select">
+                    <option value="email_sms">Email és SMS</option>
+                    <option value="email">Csak Email</option>
+                    <option value="sms">Csak SMS</option>
+                  </select>
+                  megkeresésekhez.
+                </span>
+              </label>
             </div>
-            <div>
-              <label>Jelszó újra *</label>
-              <input id="regPass2" type="password" autocomplete="new-password" placeholder="Jelszó újra" />
-            </div>
-          </div>
-
-          <label>Support / Creator kód</label>
-          <input id="regCreatorCode" type="text" autocomplete="off" placeholder="Nem kötelező" />
-
-          <div class="form-checks">
-            <label class="check-row">
-              <input type="checkbox" id="regTerms" />
-              <span>Elfogadom az <span class="link-inline" id="linkTerms">ÁSZF</span>-et és az Adatvédelmi nyilatkozatot.</span>
-            </label>
-            <label class="check-row">
-              <input type="checkbox" id="regMarketing" />
-              <span>Hozzájárulok a marketing célú
-                <select id="regMarketingChannel" class="inline-select">
-                  <option value="email_sms">Email és SMS</option>
-                  <option value="email">Csak Email</option>
-                  <option value="sms">Csak SMS</option>
-                </select>
-                megkeresésekhez.
-              </span>
-            </label>
-            <label class="check-row">
-              <input type="checkbox" id="regAge" />
-              <span>Megerősítem, hogy betöltöttem a 14. életévemet, vagy szülőm/törvényes képviselőm hozzájárult.</span>
-            </label>
           </div>
 
           <div id="registerError" class="auth-error"></div>
-          <button id="registerSubmit" class="btn-glow btn-glow-orange">Regisztráció &#8594;</button>
+          <button id="registerSubmit" class="btn-glow btn-glow-orange">Fiók létrehozása &#8594;</button>
           <p class="auth-switch-hint">Már van fiókod? <span class="link-inline" id="switchToLogin">Jelentkezz be!</span></p>
-        </div>
-      </div>
-
-      <div class="auth-info-side">
-        <div class="auth-info-title">Minden egy helyen.</div>
-
-        <div class="auth-feature">
-          <div class="auth-feature-icon">
-            <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-4 0-8 2-8 5v1h16v-1c0-3-4-5-8-5z"/></svg>
-          </div>
-          <div>
-            <div class="auth-feature-title">Fiókod és a skined</div>
-            <div class="auth-feature-desc">Tölts fel egyedi skint, ami azonnal megjelenik a szerveren és a launcherben is - mindkettő ugyanazt a fiókot használja.</div>
-          </div>
-        </div>
-
-        <div class="auth-feature">
-          <div class="auth-feature-icon">
-            <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 2l8 3.5v6c0 5-3.4 8.6-8 10.5-4.6-1.9-8-5.5-8-10.5v-6z"/></svg>
-          </div>
-          <div>
-            <div class="auth-feature-title">Kitiltáscsökkentés</div>
-            <div class="auth-feature-desc">Ha szankciót kaptál, itt tudod feloldani vagy csökkenteni - gyors, automatikus jóváírással.</div>
-          </div>
-        </div>
-
-        <div class="auth-feature">
-          <div class="auth-feature-icon">
-            <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 21s-6.7-4.3-9.3-8.8C.6 8.7 2 4.9 5.6 4.1c2-.5 3.9.3 5 1.9C11.7 4.4 13.6 3.6 15.6 4.1c3.6.8 5 4.6 2.9 8.1C18.7 16.7 12 21 12 21z"/></svg>
-          </div>
-          <div>
-            <div class="auth-feature-title">Támogasd a szervert</div>
-            <div class="auth-feature-desc">PrémiumPont vásárlásával közvetlenül a szerver fejlesztését és a személyzet munkáját támogatod.</div>
-          </div>
         </div>
       </div>
     </div>
@@ -1059,6 +1096,19 @@
                 <p class="page-note" style="margin:-8px 0 14px;">A SolarClientben bekapcsolt modulok, a HUD-elemek helye és minden beállításod a fiókodhoz mentődik, így bármelyik gépen belépve ugyanúgy folytathatod. A mentés automatikus.</p>
                 <p class="client-settings-state" id="clientSettingsState">Betöltés...</p>
                 <button type="button" class="btn-outline hidden" id="btnResetClientSettings">Mentett beállítások törlése</button>
+              </div>
+
+              <div class="card privacy-card">
+                <div class="card-title">Adatvédelem</div>
+                <label class="privacy-toggle">
+                  <input type="checkbox" id="privacyCosmeticsToggle" disabled />
+                  <span class="rp-switch" aria-hidden="true"></span>
+                  <span>
+                    <b>Kiegészítőim elrejtése</b>
+                    <small>Ha bekapcsolod, a profilodon mások nem látják, milyen kiegészítőid vannak - helyette azt látják, hogy kikapcsoltad a láthatóságukat. A játékban viselt kiegészítőidet ez nem befolyásolja.</small>
+                  </span>
+                </label>
+                <p class="redeem-result" id="privacyCosmeticsResult"></p>
               </div>
             </div>
             <div class="side-rail" data-side-rail="security"></div>
@@ -2957,9 +3007,9 @@
     </div>
   </div>
 
-  <script src="skin3d.js?v=20261001a" defer></script>
-  <script src="app.js?v=20261001a" defer></script>
-  <script src="ui.js?v=20261001a" defer></script>
-  <script src="design.js?v=20261001a" defer></script>
+  <script src="skin3d.js?v=20261001b" defer></script>
+  <script src="app.js?v=20261001b" defer></script>
+  <script src="ui.js?v=20261001b" defer></script>
+  <script src="design.js?v=20261001b" defer></script>
 </body>
 </html>
