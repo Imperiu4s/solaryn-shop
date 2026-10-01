@@ -592,7 +592,7 @@ async function tryAutoLogin() {
 
 const STAT_ICONS = {
   rank: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l2.4 6.6L21 9l-5 4.6L17.4 21 12 17.3 6.6 21 8 13.6 3 9l6.6-.4z"/></svg>',
-  coin: '<img src="assets/pp-coin.png" alt="PP" />',
+  coin: '<img src="assets/pp-coin.svg" alt="PP" />',
   time: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 5v5.4l4 2.3-.8 1.3L11 13V7z"/></svg>',
   wallet: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M20 6H4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2zm-1.5 8.5A1.5 1.5 0 1 1 20 13a1.5 1.5 0 0 1-1.5 1.5zM20 9H4V8h16z"/></svg>',
   spin: '<svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M4 12a8 8 0 0 1 14.6-4.5M20 12a8 8 0 0 1-14.6 4.5M18.6 7.5V4m0 3.5H15M5.4 16.5V20m0-3.5H9"/></svg>'
@@ -1775,6 +1775,7 @@ function switchView(view) {
   if (view === 'badges') { resetBadgeForm(); loadBadgesAdmin(); }
   if (view === 'defaultMediaAdmin') { resetDmAdminForm(); loadDefaultMediaAdmin(); loadSkinSubmissionsAdmin(); }
   if (view === 'nameRules') loadNameRules();
+  if (view === 'rankPerksAdmin') loadRankPerksAdmin();
   if (view === 'discounts') { resetDiscountForm(); loadDiscountsAdmin(); }
   if (view === 'coupons') { resetCouponForm(); loadCouponsAdmin(); }
   if (view === 'creatorCodes') { resetCreatorCodeForm(); loadCreatorCodesAdmin(); }
@@ -1991,13 +1992,33 @@ $('#capeResetBtn').addEventListener('click', async () => {
   }
 });
 
+// A backend csak PNG-t fogad - más képformátumot (JPG, WebP...) a böngészőben
+// alakítunk át, a méretet pedig a backend igazítja a legközelebbi érvényes köpeny-méretre.
+async function toPngBlob(file) {
+  if (file.type === 'image/png') return file;
+  const bitmap = await createImageBitmap(file);
+  const canvas = document.createElement('canvas');
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+  canvas.getContext('2d').drawImage(bitmap, 0, 0);
+  return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('png'))), 'image/png'));
+}
+
 async function uploadCapeFile(file) {
   const statusEl = $('#capeStatus');
   statusEl.classList.remove('error');
   statusEl.textContent = 'Feltöltés...';
+  let pngFile;
+  try {
+    pngFile = await toPngBlob(file);
+  } catch {
+    statusEl.classList.add('error');
+    statusEl.textContent = 'Ezt a képet nem sikerült beolvasni - PNG, JPG vagy WebP képet tölts fel.';
+    return;
+  }
   try {
     const form = new FormData();
-    form.append('cape', file, 'cape.png');
+    form.append('cape', pngFile, 'cape.png');
     const res = await fetch(BACKEND_URL + '/api/cape', {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + session.token },
@@ -2005,7 +2026,7 @@ async function uploadCapeFile(file) {
     });
     const data = await res.json();
     if (data.ok) {
-      statusEl.textContent = 'Köpeny sikeresen feltöltve!';
+      statusEl.textContent = data.resized ? `Köpeny feltöltve - automatikusan átméreteztük (${data.resized.from} → ${data.resized.to}).` : 'Köpeny sikeresen feltöltve!';
       loadSkinPreview3d();
       loadHomeSkinPreview();
     } else {
@@ -2917,7 +2938,7 @@ $('#unbanSubmitBtn').addEventListener('click', async () => {
 $('#btnBackToPlayers').addEventListener('click', () => switchView('players'));
 
 const ICONS = {
-  coin: '<img src="assets/pp-coin.png" alt="PP" />',
+  coin: '<img src="assets/pp-coin.svg" alt="PP" />',
   gem: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M6 3h12l4 6-10 12L2 9z"/></svg>',
   crown: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 8l4 3 5-6 5 6 4-3-2 11H5z"/></svg>',
   micMute: `<svg viewBox="0 0 24 24">
@@ -3027,8 +3048,11 @@ const RANK_THEMES = {
 };
 const RANK_THEME_FALLBACK = { c1: '#ffc42e', c2: '#ff9d17', ink: '#1a1206', tagline: '' };
 
-function rankEmblemSvg(rankId) {
-  const g = `rkg-${rankId}`;
+// idSuffix: ha ugyanaz a rang-embléma többször is szerepel az oldalon (pl. a
+// Rangok táblázat és az admin kártyák), a gradiens-id-knek egyedinek kell lenniük,
+// különben a rejtett nézetben lévő példány gradiensére hivatkoznak és nem látszanak.
+function rankEmblemSvg(rankId, idSuffix) {
+  const g = `rkg-${rankId}${idSuffix ? `-${idSuffix}` : ''}`;
   const defs = `<defs>
     <linearGradient id="${g}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--rank-c1)"/><stop offset="1" style="stop-color:var(--rank-c2)"/></linearGradient>
     <radialGradient id="${g}-glow" cx=".5" cy=".42" r=".6"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
@@ -3071,39 +3095,56 @@ function rankEmblemSvg(rankId) {
 
 const RANK_INHERIT_RE = /^el[őo]z[őo] rangok? jogai$/i;
 
-// A backend rangonként egy sima szöveglistát ad (perms). Ebből építünk
-// összehasonlító mátrixot: a "<Rangnév> Napi Jutalom"-féle sorokat egy
-// közös "Napi Jutalom" sorba vonjuk össze, az "Előző rangok jogai" pedig
-// az összes korábbi rang jogát is megadja az adott rangnak.
-function buildRankMatrix(ranks) {
-  const rows = [];
+// A backend rangonként a jogok listáját adja (perks: {text, serverId}, ahol
+// serverId null = általános jog), a szerverek nevét pedig a perkServers-ben.
+// Ebből építünk összehasonlító mátrixot szerverenkénti szekciókkal: a
+// "<Rangnév> Napi Jutalom"-féle sorokat egy közös "Napi Jutalom" sorba vonjuk
+// össze, az "Előző rangok jogai" (inheritPrevious) pedig az összes korábbi
+// rang jogát is megadja az adott rangnak. A régi, csak "perms" szöveglistás
+// választ is kezeljük (általános jogként).
+function buildRankMatrix(ranks, servers) {
+  const groups = [{ id: null, name: 'Általános', rows: [] }, ...(servers || []).map((s) => ({ id: s.id, name: s.name, rows: [] }))];
+  const groupById = new Map(groups.map((g) => [g.id, g]));
   const rowByKey = new Map();
   const cells = ranks.map(() => new Map());
   ranks.forEach((rank, i) => {
     const label = String(rank.label || '').trim();
     const prefixRe = label ? new RegExp('^' + label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s+', 'i') : null;
-    const perms = Array.isArray(rank.perms) ? rank.perms : [];
-    for (const raw of perms) {
-      const text = String(raw || '').trim();
-      if (!text || RANK_INHERIT_RE.test(text)) continue;
+    const legacy = Array.isArray(rank.perms) ? rank.perms : [];
+    const perks = Array.isArray(rank.perks)
+      ? rank.perks
+      : legacy.filter((p) => !RANK_INHERIT_RE.test(String(p || '').trim())).map((text) => ({ text, serverId: null }));
+    const inherit = typeof rank.inheritPrevious === 'boolean'
+      ? rank.inheritPrevious
+      : legacy.some((p) => RANK_INHERIT_RE.test(String(p || '').trim()));
+    for (const perk of perks) {
+      const text = String(perk.text || '').trim();
+      const group = groupById.get(perk.serverId ?? null);
+      if (!text || !group || RANK_INHERIT_RE.test(text)) continue;
       const own = prefixRe && prefixRe.test(text);
       const rowLabel = own ? text.replace(prefixRe, '') : text;
-      const key = rowLabel.toLowerCase();
+      const key = `${group.id ?? '-'}|${rowLabel.toLowerCase()}`;
       if (!rowByKey.has(key)) {
         const row = { key, label: rowLabel.charAt(0).toUpperCase() + rowLabel.slice(1), perRank: !!own };
         rowByKey.set(key, row);
-        rows.push(row);
+        group.rows.push(row);
       } else if (own) {
         rowByKey.get(key).perRank = true;
       }
       cells[i].set(key, text);
     }
-    if (i > 0 && perms.some((p) => RANK_INHERIT_RE.test(String(p || '').trim()))) {
+    if (i > 0 && inherit) {
       for (const [key, text] of cells[i - 1]) if (!cells[i].has(key)) cells[i].set(key, text);
     }
   });
-  return { rows, cells };
+  return { groups: groups.filter((g) => g.rows.length), cells };
 }
+
+let shopPerkServers = [];
+let rankPerkFilter = 'all';
+
+const RANK_SERVER_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="17" height="6.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="3.5" y="13.5" width="17" height="6.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="7.5" cy="7.25" r="1.1" fill="currentColor"/><circle cx="7.5" cy="16.75" r="1.1" fill="currentColor"/></svg>';
+const RANK_GLOBE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M3.5 12h17M12 3.5c2.4 2.4 3.6 5.2 3.6 8.5s-1.2 6.1-3.6 8.5c-2.4-2.4-3.6-5.2-3.6-8.5s1.2-6.1 3.6-8.5z" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>';
 
 function rankActionsHtml(rank) {
   const affordable = currentPpBalance >= rank.priceCoins;
@@ -3123,7 +3164,7 @@ function rankActionsHtml(rank) {
     ? `<span class="price-original">${formatPp(rank.originalPriceCoins)}</span><b>${formatPp(rank.priceCoins)}</b>`
     : `<b>${formatPp(rank.priceCoins)}</b>`;
   return `
-    <div class="rank-price-tag"><img src="assets/pp-coin.png" alt="" />${price}</div>
+    <div class="rank-price-tag"><img src="assets/pp-coin.svg" alt="" />${price}</div>
     <button type="button" class="btn-buy rank-btn-buy" data-rank-id="${rank.id}"${affordable ? '' : ' disabled'}>${affordable ? 'Vásárlás' : 'Nincs elég PP'}</button>
     <div class="rank-btn-row">
       <button type="button" class="btn-outline rank-btn-small btn-gift" data-gift-rank-id="${rank.id}"${affordable ? '' : ' disabled'}>Ajándék</button>
@@ -3140,7 +3181,18 @@ function renderRankGrid() {
     wrap.innerHTML = '<div class="card card-static"><p class="redeem-result">A rangok most nem érhetők el - próbáld újra később.</p></div>';
     return;
   }
-  const { rows, cells } = buildRankMatrix(shopRanks);
+  const { groups, cells } = buildRankMatrix(shopRanks, shopPerkServers);
+  const hasServers = groups.some((g) => g.id !== null);
+  if (rankPerkFilter !== 'all' && !groups.some((g) => String(g.id ?? 'general') === rankPerkFilter)) rankPerkFilter = 'all';
+  const visibleGroups = groups.filter((g) => rankPerkFilter === 'all' || String(g.id ?? 'general') === rankPerkFilter);
+  const filterHtml = hasServers ? `
+    <div class="rank-perk-filter" role="tablist" aria-label="Jogok szűrése szerver szerint">
+      <button type="button" class="dm-tab${rankPerkFilter === 'all' ? ' active' : ''}" data-rank-perk-filter="all" role="tab" aria-selected="${rankPerkFilter === 'all'}">Összes</button>
+      ${groups.map((g) => {
+        const value = String(g.id ?? 'general');
+        return `<button type="button" class="dm-tab${rankPerkFilter === value ? ' active' : ''}" data-rank-perk-filter="${value}" role="tab" aria-selected="${rankPerkFilter === value}">${g.id === null ? RANK_GLOBE_SVG : RANK_SERVER_SVG}${escapeHtml(g.name)} <span class="dm-tab-count">${g.rows.length}</span></button>`;
+      }).join('')}
+    </div>` : '';
   const styleOf = (rank) => {
     const t = RANK_THEMES[rank.id] || RANK_THEME_FALLBACK;
     return `--rank-c1:${t.c1};--rank-c2:${t.c2};--rank-ink:${t.ink};`;
@@ -3152,7 +3204,7 @@ function renderRankGrid() {
   };
   const headCells = (fn, cls) => shopRanks.map((r, i) => `<th scope="col" class="${colClass(r)} ${cls}" style="${styleOf(r)}" data-col="${i}">${fn(r)}</th>`).join('');
 
-  wrap.innerHTML = `
+  wrap.innerHTML = `${filterHtml}
     <div class="rank-table-scroll">
       <table class="rank-table" style="--rank-count:${shopRanks.length}">
         <thead>
@@ -3186,8 +3238,9 @@ function renderRankGrid() {
           </tr>
         </thead>
         <tbody>
-          <tr class="rank-row-section"><th scope="row" colspan="${shopRanks.length + 1}">Jogosultságok</th></tr>
-          ${rows.map((row) => `
+          ${visibleGroups.map((group) => `
+          <tr class="rank-row-section${group.id !== null ? ' is-server' : ''}"><th scope="row" colspan="${shopRanks.length + 1}">${!hasServers ? 'Jogosultságok' : group.id === null ? `${RANK_GLOBE_SVG}Általános jogok <small>minden szerveren</small>` : `${RANK_SERVER_SVG}${escapeHtml(group.name)} <small>csak ezen a szerveren</small>`}</th></tr>
+          ${group.rows.map((row) => `
             <tr class="rank-row-perm">
               <th scope="row">${escapeHtml(row.label)}</th>
               ${shopRanks.map((r, i) => {
@@ -3197,7 +3250,7 @@ function renderRankGrid() {
                   <span class="rank-mark ${has ? 'rank-mark-yes' : 'rank-mark-no'}" aria-label="${has ? 'Elérhető' : 'Nem elérhető'}">${has ? RANK_CHECK_SVG : RANK_CROSS_SVG}</span>
                 </td>`;
               }).join('')}
-            </tr>`).join('')}
+            </tr>`).join('')}`).join('')}
         </tbody>
       </table>
     </div>
@@ -3223,8 +3276,10 @@ async function loadRanks() {
       : undefined);
     const data = await res.json();
     shopRanks = data.ok && Array.isArray(data.ranks) ? data.ranks : [];
+    shopPerkServers = data.ok && Array.isArray(data.perkServers) ? data.perkServers : [];
   } catch {
     shopRanks = [];
+    shopPerkServers = [];
   }
   await loadMySubscriptions();
   renderRankGrid();
@@ -3233,6 +3288,12 @@ async function loadRanks() {
 loadRanks();
 
 document.addEventListener('click', (e) => {
+  const perkFilter = e.target.closest('[data-rank-perk-filter]');
+  if (perkFilter) {
+    rankPerkFilter = perkFilter.dataset.rankPerkFilter;
+    renderRankGrid();
+    return;
+  }
   const btn = e.target.closest('.btn-buy[data-rank-id]');
   if (btn && !btn.disabled) buyRank(btn.dataset.rankId, btn);
   const subBtn = e.target.closest('.btn-subscribe[data-subscribe-rank-id]');
@@ -3504,9 +3565,10 @@ $('#transferSubmitBtn').addEventListener('click', async () => {
     resultEl.className = 'redeem-result error';
     return;
   }
+  const note = $('#transferNoteInput').value.replace(/\s+/g, ' ').trim();
   const confirmed = await confirmModal(
     'Biztosan átutalod?',
-    `<b>${formatPp(amount)}</b>-t küldesz <b>${recipient}</b>-nak. A 10% díjjal együtt <b>${formatPp(total)}</b> kerül levonásra az egyenlegedből.`,
+    `<b>${formatPp(amount)}</b>-t küldesz <b>${escapeHtml(recipient)}</b>-nak. A 10% díjjal együtt <b>${formatPp(total)}</b> kerül levonásra az egyenlegedből.${note ? `<br><br>Megjegyzés: <i>„${escapeHtml(note)}”</i>` : ''}`,
     'Igen, utalás'
   );
   if (!confirmed) return;
@@ -3519,7 +3581,7 @@ $('#transferSubmitBtn').addEventListener('click', async () => {
     const res = await fetch(BACKEND_URL + '/api/shop/transfer', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
-      body: JSON.stringify({ recipient, amount })
+      body: JSON.stringify(note ? { recipient, amount, note } : { recipient, amount })
     });
     const data = await res.json();
     if (!data.ok) {
@@ -3529,6 +3591,8 @@ $('#transferSubmitBtn').addEventListener('click', async () => {
       showToast('Átutalás elindítva - kb. 1 percen belül megtörténik.');
       $('#transferRecipientInput').value = '';
       $('#transferAmountInput').value = '';
+      $('#transferNoteInput').value = '';
+      updateTransferNoteCounter();
       updateTransferFeeNote();
     }
   } catch {
@@ -3539,6 +3603,12 @@ $('#transferSubmitBtn').addEventListener('click', async () => {
     btn.textContent = originalText;
   }
 });
+
+function updateTransferNoteCounter() {
+  const len = $('#transferNoteInput').value.length;
+  $('#transferNoteCounter').textContent = `${len} / 100 - a címzett az utalás megérkezésekor látja.`;
+}
+$('#transferNoteInput').addEventListener('input', updateTransferNoteCounter);
 
 const WALLET_TOPUP_MIN_HUF = 500;
 const WALLET_TOPUP_MAX_HUF = 500000;
@@ -5725,9 +5795,11 @@ function showNextGiftModal(queue) {
   overlay.className = 'modal-overlay';
   overlay.innerHTML = `
     <div class="modal-card purchase-success-card">
-      <div class="purchase-success-icon" style="font-size:28px;border-color:var(--gold);color:var(--gold);box-shadow:0 0 24px var(--gold-glow);">🎁</div>
-      <h3>Ajándékot kaptál!</h3>
-      <p><b>${escapeHtml(gift.from)}</b> ajándékozott neked ${giftItemLabel(gift)}.</p>
+      <div class="purchase-success-icon" style="font-size:28px;border-color:var(--gold);color:var(--gold);box-shadow:0 0 24px var(--gold-glow);">${gift.item_type === 'transfer' ? '💸' : '🎁'}</div>
+      <h3>${gift.item_type === 'transfer' ? 'Átutalás érkezett!' : 'Ajándékot kaptál!'}</h3>
+      <p>${gift.item_type === 'transfer'
+        ? `<b>${escapeHtml(gift.from)}</b> ${formatPp(gift.amount || 0)}-t utalt neked.`
+        : `<b>${escapeHtml(gift.from)}</b> ajándékozott neked ${giftItemLabel(gift)}.`}</p>
       ${gift.gift_message ? `<p class="gift-message">„${escapeHtml(gift.gift_message)}”</p>` : ''}
       <div class="modal-actions">
         <button type="button" class="btn-outline" id="giftAckBtn" style="flex:0 1 160px;margin:0 auto;">Rendben</button>
@@ -11944,3 +12016,327 @@ $('#btnResetClientSettings')?.addEventListener('click', async () => {
     showToast('Nem sikerült elérni a szervert.', true);
   }
 });
+
+// ---------------------------------------------------------------------------
+// Rangok jogai (admin) - a Rangok oldal összehasonlító táblázata innen olvas
+// ---------------------------------------------------------------------------
+
+let rpServers = [];
+let rpRanks = [];
+
+const RP_EDIT_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z M13.5 6.5l4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>';
+const RP_TRASH_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4.5h4V7M7 7l1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const RP_UP_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 14l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const RP_DOWN_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 10l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const RP_PERK_MAX = 80;
+
+function rpHeaders(json) {
+  return json
+    ? { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token }
+    : { Authorization: 'Bearer ' + session.token };
+}
+
+function rpServerName(serverId) {
+  if (serverId === null || serverId === undefined) return 'Általános';
+  const s = rpServers.find((x) => x.id === serverId);
+  return s ? s.name : '?';
+}
+
+async function loadRankPerksAdmin() {
+  $('#rpRankGrid').innerHTML = '<div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>';
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/rank-perks', { headers: rpHeaders() });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.message);
+    rpServers = data.servers || [];
+    rpRanks = data.ranks || [];
+  } catch (e) {
+    rpServers = [];
+    rpRanks = [];
+    $('#rpRankGrid').innerHTML = `<div class="card card-static"><p class="redeem-result">${escapeHtml((e && e.message) || 'Nem sikerült betölteni a rangokat.')}</p></div>`;
+    renderRpServers();
+    return;
+  }
+  renderRpServers();
+  renderRpRanks();
+}
+
+function renderRpServers() {
+  const list = $('#rpServerList');
+  if (!rpServers.length) {
+    list.innerHTML = '<p class="rp-empty">Még nincs szerver felvéve - addig minden jog általános (minden szerveren érvényes).</p>';
+    return;
+  }
+  list.innerHTML = rpServers.map((s, i) => {
+    const count = rpRanks.reduce((n, r) => n + r.perks.filter((p) => p.serverId === s.id).length, 0);
+    return `<div class="rp-server-chip" style="--i:${i}">
+      ${RANK_SERVER_SVG}<b>${escapeHtml(s.name)}</b><span class="dm-tab-count" title="Ennyi jog tartozik ehhez a szerverhez">${count}</span>
+      <button type="button" class="rp-icon-btn" data-rp-server-rename="${s.id}" title="Átnevezés" aria-label="${escapeHtml(s.name)} átnevezése">${RP_EDIT_SVG}</button>
+      <button type="button" class="rp-icon-btn is-danger" data-rp-server-delete="${s.id}" title="Törlés" aria-label="${escapeHtml(s.name)} törlése">${RP_TRASH_SVG}</button>
+    </div>`;
+  }).join('');
+}
+
+function renderRpRanks() {
+  const grid = $('#rpRankGrid');
+  if (!rpRanks.length) {
+    grid.innerHTML = '<div class="card card-static"><p class="redeem-result">Nincs megvásárolható rang.</p></div>';
+    return;
+  }
+  grid.innerHTML = rpRanks.map((rank, i) => {
+    const t = RANK_THEMES[rank.id] || RANK_THEME_FALLBACK;
+    const general = rank.perks.filter((p) => p.serverId === null);
+    const specific = rank.perks.filter((p) => p.serverId !== null);
+    const preview = rank.perks.slice(0, 5);
+    return `<article class="rp-rank-card" style="--rank-c1:${t.c1};--rank-c2:${t.c2};--rank-ink:${t.ink};--i:${i}">
+      <header class="rp-rank-head">
+        <div class="rank-emblem-wrap rp-emblem">${rankEmblemSvg(rank.id, 'rp')}</div>
+        <div class="rp-rank-title">
+          <span class="rank-name">${escapeHtml(rank.label)}</span>
+          <span class="rp-rank-price"><img src="assets/pp-coin.svg" alt="" />${formatPp(rank.priceCoins)} · ${Number(rank.durationDays) || 30} nap</span>
+        </div>
+      </header>
+      <div class="rp-rank-stats">
+        <span class="nr-chip">${general.length} általános</span>
+        ${specific.length ? `<span class="nr-chip">${specific.length} szerver-specifikus</span>` : ''}
+        ${rank.inheritPrevious ? '<span class="nr-chip rp-chip-inherit">+ előző rangok jogai</span>' : ''}
+      </div>
+      <ul class="rp-rank-preview">
+        ${preview.length ? preview.map((p) => `<li><span>${escapeHtml(p.text)}</span>${p.serverId !== null ? `<em>${escapeHtml(rpServerName(p.serverId))}</em>` : ''}</li>`).join('') : '<li class="rp-empty">Nincs még saját joga.</li>'}
+        ${rank.perks.length > preview.length ? `<li class="rp-more">+${rank.perks.length - preview.length} további</li>` : ''}
+      </ul>
+      <button type="button" class="btn-glow rp-edit-btn" data-rp-edit="${rank.id}">${RP_EDIT_SVG}Jogok módosítása</button>
+    </article>`;
+  }).join('');
+}
+
+async function saveRpServers(servers, successText) {
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/rank-perk-servers', {
+      method: 'PUT', headers: rpHeaders(true), body: JSON.stringify({ servers })
+    });
+    const data = await res.json();
+    if (!data.ok) { showToast(data.message || 'Nem sikerült menteni.', true); return false; }
+    showToast(successText);
+    await loadRankPerksAdmin();
+    loadRanks();
+    return true;
+  } catch {
+    showToast('Nem sikerült elérni a szervert.', true);
+    return false;
+  }
+}
+
+async function addRpServer() {
+  const input = $('#rpServerInput');
+  const name = input.value.replace(/\s+/g, ' ').trim();
+  if (name.length < 2) { showToast('Adj meg egy szervernevet (legalább 2 karakter).', true); return; }
+  if (rpServers.some((s) => s.name.toLowerCase() === name.toLowerCase())) { showToast('Ez a szerver már szerepel.', true); return; }
+  const ok = await saveRpServers([...rpServers.map((s) => ({ id: s.id, name: s.name })), { name }], `${name} hozzáadva.`);
+  if (ok) input.value = '';
+}
+
+$('#rpServerAddBtn').addEventListener('click', addRpServer);
+$('#rpServerInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addRpServer(); });
+
+document.querySelector('.view[data-view="rankPerksAdmin"]').addEventListener('click', async (e) => {
+  const edit = e.target.closest('[data-rp-edit]');
+  if (edit) { openRankPerkEditor(edit.dataset.rpEdit); return; }
+
+  const rename = e.target.closest('[data-rp-server-rename]');
+  if (rename) {
+    const server = rpServers.find((s) => s.id === Number(rename.dataset.rpServerRename));
+    if (!server) return;
+    const name = await textPromptModal('Szerver átnevezése', `Add meg a(z) <b>${escapeHtml(server.name)}</b> új nevét. A hozzá tartozó jogok megmaradnak.`, server.name, 'Átnevezés');
+    if (!name || name === server.name) return;
+    saveRpServers(rpServers.map((s) => ({ id: s.id, name: s.id === server.id ? name : s.name })), 'Szerver átnevezve.');
+    return;
+  }
+
+  const del = e.target.closest('[data-rp-server-delete]');
+  if (del) {
+    const server = rpServers.find((s) => s.id === Number(del.dataset.rpServerDelete));
+    if (!server) return;
+    const count = rpRanks.reduce((n, r) => n + r.perks.filter((p) => p.serverId === server.id).length, 0);
+    const ok = await confirmModal(
+      'Szerver törlése',
+      count
+        ? `A(z) <b>${escapeHtml(server.name)}</b> szerverhez <b>${count} jog</b> tartozik a rangoknál - ezek is törlődnek. Biztosan folytatod?`
+        : `Biztosan törlöd a(z) <b>${escapeHtml(server.name)}</b> szervert?`,
+      'Igen, törlés'
+    );
+    if (!ok) return;
+    saveRpServers(rpServers.filter((s) => s.id !== server.id).map((s) => ({ id: s.id, name: s.name })), `${server.name} törölve.`);
+  }
+});
+
+function openRankPerkEditor(rankId) {
+  const rankIndex = rpRanks.findIndex((r) => r.id === rankId);
+  const rank = rpRanks[rankIndex];
+  if (!rank) return;
+  const t = RANK_THEMES[rank.id] || RANK_THEME_FALLBACK;
+  let uid = 0;
+  let draft = rank.perks.map((p) => ({ uid: ++uid, text: p.text, serverId: p.serverId }));
+  let inherit = !!rank.inheritPrevious;
+  const snapshot = () => JSON.stringify({ inherit, perks: draft.map((p) => [p.text.trim(), p.serverId]) });
+  const initial = snapshot();
+  const prev = rankIndex > 0 ? rpRanks[rankIndex - 1] : null;
+
+  const serverOptions = (selected, generalLabel = 'Általános (minden szerver)') => [{ id: null, name: generalLabel }, ...rpServers]
+    .map((s) => `<option value="${s.id ?? ''}"${(s.id ?? null) === (selected ?? null) ? ' selected' : ''}>${escapeHtml(s.name)}</option>`).join('');
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal-card rp-editor" role="dialog" aria-modal="true" aria-labelledby="rpEditorTitle" style="--rank-c1:${t.c1};--rank-c2:${t.c2};--rank-ink:${t.ink};">
+      <header class="rp-editor-head">
+        <div class="rank-emblem-wrap rp-emblem">${rankEmblemSvg(rank.id, 'rpe')}</div>
+        <div>
+          <span class="rp-editor-eyebrow">Jogok módosítása</span>
+          <h3 id="rpEditorTitle"><span class="rank-name">${escapeHtml(rank.label)}</span></h3>
+        </div>
+        <button type="button" class="rp-icon-btn rp-editor-x" data-rp-close aria-label="Bezárás"><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+      </header>
+
+      <label class="rp-inherit${prev ? '' : ' is-disabled'}">
+        <input type="checkbox" data-rp-inherit${inherit ? ' checked' : ''}${prev ? '' : ' disabled'} />
+        <span class="rp-switch" aria-hidden="true"></span>
+        <span><b>Előző rangok jogai</b><small>${prev ? `A(z) ${escapeHtml(prev.label)} (és az alatta lévő rangok) összes jogát is megkapja.` : 'Ez a legalacsonyabb rang, nincs előző rang.'}</small></span>
+      </label>
+
+      <div class="rp-add">
+        <input type="text" class="gift-modal-input" data-rp-new-text placeholder="Új jog, pl. /fly jog" maxlength="${RP_PERK_MAX}" autocomplete="off" />
+        <select class="gift-modal-input" data-rp-new-server aria-label="Szerver">${serverOptions(null)}</select>
+        <button type="button" class="btn-glow" data-rp-add>Hozzáadás</button>
+      </div>
+      <p class="nr-hint rp-add-hint">Tipp: a rang nevével kezdődő jogok (pl. <i>${escapeHtml(rank.label)} Napi Jutalom</i>) a táblázatban egy közös sorba kerülnek a többi rang hasonló jogával.</p>
+
+      <div class="rp-groups" data-rp-groups></div>
+
+      <footer class="rp-editor-foot">
+        <span class="rp-dirty" data-rp-dirty></span>
+        <button type="button" class="btn-outline" data-rp-close>Mégse</button>
+        <button type="button" class="btn-glow" data-rp-save>Mentés</button>
+      </footer>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const groupsEl = overlay.querySelector('[data-rp-groups]');
+  const dirtyEl = overlay.querySelector('[data-rp-dirty]');
+  const syncDirty = () => {
+    const dirty = snapshot() !== initial;
+    dirtyEl.textContent = dirty ? 'Nem mentett változások' : '';
+    return dirty;
+  };
+
+  function renderGroups() {
+    const groups = [{ id: null, name: 'Általános', note: 'minden szerveren' }, ...rpServers.map((s) => ({ ...s, note: 'csak ezen a szerveren' }))];
+    groupsEl.innerHTML = groups.map((g) => {
+      const items = draft.filter((p) => (p.serverId ?? null) === g.id);
+      if (g.id !== null && !items.length) return '';
+      return `<section class="rp-group">
+        <h4>${g.id === null ? RANK_GLOBE_SVG : RANK_SERVER_SVG}${escapeHtml(g.name)} <small>${g.note}</small><span class="dm-tab-count">${items.length}</span></h4>
+        ${items.length ? items.map((p, idx) => `
+          <div class="rp-perk-row${rpServers.length ? '' : ' no-server'}" data-uid="${p.uid}">
+            <input type="text" class="gift-modal-input" data-rp-text value="${escapeHtml(p.text)}" maxlength="${RP_PERK_MAX}" aria-label="Jog szövege" />
+            ${rpServers.length ? `<select class="gift-modal-input" data-rp-server aria-label="Szerver">${serverOptions(p.serverId, 'Általános')}</select>` : ''}
+            <button type="button" class="rp-icon-btn" data-rp-move="-1" title="Feljebb" aria-label="Feljebb"${idx === 0 ? ' disabled' : ''}>${RP_UP_SVG}</button>
+            <button type="button" class="rp-icon-btn" data-rp-move="1" title="Lejjebb" aria-label="Lejjebb"${idx === items.length - 1 ? ' disabled' : ''}>${RP_DOWN_SVG}</button>
+            <button type="button" class="rp-icon-btn is-danger" data-rp-remove title="Törlés" aria-label="Törlés">${RP_TRASH_SVG}</button>
+          </div>`).join('') : '<p class="rp-empty">Nincs még általános joga ennek a rangnak.</p>'}
+      </section>`;
+    }).join('') + (rpServers.length ? '' : '<p class="nr-hint">Szerver-specifikus jogokhoz előbb vegyél fel szervert a lap tetején.</p>');
+    syncDirty();
+  }
+  renderGroups();
+
+  const onKey = (e) => { if (e.key === 'Escape' && document.body.lastElementChild === overlay) close(false); };
+  const close = async (force) => {
+    if (!force && syncDirty() && !(await confirmModal('Elveted a változásokat?', 'A módosításaid nincsenek mentve.', 'Igen, elvetem'))) return;
+    overlay.remove();
+    document.removeEventListener('keydown', onKey);
+  };
+  document.addEventListener('keydown', onKey);
+
+  const addPerk = () => {
+    const input = overlay.querySelector('[data-rp-new-text]');
+    const text = input.value.replace(/\s+/g, ' ').trim();
+    const raw = overlay.querySelector('[data-rp-new-server]').value;
+    const serverId = raw === '' ? null : Number(raw);
+    if (!text) { input.focus(); return; }
+    if (draft.some((p) => (p.serverId ?? null) === serverId && p.text.trim().toLowerCase() === text.toLowerCase())) {
+      showToast('Ez a jog már szerepel ennél a szervernél.', true);
+      return;
+    }
+    draft.push({ uid: ++uid, text, serverId });
+    input.value = '';
+    renderGroups();
+    input.focus();
+  };
+
+  overlay.addEventListener('click', async (e) => {
+    if (e.target === overlay || e.target.closest('[data-rp-close]')) { close(false); return; }
+    if (e.target.closest('[data-rp-add]')) { addPerk(); return; }
+    const row = e.target.closest('.rp-perk-row');
+    if (row && e.target.closest('[data-rp-remove]')) {
+      draft = draft.filter((p) => p.uid !== Number(row.dataset.uid));
+      renderGroups();
+      return;
+    }
+    const move = row && e.target.closest('[data-rp-move]');
+    if (move) {
+      const item = draft.find((p) => p.uid === Number(row.dataset.uid));
+      const same = draft.filter((p) => (p.serverId ?? null) === (item.serverId ?? null));
+      const target = same[same.indexOf(item) + Number(move.dataset.rpMove)];
+      if (!target) return;
+      const a = draft.indexOf(item);
+      const b = draft.indexOf(target);
+      [draft[a], draft[b]] = [draft[b], draft[a]];
+      renderGroups();
+      return;
+    }
+    const save = e.target.closest('[data-rp-save]');
+    if (save) {
+      const perks = draft.map((p) => ({ text: p.text.replace(/\s+/g, ' ').trim(), serverId: p.serverId })).filter((p) => p.text);
+      save.disabled = true;
+      save.textContent = 'Mentés...';
+      try {
+        const res = await fetch(BACKEND_URL + '/api/admin/rank-perks/' + encodeURIComponent(rank.id), {
+          method: 'PUT', headers: rpHeaders(true), body: JSON.stringify({ perks, inheritPrevious: inherit })
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.message || 'Nem sikerült menteni.');
+        rpRanks[rankIndex] = { ...rank, ...data.rank };
+        renderRpRanks();
+        renderRpServers();
+        loadRanks();
+        showToast(`${rank.label} jogai elmentve.`);
+        close(true);
+      } catch (err) {
+        showToast((err && err.message) || 'Nem sikerült elérni a szervert.', true);
+        save.disabled = false;
+        save.textContent = 'Mentés';
+      }
+    }
+  });
+
+  overlay.addEventListener('input', (e) => {
+    const row = e.target.closest('.rp-perk-row');
+    if (row && e.target.matches('[data-rp-text]')) {
+      const item = draft.find((p) => p.uid === Number(row.dataset.uid));
+      if (item) item.text = e.target.value;
+      syncDirty();
+    }
+  });
+  overlay.addEventListener('change', (e) => {
+    if (e.target.matches('[data-rp-inherit]')) { inherit = e.target.checked; syncDirty(); return; }
+    const row = e.target.closest('.rp-perk-row');
+    if (row && e.target.matches('[data-rp-server]')) {
+      const item = draft.find((p) => p.uid === Number(row.dataset.uid));
+      if (item) item.serverId = e.target.value === '' ? null : Number(e.target.value);
+      renderGroups();
+    }
+  });
+  overlay.querySelector('[data-rp-new-text]').addEventListener('keydown', (e) => { if (e.key === 'Enter') addPerk(); });
+  setTimeout(() => overlay.querySelector('[data-rp-new-text]').focus(), 40);
+}

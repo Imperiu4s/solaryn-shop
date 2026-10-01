@@ -35,10 +35,10 @@
   <link rel="dns-prefetch" href="https://api.overclockgame.hu" />
   <link rel="preload" as="image" href="assets/solaryn-icon.png" />
 
-  <script src="theme.js?v=20260930a"></script>
-  <link rel="stylesheet" href="style.css?v=20260930a" />
-  <link rel="stylesheet" href="ui.css?v=20260930a" />
-  <link rel="stylesheet" href="design.css?v=20260930a" />
+  <script src="theme.js?v=20261001a"></script>
+  <link rel="stylesheet" href="style.css?v=20261001a" />
+  <link rel="stylesheet" href="ui.css?v=20261001a" />
+  <link rel="stylesheet" href="design.css?v=20261001a" />
 
   <script type="application/ld+json">
   {
@@ -296,6 +296,7 @@
             <button class="app-nav-item admin-nav-item hidden" data-view="badges" data-permission="global.badgesManage"><span>Jelvények</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="defaultMediaAdmin" data-permission="global.defaultMediaManage"><span>Alap skinek</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="nameRules" data-permission="global.nameRulesManage"><span>Tiltott nevek</span></button>
+            <button class="app-nav-item admin-nav-item hidden" data-view="rankPerksAdmin" data-permission="global.rankPerksManage"><span>Rangok jogai</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="cosmeticsAdmin" data-permission="global.cosmeticsManage,global.cosmeticsMarketManage"><span>Kiegészítők</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="mobsAdmin" data-permission="global.mobsManage"><span>Mobok</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="discounts" data-permission="global.discountsManage"><span>Akciók</span></button>
@@ -332,7 +333,7 @@
           <div class="topbar-user-text">
             <span id="topbarUsername"></span>
             <span class="topbar-pp-badge">
-              <img src="assets/pp-coin.png" alt="PP" />
+              <img src="assets/pp-coin.svg" alt="PP" />
               <span id="topbarPpValue">0 PP</span>
             </span>
             <span class="topbar-pp-badge topbar-wallet-badge">
@@ -583,6 +584,9 @@
                 <input type="text" id="transferRecipientInput" placeholder="Játékosnév" />
                 <label>Mennyiség (PP)</label>
                 <input type="number" id="transferAmountInput" placeholder="0" min="1" step="1" />
+                <label for="transferNoteInput">Megjegyzés a címzettnek <span class="transfer-note-optional">(nem kötelező)</span></label>
+                <input type="text" id="transferNoteInput" placeholder="Pl. Köszi a segítséget!" maxlength="100" autocomplete="off" />
+                <div class="transfer-note-counter" id="transferNoteCounter">0 / 100 - a címzett az utalás megérkezésekor látja.</div>
                 <div class="transfer-fee-note" id="transferFeeNote">Add meg az összeget a díj kiszámításához.</div>
                 <button type="button" class="btn-glow btn-glow-orange" id="transferSubmitBtn">Átutalás</button>
                 <p class="redeem-result" id="transferResult"></p>
@@ -643,7 +647,7 @@
                   <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M20 12v7a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-7m16-4H4a1 1 0 0 0-1 1v3h18v-3a1 1 0 0 0-1-1zm-9 0V6a2 2 0 1 0-2 2m4-2v2m0-2a2 2 0 1 1 2 2"/></svg>
                 </div>
                 <div class="card-title" style="justify-content:center;">Ajándékkód</div>
-                <input type="text" id="redeemInput" class="redeem-input" placeholder="XXXX-XXXX-XXXX" />
+                <input type="text" id="redeemInput" class="redeem-input" placeholder="Pl. NYAR2026" maxlength="12" autocomplete="off" spellcheck="false" />
                 <button class="btn-glow" id="redeemSubmit">Beváltás</button>
                 <p class="redeem-result" id="redeemResult"></p>
               </div>
@@ -699,8 +703,8 @@
               <div class="card-title">Köpenyed</div>
               <p class="page-note" style="margin-bottom:20px;">Egyedi köpeny feltöltés (.png, 64x32 vagy ennek HD többszöröse - pl. 128x64, 256x128, egészen 2048x1024-ig -, mindig pontosan 2:1 arányban) - nincs külön előnézete, a skined 3D-előnézetén jelenik meg, ugyanúgy, mint a szerveren.</p>
               <div class="skin-upload-col">
-                <input type="file" id="capeFileInput" accept=".png,image/png" hidden />
-                <div class="skin-drop" id="capeDrop">Húzd ide a .png köpenyedet, vagy kattints a tallózáshoz</div>
+                <input type="file" id="capeFileInput" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" hidden />
+                <div class="skin-drop" id="capeDrop">Húzd ide a köpenyedet (PNG, JPG vagy WebP), vagy kattints a tallózáshoz</div>
                 <button type="button" class="btn-outline" id="capeResetBtn">Köpeny eltávolítása</button>
                 <p class="skin-status" id="capeStatus"></p>
               </div>
@@ -1476,6 +1480,27 @@
           </div>
         </section>
 
+        <section class="view" data-view="rankPerksAdmin">
+          <h1 class="page-title">Rangok jogai</h1>
+          <p class="page-note">Itt szerkesztheted, hogy a megvásárolható rangok milyen jogokat adnak. A <b>Rangok</b> oldal összehasonlító táblázata innen olvassa a jogokat - a mentés után azonnal frissül. A jogokat szerverenként is megadhatod.</p>
+
+          <div class="card rp-servers-card">
+            <div class="rp-servers-head">
+              <div>
+                <div class="card-title" style="margin-bottom:4px;">Szerverek</div>
+                <p class="nr-hint" style="margin:0;">A szerver-specifikus jogok ezek alá kerülnek. Az <b>Általános</b> jogok minden szerveren érvényesek.</p>
+              </div>
+              <div class="rp-server-add">
+                <input type="text" id="rpServerInput" class="gift-modal-input" placeholder="Új szerver, pl. Survival" maxlength="24" autocomplete="off" />
+                <button type="button" class="btn-glow" id="rpServerAddBtn">Hozzáadás</button>
+              </div>
+            </div>
+            <div class="rp-server-list" id="rpServerList"></div>
+          </div>
+
+          <div class="rp-rank-grid" id="rpRankGrid"></div>
+        </section>
+
         <section class="view" data-view="cosmeticsAdmin">
           <h1 class="page-title">Kiegészítők</h1>
 
@@ -2019,7 +2044,7 @@
           <div class="card">
             <div class="card-title" id="couponFormTitle">Új kupon</div>
             <label class="gift-modal-label" style="margin-top:0;">Kód</label>
-            <input type="text" id="couponCodeInput" class="gift-modal-input" placeholder="Pl. NYAR2026" maxlength="32" style="text-transform:uppercase;" />
+            <input type="text" id="couponCodeInput" class="gift-modal-input" placeholder="Pl. NYAR2026" maxlength="12" style="text-transform:uppercase;" />
             <label class="gift-modal-label">Jutalom típusa</label>
             <select id="couponRewardTypeSelect" class="gift-modal-input">
               <option value="pp">PrémiumPont</option>
@@ -2586,9 +2611,8 @@
                 <li>Játékbeli rangok, csomagok, kozmetikai elemek és digitális termékek értékesítése</li>
                 <li>Események, játékmódok és egyedi rendszerek biztosítása</li>
                 <li>Közösségi platformok működtetése (Discord, weboldal)</li>
-                <li>Weboldali felhasználói fiók, egyenleg, PrémiumPont, játékosi piac és egyéb kiegészítő funkciók (pl. skin és köpeny feltöltés, kuponok, kétlépcsős azonosítás)</li>
               </ul>
-              <p>A szolgáltatás igénybevételéhez a játékosnak Minecraft fiókkal kell rendelkeznie. A SolarynNetwork nem hivatalos szerver, nem áll kapcsolatban a Mojang Studios-szal és a Microsoft Corporationnel, és azok nem támogatják. A Minecraft a Mojang Studios védjegye.</p>
+              <p>A szolgáltatás igénybevételéhez a játékosnak Minecraft fiókkal kell rendelkeznie.</p>
 
               <h4>3. Fizetési feltételek</h4>
               <ul>
@@ -2596,35 +2620,19 @@
                 <li>Elfogadott fizetési módok: Stripe (bankkártyás fizetés), PayPal.</li>
                 <li>A megvásárolt termékek digitális terméknek minősülnek, amelyek teljesítése automatikusan történik.</li>
                 <li>A digitális termékek nem visszatéríthetők, kivéve ha a szolgáltató hibájából nem kerülnek teljesítésre.</li>
-                <li>Az árak a vásárlás előtt a webshopban láthatók; a fizetendő végösszeg a fizetés megerősítése előtt megjelenik. A felhasználó bankja a kártyás fizetésnél átváltási vagy egyéb díjat alkalmazhat.</li>
-                <li>A bankkártyás fizetés a Stripe biztonságos felületén történik, a SolarynNetwork a kártyaadatokat nem látja és nem tárolja.</li>
-                <li>A feltöltött egyenleg és a PrémiumPont a szerver belső, digitális fizetőeszköze: nem váltható vissza készpénzre, és a szerveren kívül nem utalható át.</li>
-                <li>Sikertelen vagy megszakított fizetés esetén a szolgáltató a terméket nem teljesíti.</li>
               </ul>
-
-              <h4>3/A. Elállási jog digitális termékeknél</h4>
-              <p>A 45/2014. (II. 26.) Korm. rendelet 29. § (1) bekezdés m) pontja alapján a fogyasztót nem illeti meg az elállási jog az olyan, nem tárolóeszközön rögzített digitális tartalom esetében, amelynek teljesítése a fogyasztó előzetes, kifejezett beleegyezésével megkezdődött, és a fogyasztó tudomásul vette, hogy a teljesítés megkezdésével elveszíti az elállási jogát. A vásárlás véglegesítésével a felhasználó ezt a beleegyezést és tudomásulvételt megadja. Ez nem érinti a felhasználónak a hibás teljesítésre vonatkozó, jogszabályban biztosított jogait.</p>
 
               <h4>4. Felhasználói fiók és szabályok</h4>
               <ul>
                 <li>A játékos a Minecraft szerveren regisztrál fiókot.</li>
-                <li>A felhasználó felelős a fiókja biztonságáért, a jelszava titokban tartásáért és a fiókjából történő minden tevékenységért. Javasoljuk a kétlépcsős azonosítás és a biztonsági PIN bekapcsolását.</li>
-                <li>A fizetős vásárlást 18 év alatti felhasználó csak a törvényes képviselője hozzájárulásával végezhet.</li>
-                <li>A szankció, tiltás vagy kizárás megkerülése céljából létrehozott további fiókok használata tilos.</li>
-                <li>Fiók, rang vagy egyéb digitális termék a szerveren kívül nem értékesíthető és nem cserélhető; a játékosok közötti kereskedelem kizárólag a játékosi piacon, a mindenkori szabályok szerint engedélyezett.</li>
-                <li>A felhasználónév, a feltöltött skin és köpeny nem tartalmazhat sértő, jogsértő, mások jogait sértő vagy a szolgáltató által tiltott tartalmat. A szolgáltató az ilyen tartalmat törölheti, a nevet letilthatja vagy megváltoztathatja.</li>
+                <li>A felhasználó felelős a fiókja biztonságáért.</li>
                 <li>Tiltott tevékenységek többek között: csalás, exploitok használata; visszaélés fizetési rendszerekkel (pl. chargeback); más játékosok zaklatása; a szerver működésének szándékos megzavarása.</li>
                 <li>Szabálysértés esetén a szolgáltató jogosult a felhasználó fiókját korlátozni vagy törölni, a játékbeli rangokat/előnyöket visszavonni, vagy a szolgáltatásból kizárni.</li>
               </ul>
-              <p>A tiltás vagy rangvesztés nem jogosít visszatérítésre, kivéve ha a szolgáltató hibájából történt. A szankció ellen a felhasználó a Discord szerveren fellebbezhet; bizonyos súlyos szabálysértések (pl. fizetési visszaélés) esetén szankció-csökkentés nem kérhető.</p>
-
-              <h4>4/A. Visszaélés fizetési rendszerrel</h4>
-              <p>Jogosulatlan fizetés, chargeback (jogtalan visszaterhelés), lopott vagy más nevére szóló kártya használata esetén a szolgáltató a fiókot azonnali hatállyal felfüggesztheti, a kapcsolódó digitális termékeket és egyenleget visszavonhatja, és a szükséges jogi lépéseket megteheti.</p>
+              <p>A tiltás vagy rangvesztés nem jogosít visszatérítésre, kivéve ha a szolgáltató hibájából történt.</p>
 
               <h4>5. Adatkezelés</h4>
               <p>A SolarynNetwork a működéséhez szükséges minimális adatokat kezeli: Minecraft felhasználónév, IP cím (technikai és biztonsági okokból), vásárlási adatok (a fizetési szolgáltató kezeli; bankkártyaadatokat a SolarynNetwork nem tárol). Az adatkezelés céljai: a szolgáltatás technikai működtetése, csalások és visszaélések megelőzése, vásárlások teljesítése, szerverbiztonság fenntartása.</p>
-
-              <p>Az adatkezelés részleteit az Adatkezelési tájékoztató tartalmazza.</p>
 
               <h4>6. Felelősségkorlátozás</h4>
               <p>A szolgáltatás "jelen állapotában" érhető el, a szolgáltató nem garantál folyamatos, hibamentes működést, és nem vállal felelősséget szerverhibákból eredő adatvesztésért vagy játékbeli veszteségekért. Kártérítés kizárólag akkor jár, ha a hiba bizonyíthatóan a szolgáltató hibájából következett be, és a felhasználó igazolni tudja a veszteséget.</p>
@@ -2632,22 +2640,13 @@
               <h4>7. Digitális termékek teljesítése</h4>
               <p>A vásárló a fizetés után 2-5 percen belül automatikusan megkapja a digitális terméket. Ha a teljesítés technikai hiba miatt nem történik meg, a felhasználó köteles jelezni a szolgáltatónak, aki a hibát kijavítja vagy a terméket manuálisan biztosítja.</p>
 
-              <h4>7/A. Szerződés létrejötte</h4>
-              <p>A vásárlásra irányuló szerződés a fizetés sikeres visszaigazolásakor jön létre, és a digitális termék teljesítésével teljesedik. A szerződés nyelve magyar. A szolgáltató jogosult a szolgáltatás egészét vagy egy részét módosítani, átalakítani vagy megszüntetni.</p>
-
-              <h4>7/B. Szellemi tulajdon</h4>
-              <p>A weboldal, a logó, a grafikai elemek és a szerver egyedi rendszerei a SolarynNetwork tulajdonát képezik. A feltöltött skin, köpeny és egyéb tartalom esetén a felhasználó kijelenti, hogy jogosult azok használatára, és engedélyt ad a szolgáltatónak azok szolgáltatáson belüli megjelenítésére.</p>
-
               <h4>8. Az ÁSZF hatálya és módosítása</h4>
-              <p>Jelen ÁSZF 2026.04.04. 18:00 időponttól érvényes. A szolgáltató jogosult az ÁSZF-et bármikor módosítani - a felhasználók a módosításokról a Discord szerveren értesülhetnek. A módosítás a közzététel napjától hatályos, a már megkötött szerződésekre nem hat vissza; a szolgáltatás további használata a módosított feltételek elfogadásának minősül. Ha az ÁSZF valamely rendelkezése érvénytelen, a többi rendelkezés hatályban marad.</p>
+              <p>Jelen ÁSZF 2026.04.04. 18:00 időponttól érvényes. A szolgáltató jogosult az ÁSZF-et bármikor módosítani - a felhasználók a módosításokról a Discord szerveren értesülhetnek.</p>
 
               <h4>9. Jogviták rendezése</h4>
               <p>A szolgáltatásra a magyar jog az irányadó. Jogvita esetén a felek elsősorban békés úton próbálják rendezni a problémát, ha ez nem sikerül, a jogvita magyar bíróság előtt folytatható.</p>
 
-              <p><b>Fogyasztói jogérvényesítés:</b> a fogyasztónak minősülő felhasználó panaszával a szolgáltatóhoz, annak eredménytelensége esetén a lakóhelye szerint illetékes békéltető testülethez (a szolgáltató székhelye szerint a Budapesti Békéltető Testülethez), a fogyasztóvédelmi hatósághoz vagy bírósághoz fordulhat. Az Európai Bizottság online vitarendezési platformja: ec.europa.eu/consumers/odr.</p>
-
-              <h4>10. Panaszkezelés és kapcsolat</h4>
-              <p>A vásárlással és a teljesítéssel kapcsolatos panaszokat a felhasználó a Discord szerveren vagy a weboldalon keresztül jelezheti; a szolgáltató a panaszt kivizsgálja és ésszerű időn belül érdemben válaszol.</p>
+              <h4>10. Kapcsolat</h4>
               <p>Bármilyen kérdés, probléma vagy hibabejelentés esetén a felhasználók a Discord szerveren vagy a weboldalon keresztül vehetik fel a kapcsolatot a szolgáltatóval.</p>
             </div>
 
@@ -2661,7 +2660,7 @@
               <p><b>Adatkezelő neve:</b> SolarynNetwork<br><b>Székhely:</b> Budapest, Magyarország<br><b>Weboldal:</b> www.solaryn.hu<br><b>Kapcsolattartó:</b> Nagy Szabolcs</p>
 
               <h4>3. Kezelt adatok köre</h4>
-              <p><b>Technikai adatok:</b> Minecraft felhasználónév, IP cím, szervernaplók.<br><b>Fiókadatok:</b> felhasználónév, e-mail cím (ha megadtad), jelszó (kizárólag titkosított formában), kétlépcsős azonosítás és biztonsági PIN beállításai, Discord fiók összekapcsolásához szükséges azonosító.<br><b>Használati adatok:</b> játékidő, egyenleg és PrémiumPont mozgások, piaci tranzakciók, szankciók.<br><b>Feltöltött tartalmak:</b> skin és köpeny.<br><b>Vásárlási adatok:</b> vásárlás időpontja, vásárolt termék típusa, fizetési azonosító (Stripe/PayPal által biztosított).<br><b>Weboldali használati adatok:</b> a weboldal működéséhez és fejlesztéséhez szükséges statisztikai adatok (a süti beállításaid szerint).</p>
+              <p><b>Technikai adatok:</b> Minecraft felhasználónév, IP cím, szervernaplók.<br><b>Vásárlási adatok:</b> vásárlás időpontja, vásárolt termék típusa, fizetési azonosító (Stripe/PayPal által biztosított).</p>
               <p><i>A SolarynNetwork nem tárol bankkártyaadatokat, azokat kizárólag a fizetési szolgáltatók (Stripe, PayPal) kezelik.</i></p>
 
               <h4>4. Az adatkezelés céljai</h4>
@@ -2680,31 +2679,17 @@
               <h4>6. Adatmegőrzési idő</h4>
               <p>Technikai adatok: legfeljebb 90 nap. Vásárlási adatok: legfeljebb 1 év. IP címek: legfeljebb 30 nap. Jogvita vagy visszaélés gyanúja esetén az adatok megőrzési ideje meghosszabbodhat.</p>
 
-              <p>A fiókadatokat a fiók fennállásáig őrizzük. A számviteli bizonylatnak minősülő vásárlási adatok esetén a jogszabályi megőrzési kötelezettség hosszabb időt is előírhat.</p>
-
               <h4>7. Adatok továbbítása</h4>
               <p>Fizetési szolgáltatók (Stripe, PayPal) - kizárólag a fizetés lebonyolításához szükséges adatokat kezelik. Hatóságok - kizárólag jogszabályi kötelezettség esetén. A SolarynNetwork nem értékesít, nem ad bérbe és nem oszt meg adatot kereskedelmi célból.</p>
 
               <h4>8. Adatbiztonság</h4>
               <p>Szerverbiztonsági rendszerek, naplózás és visszaélésfigyelés, korlátozott hozzáférés, titkosított kommunikáció a fizetési szolgáltatókkal.</p>
 
-              <h4>8/A. Sütik és hasonló technológiák</h4>
-              <p>A weboldal a működéséhez szükséges sütiket és böngészőtárhelyet (pl. bejelentkezés, téma-beállítás) használ. A nem feltétlenül szükséges (pl. statisztikai) adatgyűjtés csak a hozzájárulásoddal történik, amelyet a lábléc <b>Süti beállítások</b> pontjában bármikor módosíthatsz vagy visszavonhatsz.</p>
-
-              <h4>8/B. Külső szolgáltatók</h4>
-              <p>A szolgáltatás működtetéséhez külső szolgáltatókat veszünk igénybe: Stripe és PayPal (fizetés), Discord (közösségi platform, fiókösszekapcsolás), valamint tárhely- és szerverüzemeltetők. Ezek a saját adatvédelmi szabályzatuk szerint is kezelhetnek adatot; EGT-n kívüli adattovábbításra a GDPR szerinti megfelelő garanciák mellett kerülhet sor.</p>
-
-              <h4>8/C. Gyermekek adatai</h4>
-              <p>A 16 év alatti felhasználók a szolgáltatást csak törvényes képviselőjük hozzájárulásával vehetik igénybe. Ha tudomásunkra jut, hogy ilyen hozzájárulás nélkül adtak meg adatot, azt töröljük.</p>
-
-              <h4>8/D. Adatvédelmi incidens</h4>
-              <p>Adatvédelmi incidens esetén a szolgáltató a jogszabályban előírt módon és határidőn belül értesíti a NAIH-ot, szükség esetén az érintetteket is.</p>
-
               <h4>9. Felhasználói jogok</h4>
-              <p>Hozzáférés, helyesbítés, törlés, korlátozás, adathordozhatóság és tiltakozás joga, valamint a hozzájárulás bármikor történő visszavonásának joga - a kérelmeket a Discord szerveren vagy a weboldalon keresztül jelezheted. A kérelmet a szolgáltató a beérkezéstől számított legfeljebb 30 napon belül megválaszolja. A törlés nem terjed ki azokra az adatokra, amelyek megőrzésére jogszabály vagy jogos érdek (pl. csalás elleni védelem, jogi igény érvényesítése) kötelez.</p>
+              <p>Hozzáférés, helyesbítés, törlés, korlátozás és tiltakozás joga - a kérelmeket a Discord szerveren vagy a weboldalon keresztül jelezheted.</p>
 
               <h4>10. Panasz benyújtása</h4>
-              <p>Ha úgy érzed, hogy az adatkezelés nem felel meg a jogszabályoknak, panaszt tehetsz a Nemzeti Adatvédelmi és Információszabadság Hatóságnál (NAIH; 1055 Budapest, Falk Miksa utca 9-11.; www.naih.hu). Jogaid megsértése esetén bírósághoz is fordulhatsz.</p>
+              <p>Ha úgy érzed, hogy az adatkezelés nem felel meg a jogszabályoknak, panaszt tehetsz a Nemzeti Adatvédelmi és Információszabadság Hatóságnál (NAIH).</p>
 
               <h4>11. A Tájékoztató módosítása</h4>
               <p>A SolarynNetwork fenntartja a jogot, hogy a jelen Adatkezelési Tájékoztatót bármikor módosítsa. A módosításokról a felhasználók a Discord szerveren értesülhetnek.</p>
@@ -2717,12 +2702,6 @@
               <p><b>Üzemeltető neve:</b> SolarynNetwork<br><b>Képviselő:</b> Nagy Szabolcs<br><b>Székhely:</b> Budapest, Magyarország<br><b>Weboldal:</b> www.solaryn.hu<br><b>Kapcsolat:</b> Discord szerveren keresztül</p>
               <p>A SolarynNetwork magánszemély által üzemeltetett online szolgáltatás és Minecraft játékszerver.</p>
 
-              <h4>Domain és fizetés</h4>
-              <p>A weboldal domainjét a Rackhost Zrt. szolgáltatja. A bankkártyás fizetést a Stripe, a PayPal-os fizetést a PayPal bonyolítja.</p>
-
-              <h4>Adatkezelés és panaszkezelés</h4>
-              <p>Az adatkezelésről az Adatkezelési tájékoztatóban, a szerződési feltételekről és a panaszkezelésről az ÁSZF-ben olvashatsz. Adatvédelmi hatóság: Nemzeti Adatvédelmi és Információszabadság Hatóság (NAIH), www.naih.hu.</p>
-
               <h4>Kapcsolattartás</h4>
               <p>A felhasználók Discord szerveren vagy a weboldalon keresztüli üzenetküldéssel vehetik fel a kapcsolatot az üzemeltetővel, aki a beérkező megkeresésekre ésszerű időn belül válaszol.</p>
 
@@ -2734,7 +2713,6 @@
 
               <h4>Jognyilatkozat</h4>
               <p>A weboldalon és a szerveren található tartalmak a SolarynNetwork tulajdonát képezik. A tartalmak másolása, terjesztése vagy felhasználása kizárólag az üzemeltető engedélyével lehetséges.</p>
-              <p>A Minecraft név és márka a Mojang Studios tulajdona. A SolarynNetwork nem hivatalos Minecraft szolgáltatás, nem áll kapcsolatban a Mojang Studios-szal vagy a Microsoft Corporationnel, és azok nem támogatják.</p>
 
               <h4>Jogviták rendezése</h4>
               <p>A szolgáltatásra a magyar jog az irányadó. Jogvita esetén a felek elsősorban békés úton próbálják rendezni a problémát.</p>
@@ -2979,9 +2957,9 @@
     </div>
   </div>
 
-  <script src="skin3d.js?v=20260930a" defer></script>
-  <script src="app.js?v=20260930a" defer></script>
-  <script src="ui.js?v=20260930a" defer></script>
-  <script src="design.js?v=20260930a" defer></script>
+  <script src="skin3d.js?v=20261001a" defer></script>
+  <script src="app.js?v=20261001a" defer></script>
+  <script src="ui.js?v=20261001a" defer></script>
+  <script src="design.js?v=20261001a" defer></script>
 </body>
 </html>
