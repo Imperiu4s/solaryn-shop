@@ -3932,6 +3932,7 @@ const ADMIN_ACTION_LABELS = {
   'staffApps.deadline': 'Tagfelvétel határidejének módosítása', 'staffApps.slotAdd': 'Szóbeli időpont hozzáadása',
   'staffApps.slotDelete': 'Szóbeli időpont törlése', 'staffApps.accept': 'Staff jelentkezés elfogadása',
   'staffApps.reject': 'Staff jelentkezés elutasítása', 'staffApps.reset': 'Staff jelentkezés visszaállítása',
+  'staffApps.form': 'Tagfelvételi kérdőív módosítása',
   'player.securityReset': '2FA / biztonsági kód visszaállítása',
   'playtime.milestone': 'Játékidő mérföldkő jutalom'
 };
@@ -12761,84 +12762,324 @@ async function announceStaffDecision() {
   markStaffDecisionSeen();
 }
 
-function staffDraftKey() {
-  const round = staffApplyState && staffApplyState.round;
-  return `solarcenter.staffApplyDraft.${session.username}.${round ? round.id : 0}`;
+// --- Kérdőív (Forms-szerű űrlap) - a játékos oldalon és az admin előnézetben ---
+
+const SF_TYPE_LABELS = {
+  short: 'Rövid válasz', long: 'Hosszú válasz', number: 'Szám', choice: 'Egy választás',
+  multi: 'Több választás', yesno: 'Igen / nem', upload: 'Képfeltöltés', section: 'Szakasz', info: 'Szöveg vagy kép'
+};
+const SF_QUESTION_TYPES = new Set(['short', 'long', 'number', 'choice', 'multi', 'yesno', 'upload']);
+const SF_MAX_LENGTH = { short: 200, long: 3000 };
+const SF_ACCEPT = 'image/png,image/jpeg,image/gif,image/webp';
+
+function sfMediaUrl(file) {
+  return `${BACKEND_URL}/api/staff-apps/media/${encodeURIComponent(file)}`;
 }
 
-function readStaffDraft() {
-  try { return JSON.parse(localStorage.getItem(staffDraftKey()) || '{}') || {}; } catch { return {}; }
+function sfSteps(items) {
+  const steps = [];
+  let cur = { section: null, items: [] };
+  for (const it of items) {
+    if (it.type === 'section') {
+      if (cur.section || cur.items.length) steps.push(cur);
+      cur = { section: it, items: [] };
+    } else {
+      cur.items.push(it);
+    }
+  }
+  if (cur.section || cur.items.length) steps.push(cur);
+  return steps.length ? steps : [{ section: null, items: [] }];
 }
 
-function writeStaffDraft(answers) {
-  try { localStorage.setItem(staffDraftKey(), JSON.stringify(answers)); } catch {}
+function sfIsEmpty(value) {
+  return value === undefined || value === null || (typeof value === 'string' && !value.trim()) || (Array.isArray(value) && !value.length);
 }
 
-function clearStaffDraft() {
-  try { localStorage.removeItem(staffDraftKey()); } catch {}
+// Egy lépés kérdéseinek ellenőrzése; az első hibás kérdés azonosítóját és a
+// hibaüzenetet adja vissza.
+function sfValidateStep(items, answers) {
+  for (const it of items) {
+    if (!SF_QUESTION_TYPES.has(it.type)) continue;
+    const v = answers[it.id];
+    if (sfIsEmpty(v)) {
+      if (it.required) return { id: it.id, message: it.type === 'upload' ? 'Tölts fel ide legalább egy képet.' : it.type === 'multi' ? 'Jelölj be legalább egyet.' : it.type === 'choice' || it.type === 'yesno' ? 'Válassz egyet.' : 'Ezt is töltsd ki.' };
+      continue;
+    }
+    if (it.type === 'number') {
+      const num = Number(String(v).trim().replace(',', '.'));
+      if (!Number.isFinite(num)) return { id: it.id, message: 'Számot írj ide.' };
+      if (it.min !== null && it.min !== undefined && num < it.min) return { id: it.id, message: `Legalább ${it.min} lehet.` };
+      if (it.max !== null && it.max !== undefined && num > it.max) return { id: it.id, message: `Legfeljebb ${it.max} lehet.` };
+    }
+  }
+  return null;
 }
 
-function renderStaffApplyForm(d) {
-  const draft = readStaffDraft();
-  const fields = d.questions.map((q) => {
-    const value = escapeHtml(draft[q.id] || '');
-    const control = q.type === 'long'
-      ? `<textarea class="gift-modal-input" name="${q.id}" maxlength="${q.max}" rows="4">${value}</textarea>`
-      : `<input type="text" class="gift-modal-input" name="${q.id}" maxlength="${q.max}" value="${value}"${q.id === 'age' ? ' inputmode="numeric"' : ''} />`;
-    return `<label class="sa-q"><span class="sa-q-label">${escapeHtml(q.label)}</span>${control}</label>`;
-  }).join('');
+function sfItemHtml(it, answers, opts) {
+  const required = SF_QUESTION_TYPES.has(it.type) && it.required ? '<span class="sf-star" aria-hidden="true">*</span>' : '';
+  const label = it.label ? `<div class="sf-label">${escapeHtml(it.label)}${required}</div>` : '';
+  const help = it.help ? `<p class="sf-help">${escapeHtml(it.help)}</p>` : '';
+  const img = it.image ? `<a class="sf-img" href="${sfMediaUrl(it.image)}" target="_blank" rel="noopener"><img src="${sfMediaUrl(it.image)}" alt="" loading="lazy" /></a>` : '';
+  const v = answers[it.id];
+  const name = `sf_${it.id}`;
+  let control = '';
+  if (it.type === 'short') {
+    control = `<input type="text" class="gift-modal-input" data-sf-input="${it.id}" maxlength="${SF_MAX_LENGTH.short}" value="${escapeHtml(v || '')}" placeholder="Válaszod" />`;
+  } else if (it.type === 'long') {
+    const len = String(v || '').length;
+    control = `<textarea class="gift-modal-input" data-sf-input="${it.id}" maxlength="${SF_MAX_LENGTH.long}" rows="4" placeholder="Válaszod">${escapeHtml(v || '')}</textarea>
+      <div class="sf-count" data-sf-count="${it.id}">${len} / ${SF_MAX_LENGTH.long}</div>`;
+  } else if (it.type === 'number') {
+    const range = it.min !== null && it.min !== undefined && it.max !== null && it.max !== undefined
+      ? `${it.min} és ${it.max} között` : it.min !== null && it.min !== undefined ? `legalább ${it.min}` : it.max !== null && it.max !== undefined ? `legfeljebb ${it.max}` : '';
+    control = `<input type="text" inputmode="decimal" class="gift-modal-input sf-number" data-sf-input="${it.id}" value="${escapeHtml(v === undefined || v === null ? '' : String(v))}" placeholder="Szám" />${range ? `<span class="sf-range">${range}</span>` : ''}`;
+  } else if (it.type === 'choice' || it.type === 'yesno') {
+    const options = it.type === 'yesno' ? ['Igen', 'Nem'] : it.options || [];
+    control = `<div class="sf-options${it.type === 'yesno' ? ' sf-options-inline' : ''}">${options.map((o) => `
+      <label class="sf-opt"><input type="radio" name="${name}" data-sf-radio="${it.id}" value="${escapeHtml(o)}"${v === o ? ' checked' : ''} /><span class="sf-opt-mark"></span><span>${escapeHtml(o)}</span></label>`).join('')}</div>`;
+  } else if (it.type === 'multi') {
+    const list = Array.isArray(v) ? v : [];
+    control = `<div class="sf-options">${(it.options || []).map((o) => `
+      <label class="sf-opt sf-opt-check"><input type="checkbox" data-sf-check="${it.id}" value="${escapeHtml(o)}"${list.includes(o) ? ' checked' : ''} /><span class="sf-opt-mark"></span><span>${escapeHtml(o)}</span></label>`).join('')}</div>`;
+  } else if (it.type === 'upload') {
+    const max = it.maxFiles || 1;
+    control = `
+      <div class="sf-upload" data-sf-upload="${it.id}">
+        <div class="sf-thumbs" data-sf-thumbs="${it.id}"></div>
+        <label class="sf-drop${opts.preview ? ' disabled' : ''}">
+          <input type="file" accept="${SF_ACCEPT}" data-sf-file="${it.id}"${max > 1 ? ' multiple' : ''}${opts.preview ? ' disabled' : ''} hidden />
+          <span class="sf-drop-main">${opts.preview ? 'Előnézetben nem lehet képet feltölteni' : 'Kép kiválasztása vagy idehúzása'}</span>
+          <span class="sf-drop-sub">PNG, JPG, GIF vagy WEBP, legfeljebb 5 MB · ${max === 1 ? '1 kép' : `legfeljebb ${max} kép`}</span>
+        </label>
+      </div>`;
+  }
+  const kind = it.type === 'info' ? ' sf-info' : '';
   return `
-    <div class="sa-apply-grid">
-      <div class="card sa-form-card">
-        <p class="sa-deadline">Jelentkezési határidő: <b>${escapeHtml(formatSaDate(d.round.closesAt, { weekday: true }))}</b></p>
-        <form id="staffApplyForm" class="sa-form" novalidate>
-          ${fields}
-          <p class="redeem-result" id="staffApplyResult"></p>
-          <button type="submit" class="btn-glow" id="staffApplySubmit">Jelentkezés elküldése</button>
-        </form>
-      </div>
-      <aside class="card sa-req-card">
-        <div class="card-title">Feltételek</div>
-        <ul class="sa-req-list">${d.requirements.map((r) => `<li>${escapeHtml(r)}</li>`).join('')}</ul>
-        <p class="sa-muted">Egy tagfelvételre egyszer jelentkezhetsz, beküldés után a válaszok nem módosíthatók. Amit eddig beírtál, ezen a gépen megmarad, ha közben bezárnád az oldalt.</p>
-      </aside>
-    </div>
-  `;
+    <div class="card sf-item${kind}" data-sf-item="${it.id}">
+      ${label}${help}${img}${control}
+      <p class="sf-item-error" data-sf-error="${it.id}" hidden></p>
+    </div>`;
 }
 
-function bindStaffApplyForm() {
-  const form = $('#staffApplyForm');
-  if (!form) return;
-  const collect = () => {
-    const answers = {};
-    form.querySelectorAll('[name]').forEach((el) => { answers[el.name] = el.value; });
-    return answers;
+// opts: { preview, deadline, draftKey, onSubmit(answers) -> Promise }
+function mountStaffForm(container, form, opts = {}) {
+  const steps = sfSteps(form.items || []);
+  const thumbUrls = {};
+  let step = 0;
+  let answers = {};
+  if (opts.draftKey) {
+    try { answers = JSON.parse(localStorage.getItem(opts.draftKey) || '{}') || {}; } catch { answers = {}; }
+  }
+  const saveDraft = () => {
+    if (!opts.draftKey) return;
+    try { localStorage.setItem(opts.draftKey, JSON.stringify(answers)); } catch {}
   };
-  form.addEventListener('input', () => writeStaffDraft(collect()));
-  form.addEventListener('submit', async (e) => {
+
+  const reqList = (form.requirements || []).length
+    ? `<div class="sf-req"><div class="sf-req-title">Feltételek</div><ul>${form.requirements.map((r) => `<li>${escapeHtml(r)}</li>`).join('')}</ul></div>` : '';
+  const anyRequired = (form.items || []).some((it) => SF_QUESTION_TYPES.has(it.type) && it.required);
+  container.innerHTML = `
+    <div class="sf${opts.preview ? ' sf-is-preview' : ''}">
+      <div class="card sf-head">
+        ${form.headerImage ? `<img class="sf-banner" src="${sfMediaUrl(form.headerImage)}" alt="" />` : ''}
+        <div class="sf-head-body">
+          <h2 class="sf-title">${escapeHtml(form.title || 'Staff tagfelvétel')}</h2>
+          ${form.intro ? `<p class="sf-intro">${escapeHtml(form.intro)}</p>` : ''}
+          ${opts.deadline ? `<p class="sf-deadline">Jelentkezési határidő: <b>${escapeHtml(formatSaDate(opts.deadline, { weekday: true }))}</b></p>` : ''}
+          ${reqList}
+          ${anyRequired ? '<p class="sf-required-note"><span class="sf-star">*</span> kötelező</p>' : ''}
+        </div>
+      </div>
+      <div class="sf-progress" data-sf-progress${steps.length > 1 ? '' : ' hidden'}>
+        <div class="sf-progress-bar"><i data-sf-bar></i></div>
+        <span data-sf-step-label></span>
+      </div>
+      <div class="sf-step" data-sf-step></div>
+      <div class="sf-nav">
+        <button type="button" class="btn-outline" data-sf-back>Vissza</button>
+        <p class="sf-nav-error" data-sf-nav-error hidden></p>
+        <button type="button" class="btn-glow" data-sf-next></button>
+      </div>
+    </div>`;
+
+  const root = container.querySelector('.sf');
+  const stepBox = root.querySelector('[data-sf-step]');
+  const backBtn = root.querySelector('[data-sf-back]');
+  const nextBtn = root.querySelector('[data-sf-next]');
+  const navError = root.querySelector('[data-sf-nav-error]');
+
+  function renderThumbs(id) {
+    const box = root.querySelector(`[data-sf-thumbs="${id}"]`);
+    if (!box) return;
+    const list = Array.isArray(answers[id]) ? answers[id] : [];
+    box.innerHTML = list.map((uid) => `
+      <div class="sf-thumb">
+        ${thumbUrls[uid] ? `<img src="${thumbUrls[uid]}" alt="" />` : '<span class="sf-thumb-wait"></span>'}
+        <button type="button" class="sf-thumb-x" data-sf-remove="${id}" data-uid="${uid}" aria-label="Kép eltávolítása">&times;</button>
+      </div>`).join('');
+    const item = steps.flatMap((s) => s.items).find((x) => x.id === id);
+    const drop = root.querySelector(`[data-sf-upload="${id}"] .sf-drop`);
+    if (drop && item) drop.classList.toggle('hidden', list.length >= (item.maxFiles || 1));
+  }
+
+  // A vázlatból visszatöltött képek előnézete (hitelesítve kérjük le).
+  async function loadDraftThumb(id, uid) {
+    if (thumbUrls[uid] || opts.preview) return;
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/staff-apps/uploads/${uid}`, { headers: { Authorization: 'Bearer ' + session.token } });
+      if (!res.ok) throw new Error();
+      thumbUrls[uid] = URL.createObjectURL(await res.blob());
+    } catch {
+      answers[id] = (answers[id] || []).filter((x) => x !== uid);
+      saveDraft();
+    }
+    renderThumbs(id);
+  }
+
+  function renderStep() {
+    const s = steps[step];
+    const sectionHtml = s.section ? `
+      <div class="card sf-section">
+        <div class="sf-section-title">${escapeHtml(s.section.label)}</div>
+        ${s.section.help ? `<p class="sf-help">${escapeHtml(s.section.help)}</p>` : ''}
+        ${s.section.image ? `<a class="sf-img" href="${sfMediaUrl(s.section.image)}" target="_blank" rel="noopener"><img src="${sfMediaUrl(s.section.image)}" alt="" loading="lazy" /></a>` : ''}
+      </div>` : '';
+    stepBox.innerHTML = sectionHtml + s.items.map((it) => sfItemHtml(it, answers, opts)).join('');
+    s.items.filter((it) => it.type === 'upload').forEach((it) => {
+      renderThumbs(it.id);
+      (answers[it.id] || []).forEach((uid) => loadDraftThumb(it.id, uid));
+    });
+    const last = step === steps.length - 1;
+    backBtn.hidden = step === 0;
+    nextBtn.textContent = last ? (opts.preview ? 'Beküldés (előnézet)' : 'Jelentkezés elküldése') : 'Tovább';
+    navError.hidden = true;
+    if (steps.length > 1) {
+      root.querySelector('[data-sf-bar]').style.width = `${((step + 1) / steps.length) * 100}%`;
+      root.querySelector('[data-sf-step-label]').textContent = `${step + 1}. rész / ${steps.length}${s.section ? ` · ${s.section.label}` : ''}`;
+    }
+  }
+
+  function showItemError(id, message) {
+    root.querySelectorAll('[data-sf-error]').forEach((el) => { el.hidden = true; });
+    root.querySelectorAll('.sf-item.has-error').forEach((el) => el.classList.remove('has-error'));
+    if (!id) return;
+    const el = root.querySelector(`[data-sf-error="${id}"]`);
+    const card = root.querySelector(`[data-sf-item="${id}"]`);
+    if (el) { el.textContent = message; el.hidden = false; }
+    if (card) { card.classList.add('has-error'); card.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+  }
+
+  async function uploadFiles(id, files) {
+    const item = steps.flatMap((s) => s.items).find((x) => x.id === id);
+    const current = Array.isArray(answers[id]) ? answers[id] : [];
+    const room = (item.maxFiles || 1) - current.length;
+    const chosen = Array.from(files).slice(0, Math.max(0, room));
+    if (files.length > chosen.length) showToast(`Ide legfeljebb ${item.maxFiles || 1} képet tölthetsz fel.`, true);
+    for (const file of chosen) {
+      if (file.size > 5 * 1024 * 1024) { showToast(`${file.name}: legfeljebb 5 MB lehet.`, true); continue; }
+      const fd = new FormData();
+      fd.append('file', file);
+      const box = root.querySelector(`[data-sf-thumbs="${id}"]`);
+      box?.insertAdjacentHTML('beforeend', '<div class="sf-thumb sf-thumb-loading"><span class="sf-thumb-wait"></span></div>');
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/staff-apps/upload`, { method: 'POST', headers: { Authorization: 'Bearer ' + session.token }, body: fd });
+        const data = await res.json().catch(() => ({ ok: false }));
+        if (!data.ok) throw new Error(data.message || 'Nem sikerült feltölteni a képet.');
+        thumbUrls[data.id] = URL.createObjectURL(file);
+        answers[id] = [...(Array.isArray(answers[id]) ? answers[id] : []), data.id];
+        saveDraft();
+      } catch (err) {
+        showToast(err.message, true);
+      }
+      renderThumbs(id);
+    }
+  }
+
+  root.addEventListener('input', (e) => {
+    const t = e.target;
+    if (t.dataset.sfInput) {
+      answers[t.dataset.sfInput] = t.value;
+      const counter = root.querySelector(`[data-sf-count="${t.dataset.sfInput}"]`);
+      if (counter) counter.textContent = `${t.value.length} / ${SF_MAX_LENGTH.long}`;
+      saveDraft();
+    }
+  });
+  root.addEventListener('change', (e) => {
+    const t = e.target;
+    if (t.dataset.sfRadio) { answers[t.dataset.sfRadio] = t.value; saveDraft(); }
+    if (t.dataset.sfCheck) {
+      const id = t.dataset.sfCheck;
+      answers[id] = [...root.querySelectorAll(`[data-sf-check="${id}"]:checked`)].map((c) => c.value);
+      saveDraft();
+    }
+    if (t.dataset.sfFile && t.files.length) {
+      uploadFiles(t.dataset.sfFile, t.files);
+      t.value = '';
+    }
+  });
+  root.addEventListener('click', (e) => {
+    const rm = e.target.closest('[data-sf-remove]');
+    if (!rm) return;
+    const id = rm.dataset.sfRemove;
+    answers[id] = (answers[id] || []).filter((x) => x !== rm.dataset.uid);
+    saveDraft();
+    renderThumbs(id);
+  });
+  ['dragover', 'drop'].forEach((type) => root.addEventListener(type, (e) => {
+    const drop = e.target.closest('.sf-drop');
+    if (!drop || opts.preview) return;
     e.preventDefault();
-    const result = $('#staffApplyResult');
-    const answers = collect();
-    const missing = staffApplyState.questions.find((q) => !String(answers[q.id] || '').trim());
-    result.classList.add('error');
-    if (missing) {
-      result.textContent = `Töltsd ki ezt is: ${missing.label}`;
-      form.querySelector(`[name="${missing.id}"]`)?.focus();
+    if (type === 'drop' && e.dataTransfer.files.length) {
+      uploadFiles(drop.querySelector('[data-sf-file]').dataset.sfFile, e.dataTransfer.files);
+    }
+  }));
+
+  backBtn.addEventListener('click', () => {
+    step = Math.max(0, step - 1);
+    renderStep();
+    root.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+  nextBtn.addEventListener('click', async () => {
+    const err = sfValidateStep(steps[step].items, answers);
+    if (err) { showItemError(err.id, err.message); return; }
+    showItemError(null);
+    if (step < steps.length - 1) {
+      step++;
+      renderStep();
+      root.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
+    if (opts.preview) { showToast('Ez csak előnézet, nem küldtük be.'); return; }
     const ok = await confirmModal('Jelentkezés elküldése', 'Beküldés után a válaszaidat már nem tudod módosítani. Elküldöd?', 'Elküldöm');
     if (!ok) return;
-    const btn = $('#staffApplySubmit');
-    btn.disabled = true;
-    result.textContent = '';
+    nextBtn.disabled = true;
+    navError.hidden = true;
     try {
+      await opts.onSubmit(answers);
+      if (opts.draftKey) { try { localStorage.removeItem(opts.draftKey); } catch {} }
+    } catch (e) {
+      navError.textContent = e.message;
+      navError.hidden = false;
+      nextBtn.disabled = false;
+    }
+  });
+
+  renderStep();
+}
+
+function staffDraftKey() {
+  const round = staffApplyState && staffApplyState.round;
+  return `solarcenter.staffApplyDraft2.${session.username}.${round ? round.id : 0}`;
+}
+
+function mountStaffApplyForm(body, d) {
+  mountStaffForm(body, d.form, {
+    deadline: d.round.closesAt,
+    draftKey: staffDraftKey(),
+    onSubmit: async (answers) => {
       await saFetch('/api/staff-apps/apply', 'POST', { answers });
-      clearStaffDraft();
       showToast('Jelentkezés elküldve.');
       loadStaffApply();
-    } catch (err) {
-      result.textContent = err.message;
-      btn.disabled = false;
     }
   });
 }
@@ -12881,8 +13122,7 @@ function renderStaffApply() {
         </div>`;
       return;
     }
-    body.innerHTML = renderStaffApplyForm(d);
-    bindStaffApplyForm();
+    mountStaffApplyForm(body, d);
     return;
   }
 
@@ -13141,8 +13381,6 @@ function renderSaAdminApps() {
     const open = saExpandedApps.has(a.id);
     let meta = `Beküldve: ${formatSaDate(a.createdAt)}`;
     if (a.status === 'accepted') meta += a.slotStartsAt ? ` · Szóbeli: ${formatSaDate(a.slotStartsAt)}` : ' · Még nem választott időpontot';
-    const answers = saAdminData.questions.map((q) => `
-      <div class="sa-answer"><dt>${escapeHtml(q.label)}</dt><dd>${escapeHtml((a.answers && a.answers[q.id]) || '-')}</dd></div>`).join('');
     const reason = a.status === 'rejected' && a.rejectReason ? `<div class="sa-reason"><span>Indoklás</span><p>${escapeHtml(a.rejectReason)}</p></div>` : '';
     const reviewed = a.reviewedBy ? `<p class="sa-muted sa-reviewed">Döntött: ${escapeHtml(a.reviewedBy)}, ${escapeHtml(formatSaDate(a.reviewedAt))}</p>` : '';
     const actions = a.status === 'pending'
@@ -13158,7 +13396,7 @@ function renderSaAdminApps() {
           <svg class="sa-app-caret" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/></svg>
         </button>
         <div class="sa-app-body"${open ? '' : ' hidden'}>
-          <dl class="sa-answers">${answers}</dl>
+          <dl class="sa-answers">${renderSaAnswers(a)}</dl>
           ${reason}
           ${reviewed}
           <div class="sa-app-actions">
@@ -13168,6 +13406,7 @@ function renderSaAdminApps() {
         </div>
       </div>`;
   }).join('');
+  loadSaUploadImages(list);
 }
 
 function saRejectModal(username) {
@@ -13250,6 +13489,7 @@ document.querySelector('.view[data-view="staffAppsAdmin"]').addEventListener('cl
     app.classList.toggle('open', open);
     toggle.setAttribute('aria-expanded', String(open));
     app.querySelector('.sa-app-body').hidden = !open;
+    if (open) loadSaUploadImages(app);
     return;
   }
 
@@ -13279,4 +13519,349 @@ document.querySelector('.view[data-view="staffAppsAdmin"]').addEventListener('cl
     }
     loadStaffAppsAdmin();
   } catch (err) { showToast(err.message, true); }
+});
+
+// ---------------------------------------------------------------------------
+// Staff tagfelvétel - kérdőív-szerkesztő (admin)
+// ---------------------------------------------------------------------------
+
+let sfDraft = null;
+let sfDirty = false;
+let sfSaving = false;
+
+const SF_EDITOR_TYPES = ['short', 'long', 'number', 'choice', 'multi', 'yesno', 'upload', 'section', 'info'];
+
+function sfNewId() {
+  return Math.random().toString(36).slice(2, 10).padEnd(8, '0');
+}
+
+function sfNewItem(type) {
+  const base = { id: sfNewId(), type, label: '', help: '', image: null };
+  if (SF_QUESTION_TYPES.has(type)) base.required = true;
+  if (type === 'choice' || type === 'multi') base.options = ['', ''];
+  if (type === 'number') { base.min = null; base.max = null; }
+  if (type === 'upload') base.maxFiles = 1;
+  return base;
+}
+
+function sfSetDirty(value) {
+  sfDirty = value;
+  const el = $('#sfDirty');
+  if (el) el.hidden = !value;
+}
+
+async function loadSfEditor() {
+  if (sfDraft && sfDirty) { renderSfEditor(); return; }
+  try {
+    const data = await saFetch('/api/admin/staff-apps/form');
+    sfDraft = data.form;
+    sfDraft._meta = { updatedBy: data.updatedBy, updatedAt: data.updatedAt };
+  } catch (err) {
+    $('#sfEditor').innerHTML = `<div class="card"><p class="sa-muted" style="margin:0;">${escapeHtml(err.message)}</p></div>`;
+    return;
+  }
+  sfSetDirty(false);
+  renderSfEditor();
+}
+
+function sfImageControl(key, file) {
+  if (file) {
+    return `
+      <div class="sf-ed-image">
+        <img src="${sfMediaUrl(file)}" alt="" />
+        <div class="sf-ed-image-actions">
+          <label class="btn-outline sf-ed-small">Csere<input type="file" accept="${SF_ACCEPT}" data-sf-image="${key}" hidden /></label>
+          <button type="button" class="btn-outline sf-ed-small" data-sf-image-remove="${key}">Eltávolítás</button>
+        </div>
+      </div>`;
+  }
+  return `<label class="sf-ed-add-image"><input type="file" accept="${SF_ACCEPT}" data-sf-image="${key}" hidden />
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="9" cy="10" r="1.8" fill="currentColor"/><path d="M4 18l5-5 4 4 3-3 4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+    Kép hozzáadása</label>`;
+}
+
+function sfItemEditorHtml(it, i, qNum) {
+  const isQuestion = SF_QUESTION_TYPES.has(it.type);
+  const typeOptions = SF_EDITOR_TYPES.map((t) => `<option value="${t}"${t === it.type ? ' selected' : ''}>${SF_TYPE_LABELS[t]}</option>`).join('');
+  const placeholder = it.type === 'section' ? 'Szakasz címe' : it.type === 'info' ? 'Cím (nem kötelező)' : 'Kérdés';
+  const helpPlaceholder = it.type === 'info' ? 'Szöveg' : 'Leírás vagy segítség (nem kötelező)';
+  let extra = '';
+  if (it.type === 'choice' || it.type === 'multi') {
+    extra = `
+      <label class="gift-modal-label">Válaszlehetőségek, soronként egy</label>
+      <textarea class="gift-modal-input sf-ed-options" data-sf-field="options" rows="${Math.max(3, (it.options || []).length + 1)}" placeholder="1. lehetőség&#10;2. lehetőség">${escapeHtml((it.options || []).join('\n'))}</textarea>`;
+  } else if (it.type === 'number') {
+    extra = `
+      <div class="sf-ed-row">
+        <label class="sf-ed-inline">Legkisebb<input type="number" class="gift-modal-input" data-sf-field="min" value="${it.min ?? ''}" placeholder="nincs" /></label>
+        <label class="sf-ed-inline">Legnagyobb<input type="number" class="gift-modal-input" data-sf-field="max" value="${it.max ?? ''}" placeholder="nincs" /></label>
+      </div>`;
+  } else if (it.type === 'upload') {
+    extra = `
+      <div class="sf-ed-row">
+        <label class="sf-ed-inline">Legfeljebb
+          <select class="gift-modal-input" data-sf-field="maxFiles">${[1, 2, 3, 4, 5].map((n) => `<option value="${n}"${(it.maxFiles || 1) === n ? ' selected' : ''}>${n} kép</option>`).join('')}</select>
+        </label>
+      </div>`;
+  }
+  const tag = it.type === 'section' ? 'Szakasz' : it.type === 'info' ? 'Blokk' : `${qNum}.`;
+  return `
+    <div class="card sf-ed-item sf-ed-${it.type === 'section' ? 'section' : isQuestion ? 'question' : 'info'}" data-sf-idx="${i}">
+      <div class="sf-ed-top">
+        <span class="sf-ed-tag">${tag}</span>
+        <select class="gift-modal-input sf-ed-type" data-sf-field="type" aria-label="Típus">${typeOptions}</select>
+        ${isQuestion ? `<label class="sf-ed-req"><input type="checkbox" data-sf-field="required"${it.required ? ' checked' : ''} /><span>Kötelező</span></label>` : ''}
+        <div class="sf-ed-tools">
+          <button type="button" class="sa-icon-btn" data-sf-act="up" title="Feljebb" aria-label="Feljebb"${i === 0 ? ' disabled' : ''}>&#8593;</button>
+          <button type="button" class="sa-icon-btn" data-sf-act="down" title="Lejjebb" aria-label="Lejjebb"${i === sfDraft.items.length - 1 ? ' disabled' : ''}>&#8595;</button>
+          <button type="button" class="sa-icon-btn" data-sf-act="dup" title="Másolat" aria-label="Másolat">&#10697;</button>
+          <button type="button" class="sa-icon-btn" data-sf-act="del" title="Törlés" aria-label="Törlés">&times;</button>
+        </div>
+      </div>
+      <input type="text" class="gift-modal-input sf-ed-label" data-sf-field="label" value="${escapeHtml(it.label || '')}" maxlength="300" placeholder="${placeholder}" />
+      <textarea class="gift-modal-input sf-ed-help" data-sf-field="help" rows="2" maxlength="1500" placeholder="${helpPlaceholder}">${escapeHtml(it.help || '')}</textarea>
+      ${extra}
+      ${sfImageControl(String(i), it.image)}
+    </div>`;
+}
+
+function renderSfEditor() {
+  const box = $('#sfEditor');
+  if (!sfDraft) return;
+  let qNum = 0;
+  const items = sfDraft.items.map((it, i) => {
+    if (SF_QUESTION_TYPES.has(it.type)) qNum++;
+    return sfItemEditorHtml(it, i, qNum);
+  }).join('');
+  const meta = sfDraft._meta && sfDraft._meta.updatedBy
+    ? `Utoljára mentette: ${escapeHtml(sfDraft._meta.updatedBy)}, ${escapeHtml(formatSaDate(sfDraft._meta.updatedAt))}.` : 'Ez az alap kérdőív, még senki nem módosította.';
+  box.innerHTML = `
+    <p class="sa-muted sf-ed-note">A mentett kérdőív azonnal érvényes, a futó tagfelvételre is. A már beküldött jelentkezések azokkal a kérdésekkel maradnak meg, amiket a játékos beküldéskor látott. ${meta}</p>
+    <div class="card sf-ed-head">
+      <div class="card-title">Fejléc</div>
+      <label class="gift-modal-label" for="sfTitle">Cím</label>
+      <input type="text" id="sfTitle" class="gift-modal-input" data-sf-form="title" maxlength="120" value="${escapeHtml(sfDraft.title || '')}" />
+      <label class="gift-modal-label" for="sfIntro">Bevezető szöveg</label>
+      <textarea id="sfIntro" class="gift-modal-input" data-sf-form="intro" rows="3" maxlength="3000">${escapeHtml(sfDraft.intro || '')}</textarea>
+      <label class="gift-modal-label" for="sfReq">Feltételek, soronként egy (nem kötelező)</label>
+      <textarea id="sfReq" class="gift-modal-input" data-sf-form="requirements" rows="4">${escapeHtml((sfDraft.requirements || []).join('\n'))}</textarea>
+      <span class="gift-modal-label">Fejléckép (nem kötelező)</span>
+      ${sfImageControl('header', sfDraft.headerImage)}
+    </div>
+    <div class="sf-ed-list">${items}</div>
+    <div class="sf-ed-addbar">
+      <button type="button" class="btn-outline" data-sf-add="short">+ Kérdés</button>
+      <button type="button" class="btn-outline" data-sf-add="section">+ Szakasz</button>
+      <button type="button" class="btn-outline" data-sf-add="info">+ Szöveg vagy kép</button>
+    </div>
+    <div class="sf-ed-bar">
+      <span class="sf-ed-dirty" id="sfDirty"${sfDirty ? '' : ' hidden'}>Nem mentett változások</span>
+      <button type="button" class="btn-outline" id="sfPreviewBtn">Előnézet</button>
+      <button type="button" class="btn-glow" id="sfSaveBtn">Mentés</button>
+    </div>`;
+}
+
+function sfCleanForm() {
+  const { _meta, ...rest } = sfDraft;
+  return {
+    ...rest,
+    items: sfDraft.items.map((it) => ({
+      ...it,
+      ...(it.options ? { options: it.options.map((o) => o.trim()).filter(Boolean) } : {})
+    }))
+  };
+}
+
+function sfOpenPreview() {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay sf-preview-overlay';
+  overlay.innerHTML = `
+    <div class="modal-card sf-preview-card">
+      <div class="legal-modal-head">
+        <h3>Előnézet</h3>
+        <button type="button" class="legal-modal-x" data-sf-preview-close aria-label="Bezárás">&times;</button>
+      </div>
+      <div class="sf-preview-body"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  mountStaffForm(overlay.querySelector('.sf-preview-body'), sfCleanForm(), { preview: true, deadline: new Date(Date.now() + 7 * 86400000).toISOString() });
+  const close = () => overlay.remove();
+  overlay.querySelector('[data-sf-preview-close]').addEventListener('click', close);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+}
+
+async function sfUploadMedia(file) {
+  if (file.size > 5 * 1024 * 1024) throw new Error('A kép legfeljebb 5 MB lehet.');
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await fetch(`${BACKEND_URL}/api/admin/staff-apps/media`, { method: 'POST', headers: { Authorization: 'Bearer ' + session.token }, body: fd });
+  const data = await res.json().catch(() => ({ ok: false }));
+  if (!data.ok) throw new Error(data.message || 'Nem sikerült feltölteni a képet.');
+  return data.file;
+}
+
+$('#sfEditor').addEventListener('input', (e) => {
+  const t = e.target;
+  if (t.dataset.sfForm) {
+    const key = t.dataset.sfForm;
+    sfDraft[key] = key === 'requirements' ? t.value.split('\n') : t.value;
+    sfSetDirty(true);
+    return;
+  }
+  const field = t.dataset.sfField;
+  const card = t.closest('[data-sf-idx]');
+  if (!field || !card || field === 'type' || field === 'required' || field === 'maxFiles') return;
+  const it = sfDraft.items[Number(card.dataset.sfIdx)];
+  if (field === 'options') it.options = t.value.split('\n');
+  else if (field === 'min' || field === 'max') it[field] = t.value === '' ? null : Number(t.value);
+  else it[field] = t.value;
+  sfSetDirty(true);
+});
+
+$('#sfEditor').addEventListener('change', async (e) => {
+  const t = e.target;
+  if (t.dataset.sfImage !== undefined && t.files && t.files[0]) {
+    const key = t.dataset.sfImage;
+    try {
+      const file = await sfUploadMedia(t.files[0]);
+      if (key === 'header') sfDraft.headerImage = file; else sfDraft.items[Number(key)].image = file;
+      sfSetDirty(true);
+      renderSfEditor();
+    } catch (err) { showToast(err.message, true); }
+    return;
+  }
+  const field = t.dataset.sfField;
+  const card = t.closest('[data-sf-idx]');
+  if (!card) return;
+  const idx = Number(card.dataset.sfIdx);
+  const it = sfDraft.items[idx];
+  if (field === 'required') { it.required = t.checked; sfSetDirty(true); }
+  if (field === 'maxFiles') { it.maxFiles = Number(t.value); sfSetDirty(true); }
+  if (field === 'type') {
+    const next = sfNewItem(t.value);
+    sfDraft.items[idx] = {
+      ...next,
+      id: it.id,
+      label: it.label,
+      help: it.help,
+      image: it.image,
+      ...(SF_QUESTION_TYPES.has(t.value) && it.required !== undefined ? { required: it.required } : {}),
+      ...((t.value === 'choice' || t.value === 'multi') && it.options ? { options: it.options } : {})
+    };
+    sfSetDirty(true);
+    renderSfEditor();
+  }
+});
+
+$('#sfEditor').addEventListener('click', async (e) => {
+  const removeImg = e.target.closest('[data-sf-image-remove]');
+  if (removeImg) {
+    const key = removeImg.dataset.sfImageRemove;
+    if (key === 'header') sfDraft.headerImage = null; else sfDraft.items[Number(key)].image = null;
+    sfSetDirty(true);
+    renderSfEditor();
+    return;
+  }
+  const add = e.target.closest('[data-sf-add]');
+  if (add) {
+    sfDraft.items.push(sfNewItem(add.dataset.sfAdd));
+    sfSetDirty(true);
+    renderSfEditor();
+    const cards = $$('#sfEditor .sf-ed-item');
+    const last = cards[cards.length - 1];
+    last?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    last?.querySelector('.sf-ed-label')?.focus({ preventScroll: true });
+    return;
+  }
+  const act = e.target.closest('[data-sf-act]');
+  if (act) {
+    const idx = Number(act.closest('[data-sf-idx]').dataset.sfIdx);
+    const items = sfDraft.items;
+    if (act.dataset.sfAct === 'up' && idx > 0) [items[idx - 1], items[idx]] = [items[idx], items[idx - 1]];
+    if (act.dataset.sfAct === 'down' && idx < items.length - 1) [items[idx + 1], items[idx]] = [items[idx], items[idx + 1]];
+    if (act.dataset.sfAct === 'dup') items.splice(idx + 1, 0, { ...JSON.parse(JSON.stringify(items[idx])), id: sfNewId() });
+    if (act.dataset.sfAct === 'del') {
+      const label = items[idx].label ? `„${escapeHtml(items[idx].label)}”` : 'ezt az elemet';
+      if (!(await confirmModal('Törlés', `Biztosan törlöd: ${label}?`, 'Törlés'))) return;
+      items.splice(idx, 1);
+    }
+    sfSetDirty(true);
+    renderSfEditor();
+    return;
+  }
+  if (e.target.closest('#sfPreviewBtn')) { sfOpenPreview(); return; }
+  if (e.target.closest('#sfSaveBtn')) {
+    if (sfSaving) return;
+    sfSaving = true;
+    try {
+      const data = await saFetch('/api/admin/staff-apps/form', 'PUT', { form: sfCleanForm() });
+      sfDraft = data.form;
+      sfDraft._meta = { updatedBy: session.username, updatedAt: new Date().toISOString() };
+      sfSetDirty(false);
+      renderSfEditor();
+      showToast('Kérdőív mentve.');
+    } catch (err) {
+      showToast(err.message, true);
+    } finally {
+      sfSaving = false;
+    }
+  }
+});
+
+$$('[data-sa-tab]').forEach((btn) => btn.addEventListener('click', () => setSaAdminTab(btn.dataset.saTab)));
+
+function setSaAdminTab(tab) {
+  $$('[data-sa-tab]').forEach((b) => {
+    b.classList.toggle('active', b.dataset.saTab === tab);
+    b.setAttribute('aria-selected', String(b.dataset.saTab === tab));
+  });
+  $$('[data-sa-pane]').forEach((p) => { p.hidden = p.dataset.saPane !== tab; });
+  if (tab === 'form') loadSfEditor();
+}
+
+window.addEventListener('beforeunload', (e) => {
+  if (sfDirty) { e.preventDefault(); e.returnValue = ''; }
+});
+
+// --- Válaszok megjelenítése az admin listában ---
+
+const saUploadUrls = {};
+
+function renderSaAnswers(a) {
+  return (a.items || []).map((it) => {
+    if (it.type === 'section') return `<div class="sa-answer-section">${escapeHtml(it.label)}</div>`;
+    if (!SF_QUESTION_TYPES.has(it.type)) return '';
+    const v = a.answers ? a.answers[it.id] : undefined;
+    let html;
+    if (sfIsEmpty(v)) html = '<span class="sa-muted">nincs válasz</span>';
+    else if (it.type === 'upload') html = `<div class="sa-answer-imgs">${v.map((id) => `<button type="button" class="sa-answer-img" data-sa-upload="${escapeHtml(id)}" title="Megnyitás"><img data-sa-upload-img="${escapeHtml(id)}" alt="" /></button>`).join('')}</div>`;
+    else if (Array.isArray(v)) html = `<ul class="sa-answer-list">${v.map((x) => `<li>${escapeHtml(x)}</li>`).join('')}</ul>`;
+    else html = escapeHtml(String(v));
+    const wide = it.type === 'long' || it.type === 'upload' || it.type === 'multi';
+    return `<div class="sa-answer${wide ? ' wide' : ''}"><dt>${escapeHtml(it.label)}</dt><dd>${html}</dd></div>`;
+  }).join('');
+}
+
+async function loadSaUploadImages(root) {
+  for (const img of root.querySelectorAll('[data-sa-upload-img]:not([src])')) {
+    const id = img.dataset.saUploadImg;
+    if (!saUploadUrls[id]) {
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/staff-apps/uploads/${encodeURIComponent(id)}`, { headers: { Authorization: 'Bearer ' + session.token } });
+        if (!res.ok) throw new Error();
+        saUploadUrls[id] = URL.createObjectURL(await res.blob());
+      } catch {
+        img.closest('.sa-answer-img')?.classList.add('missing');
+        continue;
+      }
+    }
+    img.src = saUploadUrls[id];
+  }
+}
+
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-sa-upload]');
+  if (!btn) return;
+  const url = saUploadUrls[btn.dataset.saUpload];
+  if (url) window.open(url, '_blank', 'noopener');
 });

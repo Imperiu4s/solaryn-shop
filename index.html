@@ -35,10 +35,10 @@
   <link rel="dns-prefetch" href="https://api.overclockgame.hu" />
   <link rel="preload" as="image" href="assets/solaryn-icon.png" />
 
-  <script src="theme.js?v=20261002c"></script>
-  <link rel="stylesheet" href="style.css?v=20261002c" />
-  <link rel="stylesheet" href="ui.css?v=20261002c" />
-  <link rel="stylesheet" href="design.css?v=20261002c" />
+  <script src="theme.js?v=20261002d"></script>
+  <link rel="stylesheet" href="style.css?v=20261002d" />
+  <link rel="stylesheet" href="ui.css?v=20261002d" />
+  <link rel="stylesheet" href="design.css?v=20261002d" />
 
   <script type="application/ld+json">
   {
@@ -1568,8 +1568,18 @@
 
         <section class="view" data-view="staffAppsAdmin">
           <h1 class="page-title">Staff tagfelvétel</h1>
-          <p class="page-note">Bekapcsoláskor megadod a jelentkezési határidőt és a szóbeli időpontokat. Az elfogadott jelentkezők ezek közül választanak.</p>
+          <p class="page-note">Itt kapcsolod be a tagfelvételt, itt bírálod el a jelentkezéseket, és itt szerkeszted a jelentkezési lap kérdéseit.</p>
 
+          <div class="sa-tabs" role="tablist" aria-label="Staff tagfelvétel">
+            <button type="button" class="sa-tab active" data-sa-tab="manage" role="tab" aria-selected="true">Tagfelvétel és jelentkezések</button>
+            <button type="button" class="sa-tab" data-sa-tab="form" role="tab" aria-selected="false">Kérdőív</button>
+          </div>
+
+          <div data-sa-pane="form" hidden>
+            <div id="sfEditor"></div>
+          </div>
+
+          <div data-sa-pane="manage">
           <div class="card sa-state-card" id="saAdminState"></div>
 
           <div class="card sa-slots-card hidden" id="saAdminSlotsCard">
@@ -1596,6 +1606,7 @@
               <select id="saRoundSelect" class="gift-modal-input sa-round-select" aria-label="Tagfelvétel"></select>
             </div>
             <div class="sa-app-list" id="saAdminAppList"></div>
+          </div>
           </div>
         </section>
 
@@ -2807,7 +2818,7 @@
                     <tr><td>Discord-összekötés</td><td>Discord-azonosító, felhasználónév, profilkép</td><td>b) szerződés teljesítése (te kéred)</td><td>amíg le nem választod</td></tr>
                     <tr><td>Fiókkal kapcsolatos emailek</td><td>email-cím</td><td>b) szerződés teljesítése</td><td>a fiók törléséig</td></tr>
                     <tr><td>Hírlevél</td><td>email-cím, a választott csatorna</td><td>a) hozzájárulás</td><td>a hozzájárulás visszavonásáig</td></tr>
-                    <tr><td>Staff jelentkezés</td><td>a jelentkezési lapon megadott válaszok (például életkor, Discord-név), a döntés és az indoklás, a választott szóbeli időpont</td><td>a) hozzájárulás (a jelentkezés beküldésével)</td><td>a tagfelvétel lezárása után 1 évig, vagy amíg vissza nem vonod</td></tr>
+                    <tr><td>Staff jelentkezés</td><td>a jelentkezési lapon megadott válaszok és feltöltött képek (például életkor, Discord-név), a döntés és az indoklás, a választott szóbeli időpont</td><td>a) hozzájárulás (a jelentkezés beküldésével)</td><td>a tagfelvétel lezárása után 1 évig, vagy amíg vissza nem vonod</td></tr>
                     <tr><td>Látogatottsági statisztika (SolarCenter)</td><td>a megnézett oldal, az eszköz típusa, honnan érkeztél, egy naponta cserélődő azonosító; IP-címet nem tárolunk</td><td>a) hozzájárulás (süti-beállítás)</td><td>400 napig</td></tr>
                     <tr><td>Ügyintézés</td><td>amit a ticketben vagy a leveledben írsz</td><td>b) szerződés teljesítése, illetve f) jogos érdek</td><td>a ticket lezárása után 1 évig</td></tr>
                   </tbody>
@@ -3117,9 +3128,9 @@
     </div>
   </div>
 
-  <script src="skin3d.js?v=20261002c" defer></script>
-  <script src="app.js?v=20261002c" defer></script>
-  <script src="ui.js?v=20261002c" defer></script>
-  <script src="design.js?v=20261002c" defer></script>
+  <script src="skin3d.js?v=20261002d" defer></script>
+  <script src="app.js?v=20261002d" defer></script>
+  <script src="ui.js?v=20261002d" defer></script>
+  <script src="design.js?v=20261002d" defer></script>
 </body>
 </html>
