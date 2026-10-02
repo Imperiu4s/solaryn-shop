@@ -35,10 +35,10 @@
   <link rel="dns-prefetch" href="https://api.overclockgame.hu" />
   <link rel="preload" as="image" href="assets/solaryn-icon.png" />
 
-  <script src="theme.js?v=20261002b"></script>
-  <link rel="stylesheet" href="style.css?v=20261002b" />
-  <link rel="stylesheet" href="ui.css?v=20261002b" />
-  <link rel="stylesheet" href="design.css?v=20261002b" />
+  <script src="theme.js?v=20261002c"></script>
+  <link rel="stylesheet" href="style.css?v=20261002c" />
+  <link rel="stylesheet" href="ui.css?v=20261002c" />
+  <link rel="stylesheet" href="design.css?v=20261002c" />
 
   <script type="application/ld+json">
   {
@@ -198,7 +198,7 @@
             <div class="form-checks">
               <label class="check-row">
                 <input type="checkbox" id="regTerms" />
-                <span>Elfogadom az <span class="link-inline" id="linkTerms">ÁSZF</span>-et és az Adatvédelmi nyilatkozatot. *</span>
+                <span>Elfogadom az <a href="#legal" class="link-inline" data-legal-modal="aszf">ÁSZF</a>-et, és elolvastam az <a href="#legal" class="link-inline" data-legal-modal="adatkezeles">Adatkezelési tájékoztatót</a>. *</span>
               </label>
               <label class="check-row">
                 <input type="checkbox" id="regAge" />
@@ -309,6 +309,10 @@
           <div class="app-nav-sub">
             <button class="app-nav-item" data-view="players"><span>Játékosok</span></button>
             <button class="app-nav-item" data-view="casino"><span>Casino</span></button>
+            <button class="app-nav-item hidden" data-view="staffApply" id="navStaffApply">
+              <span>Staff jelentkezés</span>
+              <span class="app-nav-badge hidden" id="navStaffApplyBadge">1</span>
+            </button>
           </div>
         </div>
 
@@ -334,6 +338,7 @@
             <button class="app-nav-item admin-nav-item hidden" data-view="defaultMediaAdmin" data-permission="global.defaultMediaManage"><span>Alap skinek</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="nameRules" data-permission="global.nameRulesManage"><span>Tiltott nevek</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="rankPerksAdmin" data-permission="global.rankPerksManage"><span>Rangok jogai</span></button>
+            <button class="app-nav-item admin-nav-item hidden" data-view="staffAppsAdmin" data-permission="global.staffAppsManage"><span>Staff tagfelvétel</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="cosmeticsAdmin" data-permission="global.cosmeticsManage,global.cosmeticsMarketManage"><span>Kiegészítők</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="mobsAdmin" data-permission="global.mobsManage"><span>Mobok</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="discounts" data-permission="global.discountsManage"><span>Akciók</span></button>
@@ -946,12 +951,18 @@
 
         <section class="view" data-view="sanction">
           <h1 class="page-title">Kitiltáscsökkentés</h1>
-          <p class="page-note">Vásárolj szankció feloldást, hogy eltöröld a szerverről a rád kiszabott némítást vagy kitiltást - a vásárlás után automatikusan jóváíródik a feloldás a játékban.</p>
+          <p class="page-note">Itt lerövidítheted az aktív némításod vagy kitiltásod idejét. A vásárlás után pár percen belül érvényes a játékban. A kitiltás teljes feloldását ticketben lehet kérni.</p>
 
           <div class="content-grid">
             <div id="sanctionPkgWrap"></div>
             <div class="side-rail" data-side-rail="sanction"></div>
           </div>
+        </section>
+
+        <section class="view" data-view="staffApply">
+          <h1 class="page-title">Staff jelentkezés</h1>
+          <p class="page-note">Itt tudsz jelentkezni, ha éppen van tagfelvétel, és itt látod a jelentkezésed állapotát.</p>
+          <div id="staffApplyBody"></div>
         </section>
 
         <section class="view" data-view="casino">
@@ -1553,6 +1564,39 @@
           </div>
 
           <div class="rp-rank-grid" id="rpRankGrid"></div>
+        </section>
+
+        <section class="view" data-view="staffAppsAdmin">
+          <h1 class="page-title">Staff tagfelvétel</h1>
+          <p class="page-note">Bekapcsoláskor megadod a jelentkezési határidőt és a szóbeli időpontokat. Az elfogadott jelentkezők ezek közül választanak.</p>
+
+          <div class="card sa-state-card" id="saAdminState"></div>
+
+          <div class="card sa-slots-card hidden" id="saAdminSlotsCard">
+            <div class="sa-card-head">
+              <div class="card-title" style="margin-bottom:0;">Szóbeli időpontok</div>
+            </div>
+            <div class="sa-slot-list" id="saAdminSlotList"></div>
+            <div class="sa-slot-add" id="saAdminSlotAdd">
+              <input type="datetime-local" id="saSlotNewTime" class="gift-modal-input" aria-label="Új időpont" />
+              <input type="number" id="saSlotNewCap" class="gift-modal-input" min="1" max="100" placeholder="Férőhely" aria-label="Férőhely" />
+              <button type="button" class="btn-outline" id="saSlotAddBtn">Időpont hozzáadása</button>
+            </div>
+          </div>
+
+          <div class="card sa-apps-card hidden" id="saAdminAppsCard">
+            <div class="sa-card-head">
+              <div class="card-title" style="margin-bottom:0;">Jelentkezések</div>
+              <div class="nr-filter" role="tablist" aria-label="Szűrés" id="saAppFilter">
+                <button type="button" class="nr-filter-btn active" data-sa-filter="all">Mind</button>
+                <button type="button" class="nr-filter-btn" data-sa-filter="pending">Függőben</button>
+                <button type="button" class="nr-filter-btn" data-sa-filter="accepted">Elfogadva</button>
+                <button type="button" class="nr-filter-btn" data-sa-filter="rejected">Elutasítva</button>
+              </div>
+              <select id="saRoundSelect" class="gift-modal-input sa-round-select" aria-label="Tagfelvétel"></select>
+            </div>
+            <div class="sa-app-list" id="saAdminAppList"></div>
+          </div>
         </section>
 
         <section class="view" data-view="cosmeticsAdmin">
@@ -2585,7 +2629,7 @@
                 <svg class="faq-chevron" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/></svg>
               </button>
               <div class="faq-a-wrap"><div class="faq-a"><div>
-                A megvásárolt termékek digitális termékek, amelyek teljesítése azonnal megtörténik, ezért általános esetben nem visszatéríthetők - a részleteket az <a href="#legal" data-legal-link="aszf">ÁSZF 3. pontja</a> tartalmazza. Ha a termék a mi hibánkból nem került teljesítésre, természetesen rendezzük: vagy manuálisan kiadjuk, vagy visszatérítjük.
+                Vásárlás előtt megkérdezzük, kéred-e az azonnali jóváírást. Ha igen, a jóváírás után a 14 napos elállási jog már nem él. Ha a terméket nem kaptad meg, vagy nem úgy működik, ahogy leírtuk, nyiss ticketet: pótoljuk, vagy visszaadjuk az árát. A feltöltött, de el nem költött Egyenleget 14 napon belül indoklás nélkül is visszakérheted. Részletek az <a href="#legal" data-legal-link="aszf">ÁSZF 6-7. pontjában</a>.
               </div></div></div>
             </div>
 
@@ -2605,7 +2649,7 @@
                 <svg class="faq-chevron" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/></svg>
               </button>
               <div class="faq-a-wrap"><div class="faq-a"><div>
-                A <b>Szankciók</b> fülön látod az aktív büntetéseidet, és PrémiumPontért csökkentheted vagy feloldhatod őket. Bizonyos súlyos szabálysértések (pl. fizetési visszaélés) esetén ez nem elérhető - ilyenkor a Discordon lehet fellebbezni.
+                A <b>Kitiltáscsökkentés</b> oldalon lerövidítheted az aktív némításod vagy kitiltásod idejét. A teljes feloldást nem lehet megvenni, mert nem minden kitiltásnál adjuk meg: ehhez nyiss ticketet a <a href="https://dc.solaryn.hu" target="_blank" rel="noopener noreferrer">Discordon</a>, és ott megnézzük az indokot.
               </div></div></div>
             </div>
 
@@ -2625,7 +2669,7 @@
                 <svg class="faq-chevron" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/></svg>
               </button>
               <div class="faq-a-wrap"><div class="faq-a"><div>
-                A működéshez szükséges minimumot: felhasználónév, IP cím (biztonsági okból), és a vásárlásaid adatai. Bankkártyaadatot nem tárolunk - azt kizárólag a fizetési szolgáltató (Stripe, PayPal) kezeli. A részletekért lásd az <a href="#legal" data-legal-link="adatkezeles">Adatkezelési tájékoztatót</a>, a sütikről pedig a lábléc <b>Süti beállítások</b> pontja szól.
+                A fiókod adatait (név, email, születési dátum), a játékbeli adataidat, a vásárlásaidat, és ha a SolarLaunchert használod, a géped néhány azonosítójának hash-ét. Bankkártyaadatot nem látunk, azt a Stripe kezeli. Hogy mit, miért és meddig, azt az <a href="#legal" data-legal-link="adatkezeles">Adatkezelési tájékoztató</a> táblázata írja le. A sütikről a lábléc <b>Süti beállítások</b> pontja szól.
               </div></div></div>
             </div>
 
@@ -2647,8 +2691,8 @@
             <svg viewBox="0 0 24 24" width="14" height="14"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M15 18l-6-6 6-6"/></svg>
             Vissza
           </button>
-          <h1 class="page-title">Jogi <span class="text-accent">dokumentumok</span></h1>
-          <p class="page-note">Az alábbiakban találod a SolarynNetwork hivatalos dokumentumait.</p>
+          <h1 class="page-title">Jogi dokumentumok</h1>
+          <p class="page-note">ÁSZF, adatkezelési tájékoztató és impresszum.</p>
 
           <div class="legal-tabs">
             <button class="legal-tab active" data-legal="aszf">ÁSZF</button>
@@ -2659,122 +2703,164 @@
           <div class="card legal-card">
             <div class="legal-panel active" data-legal-panel="aszf">
               <h3>Általános Szerződési Feltételek</h3>
+              <p class="legal-meta">Hatályos 2026. október 2-től. Az előző változat 2026. április 4-től volt érvényben.</p>
 
-              <h4>1. Szolgáltató adatai</h4>
-              <p><b>Szolgáltató neve:</b> SolarynNetwork<br><b>Székhely:</b> Budapest, Magyarország<br><b>Weboldal:</b> www.solaryn.hu<br><b>Kapcsolattartó:</b> Nagy Szabolcs<br><b>Jogi státusz:</b> magánszemély által üzemeltetett online szolgáltatás</p>
+              <h4>1. Ki nyújtja a szolgáltatást</h4>
+              <p><b>Szolgáltató:</b> Nagy Szabolcs, magánszemély<br><b>A szolgáltatás neve:</b> Solaryn Network<br><b>Cím:</b> Budapest, Magyarország<br><b>Kapcsolat:</b> ticket a Discord szerverünkön (dc.solaryn.hu)<br><b>Weboldalak:</b> solaryn.hu, center.solaryn.hu (SolarCenter)</p>
+              <p>A Solaryn Network egy márkanév, nem külön cég: a szerződés közted és a fenti magánszemély között jön létre. A szövegben a Szolgáltató „mi”, a Felhasználó „te”.</p>
 
-              <h4>2. A szolgáltatás leírása</h4>
-              <p>A SolarynNetwork egy online Minecraft játékszerver, amely a következő szolgáltatásokat nyújtja:</p>
+              <h4>2. Mire vonatkozik</h4>
+              <p>Ez az ÁSZF a Solaryn Minecraft-szerverek, a SolarCenter, a SolarLauncher és a SolarClient használatára, valamint a SolarCenterben megvehető digitális tartalmakra vonatkozik. A játékszabályzat (solaryn.hu/szabalyzat) ennek a része.</p>
+              <p>Ha fogyasztóként vásárolsz, a fogyasztóvédelmi jogszabályok minden jogot megadnak neked akkor is, ha itt nem soroljuk fel őket. Ezeket az ÁSZF nem szűkítheti, és ahol mégis ellentmondana nekik, ott a jogszabály érvényes.</p>
+
+              <h4>3. Fiók</h4>
               <ul>
-                <li>Minecraft szerver elérés biztosítása</li>
-                <li>Játékbeli rangok, csomagok, kozmetikai elemek és digitális termékek értékesítése</li>
-                <li>Események, játékmódok és egyedi rendszerek biztosítása</li>
-                <li>Közösségi platformok működtetése (Discord, weboldal)</li>
-              </ul>
-              <p>A szolgáltatás igénybevételéhez a játékosnak Minecraft fiókkal kell rendelkeznie.</p>
-
-              <h4>3. Fizetési feltételek</h4>
-              <ul>
-                <li>A vásárlás a weboldalon keresztül történik.</li>
-                <li>Elfogadott fizetési módok: Stripe (bankkártyás fizetés), PayPal.</li>
-                <li>A megvásárolt termékek digitális terméknek minősülnek, amelyek teljesítése automatikusan történik.</li>
-                <li>A digitális termékek nem visszatéríthetők, kivéve ha a szolgáltató hibájából nem kerülnek teljesítésre.</li>
+                <li>A játékhoz Solaryn-fiók kell, amit ingyen hozhatsz létre a SolarCenterben.</li>
+                <li>14 éves kor alatt csak a szülőd vagy a törvényes képviselőd beleegyezésével regisztrálhatsz.</li>
+                <li>A fiókot csak te használhatod, nem adhatod el és nem adhatod tovább. A jelszavadat ne add meg senkinek, a személyzet sem kéri el soha.</li>
+                <li>Ha valaki illetéktelenül használja a fiókodat, minél előbb jelezd ticketben. Addig, amíg nem szólsz, a fiókkal végzett műveleteket a tiédnek tekintjük.</li>
+                <li>A fiókod törlését ticketben kérheted.</li>
               </ul>
 
-              <h4>4. Felhasználói fiók és szabályok</h4>
+              <h4>4. Mit lehet vásárolni</h4>
+              <p>A játék ingyenes, vásárolni nem kötelező. A SolarCenterben ezeket a digitális tartalmakat lehet megvenni:</p>
               <ul>
-                <li>A játékos a Minecraft szerveren regisztrál fiókot.</li>
-                <li>A felhasználó felelős a fiókja biztonságáért.</li>
-                <li>Tiltott tevékenységek többek között: csalás, exploitok használata; visszaélés fizetési rendszerekkel (pl. chargeback); más játékosok zaklatása; a szerver működésének szándékos megzavarása.</li>
-                <li>Szabálysértés esetén a szolgáltató jogosult a felhasználó fiókját korlátozni vagy törölni, a játékbeli rangokat/előnyöket visszavonni, vagy a szolgáltatásból kizárni.</li>
+                <li><b>PrémiumPont (PP):</b> a szerver saját pontja, amiből rangot, kiegészítőt és más játékbeli dolgot vehetsz. Pénzre nem váltható vissza, és csak a Solaryn-en használható. Másik játékosnak átutalhatod, ilyenkor 10% díjat vonunk le.</li>
+                <li><b>Rang:</b> 30 vagy 60 napig érvényes. Ha előfizetést kapcsolsz be, lejáratkor automatikusan megújul a PP-egyenleged terhére. Az előfizetést a Rangok oldalon bármikor lemondhatod, a már kifizetett időszak ilyenkor is megmarad.</li>
+                <li><b>Szankció-csökkentés:</b> egy aktív némítás, kitiltás vagy kliens-tiltás idejét rövidíti le. A kitiltás teljes feloldása nem vásárolható meg: ezt ticketben lehet kérni, és minden esetet külön nézünk meg.</li>
+                <li><b>Egyenleg:</b> forintban feltöltött keret, amiből a SolarCenterben vásárolhatsz.</li>
               </ul>
-              <p>A tiltás vagy rangvesztés nem jogosít visszatérítésre, kivéve ha a szolgáltató hibájából történt.</p>
+              <p>Az árak forintban szerepelnek, és a teljes fizetendő összeget mutatják. Az árakat és a kínálatot megváltoztathatjuk, de ez a már kifizetett vásárlásokat nem érinti.</p>
 
-              <h4>5. Adatkezelés</h4>
-              <p>A SolarynNetwork a működéséhez szükséges minimális adatokat kezeli: Minecraft felhasználónév, IP cím (technikai és biztonsági okokból), vásárlási adatok (a fizetési szolgáltató kezeli; bankkártyaadatokat a SolarynNetwork nem tárol). Az adatkezelés céljai: a szolgáltatás technikai működtetése, csalások és visszaélések megelőzése, vásárlások teljesítése, szerverbiztonság fenntartása.</p>
+              <h4>5. Vásárlás és fizetés</h4>
+              <p>A terméket a SolarCenterben választod ki, és bankkártyával fizetsz a Stripe fizetési oldalán, vagy a SolarCenter Egyenlegedből. A szerződés a sikeres fizetéssel jön létre. A vásárlást a SolarCenter Napló oldalán látod.</p>
+              <p>A szerződés nyelve magyar. Írásba foglalt szerződésnek nem minősül, nem iktatjuk, a vásárlás adatai a Napló oldalon visszanézhetők. A bankkártyád adatait nem látjuk és nem tároljuk, azokat a Stripe kezeli.</p>
 
-              <h4>6. Felelősségkorlátozás</h4>
-              <p>A szolgáltatás "jelen állapotában" érhető el, a szolgáltató nem garantál folyamatos, hibamentes működést, és nem vállal felelősséget szerverhibákból eredő adatvesztésért vagy játékbeli veszteségekért. Kártérítés kizárólag akkor jár, ha a hiba bizonyíthatóan a szolgáltató hibájából következett be, és a felhasználó igazolni tudja a veszteséget.</p>
+              <h4>6. Teljesítés és elállási jog</h4>
+              <p>A digitális tartalmat általában a fizetés után néhány percen belül jóváírjuk. Ami a játékban aktiválódik (például egy rang), azt akkor kapod meg, amikor fent vagy a szerveren.</p>
+              <p>Fogyasztóként a szerződéstől 14 napon belül indoklás nélkül elállhatsz. Digitális tartalomnál ez a jog megszűnik, ha a teljesítés a kifejezett, előzetes beleegyezéseddel kezdődött meg, és tudomásul vetted, hogy ezzel elveszíted az elállási jogodat (45/2014. (II. 26.) Korm. rendelet 29. § (1) bekezdés m) pont). Ezt a SolarCenter minden vásárlás előtt külön megkérdezi, és a válaszodat a vásárlással együtt eltároljuk. Beleegyezés nélkül a vásárlás nem indul el.</p>
+              <p>Az Egyenleg feltöltése még nem digitális tartalom vásárlása. A feltöltött, de el nem költött összeget a feltöltéstől számított 14 napon belül indoklás nélkül visszakérheted.</p>
+              <p>Az elállást bármilyen egyértelmű nyilatkozattal jelezheted ticketben vagy levélben, erre a 45/2014. (II. 26.) Korm. rendelet 2. melléklete szerinti nyilatkozatmintát is használhatod. A visszajáró összeget legkésőbb 14 napon belül, ugyanarra a fizetési módra utaljuk vissza.</p>
 
-              <h4>7. Digitális termékek teljesítése</h4>
-              <p>A vásárló a fizetés után 2-5 percen belül automatikusan megkapja a digitális terméket. Ha a teljesítés technikai hiba miatt nem történik meg, a felhasználó köteles jelezni a szolgáltatónak, aki a hibát kijavítja vagy a terméket manuálisan biztosítja.</p>
+              <h4>7. Ha valami nem működik</h4>
+              <p>Ha a megvett tartalmat nem kaptad meg, vagy nem úgy működik, ahogy a SolarCenterben leírtuk, nyiss ticketet, és írd meg a vásárlás idejét. Ilyenkor a 373/2021. (VI. 30.) Korm. rendelet szerint kérheted, hogy pótoljuk vagy kijavítsuk. Ha ez ésszerű időn belül nem sikerül, kérheted az ár arányos csökkentését vagy a teljes ár visszafizetését.</p>
+              <p>Ha a megvett tartalom leállás vagy adatvesztés miatt hosszabb ideig nem volt használható, azt is jelezd: pótoljuk, vagy meghosszabbítjuk az érintett időt.</p>
 
-              <h4>8. Az ÁSZF hatálya és módosítása</h4>
-              <p>Jelen ÁSZF 2026.04.04. 18:00 időponttól érvényes. A szolgáltató jogosult az ÁSZF-et bármikor módosítani - a felhasználók a módosításokról a Discord szerveren értesülhetnek.</p>
+              <h4>8. Szabályok és szankciók</h4>
+              <p>A játékszabályzat megszegéséért némítás, kitiltás, kliens-tiltás vagy fiókzárolás járhat. Súlyos esetben a rangot és a fiókhoz tartozó többi előnyt is visszavonhatjuk. Szabályszegés többek között:</p>
+              <ul>
+                <li>csalás, csaló kliens vagy játékhiba kihasználása;</li>
+                <li>más játékosok zaklatása, fenyegetése;</li>
+                <li>a szerver működésének szándékos megzavarása;</li>
+                <li>visszaélés a fizetéssel, például jogosulatlan vagy megtévesztő visszaterhelés (chargeback) kezdeményezése.</li>
+              </ul>
+              <p>A visszaterhelés önmagában nem szabályszegés: ha a fizetéssel tényleg baj volt, írj nekünk, és rendezzük. Amíg egy vitatott visszaterhelés tart, a fiókot zárolhatjuk.</p>
+              <p>Ha a szankció a szabályzat alapján jogos volt, a miatta elvesztett digitális tartalom árát nem fizetjük vissza. Ha szerinted tévedtünk, ticketben kérheted a felülvizsgálatot. Ha igazad van, visszaadjuk, amit elvettünk, vagy visszafizetjük az árát.</p>
 
-              <h4>9. Jogviták rendezése</h4>
-              <p>A szolgáltatásra a magyar jog az irányadó. Jogvita esetén a felek elsősorban békés úton próbálják rendezni a problémát, ha ez nem sikerül, a jogvita magyar bíróság előtt folytatható.</p>
+              <h4>9. Szerzői jog és feltöltött tartalom</h4>
+              <p>A Solaryn szövegei, logói, grafikái, építményei, saját fejlesztésű pluginjai, valamint a SolarCenter, a SolarLauncher és a SolarClient szerzői jogi védelem alatt állnak (1999. évi LXXVI. törvény a szerzői jogról). Az engedélyünk nélkül nem másolhatod, nem terjesztheted, nem módosíthatod őket, és nem használhatod fel őket más szerveren vagy szolgáltatásban. A SolarLaunchert és a SolarClientet csak a Solaryn-en való játékhoz használhatod, és nem fejtheted vissza, kivéve ahol ezt a szerzői jogi törvény kifejezetten megengedi.</p>
+              <p>Videót, streamet és képernyőképet szabadon készíthetsz a szerverről, és közzéteheted őket.</p>
+              <p>Amit te töltesz fel (skin, köpeny, név, üzenet), ahhoz neked kell jogot szerezned, és nem sérthet másokat. Ahhoz, hogy a szerveren és a SolarCenterben meg tudjuk jeleníteni, ingyenes, nem kizárólagos felhasználási engedélyt adsz nekünk, amíg a tartalom fent van. A szabályt vagy jogot sértő feltöltést törölhetjük, és megtilthatjuk, hogy ugyanazt a fájlt újra feltöltsék.</p>
+              <p>A Minecraft a Mojang Studios és a Microsoft védjegye. A Solaryn nem áll kapcsolatban velük, és ők nem támogatják a szervert.</p>
 
-              <h4>10. Kapcsolat</h4>
-              <p>Bármilyen kérdés, probléma vagy hibabejelentés esetén a felhasználók a Discord szerveren vagy a weboldalon keresztül vehetik fel a kapcsolatot a szolgáltatóval.</p>
+              <h4>10. Felelősség</h4>
+              <p>A felelősségünket a jogszabályok által megengedett mértékben korlátozzuk. Igyekszünk, hogy a szerver és a SolarCenter folyamatosan elérhető legyen, de karbantartás, hiba vagy támadás miatt leállhat. A játékmenetet, a játékmódokat és a játékbeli gazdaságot (árak, jutalmak, egyensúly) időnként módosítjuk, ez önmagában nem hibás teljesítés.</p>
+              <p>A szándékosan vagy súlyos gondatlansággal okozott kárért, valamint az életet, testi épséget vagy egészséget sértő kárért a felelősségünket nem zárjuk ki.</p>
+
+              <h4>11. Panasz és jogvita</h4>
+              <p>Panaszt ticketben vagy a fenti címre küldött levélben tehetsz. Az írásbeli panaszra 30 napon belül írásban válaszolunk.</p>
+              <p>Ha nem sikerül megegyeznünk, fogyasztóként a lakóhelyed szerinti békéltető testülethez, vagy a mi címünk szerinti Budapesti Békéltető Testülethez fordulhatsz (1016 Budapest, Krisztina krt. 99. III. em. 310., bekelteto.testulet@bkik.hu). Fogyasztóvédelmi panasszal a lakóhelyed szerinti vármegyei kormányhivatalt is megkeresheted.</p>
+              <p>A szerződésre a magyar jog az irányadó. Ha másik EU-tagállamban élsz, az ottani jog kötelező fogyasztóvédelmi szabályai is megilletnek. Perben az illetékes bíróságot a hatásköri és illetékességi szabályok határozzák meg, fogyasztó ellen pedig csak a lakóhelye szerinti ország bírósága előtt indítható per.</p>
+
+              <h4>12. Az ÁSZF módosítása</h4>
+              <p>Az ÁSZF-et módosíthatjuk, például ha új terméket vezetünk be, vagy változik egy jogszabály. Az új szöveget a hatálybalépése előtt legalább 15 nappal közzétesszük a solaryn.hu/jogi oldalon és a SolarCenterben, és a Discordon is szólunk róla.</p>
+              <ul>
+                <li>A módosítás csak a hatálybalépése utáni vásárlásokra vonatkozik.</li>
+                <li>A már megvett tartalomra (például egy futó rang hátralévő idejére) a vásárláskor érvényes feltételek maradnak, kivéve ha a változás neked kedvez.</li>
+                <li>Rang-előfizetésnél az új ár csak a hatálybalépés utáni első megújulástól érvényes. Ha nem fogadod el, előtte lemondhatod.</li>
+                <li>Ha egy jogszabály miatt azonnal kell módosítanunk, a 15 napnál rövidebb idővel is közölhetjük.</li>
+              </ul>
+              <p>A korábbi változatokat kérésre elküldjük.</p>
             </div>
 
             <div class="legal-panel" data-legal-panel="adatkezeles">
-              <h3>Adatkezelési Tájékoztató</h3>
+              <h3>Adatkezelési tájékoztató</h3>
+              <p class="legal-meta">Hatályos 2026. október 2-től.</p>
 
-              <h4>1. Bevezetés</h4>
-              <p>Jelen Adatkezelési Tájékoztató célja, hogy a SolarynNetwork szolgáltatásait igénybe vevő felhasználókat tájékoztassa arról, milyen adatokat kezelünk, milyen célból, milyen jogalapon, mennyi ideig, és milyen jogok illetik meg a felhasználót. A SolarynNetwork a működéséhez szükséges minimális adatot kezeli.</p>
+              <h4>1. Az adatkezelő</h4>
+              <p><b>Adatkezelő:</b> Nagy Szabolcs magánszemély, a Solaryn Network üzemeltetője<br><b>Cím:</b> Budapest, Magyarország<br><b>Kapcsolat adatvédelmi ügyben:</b> ticket a Discord szerverünkön (dc.solaryn.hu), vagy levél a fenti címre</p>
+              <p>Adatvédelmi tisztviselő kijelölésére nem vagyunk kötelesek, ilyen nincs.</p>
 
-              <h4>2. Adatkezelő adatai</h4>
-              <p><b>Adatkezelő neve:</b> SolarynNetwork<br><b>Székhely:</b> Budapest, Magyarország<br><b>Weboldal:</b> www.solaryn.hu<br><b>Kapcsolattartó:</b> Nagy Szabolcs</p>
+              <h4>2. Milyen adatot, miért és meddig kezelünk</h4>
+              <div class="legal-table-wrap">
+                <table class="legal-table">
+                  <thead>
+                    <tr><th>Mire</th><th>Milyen adatot</th><th>Jogalap (GDPR 6. cikk (1))</th><th>Meddig</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr><td>Fiók</td><td>felhasználónév, email-cím, jelszó (csak hash-elve), születési dátum, az ÁSZF elfogadásának ideje, a megadott creator kód</td><td>b) szerződés teljesítése</td><td>a fiók törléséig</td></tr>
+                    <tr><td>Játék és SolarCenter</td><td>rang, PrémiumPont-egyenleg, játékidő, barátlista, kiegészítők, feltöltött skin és köpeny, jelvények</td><td>b) szerződés teljesítése</td><td>a fiók törléséig</td></tr>
+                    <tr><td>Fiókvédelem</td><td>a kétlépcsős azonosítás kulcsa, a biztonsági kód hash-e, belépési előzmények</td><td>f) jogos érdek: a fiókod védelme</td><td>a fiók törléséig, a belépési előzmények 1 évig</td></tr>
+                    <tr><td>Tiltások kijátszása elleni védelem</td><td>a SolarLauncher által küldött gépazonosítók hash-e (Windows gépazonosító, lemez- és alaplap-sorozatszám, MAC-cím); ezekből az eredeti érték nem fejthető vissza</td><td>f) jogos érdek: a kitiltások betartatása</td><td>az utolsó használattól 1 évig, kitiltott gépnél a tiltás végéig</td></tr>
+                    <tr><td>Szankciók</td><td>némítás, kitiltás oka, ideje, ki adta; a játékszerverek naplójában a belépéskori IP-cím</td><td>f) jogos érdek: a szabályok betartatása</td><td>a szankció lejárta után 1 évig, az IP-cím 1 évig</td></tr>
+                    <tr><td>Vásárlás</td><td>a termék, az ár, az időpont, a Stripe tranzakció-azonosítója, ajándéknál a címzett és az üzenet, az elállási jogról tett nyilatkozat ideje, a PP-mozgások (Napló)</td><td>b) szerződés teljesítése; a bizonylatoknál c) jogi kötelezettség</td><td>5 évig (a polgári jogi elévülési idő); a bizonylatok a számviteli és adózási szabályok szerinti ideig, legfeljebb 8 évig</td></tr>
+                    <tr><td>Discord-összekötés</td><td>Discord-azonosító, felhasználónév, profilkép</td><td>b) szerződés teljesítése (te kéred)</td><td>amíg le nem választod</td></tr>
+                    <tr><td>Fiókkal kapcsolatos emailek</td><td>email-cím</td><td>b) szerződés teljesítése</td><td>a fiók törléséig</td></tr>
+                    <tr><td>Hírlevél</td><td>email-cím, a választott csatorna</td><td>a) hozzájárulás</td><td>a hozzájárulás visszavonásáig</td></tr>
+                    <tr><td>Staff jelentkezés</td><td>a jelentkezési lapon megadott válaszok (például életkor, Discord-név), a döntés és az indoklás, a választott szóbeli időpont</td><td>a) hozzájárulás (a jelentkezés beküldésével)</td><td>a tagfelvétel lezárása után 1 évig, vagy amíg vissza nem vonod</td></tr>
+                    <tr><td>Látogatottsági statisztika (SolarCenter)</td><td>a megnézett oldal, az eszköz típusa, honnan érkeztél, egy naponta cserélődő azonosító; IP-címet nem tárolunk</td><td>a) hozzájárulás (süti-beállítás)</td><td>400 napig</td></tr>
+                    <tr><td>Ügyintézés</td><td>amit a ticketben vagy a leveledben írsz</td><td>b) szerződés teljesítése, illetve f) jogos érdek</td><td>a ticket lezárása után 1 évig</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <p>A SolarCenter szervere az IP-címedet nem menti el. Csak a túlterhelés és a jelszópróbálgatás elleni korlátozáshoz használja, rövid ideig, a memóriában.</p>
+              <p>Ha 16 évesnél fiatalabb vagy, a hozzájáruláson alapuló adatkezeléshez (hírlevél, staff jelentkezés) a szülőd vagy a törvényes képviselőd hozzájárulása is kell.</p>
 
-              <h4>3. Kezelt adatok köre</h4>
-              <p><b>Technikai adatok:</b> Minecraft felhasználónév, IP cím, szervernaplók.<br><b>Vásárlási adatok:</b> vásárlás időpontja, vásárolt termék típusa, fizetési azonosító (Stripe/PayPal által biztosított).</p>
-              <p><i>A SolarynNetwork nem tárol bankkártyaadatokat, azokat kizárólag a fizetési szolgáltatók (Stripe, PayPal) kezelik.</i></p>
-
-              <h4>4. Az adatkezelés céljai</h4>
+              <h4>3. Kik kapják meg az adatokat</h4>
               <ul>
-                <li>a szolgáltatás technikai működtetése</li>
-                <li>a felhasználói fiókok azonosítása</li>
-                <li>a digitális termékek teljesítése</li>
-                <li>csalások, visszaélések és szerverbiztonsági incidensek megelőzése</li>
-                <li>hibák kivizsgálása és javítása, fizetések ellenőrzése és adminisztrációja</li>
+                <li><b>Stripe</b> (Stripe Payments Europe Ltd., Írország): kártyás fizetés. A kártyaadatokat ők kezelik, mi csak a tranzakció azonosítóját, összegét és állapotát kapjuk meg.</li>
+                <li><b>Resend</b> (Resend, Inc., USA): az emailek kiküldése (adatfeldolgozó).</li>
+                <li><b>Discord</b> (Discord Inc., USA): ha összekötöd a fiókodat, vagy a Discordon írsz nekünk.</li>
+                <li><b>A személyzet</b> tagjai: csak azt látják, ami a feladatukhoz kell, ezt jogosultságonként állítjuk be.</li>
+                <li><b>Hatóság</b>: csak ha jogszabály kötelez rá.</li>
               </ul>
-              <p>A SolarynNetwork nem használja fel az adatokat marketing célokra, és nem adja át harmadik félnek kereskedelmi célból.</p>
+              <p>Az USA-ba történő továbbítás az Európai Bizottság megfelelőségi határozata (EU–USA adatvédelmi keret) vagy általános adatvédelmi kikötések alapján történik. Adatot nem adunk el, és reklámcélra senkinek nem adunk át.</p>
 
-              <h4>5. Az adatkezelés jogalapja</h4>
-              <p><b>Szerződés teljesítése</b> (GDPR 6. cikk (1) b)): a felhasználó és a szolgáltató közötti szolgáltatás biztosítása.<br><b>Jogszerű érdek</b> (GDPR 6. cikk (1) f)): a szerver biztonságának fenntartása, visszaélések megelőzése.</p>
+              <h4>4. Sütik és helyi tárolás</h4>
+              <p>A <b>www.solaryn.hu</b> weboldal nem használ követő, statisztikai vagy hirdetési célú sütit, és harmadik féltől sem tölt be tartalmat (a betűkészletek is a saját szerverünkről érkeznek). Az egyetlen, amit a böngésződben, a saját eszközödön tárolunk: hogy a süti-tájékoztató sávot már bezártad-e (böngésző <i>localStorage</i>, nem hagyja el az eszközödet, nem küldjük el sehová). Ez bármikor törölhető a böngésződ beállításaiból, ez esetben a tájékoztató sáv a következő látogatáskor újra megjelenik.</p>
+              <p>A <b>SolarCenter</b> (center.solaryn.hu) a bejelentkezésed és a választott téma megőrzéséhez tárol adatot a böngésződben, ez nem kapcsolható ki. A névtelen statisztika és a beágyazott Discord-tartalom csak akkor működik, ha a lábléc „Süti beállítások” pontjában engedélyezed.</p>
 
-              <h4>6. Adatmegőrzési idő</h4>
-              <p>Technikai adatok: legfeljebb 90 nap. Vásárlási adatok: legfeljebb 1 év. IP címek: legfeljebb 30 nap. Jogvita vagy visszaélés gyanúja esetén az adatok megőrzési ideje meghosszabbodhat.</p>
+              <h4>5. Adatbiztonság</h4>
+              <p>A jelszavakat csak hash-elve tároljuk, a kapcsolat titkosított (HTTPS). Kétlépcsős azonosítást és biztonsági kódot bárki bekapcsolhat a fiókjához. A személyzet csak a számára kiosztott jogosultságokkal fér hozzá az adatokhoz, és az adminisztrátori műveleteket naplózzuk.</p>
 
-              <h4>7. Adatok továbbítása</h4>
-              <p>Fizetési szolgáltatók (Stripe, PayPal) - kizárólag a fizetés lebonyolításához szükséges adatokat kezelik. Hatóságok - kizárólag jogszabályi kötelezettség esetén. A SolarynNetwork nem értékesít, nem ad bérbe és nem oszt meg adatot kereskedelmi célból.</p>
+              <h4>6. A jogaid</h4>
+              <ul>
+                <li>Kérhetsz tájékoztatást és másolatot arról, milyen adatot kezelünk rólad.</li>
+                <li>Kérheted a pontatlan adat javítását.</li>
+                <li>Kérheted az adataid törlését, illetve a kezelésük korlátozását.</li>
+                <li>Kérheted, hogy az általad megadott adatokat géppel olvasható formában kiadjuk (adathordozhatóság).</li>
+                <li>Tiltakozhatsz a jogos érdeken alapuló adatkezelés ellen.</li>
+                <li>A hozzájárulásodat bármikor visszavonhatod. Ez nem érinti a visszavonás előtti adatkezelés jogszerűségét.</li>
+              </ul>
+              <p>A kérésedet ticketben vagy levélben küldd el. Egy hónapon belül válaszolunk; ha a kérés bonyolult, ez legfeljebb két hónappal meghosszabbodhat, erről időben szólunk. Mielőtt bármit kiadunk vagy törlünk, ellenőrizzük, hogy tényleg a fiók tulajdonosa kéri-e (például a fiókhoz kötött Discordról vagy email-címről).</p>
 
-              <h4>8. Adatbiztonság</h4>
-              <p>Szerverbiztonsági rendszerek, naplózás és visszaélésfigyelés, korlátozott hozzáférés, titkosított kommunikáció a fizetési szolgáltatókkal.</p>
+              <h4>7. Jogorvoslat</h4>
+              <p>Ha szerinted megsértettük a jogaidat, panaszt tehetsz a Nemzeti Adatvédelmi és Információszabadság Hatóságnál (NAIH): 1055 Budapest, Falk Miksa utca 9-11., postacím: 1363 Budapest, Pf. 9., ugyfelszolgalat@naih.hu, www.naih.hu. Bírósághoz is fordulhatsz, a pert a lakóhelyed szerinti törvényszék előtt is megindíthatod.</p>
 
-              <h4>9. Felhasználói jogok</h4>
-              <p>Hozzáférés, helyesbítés, törlés, korlátozás és tiltakozás joga - a kérelmeket a Discord szerveren vagy a weboldalon keresztül jelezheted.</p>
-
-              <h4>10. Panasz benyújtása</h4>
-              <p>Ha úgy érzed, hogy az adatkezelés nem felel meg a jogszabályoknak, panaszt tehetsz a Nemzeti Adatvédelmi és Információszabadság Hatóságnál (NAIH).</p>
-
-              <h4>11. A Tájékoztató módosítása</h4>
-              <p>A SolarynNetwork fenntartja a jogot, hogy a jelen Adatkezelési Tájékoztatót bármikor módosítsa. A módosításokról a felhasználók a Discord szerveren értesülhetnek.</p>
+              <h4>8. Módosítás</h4>
+              <p>Ha a tájékoztató változik, az új szöveget itt és a solaryn.hu/jogi oldalon tesszük közzé. Lényeges változásról a hatálybalépése előtt a Discordon is szólunk.</p>
             </div>
 
             <div class="legal-panel" data-legal-panel="impresszum">
               <h3>Impresszum</h3>
 
-              <h4>Üzemeltető adatai</h4>
-              <p><b>Üzemeltető neve:</b> SolarynNetwork<br><b>Képviselő:</b> Nagy Szabolcs<br><b>Székhely:</b> Budapest, Magyarország<br><b>Weboldal:</b> www.solaryn.hu<br><b>Kapcsolat:</b> Discord szerveren keresztül</p>
-              <p>A SolarynNetwork magánszemély által üzemeltetett online szolgáltatás és Minecraft játékszerver.</p>
+              <h4>Üzemeltető</h4>
+              <p><b>Név:</b> Nagy Szabolcs, magánszemély<br><b>A szolgáltatás neve:</b> Solaryn Network<br><b>Cím:</b> Budapest, Magyarország<br><b>Kapcsolat:</b> ticket a Discord szerverünkön (dc.solaryn.hu)<br><b>Weboldalak:</b> solaryn.hu, center.solaryn.hu</p>
+              <p>A megkeresésekre ésszerű időn belül válaszolunk, a panaszokra legkésőbb 30 napon belül.</p>
 
-              <h4>Kapcsolattartás</h4>
-              <p>A felhasználók Discord szerveren vagy a weboldalon keresztüli üzenetküldéssel vehetik fel a kapcsolatot az üzemeltetővel, aki a beérkező megkeresésekre ésszerű időn belül válaszol.</p>
-
-              <h4>A szolgáltatás jellege</h4>
-              <p>A SolarynNetwork egy online Minecraft játékszerver, amely digitális termékeket, rangokat, csomagokat és egyéb játékbeli szolgáltatásokat kínál.</p>
-
-              <h4>Felelősség</h4>
-              <p>Az üzemeltető mindent megtesz a weboldal és a szerver zavartalan működéséért, azonban a szolgáltatás esetleges hibáiért, leállásaiért vagy adatvesztésért felelősséget nem vállal, kivéve ha a hiba bizonyíthatóan az üzemeltető hibájából ered.</p>
-
-              <h4>Jognyilatkozat</h4>
-              <p>A weboldalon és a szerveren található tartalmak a SolarynNetwork tulajdonát képezik. A tartalmak másolása, terjesztése vagy felhasználása kizárólag az üzemeltető engedélyével lehetséges.</p>
-
-              <h4>Jogviták rendezése</h4>
-              <p>A szolgáltatásra a magyar jog az irányadó. Jogvita esetén a felek elsősorban békés úton próbálják rendezni a problémát.</p>
+              <h4>Egyéb</h4>
+              <p>A szerzői jogokról és a feltöltött tartalmakról az ÁSZF 9. pontja, a felelősségről a 10. pontja, a panaszokról és a jogvitákról a 11. pontja szól.</p>
+              <p>A Solaryn nem áll kapcsolatban a Mojang Studios-szal és a Microsofttal, és ők nem támogatják a szervert.</p>
             </div>
           </div>
         </section>
@@ -2877,7 +2963,7 @@
         <div class="form-checks">
           <label class="check-row">
             <input type="checkbox" id="modalRegTerms" />
-            <span>Elfogadom az <span class="link-inline">ÁSZF</span>-et és az Adatvédelmi nyilatkozatot.</span>
+            <span>Elfogadom az <a href="#legal" class="link-inline" data-legal-modal="aszf">ÁSZF</a>-et, és elolvastam az <a href="#legal" class="link-inline" data-legal-modal="adatkezeles">Adatkezelési tájékoztatót</a>.</span>
           </label>
           <label class="check-row">
             <input type="checkbox" id="modalRegMarketing" />
@@ -3016,9 +3102,24 @@
     </div>
   </div>
 
-  <script src="skin3d.js?v=20261002b" defer></script>
-  <script src="app.js?v=20261002b" defer></script>
-  <script src="ui.js?v=20261002b" defer></script>
-  <script src="design.js?v=20261002b" defer></script>
+  <div class="modal-overlay hidden" id="legalModal" role="dialog" aria-modal="true" aria-labelledby="legalModalTitle">
+    <div class="modal-card legal-modal-card">
+      <div class="legal-modal-head">
+        <h3 id="legalModalTitle">Jogi dokumentumok</h3>
+        <button type="button" class="legal-modal-x" id="legalModalClose" aria-label="Bezárás">&times;</button>
+      </div>
+      <div class="legal-tabs" id="legalModalTabs">
+        <button type="button" class="legal-tab" data-legal-modal-tab="aszf">ÁSZF</button>
+        <button type="button" class="legal-tab" data-legal-modal-tab="adatkezeles">Adatkezelés</button>
+        <button type="button" class="legal-tab" data-legal-modal-tab="impresszum">Impresszum</button>
+      </div>
+      <div class="legal-modal-body" id="legalModalBody"></div>
+    </div>
+  </div>
+
+  <script src="skin3d.js?v=20261002c" defer></script>
+  <script src="app.js?v=20261002c" defer></script>
+  <script src="ui.js?v=20261002c" defer></script>
+  <script src="design.js?v=20261002c" defer></script>
 </body>
 </html>

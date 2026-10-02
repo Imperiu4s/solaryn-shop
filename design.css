@@ -1176,3 +1176,173 @@ body::before {
 [data-theme="solaryn-light"] .rank-corner, [data-theme="solaryn-light"] .rank-row-perm th { background: var(--panel); }
 [data-theme="solaryn-light"] .app-sidebar { background: color-mix(in srgb, var(--panel) 85%, transparent); }
 .discount-target-hint { margin: 6px 2px 0; font-size: 12px; line-height: 1.5; color: var(--text-faint); }
+
+/* ==========================================================================
+   Napló: típusonként színezett művelet, halványabb dátum
+   ========================================================================== */
+.ledger-table { --lt-transfer: #5aa9ff; --lt-purchase: var(--gold); --lt-game: #b48cff; --lt-gift: #ff7eb6; --lt-admin: #3ccfc0; --lt-cosmetic: #ff9d5c; --lt-other: var(--text-dim); }
+[data-theme="solaryn-light"] .ledger-table { --lt-transfer: #1f6fd1; --lt-game: #7a4fd6; --lt-gift: #c43d7d; --lt-admin: #12897d; --lt-cosmetic: #c25a12; }
+.ledger-table td.ledger-date { color: var(--text-faint); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ledger-table td.ledger-party { color: var(--text); font-weight: 600; }
+.ledger-table td.ledger-detail { color: var(--text-dim); }
+.ledger-none { color: var(--text-faint); }
+.ledger-type { display: inline-flex; align-items: center; gap: 7px; padding: 3px 10px 3px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; color: var(--lt); background: color-mix(in srgb, var(--lt) 12%, transparent); border: 1px solid color-mix(in srgb, var(--lt) 24%, transparent); }
+.ledger-type::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.ledger-type-transfer { --lt: var(--lt-transfer); }
+.ledger-type-purchase { --lt: var(--lt-purchase); }
+.ledger-type-game { --lt: var(--lt-game); }
+.ledger-type-gift { --lt: var(--lt-gift); }
+.ledger-type-admin { --lt: var(--lt-admin); }
+.ledger-type-cosmetic { --lt: var(--lt-cosmetic); }
+.ledger-type-other { --lt: var(--lt-other); }
+.ledger-table .ledger-amount-positive { color: var(--success); }
+.ledger-table .ledger-amount-negative { color: var(--danger); }
+.ledger-table .ledger-balance { color: var(--gold); }
+
+/* Kitiltás teljes feloldása: csak ticketben */
+.pkg-card-ticket { border-style: dashed; }
+.pkg-card-ticket:hover { transform: none; }
+.pkg-ticket-note { margin: 4px 0 12px; font-size: 12.5px; line-height: 1.5; color: var(--text-dim); text-align: center; }
+.pkg-ticket-btn { display: inline-flex; justify-content: center; text-decoration: none; width: 100%; }
+
+/* ==========================================================================
+   Staff tagfelvétel (játékos + admin)
+   ========================================================================== */
+.sa-muted { font-size: 13px; line-height: 1.55; color: var(--text-dim); }
+.sa-apply-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; }
+.sa-req-card { position: sticky; top: 90px; }
+.sa-req-list { margin: 0 0 14px; padding-left: 18px; font-size: 13.5px; line-height: 1.6; color: var(--text); }
+.sa-req-list li + li { margin-top: 4px; }
+.sa-deadline { margin: 0 0 18px; font-size: 13.5px; color: var(--text-dim); }
+.sa-deadline b { color: var(--text); }
+.sa-form { display: grid; gap: 16px; }
+.sa-q { display: grid; gap: 7px; }
+.sa-q-label { font-size: 13.5px; font-weight: 600; color: var(--text); }
+.sa-q .gift-modal-input { margin: 0; }
+.sa-q textarea, .sa-reject-text { resize: vertical; min-height: 92px; line-height: 1.5; font: inherit; font-size: 13.5px; }
+.sa-form .btn-glow { justify-self: start; width: auto; padding-left: 26px; padding-right: 26px; }
+
+.sa-status-card { max-width: 760px; }
+.sa-status-title { margin: 10px 0 6px; font-size: 18px; font-weight: 700; color: var(--text); }
+.sa-lead { margin: 0 0 16px; font-size: 14px; line-height: 1.55; color: var(--text-dim); }
+.sa-lead b { color: var(--text); }
+.sa-chip { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.sa-chip-pending { color: var(--gold); background: color-mix(in srgb, var(--gold) 13%, transparent); }
+.sa-chip-accepted { color: var(--success); background: color-mix(in srgb, var(--success) 14%, transparent); }
+.sa-chip-rejected { color: var(--danger); background: color-mix(in srgb, var(--danger) 13%, transparent); }
+.sa-reason { margin: 12px 0; padding: 10px 14px; border-left: 3px solid var(--danger); border-radius: 0 10px 10px 0; background: color-mix(in srgb, var(--danger) 7%, transparent); }
+.sa-reason span { display: block; margin-bottom: 3px; font-size: 12px; font-weight: 600; color: var(--danger); }
+.sa-reason p { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--text); white-space: pre-line; }
+.sa-modal-body p { margin: 0 0 10px; }
+
+.sa-slot-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.sa-slot-opt { display: grid; gap: 2px; padding: 14px 16px; text-align: left; font: inherit; color: var(--text); cursor: pointer; border-radius: 14px; border: 1px solid var(--stroke-2); background: rgba(255, 255, 255, .02); transition: border-color .15s, background .15s; }
+.sa-slot-opt:hover:not(:disabled) { border-color: var(--brand-line); background: var(--brand-soft); }
+.sa-slot-opt:disabled { cursor: default; opacity: .5; }
+.sa-slot-opt.chosen { opacity: 1; border-color: var(--success); background: color-mix(in srgb, var(--success) 9%, transparent); }
+.sa-slot-day { font-size: 13px; color: var(--text-dim); }
+.sa-slot-time { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.sa-slot-state { font-size: 12px; color: var(--text-faint); }
+.sa-slot-opt.chosen .sa-slot-state { color: var(--success); font-weight: 600; }
+
+.sa-state-card, .sa-slots-card, .sa-apps-card { margin-bottom: 20px; }
+.sa-state-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; }
+.sa-state-line { display: flex; align-items: center; gap: 9px; font-size: 15px; font-weight: 700; color: var(--text); }
+.sa-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.sa-dot.on { background: var(--success); box-shadow: 0 0 0 4px color-mix(in srgb, var(--success) 18%, transparent); }
+.sa-dot.wait { background: var(--gold); }
+.sa-state-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.sa-state-actions .btn-outline, .sa-inline-form .btn-glow, .sa-add-row, .sa-open-btn, .sa-slot-add .btn-outline, .sa-app-actions > button { width: auto; margin: 0; padding: 10px 18px; }
+.sa-btn-danger { color: var(--danger); }
+.sa-btn-danger:hover:not(:disabled) { border-color: color-mix(in srgb, var(--danger) 50%, transparent); }
+.sa-btn-danger-solid { background: var(--danger); color: #fff; }
+.sa-inline-form { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.sa-inline-form .gift-modal-input, .sa-deadline-input { width: auto; min-width: 240px; margin: 0; }
+.sa-sub-title { margin: 22px 0 4px; font-size: 14px; font-weight: 700; color: var(--text); }
+.sa-open-slots { display: grid; gap: 8px; margin-bottom: 10px; }
+.sa-open-slot { display: grid; grid-template-columns: minmax(0, 260px) 120px 36px; gap: 8px; align-items: center; }
+.sa-open-slot .gift-modal-input, .sa-slot-add .gift-modal-input { margin: 0; }
+.sa-open-btn { display: block; margin-top: 6px; }
+.sa-icon-btn { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--stroke-2); background: transparent; color: var(--text-dim); font-size: 18px; line-height: 1; cursor: pointer; }
+.sa-icon-btn:hover { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+
+.sa-card-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 14px; }
+.sa-card-head .nr-filter { margin-left: auto; }
+.sa-round-select { width: auto; margin: 0; padding: 8px 12px; font-size: 13px; }
+.sa-slot-list { display: grid; gap: 6px; margin-bottom: 14px; }
+.sa-slot-row { display: grid; grid-template-columns: 220px 90px minmax(0, 1fr) 36px; gap: 12px; align-items: center; padding: 8px 8px 8px 14px; border-radius: 12px; border: 1px solid var(--stroke); }
+.sa-slot-row.past { opacity: .55; }
+.sa-slot-when { font-size: 13.5px; color: var(--text-dim); }
+.sa-slot-when b { color: var(--text); font-weight: 600; }
+.sa-slot-cap { font-size: 13px; font-weight: 600; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.sa-slot-cap.full { color: var(--orange); }
+.sa-slot-names { display: flex; flex-wrap: wrap; gap: 6px; }
+.sa-name-chip { padding: 3px 9px; border-radius: 8px; border: 1px solid var(--stroke-2); background: transparent; font: inherit; font-size: 12.5px; color: var(--text); cursor: pointer; }
+.sa-name-chip:hover { border-color: var(--brand-line); color: var(--gold); }
+.sa-slot-add { display: grid; grid-template-columns: minmax(0, 260px) 120px auto; gap: 8px; align-items: center; justify-content: start; }
+
+.sa-app-list { display: grid; gap: 8px; }
+.sa-app { border: 1px solid var(--stroke); border-radius: 14px; overflow: hidden; }
+.sa-app.open { border-color: var(--stroke-2); }
+.sa-app-head { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; font: inherit; text-align: left; color: var(--text); background: transparent; border: 0; cursor: pointer; }
+.sa-app-head:hover { background: rgba(255, 255, 255, .025); }
+.sa-app-name { font-weight: 700; }
+.sa-app-meta { margin-left: auto; font-size: 12.5px; color: var(--text-faint); text-align: right; }
+.sa-app-caret { flex: none; color: var(--text-faint); transition: transform .15s; }
+.sa-app.open .sa-app-caret { transform: rotate(180deg); }
+.sa-app-body { padding: 4px 16px 16px; border-top: 1px solid var(--stroke); }
+.sa-answers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 24px; margin: 14px 0; }
+.sa-answer dt { margin-bottom: 3px; font-size: 12px; font-weight: 600; color: var(--text-faint); }
+.sa-answer dd { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--text); white-space: pre-line; overflow-wrap: anywhere; }
+.sa-reviewed { margin: 0 0 12px; font-size: 12.5px; }
+.sa-app-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.sa-btn-accept { background: var(--success); color: #06210f; }
+
+[data-theme="solaryn-light"] .sa-slot-opt { background: #fff; }
+[data-theme="solaryn-light"] .sa-app-head:hover { background: rgba(40, 30, 10, .035); }
+
+@media (max-width: 900px) {
+  .sa-apply-grid { grid-template-columns: 1fr; }
+  .sa-req-card { position: static; order: -1; }
+  .sa-answers { grid-template-columns: 1fr; }
+  .sa-slot-row { grid-template-columns: 1fr 36px; }
+  .sa-slot-row .sa-slot-cap, .sa-slot-row .sa-slot-names { grid-column: 1; }
+  .sa-slot-row .sa-icon-btn { grid-row: 1; grid-column: 2; }
+}
+@media (max-width: 640px) {
+  .sa-open-slot { grid-template-columns: minmax(0, 1fr) 90px 36px; }
+  .sa-slot-add { grid-template-columns: 1fr 90px; }
+  .sa-slot-add .btn-outline { grid-column: 1 / -1; }
+  .sa-inline-form .gift-modal-input, .sa-deadline-input { min-width: 0; width: 100%; }
+  .sa-app-head { flex-wrap: wrap; }
+  .sa-app-meta { margin-left: 0; width: 100%; text-align: left; order: 3; }
+  .sa-card-head .nr-filter { margin-left: 0; overflow-x: auto; max-width: 100%; }
+}
+
+/* Jogi dokumentumok felugró ablakban (regisztráció, vásárlás) */
+#legalModal { z-index: 650; }
+.legal-modal-card { width: 820px; max-width: calc(100vw - 32px); max-height: calc(100vh - 48px); display: flex; flex-direction: column; padding: 24px 26px 18px; }
+.legal-modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.legal-modal-head h3 { margin: 0; }
+.legal-modal-x { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--stroke-2); background: transparent; color: var(--text-dim); font-size: 20px; line-height: 1; cursor: pointer; }
+.legal-modal-x:hover { color: var(--text); }
+.legal-modal-card .legal-tabs { margin-bottom: 12px; flex-wrap: wrap; }
+.legal-modal-body { overflow-y: auto; overscroll-behavior: contain; padding-right: 8px; min-height: 0; }
+.legal-modal-body .legal-panel.active { animation: none; }
+
+/* Vásárlás előtti nyilatkozat */
+.waiver-modal { width: 460px; }
+.waiver-item { display: flex; justify-content: space-between; gap: 12px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--stroke-2); color: var(--text) !important; margin-bottom: 14px !important; }
+.waiver-item b { color: var(--gold); white-space: nowrap; }
+.waiver-text { margin-bottom: 12px !important; }
+.waiver-check { align-items: flex-start; font-size: 13px; line-height: 1.5; color: var(--text); margin-bottom: 8px; }
+.waiver-links { font-size: 12.5px !important; margin-bottom: 16px !important; }
+
+/* Jogi szöveg: táblázat az adatkezelési tájékoztatóban */
+.legal-table-wrap { overflow-x: auto; margin: 6px 0 14px; }
+.legal-table { width: 100%; min-width: 620px; border-collapse: collapse; font-size: 13px; line-height: 1.55; }
+.legal-table th { text-align: left; font-weight: 600; color: var(--text); padding: 9px 10px; border-bottom: 1px solid var(--stroke-2); }
+.legal-table td { vertical-align: top; color: var(--text-dim); padding: 9px 10px; border-bottom: 1px solid var(--stroke); }
+.legal-table tr:last-child td { border-bottom: 0; }
+.legal-panel .legal-meta { font-size: 12.5px; color: var(--text-faint); margin-bottom: 16px; }
+.legal-panel ol { color: var(--text-dim); font-size: 13.5px; line-height: 1.8; padding-left: 20px; margin-bottom: 6px; }

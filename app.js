@@ -1329,6 +1329,8 @@ async function enterApp(meData) {
   loadHomePlaytimeWeek();
 
   refreshTradeBadge();
+
+  loadStaffApply({ announce: true });
 }
 
 async function refreshPpBalance() {
@@ -1820,6 +1822,8 @@ function switchView(view) {
   if (view === 'defaultMediaAdmin') { resetDmAdminForm(); loadDefaultMediaAdmin(); loadSkinSubmissionsAdmin(); }
   if (view === 'nameRules') loadNameRules();
   if (view === 'rankPerksAdmin') loadRankPerksAdmin();
+  if (view === 'staffApply') loadStaffApply();
+  if (view === 'staffAppsAdmin') loadStaffAppsAdmin();
   if (view === 'discounts') { resetDiscountForm(); loadDiscountsAdmin(); }
   if (view === 'coupons') { resetCouponForm(); loadCouponsAdmin(); }
   if (view === 'creatorCodes') { resetCreatorCodeForm(); loadCreatorCodesAdmin(); }
@@ -3006,7 +3010,21 @@ function formatHuf(n) {
 
 const GIFTABLE_TYPES = new Set(['sc', 'rank']);
 
+// Ticket-only tétel (pl. a kitiltás teljes feloldása): nincs ár és vásárlás,
+// csak az, hogy hol lehet kérni.
+function renderTicketOnlyCard(item) {
+  return `
+    <div class="pkg-card pkg-card-ticket">
+      <div class="pkg-icon">${ICONS[item.icon] || ICONS.ban}</div>
+      <div class="pkg-name">${escapeHtml(item.short)}</div>
+      <p class="pkg-ticket-note">Nem vásárolható. Nem minden kitiltást oldunk fel teljesen, ezért ticketben nézzük meg az indokot és döntünk.</p>
+      <a class="btn-outline pkg-ticket-btn" href="https://dc.solaryn.hu" target="_blank" rel="noopener noreferrer">Ticket nyitása</a>
+    </div>
+  `;
+}
+
 function renderPkgCard(item, locked) {
+  if (item.ticketOnly) return renderTicketOnlyCard(item);
   const lockedNote = locked
     ? `<div class="pkg-locked-note">Nincs aktív szankciód - nincs mit csökkenteni</div>`
     : '';
@@ -3742,6 +3760,21 @@ $('#btnWalletTopup').addEventListener('click', async () => {
   }
 });
 
+// A Napló "Művelet" oszlopának színe típusonként.
+const LEDGER_TYPE_TONES = {
+  transfer_in: 'transfer', transfer_out: 'transfer',
+  purchase: 'purchase', game_purchase: 'game',
+  gift_sent: 'gift', gift_received: 'gift',
+  admin_adjust: 'admin',
+  cosmetic_purchase: 'cosmetic', cosmetic_market_buy: 'cosmetic', cosmetic_market_sell: 'cosmetic',
+  cosmetic_trade_buy: 'cosmetic', cosmetic_trade_sell: 'cosmetic'
+};
+
+function ledgerTypeChip(type) {
+  const tone = LEDGER_TYPE_TONES[type] || 'other';
+  return `<span class="ledger-type ledger-type-${tone}">${escapeHtml(LEDGER_TYPE_LABELS[type] || type)}</span>`;
+}
+
 const LEDGER_TYPE_LABELS = {
   transfer_in: 'Átutalás',
   transfer_out: 'Átutalás',
@@ -3768,15 +3801,14 @@ function formatLedgerDate(sqliteDatetime) {
 }
 
 function renderLedgerRow(entry) {
-  const typeLabel = LEDGER_TYPE_LABELS[entry.type] || entry.type;
   const amountClass = entry.amount > 0 ? 'ledger-amount-positive' : entry.amount < 0 ? 'ledger-amount-negative' : 'ledger-amount-zero';
   const amountText = (entry.amount > 0 ? '+' : '') + formatPp(entry.amount);
   return `
     <tr>
-      <td>${formatLedgerDate(entry.created_at)}</td>
-      <td>${entry.counterparty ? escapeHtml(entry.counterparty) : '-'}</td>
-      <td>${escapeHtml(typeLabel)}</td>
-      <td>${entry.detail ? escapeHtml(entry.detail) : '-'}</td>
+      <td class="ledger-date">${formatLedgerDate(entry.created_at)}</td>
+      <td class="ledger-party">${entry.counterparty ? escapeHtml(entry.counterparty) : '<span class="ledger-none">-</span>'}</td>
+      <td>${ledgerTypeChip(entry.type)}</td>
+      <td class="ledger-detail">${entry.detail ? escapeHtml(entry.detail) : '<span class="ledger-none">-</span>'}</td>
       <td class="${amountClass}">${amountText}</td>
       <td class="ledger-balance">${formatPp(entry.balance_after)}</td>
     </tr>
@@ -3817,16 +3849,15 @@ $('#ledgerSearchInput').addEventListener('input', renderLedgerTable);
 let purchaseLogsEntries = [];
 
 function renderPurchaseLogRow(entry) {
-  const typeLabel = LEDGER_TYPE_LABELS[entry.type] || entry.type;
   const amountClass = entry.amount > 0 ? 'ledger-amount-positive' : entry.amount < 0 ? 'ledger-amount-negative' : 'ledger-amount-zero';
   const amountText = (entry.amount > 0 ? '+' : '') + formatPp(entry.amount);
   return `
     <tr>
-      <td>${formatLedgerDate(entry.created_at)}</td>
-      <td>${escapeHtml(entry.username)}</td>
-      <td>${entry.counterparty ? escapeHtml(entry.counterparty) : '-'}</td>
-      <td>${escapeHtml(typeLabel)}</td>
-      <td>${entry.detail ? escapeHtml(entry.detail) : '-'}</td>
+      <td class="ledger-date">${formatLedgerDate(entry.created_at)}</td>
+      <td class="ledger-party">${escapeHtml(entry.username)}</td>
+      <td class="ledger-party">${entry.counterparty ? escapeHtml(entry.counterparty) : '<span class="ledger-none">-</span>'}</td>
+      <td>${ledgerTypeChip(entry.type)}</td>
+      <td class="ledger-detail">${entry.detail ? escapeHtml(entry.detail) : '<span class="ledger-none">-</span>'}</td>
       <td class="${amountClass}">${amountText}</td>
       <td class="ledger-balance">${formatPp(entry.balance_after)}</td>
     </tr>
@@ -3897,6 +3928,10 @@ const ADMIN_ACTION_LABELS = {
   'creatorCode.rankExpired': 'Creator kód rang-jutalma lejárt',
   'news.create': 'Felhívás létrehozása', 'news.edit': 'Felhívás szerkesztése', 'news.delete': 'Felhívás törlése',
   'discord.boost': 'Discord boost jóváírás',
+  'staffApps.open': 'Staff tagfelvétel bekapcsolása', 'staffApps.close': 'Staff tagfelvétel kikapcsolása',
+  'staffApps.deadline': 'Tagfelvétel határidejének módosítása', 'staffApps.slotAdd': 'Szóbeli időpont hozzáadása',
+  'staffApps.slotDelete': 'Szóbeli időpont törlése', 'staffApps.accept': 'Staff jelentkezés elfogadása',
+  'staffApps.reject': 'Staff jelentkezés elutasítása', 'staffApps.reset': 'Staff jelentkezés visszaállítása',
   'player.securityReset': '2FA / biztonsági kód visszaállítása',
   'playtime.milestone': 'Játékidő mérföldkő jutalom'
 };
@@ -5779,11 +5814,49 @@ document.addEventListener('click', (e) => {
   if (btn && !btn.disabled) buyItemWithWallet(btn.dataset.itemId, btn);
 });
 
+// Digitális tartalom: az elállási jog csak akkor szűnik meg, ha a vásárló
+// előre, kifejezetten kéri az azonnali teljesítést és ezt tudomásul veszi.
+function purchaseWaiverModal(itemId, okLabel) {
+  const item = shopCatalog.find((i) => i.id === itemId);
+  const name = item ? item.label : 'a termék';
+  const price = item ? formatHuf(item.priceHuf) : '';
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal-card waiver-modal">
+        <h3>Vásárlás</h3>
+        <p class="waiver-item"><span>${escapeHtml(name)}</span>${price ? `<b>${escapeHtml(price)}</b>` : ''}</p>
+        <p class="waiver-text">Ez digitális tartalom, amit a fizetés után néhány percen belül jóváírunk. Ehhez a beleegyezésed kell:</p>
+        <label class="check-row waiver-check">
+          <input type="checkbox" data-waiver-check />
+          <span>Kérem a teljesítés azonnali megkezdését, és tudomásul veszem, hogy ezzel elveszítem a 14 napos elállási jogomat.</span>
+        </label>
+        <p class="waiver-links">Részletek: <a href="#legal" data-waiver-legal="aszf">ÁSZF</a></p>
+        <div class="modal-actions">
+          <button type="button" class="btn-outline" data-waiver-cancel>Mégse</button>
+          <button type="button" class="btn-glow" data-waiver-ok style="margin-top:0;" disabled>${escapeHtml(okLabel || 'Tovább a fizetéshez')}</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const check = overlay.querySelector('[data-waiver-check]');
+    const okBtn = overlay.querySelector('[data-waiver-ok]');
+    const finish = (result) => { overlay.remove(); resolve(result); };
+    check.addEventListener('change', () => { okBtn.disabled = !check.checked; });
+    okBtn.addEventListener('click', () => finish(check.checked));
+    overlay.querySelector('[data-waiver-cancel]').addEventListener('click', () => finish(false));
+    overlay.querySelector('[data-waiver-legal]').addEventListener('click', (e) => { e.preventDefault(); openLegalModal('aszf'); });
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) finish(false); });
+  });
+}
+
 async function buyItem(itemId, buttonEl, giftTo, giftMessage) {
   if (!session || !session.token) {
     showToast('A vásárláshoz jelentkezz be.', true);
     return;
   }
+  if (!(await purchaseWaiverModal(itemId))) return;
   const originalText = buttonEl.textContent;
   buttonEl.disabled = true;
   buttonEl.textContent = 'Átirányítás...';
@@ -5792,8 +5865,8 @@ async function buyItem(itemId, buttonEl, giftTo, giftMessage) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
       body: JSON.stringify(giftTo
-        ? { itemId, returnUrl: window.location.origin + window.location.pathname, giftTo, giftMessage }
-        : { itemId, returnUrl: window.location.origin + window.location.pathname })
+        ? { itemId, returnUrl: window.location.origin + window.location.pathname, giftTo, giftMessage, withdrawalWaiver: true }
+        : { itemId, returnUrl: window.location.origin + window.location.pathname, withdrawalWaiver: true })
     });
     const data = await res.json();
     if (!data.ok || !data.url) {
@@ -5815,6 +5888,7 @@ async function buyItemWithWallet(itemId, buttonEl) {
     showToast('A vásárláshoz jelentkezz be.', true);
     return;
   }
+  if (!(await purchaseWaiverModal(itemId, 'Vásárlás az egyenlegből'))) return;
   const originalText = buttonEl.textContent;
   buttonEl.disabled = true;
   buttonEl.textContent = 'Vásárlás...';
@@ -5822,7 +5896,7 @@ async function buyItemWithWallet(itemId, buttonEl) {
     const res = await fetch(BACKEND_URL + '/api/shop/checkout-with-wallet', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
-      body: JSON.stringify({ itemId })
+      body: JSON.stringify({ itemId, withdrawalWaiver: true })
     });
     const data = await res.json();
     if (!data.ok) {
@@ -5976,6 +6050,9 @@ function loadDiscordWidget() {}
 let lastViewBeforeLegal = 'home';
 
 function openLegal(tab) {
+  // Bejelentkezés előtt (és felugró ablakból) nincs látható nézet, ahová
+  // váltani lehetne - ilyenkor a jogi szöveg külön ablakban nyílik meg.
+  if ($('#appScreen').classList.contains('hidden')) { openLegalModal(tab); return; }
   const activeEl = document.querySelector('.view.active');
   if (activeEl && activeEl.dataset.view !== 'legal') lastViewBeforeLegal = activeEl.dataset.view;
   switchView('legal');
@@ -5983,18 +6060,51 @@ function openLegal(tab) {
 }
 
 function setLegalTab(tab) {
-  $$('.legal-tab').forEach((t) => t.classList.toggle('active', t.dataset.legal === tab));
-  $$('.legal-panel').forEach((p) => p.classList.toggle('active', p.dataset.legalPanel === tab));
+  $$('.view[data-view="legal"] .legal-tab').forEach((t) => t.classList.toggle('active', t.dataset.legal === tab));
+  $$('.view[data-view="legal"] .legal-panel').forEach((p) => p.classList.toggle('active', p.dataset.legalPanel === tab));
 }
 
-$$('.legal-tab').forEach((t) => t.addEventListener('click', () => setLegalTab(t.dataset.legal)));
+function setLegalModalTab(tab) {
+  $$('#legalModalTabs [data-legal-modal-tab]').forEach((t) => t.classList.toggle('active', t.dataset.legalModalTab === tab));
+  $$('#legalModalBody .legal-panel').forEach((p) => p.classList.toggle('active', p.dataset.legalPanel === tab));
+  $('#legalModalBody').scrollTop = 0;
+}
+
+function openLegalModal(tab) {
+  const body = $('#legalModalBody');
+  if (!body.childElementCount) {
+    $$('.view[data-view="legal"] .legal-panel').forEach((p) => body.appendChild(p.cloneNode(true)));
+  }
+  $('#legalModal').classList.remove('hidden');
+  setLegalModalTab(tab || 'aszf');
+}
+
+function closeLegalModal() {
+  $('#legalModal').classList.add('hidden');
+}
+
+$$('.view[data-view="legal"] .legal-tab').forEach((t) => t.addEventListener('click', () => setLegalTab(t.dataset.legal)));
 $$('[data-legal-link]').forEach((a) => {
   a.addEventListener('click', (e) => {
     e.preventDefault();
     openLegal(a.dataset.legalLink);
   });
 });
-$('#linkTerms').addEventListener('click', () => openLegal('aszf'));
+// A regisztrációs jelölőnégyzet szövegében lévő linkek: a kattintás ne
+// pipálja be/ki a négyzetet, csak nyissa meg a dokumentumot.
+document.addEventListener('click', (e) => {
+  const link = e.target.closest('[data-legal-modal]');
+  if (!link) return;
+  e.preventDefault();
+  e.stopPropagation();
+  openLegalModal(link.dataset.legalModal);
+});
+$$('#legalModalTabs [data-legal-modal-tab]').forEach((t) => t.addEventListener('click', () => setLegalModalTab(t.dataset.legalModalTab)));
+$('#legalModalClose').addEventListener('click', closeLegalModal);
+$('#legalModal').addEventListener('click', (e) => { if (e.target.id === 'legalModal') closeLegalModal(); });
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !$('#legalModal').classList.contains('hidden')) closeLegalModal();
+});
 $('#btnBackFromLegal').addEventListener('click', () => switchView(lastViewBeforeLegal));
 
 let analyticsDays = 7;
@@ -12530,4 +12640,643 @@ $('#privacyCosmeticsToggle').addEventListener('change', async (e) => {
   } finally {
     toggle.disabled = false;
   }
+});
+
+// ---------------------------------------------------------------------------
+// Staff tagfelvétel (TGF) - játékos oldal
+// ---------------------------------------------------------------------------
+
+let staffApplyState = null;
+
+function parseSaDate(raw) {
+  const str = String(raw || '');
+  return new Date(str.includes('T') ? str : str.replace(' ', 'T') + 'Z');
+}
+
+function formatSaDate(raw, opts = {}) {
+  const d = parseSaDate(raw);
+  if (Number.isNaN(d.getTime())) return String(raw || '');
+  return d.toLocaleString('hu-HU', {
+    ...(opts.weekday ? { weekday: 'long' } : {}),
+    ...(opts.year ? { year: 'numeric' } : {}),
+    month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+  });
+}
+
+function toDatetimeLocalValue(d) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function datetimeLocalToIso(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+async function saFetch(path, method, body) {
+  const res = await fetch(BACKEND_URL + path, {
+    method: method || 'GET',
+    headers: { Authorization: 'Bearer ' + session.token, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    ...(body ? { body: JSON.stringify(body) } : {})
+  });
+  const data = await res.json().catch(() => ({ ok: false }));
+  if (!data.ok) throw new Error(data.message || 'Nem sikerült, próbáld újra.');
+  return data;
+}
+
+function infoModal(title, html, okLabel, cancelLabel) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal-card">
+        <h3>${escapeHtml(title)}</h3>
+        <div class="sa-modal-body">${html}</div>
+        <div class="modal-actions">
+          ${cancelLabel ? `<button type="button" class="btn-outline" data-info-cancel>${escapeHtml(cancelLabel)}</button>` : ''}
+          <button type="button" class="btn-glow" data-info-ok style="margin-top:0;">${escapeHtml(okLabel || 'Rendben')}</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const finish = (result) => { overlay.remove(); resolve(result); };
+    overlay.querySelector('[data-info-ok]').addEventListener('click', () => finish(true));
+    overlay.querySelector('[data-info-cancel]')?.addEventListener('click', () => finish(false));
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) finish(false); });
+  });
+}
+
+function staffApplyNeedsAction(d) {
+  const a = d && d.application;
+  if (!a) return false;
+  if (a.status === 'accepted') return !a.slotId;
+  return a.status === 'rejected' && !a.decisionSeen;
+}
+
+function syncStaffApplyNav() {
+  const d = staffApplyState;
+  $('#navStaffApply').classList.toggle('hidden', !(d && (d.open || d.application)));
+  $('#navStaffApplyBadge').classList.toggle('hidden', !staffApplyNeedsAction(d));
+}
+
+async function loadStaffApply(opts = {}) {
+  if (!session || !session.token) return;
+  let data = null;
+  try {
+    data = await saFetch('/api/staff-apps/me');
+  } catch {
+    if (!opts.announce) {
+      $('#staffApplyBody').innerHTML = '<div class="card"><p class="sa-muted" style="margin:0;">Most nem sikerült betölteni. Próbáld újra kicsit később.</p></div>';
+    }
+    return;
+  }
+  staffApplyState = data;
+  syncStaffApplyNav();
+  renderStaffApply();
+  if (opts.announce) announceStaffDecision();
+}
+
+function markStaffDecisionSeen() {
+  const a = staffApplyState && staffApplyState.application;
+  if (!a || a.decisionSeen) return;
+  a.decisionSeen = true;
+  saFetch('/api/staff-apps/seen', 'POST', {}).catch(() => {});
+  syncStaffApplyNav();
+}
+
+async function announceStaffDecision() {
+  const a = staffApplyState && staffApplyState.application;
+  if (!a || a.decisionSeen || a.status === 'pending') return;
+  if (a.status === 'accepted') {
+    const go = await infoModal('Továbbjutottál a tagfelvételen',
+      '<p>Átnéztük a jelentkezésed, és behívunk szóbelire. Válassz egy időpontot, ami neked jó.</p>',
+      'Időpont választása', 'Később');
+    markStaffDecisionSeen();
+    if (go) switchView('staffApply');
+    return;
+  }
+  const reason = a.rejectReason ? `<div class="sa-reason"><span>Indoklás</span><p>${escapeHtml(a.rejectReason)}</p></div>` : '';
+  await infoModal('Staff jelentkezés', `<p>Átnéztük a jelentkezésed, de ezúttal nem nyertél felvételt.</p>${reason}<p class="sa-muted">A következő tagfelvételen újra jelentkezhetsz.</p>`, 'Rendben');
+  markStaffDecisionSeen();
+}
+
+function staffDraftKey() {
+  const round = staffApplyState && staffApplyState.round;
+  return `solarcenter.staffApplyDraft.${session.username}.${round ? round.id : 0}`;
+}
+
+function readStaffDraft() {
+  try { return JSON.parse(localStorage.getItem(staffDraftKey()) || '{}') || {}; } catch { return {}; }
+}
+
+function writeStaffDraft(answers) {
+  try { localStorage.setItem(staffDraftKey(), JSON.stringify(answers)); } catch {}
+}
+
+function clearStaffDraft() {
+  try { localStorage.removeItem(staffDraftKey()); } catch {}
+}
+
+function renderStaffApplyForm(d) {
+  const draft = readStaffDraft();
+  const fields = d.questions.map((q) => {
+    const value = escapeHtml(draft[q.id] || '');
+    const control = q.type === 'long'
+      ? `<textarea class="gift-modal-input" name="${q.id}" maxlength="${q.max}" rows="4">${value}</textarea>`
+      : `<input type="text" class="gift-modal-input" name="${q.id}" maxlength="${q.max}" value="${value}"${q.id === 'age' ? ' inputmode="numeric"' : ''} />`;
+    return `<label class="sa-q"><span class="sa-q-label">${escapeHtml(q.label)}</span>${control}</label>`;
+  }).join('');
+  return `
+    <div class="sa-apply-grid">
+      <div class="card sa-form-card">
+        <p class="sa-deadline">Jelentkezési határidő: <b>${escapeHtml(formatSaDate(d.round.closesAt, { weekday: true }))}</b></p>
+        <form id="staffApplyForm" class="sa-form" novalidate>
+          ${fields}
+          <p class="redeem-result" id="staffApplyResult"></p>
+          <button type="submit" class="btn-glow" id="staffApplySubmit">Jelentkezés elküldése</button>
+        </form>
+      </div>
+      <aside class="card sa-req-card">
+        <div class="card-title">Feltételek</div>
+        <ul class="sa-req-list">${d.requirements.map((r) => `<li>${escapeHtml(r)}</li>`).join('')}</ul>
+        <p class="sa-muted">Egy tagfelvételre egyszer jelentkezhetsz, beküldés után a válaszok nem módosíthatók. Amit eddig beírtál, ezen a gépen megmarad, ha közben bezárnád az oldalt.</p>
+      </aside>
+    </div>
+  `;
+}
+
+function bindStaffApplyForm() {
+  const form = $('#staffApplyForm');
+  if (!form) return;
+  const collect = () => {
+    const answers = {};
+    form.querySelectorAll('[name]').forEach((el) => { answers[el.name] = el.value; });
+    return answers;
+  };
+  form.addEventListener('input', () => writeStaffDraft(collect()));
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const result = $('#staffApplyResult');
+    const answers = collect();
+    const missing = staffApplyState.questions.find((q) => !String(answers[q.id] || '').trim());
+    result.classList.add('error');
+    if (missing) {
+      result.textContent = `Töltsd ki ezt is: ${missing.label}`;
+      form.querySelector(`[name="${missing.id}"]`)?.focus();
+      return;
+    }
+    const ok = await confirmModal('Jelentkezés elküldése', 'Beküldés után a válaszaidat már nem tudod módosítani. Elküldöd?', 'Elküldöm');
+    if (!ok) return;
+    const btn = $('#staffApplySubmit');
+    btn.disabled = true;
+    result.textContent = '';
+    try {
+      await saFetch('/api/staff-apps/apply', 'POST', { answers });
+      clearStaffDraft();
+      showToast('Jelentkezés elküldve.');
+      loadStaffApply();
+    } catch (err) {
+      result.textContent = err.message;
+      btn.disabled = false;
+    }
+  });
+}
+
+function renderStaffSlotPicker(d) {
+  const a = d.application;
+  const chosen = d.slots.find((s) => s.id === a.slotId);
+  const locked = !!(chosen && chosen.past);
+  if (!d.slots.length) {
+    return '<p class="sa-muted">Az időpontokat hamarosan megadjuk. Ha felkerültek, itt tudsz választani.</p>';
+  }
+  const options = d.slots.map((s) => {
+    const isChosen = s.id === a.slotId;
+    const disabled = locked || s.past || (s.full && !isChosen);
+    const state = isChosen ? 'A te időpontod' : s.past ? 'Elmúlt' : s.full ? 'Betelt' : 'Szabad';
+    const date = parseSaDate(s.startsAt);
+    return `
+      <button type="button" class="sa-slot-opt${isChosen ? ' chosen' : ''}" data-sa-pick="${s.id}"${disabled ? ' disabled' : ''}>
+        <span class="sa-slot-day">${escapeHtml(date.toLocaleDateString('hu-HU', { weekday: 'long', month: 'long', day: 'numeric' }))}</span>
+        <span class="sa-slot-time">${escapeHtml(date.toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' }))}</span>
+        <span class="sa-slot-state">${state}</span>
+      </button>
+    `;
+  }).join('');
+  return `<div class="sa-slot-pick" id="staffSlotPick">${options}</div>`;
+}
+
+function renderStaffApply() {
+  const d = staffApplyState;
+  const body = $('#staffApplyBody');
+  if (!d || !body) return;
+  const a = d.application;
+
+  if (!a) {
+    if (!d.open) {
+      body.innerHTML = `
+        <div class="card sa-status-card">
+          <div class="sa-status-title">Most nincs tagfelvétel</div>
+          <p class="sa-muted">Ha újra lesz, itt tudsz jelentkezni. Discordon is szólunk róla.</p>
+        </div>`;
+      return;
+    }
+    body.innerHTML = renderStaffApplyForm(d);
+    bindStaffApplyForm();
+    return;
+  }
+
+  const submitted = `Beküldve: ${escapeHtml(formatSaDate(a.createdAt))}`;
+  if (a.status === 'pending') {
+    body.innerHTML = `
+      <div class="card sa-status-card">
+        <span class="sa-chip sa-chip-pending">Elbírálás alatt</span>
+        <div class="sa-status-title">Megkaptuk a jelentkezésed</div>
+        <p class="sa-muted">${submitted}. Ha döntöttünk, itt látod, és Discordon vagy emailben is szólunk.</p>
+      </div>`;
+    return;
+  }
+
+  if (a.status === 'rejected') {
+    const reason = a.rejectReason ? `<div class="sa-reason"><span>Indoklás</span><p>${escapeHtml(a.rejectReason)}</p></div>` : '';
+    body.innerHTML = `
+      <div class="card sa-status-card">
+        <span class="sa-chip sa-chip-rejected">Elutasítva</span>
+        <div class="sa-status-title">Most nem nyertél felvételt</div>
+        ${reason}
+        <p class="sa-muted">${submitted}. A következő tagfelvételen újra jelentkezhetsz.</p>
+      </div>`;
+    if ($('.view.active')?.dataset.view === 'staffApply') markStaffDecisionSeen();
+    return;
+  }
+
+  const chosen = d.slots.find((s) => s.id === a.slotId);
+  const lead = chosen
+    ? `A szóbelid: <b>${escapeHtml(formatSaDate(chosen.startsAt, { weekday: true }))}</b>.${chosen.past ? '' : ' Ha mégsem jó, válassz másikat, amíg el nem kezdődik.'}`
+    : 'Válassz egy időpontot, ami neked jó. Később még módosíthatod, amíg el nem kezdődik.';
+  body.innerHTML = `
+    <div class="card sa-status-card">
+      <span class="sa-chip sa-chip-accepted">Továbbjutottál</span>
+      <div class="sa-status-title">Behívunk szóbelire</div>
+      <p class="sa-lead">${lead}</p>
+      ${renderStaffSlotPicker(d)}
+    </div>`;
+  $('#staffSlotPick')?.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-sa-pick]');
+    if (!btn || btn.disabled || btn.classList.contains('chosen')) return;
+    $$('#staffSlotPick [data-sa-pick]').forEach((b) => { b.disabled = true; });
+    try {
+      await saFetch('/api/staff-apps/slot', 'POST', { slotId: Number(btn.dataset.saPick) });
+      showToast('Időpont mentve.');
+    } catch (err) {
+      showToast(err.message, true);
+    }
+    loadStaffApply();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Staff tagfelvétel (TGF) - admin oldal
+// ---------------------------------------------------------------------------
+
+let saAdminData = null;
+let saAdminFilter = 'all';
+let saAdminRoundId = null;
+let saOpenSlotDraft = [{ time: '', cap: '' }, { time: '', cap: '' }, { time: '', cap: '' }];
+const saExpandedApps = new Set();
+
+const SA_STATUS_LABELS = { pending: 'Függőben', accepted: 'Elfogadva', rejected: 'Elutasítva' };
+
+async function loadStaffAppsAdmin() {
+  const q = saAdminRoundId ? `?round=${saAdminRoundId}` : '';
+  try {
+    saAdminData = await saFetch('/api/admin/staff-apps' + q);
+  } catch (err) {
+    $('#saAdminState').innerHTML = `<p class="sa-muted" style="margin:0;">${escapeHtml(err.message)}</p>`;
+    return;
+  }
+  renderSaAdmin();
+}
+
+function saLatestRound() {
+  return saAdminData && saAdminData.rounds[0] ? saAdminData.rounds[0] : null;
+}
+
+function renderSaAdmin() {
+  renderSaAdminState();
+  renderSaAdminSlots();
+  renderSaAdminApps();
+}
+
+function renderSaAdminState() {
+  const box = $('#saAdminState');
+  const latest = saLatestRound();
+  const nowMin = toDatetimeLocalValue(new Date());
+
+  if (latest && !latest.closedAt) {
+    const statusLine = latest.open
+      ? '<span class="sa-dot on"></span>A jelentkezés nyitva'
+      : '<span class="sa-dot wait"></span>A jelentkezési határidő lejárt, a szóbelik még hátravannak';
+    box.innerHTML = `
+      <div class="sa-state-row">
+        <div>
+          <div class="sa-state-line">${statusLine}</div>
+          <p class="sa-muted" style="margin:6px 0 0;">Határidő: <b>${escapeHtml(formatSaDate(latest.closesAt, { weekday: true }))}</b> · ${latest.applicationCount || 0} jelentkező · bekapcsolta ${escapeHtml(latest.openedBy)}</p>
+        </div>
+        <div class="sa-state-actions">
+          <button type="button" class="btn-outline" id="saDeadlineEditBtn">Határidő módosítása</button>
+          <button type="button" class="btn-outline sa-btn-danger" id="saCloseBtn">Kikapcsolás</button>
+        </div>
+      </div>
+      <div class="sa-inline-form hidden" id="saDeadlineEdit">
+        <input type="datetime-local" id="saDeadlineInput" class="gift-modal-input" min="${nowMin}" value="${toDatetimeLocalValue(parseSaDate(latest.closesAt))}" aria-label="Új határidő" />
+        <button type="button" class="btn-glow" id="saDeadlineSave">Mentés</button>
+      </div>`;
+    $('#saDeadlineEditBtn').addEventListener('click', () => $('#saDeadlineEdit').classList.toggle('hidden'));
+    $('#saDeadlineSave').addEventListener('click', async () => {
+      const closesAt = datetimeLocalToIso($('#saDeadlineInput').value);
+      if (!closesAt) return showToast('Adj meg egy időpontot.', true);
+      try {
+        await saFetch('/api/admin/staff-apps/deadline', 'POST', { closesAt });
+        showToast('Határidő mentve.');
+        loadStaffAppsAdmin();
+      } catch (err) { showToast(err.message, true); }
+    });
+    $('#saCloseBtn').addEventListener('click', async () => {
+      const ok = await confirmModal('Tagfelvétel kikapcsolása', 'Új jelentkezés nem érkezhet. A beküldött jelentkezéseket és a szóbeli időpontokat továbbra is itt kezelheted.', 'Kikapcsolás');
+      if (!ok) return;
+      try {
+        await saFetch('/api/admin/staff-apps/close', 'POST', {});
+        showToast('A tagfelvétel kikapcsolva.');
+        loadStaffAppsAdmin();
+      } catch (err) { showToast(err.message, true); }
+    });
+    return;
+  }
+
+  const prev = latest ? `<p class="sa-muted">Az előző tagfelvétel ${escapeHtml(formatSaDate(latest.closedAt, { year: true }))}-kor zárult.</p>` : '';
+  const rows = saOpenSlotDraft.map((s, i) => `
+    <div class="sa-open-slot">
+      <input type="datetime-local" class="gift-modal-input" data-sa-open-time="${i}" min="${nowMin}" value="${escapeHtml(s.time)}" aria-label="${i + 1}. időpont" />
+      <input type="number" class="gift-modal-input" data-sa-open-cap="${i}" min="1" max="100" placeholder="Férőhely" value="${escapeHtml(s.cap)}" aria-label="Férőhely" />
+      <button type="button" class="sa-icon-btn" data-sa-open-remove="${i}" title="Sor törlése" aria-label="Sor törlése">&times;</button>
+    </div>`).join('');
+  box.innerHTML = `
+    <div class="card-title">Tagfelvétel bekapcsolása</div>
+    <p class="sa-muted" style="margin-top:0;">Most ki van kapcsolva, a játékosok nem tudnak jelentkezni.</p>
+    ${prev}
+    <label class="gift-modal-label" for="saOpenDeadline">Jelentkezési határidő</label>
+    <input type="datetime-local" id="saOpenDeadline" class="gift-modal-input sa-deadline-input" min="${nowMin}" />
+    <div class="sa-sub-title">Szóbeli időpontok</div>
+    <p class="sa-muted" style="margin-top:0;">Az elfogadott jelentkezők ezek közül választanak egyet. Üres férőhely = nincs korlát. Később is hozzáadhatsz vagy törölhetsz.</p>
+    <div class="sa-open-slots" id="saOpenSlots">${rows}</div>
+    <button type="button" class="btn-outline sa-add-row" id="saOpenAddSlot">Újabb időpont</button>
+    <p class="redeem-result" id="saOpenResult"></p>
+    <button type="button" class="btn-glow sa-open-btn" id="saOpenBtn">Bekapcsolás</button>`;
+
+  const deadlineInput = $('#saOpenDeadline');
+  deadlineInput.value = saOpenDeadlineDraft;
+  deadlineInput.addEventListener('input', () => { saOpenDeadlineDraft = deadlineInput.value; });
+  const slotsBox = $('#saOpenSlots');
+  slotsBox.addEventListener('input', (e) => {
+    const t = e.target;
+    if (t.dataset.saOpenTime !== undefined) saOpenSlotDraft[Number(t.dataset.saOpenTime)].time = t.value;
+    if (t.dataset.saOpenCap !== undefined) saOpenSlotDraft[Number(t.dataset.saOpenCap)].cap = t.value;
+  });
+  slotsBox.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-sa-open-remove]');
+    if (!btn) return;
+    saOpenSlotDraft.splice(Number(btn.dataset.saOpenRemove), 1);
+    renderSaAdminState();
+  });
+  $('#saOpenAddSlot').addEventListener('click', () => {
+    saOpenSlotDraft.push({ time: '', cap: '' });
+    renderSaAdminState();
+  });
+  $('#saOpenBtn').addEventListener('click', async () => {
+    const result = $('#saOpenResult');
+    result.classList.add('error');
+    const closesAt = datetimeLocalToIso(deadlineInput.value);
+    if (!closesAt) { result.textContent = 'Add meg a jelentkezési határidőt.'; return; }
+    const slots = saOpenSlotDraft.filter((s) => s.time).map((s) => ({ startsAt: datetimeLocalToIso(s.time), capacity: s.cap === '' ? null : Number(s.cap) }));
+    const early = slots.find((s) => s.startsAt && Date.parse(s.startsAt) < Date.parse(closesAt));
+    if (early) {
+      const go = await confirmModal('Szóbeli a határidő előtt', 'Van olyan szóbeli időpont, ami a jelentkezési határidő előtt van. Biztosan így kapcsolod be?', 'Igen');
+      if (!go) return;
+    }
+    result.textContent = '';
+    try {
+      await saFetch('/api/admin/staff-apps/open', 'POST', { closesAt, slots });
+      saOpenSlotDraft = [{ time: '', cap: '' }, { time: '', cap: '' }, { time: '', cap: '' }];
+      saOpenDeadlineDraft = '';
+      saAdminRoundId = null;
+      showToast('A tagfelvétel bekapcsolva.');
+      loadStaffAppsAdmin();
+    } catch (err) {
+      result.textContent = err.message;
+    }
+  });
+}
+
+let saOpenDeadlineDraft = '';
+
+function renderSaAdminSlots() {
+  const card = $('#saAdminSlotsCard');
+  const round = saAdminData && saAdminData.round;
+  card.classList.toggle('hidden', !round);
+  if (!round) return;
+  const latest = saLatestRound();
+  $('#saAdminSlotAdd').classList.toggle('hidden', !latest || latest.id !== round.id);
+  $('#saSlotNewTime').min = toDatetimeLocalValue(new Date());
+  const list = $('#saAdminSlotList');
+  if (!saAdminData.slots.length) {
+    list.innerHTML = '<p class="sa-muted" style="margin:0 0 12px;">Még nincs időpont.</p>';
+    return;
+  }
+  list.innerHTML = saAdminData.slots.map((s) => {
+    const date = parseSaDate(s.startsAt);
+    const cap = s.capacity ? `${s.bookedCount} / ${s.capacity} fő` : `${s.bookedCount} fő`;
+    const names = s.booked.length
+      ? s.booked.map((u) => `<button type="button" class="sa-name-chip" data-sa-profile="${escapeHtml(u)}">${escapeHtml(u)}</button>`).join('')
+      : '<span class="sa-muted">Még senki</span>';
+    return `
+      <div class="sa-slot-row${s.past ? ' past' : ''}">
+        <div class="sa-slot-when"><b>${escapeHtml(date.toLocaleDateString('hu-HU', { weekday: 'short', month: 'long', day: 'numeric' }))}</b> ${escapeHtml(date.toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' }))}</div>
+        <div class="sa-slot-cap${s.capacity && s.bookedCount >= s.capacity ? ' full' : ''}">${cap}</div>
+        <div class="sa-slot-names">${names}</div>
+        <button type="button" class="sa-icon-btn" data-sa-slot-del="${s.id}" title="Időpont törlése" aria-label="Időpont törlése">&times;</button>
+      </div>`;
+  }).join('');
+}
+
+function renderSaAdminApps() {
+  const card = $('#saAdminAppsCard');
+  const round = saAdminData && saAdminData.round;
+  card.classList.toggle('hidden', !round);
+  if (!round) return;
+
+  const select = $('#saRoundSelect');
+  select.classList.toggle('hidden', saAdminData.rounds.length < 2);
+  select.innerHTML = saAdminData.rounds.map((r) => {
+    const opened = parseSaDate(r.openedAt).toLocaleDateString('hu-HU', { year: 'numeric', month: 'long', day: 'numeric' });
+    return `<option value="${r.id}"${r.id === round.id ? ' selected' : ''}>${escapeHtml(opened)} (${r.applicationCount || 0} jelentkező)</option>`;
+  }).join('');
+
+  const apps = saAdminData.applications;
+  const counts = { all: apps.length, pending: 0, accepted: 0, rejected: 0 };
+  apps.forEach((a) => { counts[a.status] = (counts[a.status] || 0) + 1; });
+  $$('#saAppFilter [data-sa-filter]').forEach((b) => {
+    const key = b.dataset.saFilter;
+    b.classList.toggle('active', key === saAdminFilter);
+    b.textContent = `${key === 'all' ? 'Mind' : SA_STATUS_LABELS[key]} (${counts[key] || 0})`;
+  });
+
+  const list = $('#saAdminAppList');
+  const shown = saAdminFilter === 'all' ? apps : apps.filter((a) => a.status === saAdminFilter);
+  if (!shown.length) {
+    list.innerHTML = `<p class="sa-muted" style="margin:0;">${apps.length ? 'Ebben a szűrésben nincs jelentkezés.' : 'Még nem érkezett jelentkezés.'}</p>`;
+    return;
+  }
+  list.innerHTML = shown.map((a) => {
+    const open = saExpandedApps.has(a.id);
+    let meta = `Beküldve: ${formatSaDate(a.createdAt)}`;
+    if (a.status === 'accepted') meta += a.slotStartsAt ? ` · Szóbeli: ${formatSaDate(a.slotStartsAt)}` : ' · Még nem választott időpontot';
+    const answers = saAdminData.questions.map((q) => `
+      <div class="sa-answer"><dt>${escapeHtml(q.label)}</dt><dd>${escapeHtml((a.answers && a.answers[q.id]) || '-')}</dd></div>`).join('');
+    const reason = a.status === 'rejected' && a.rejectReason ? `<div class="sa-reason"><span>Indoklás</span><p>${escapeHtml(a.rejectReason)}</p></div>` : '';
+    const reviewed = a.reviewedBy ? `<p class="sa-muted sa-reviewed">Döntött: ${escapeHtml(a.reviewedBy)}, ${escapeHtml(formatSaDate(a.reviewedAt))}</p>` : '';
+    const actions = a.status === 'pending'
+      ? `<button type="button" class="btn-glow sa-btn-accept" data-sa-accept="${a.id}">Elfogadás</button>
+         <button type="button" class="btn-outline sa-btn-danger" data-sa-reject="${a.id}">Elutasítás</button>`
+      : `<button type="button" class="btn-outline" data-sa-reset="${a.id}">Vissza függőbe</button>`;
+    return `
+      <div class="sa-app sa-app-${a.status}${open ? ' open' : ''}">
+        <button type="button" class="sa-app-head" data-sa-toggle="${a.id}" aria-expanded="${open}">
+          <span class="sa-app-name">${escapeHtml(a.username)}</span>
+          <span class="sa-chip sa-chip-${a.status}">${SA_STATUS_LABELS[a.status] || a.status}</span>
+          <span class="sa-app-meta">${escapeHtml(meta)}</span>
+          <svg class="sa-app-caret" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="sa-app-body"${open ? '' : ' hidden'}>
+          <dl class="sa-answers">${answers}</dl>
+          ${reason}
+          ${reviewed}
+          <div class="sa-app-actions">
+            ${actions}
+            <button type="button" class="btn-outline" data-sa-profile="${escapeHtml(a.username)}">Profil</button>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function saRejectModal(username) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal-card">
+        <h3>Elutasítás</h3>
+        <p><b>${escapeHtml(username)}</b> értesítést kap, hogy most nem nyert felvételt. Ha írsz indoklást, azt is látni fogja.</p>
+        <label class="gift-modal-label" for="saRejectReason">Indoklás (nem kötelező)</label>
+        <textarea id="saRejectReason" class="gift-modal-input sa-reject-text" maxlength="500" rows="4" placeholder="Pl. kevés a játékidőd a szerveren"></textarea>
+        <div class="modal-actions">
+          <button type="button" class="btn-outline" data-reject-cancel>Mégse</button>
+          <button type="button" class="btn-glow sa-btn-danger-solid" data-reject-ok style="margin-top:0;">Elutasítás</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const text = overlay.querySelector('textarea');
+    const finish = (result) => { overlay.remove(); resolve(result); };
+    overlay.querySelector('[data-reject-cancel]').addEventListener('click', () => finish(null));
+    overlay.querySelector('[data-reject-ok]').addEventListener('click', () => finish(text.value.trim()));
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) finish(null); });
+    setTimeout(() => text.focus(), 30);
+  });
+}
+
+$('#saAppFilter').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-sa-filter]');
+  if (!btn) return;
+  saAdminFilter = btn.dataset.saFilter;
+  renderSaAdminApps();
+});
+
+$('#saRoundSelect').addEventListener('change', (e) => {
+  const id = Number(e.target.value);
+  const latest = saLatestRound();
+  saAdminRoundId = latest && latest.id === id ? null : id;
+  saExpandedApps.clear();
+  loadStaffAppsAdmin();
+});
+
+$('#saSlotAddBtn').addEventListener('click', async () => {
+  const startsAt = datetimeLocalToIso($('#saSlotNewTime').value);
+  if (!startsAt) return showToast('Adj meg egy időpontot.', true);
+  const capRaw = $('#saSlotNewCap').value;
+  try {
+    await saFetch('/api/admin/staff-apps/slots', 'POST', { roundId: saAdminData.round.id, startsAt, capacity: capRaw === '' ? null : Number(capRaw) });
+    $('#saSlotNewTime').value = '';
+    $('#saSlotNewCap').value = '';
+    showToast('Időpont hozzáadva.');
+    loadStaffAppsAdmin();
+  } catch (err) { showToast(err.message, true); }
+});
+
+$('#saAdminSlotList').addEventListener('click', async (e) => {
+  const del = e.target.closest('[data-sa-slot-del]');
+  if (!del) return;
+  const slot = saAdminData.slots.find((s) => s.id === Number(del.dataset.saSlotDel));
+  const who = slot && slot.bookedCount ? ` Akik ezt választották (${slot.bookedCount} fő), újra választhatnak, és a Center szól nekik.` : '';
+  const ok = await confirmModal('Időpont törlése', `Biztosan törlöd ezt az időpontot?${who}`, 'Törlés');
+  if (!ok) return;
+  try {
+    await saFetch(`/api/admin/staff-apps/slots/${del.dataset.saSlotDel}`, 'DELETE');
+    loadStaffAppsAdmin();
+  } catch (err) { showToast(err.message, true); }
+});
+
+document.querySelector('.view[data-view="staffAppsAdmin"]').addEventListener('click', async (e) => {
+  const profile = e.target.closest('[data-sa-profile]');
+  if (profile) { openPlayerProfile(profile.dataset.saProfile); return; }
+
+  const toggle = e.target.closest('[data-sa-toggle]');
+  if (toggle) {
+    const id = Number(toggle.dataset.saToggle);
+    if (saExpandedApps.has(id)) saExpandedApps.delete(id); else saExpandedApps.add(id);
+    const app = toggle.closest('.sa-app');
+    const open = saExpandedApps.has(id);
+    app.classList.toggle('open', open);
+    toggle.setAttribute('aria-expanded', String(open));
+    app.querySelector('.sa-app-body').hidden = !open;
+    return;
+  }
+
+  const accept = e.target.closest('[data-sa-accept]');
+  const reject = e.target.closest('[data-sa-reject]');
+  const reset = e.target.closest('[data-sa-reset]');
+  const btn = accept || reject || reset;
+  if (!btn) return;
+  const id = Number(btn.dataset.saAccept || btn.dataset.saReject || btn.dataset.saReset);
+  const app = saAdminData.applications.find((a) => a.id === id);
+  if (!app) return;
+  try {
+    if (accept) {
+      const ok = await confirmModal('Elfogadás', `<b>${escapeHtml(app.username)}</b> továbbjut, és értesítést kap, hogy válasszon szóbeli időpontot.`, 'Elfogadás');
+      if (!ok) return;
+      await saFetch(`/api/admin/staff-apps/${id}/accept`, 'POST', {});
+      showToast(`${app.username} elfogadva.`);
+    } else if (reject) {
+      const reason = await saRejectModal(app.username);
+      if (reason === null) return;
+      await saFetch(`/api/admin/staff-apps/${id}/reject`, 'POST', { reason });
+      showToast(`${app.username} elutasítva.`);
+    } else {
+      const ok = await confirmModal('Vissza függőbe', `<b>${escapeHtml(app.username)}</b> jelentkezése újra függőben lesz, a választott időpontja törlődik. Erről nem kap értesítést.`, 'Vissza függőbe');
+      if (!ok) return;
+      await saFetch(`/api/admin/staff-apps/${id}/reset`, 'POST', {});
+    }
+    loadStaffAppsAdmin();
+  } catch (err) { showToast(err.message, true); }
 });
