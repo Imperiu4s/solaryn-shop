@@ -28,6 +28,31 @@
   --btn-ink: #1a1206;
 }
 
+/* Solaryn világos: a sötét alaptéma párja - meleg törtfehér háttér, fehér
+   panelek, és a jó olvashatóság miatt sötétebb arany. A design.css végén lévő
+   "világos téma" blokk igazítja a sötét háttérre szabott fix értékeket. */
+:root[data-theme="solaryn-light"] {
+  color-scheme: light;
+  --bg: #f5f3ee;
+  --bg-2: #ece8e0;
+  --panel: #ffffff;
+  --panel-2: #f5f2eb;
+  --line: #e1dcd1;
+  --text: #1d1a15;
+  --text-dim: #5a5548;
+  --text-faint: #8a8374;
+  --gold: #c48700;
+  --gold-2: #e07a0e;
+  --gold-glow: rgba(214, 140, 0, 0.28);
+  --orange: #e0601b;
+  --orange-2: #c9460f;
+  --orange-glow: rgba(224, 96, 27, 0.28);
+  --danger: #d23b3b;
+  --discord: #5865f2;
+  --success: #1c9650;
+  --btn-ink: #1f1404;
+}
+
 :root[data-theme="ice"] {
   --bg: #070d13;
   --bg-2: #0c151f;

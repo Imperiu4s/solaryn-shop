@@ -517,3 +517,23 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
 })();
+
+// Az Alt+0151 kombinációval beírható hosszú gondolatjelet ("—") nem engedjük a
+// mezőkben: gépeléskor és beillesztéskor is azonnal sima kötőjelre cseréljük.
+// A figyelő a dokumentumon, capture fázisban fut, így minden más kód már a
+// megtisztított szöveget kapja meg.
+(function () {
+  'use strict';
+  const EM_DASH = /—/g;
+  document.addEventListener('input', (e) => {
+    const el = e.target;
+    if (!el || typeof el.value !== 'string' || !el.value.includes('—')) return;
+    let start = null;
+    let end = null;
+    try { start = el.selectionStart; end = el.selectionEnd; } catch { /* pl. email/number mező */ }
+    el.value = el.value.replace(EM_DASH, '-');
+    if (start !== null) {
+      try { el.setSelectionRange(start, end); } catch { /* nem támogatott mezőtípus */ }
+    }
+  }, true);
+})();

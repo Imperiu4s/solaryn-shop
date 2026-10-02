@@ -866,7 +866,14 @@ body::before {
 .pt-gridline { position: relative; height: 0; border-top: 1px solid var(--stroke); }
 .pt-gridline:last-child { border-top-color: var(--stroke-3); }
 .pt-gridline span { position: absolute; left: 0; top: -7px; font-size: 10px; line-height: 1; color: var(--text-faint); font-variant-numeric: tabular-nums; }
-.pt-bars { position: absolute; inset: 0 0 0 30px; display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.pt-bars { position: absolute; inset: 0 0 0 30px; display: grid; grid-template-columns: repeat(var(--pt-count, 7), 1fr); gap: 6px; }
+.playtime-chart.is-month .pt-bars { gap: 2px; }
+.playtime-chart.is-month .pt-bar { width: 78%; border-radius: 3px 3px 0 0; animation-delay: calc(var(--i, 0) * 14ms); }
+.playtime-chart.is-month .pt-day { font-size: 10px; white-space: nowrap; }
+.pt-range-switch { display: inline-flex; gap: 2px; margin-top: 10px; padding: 3px; border-radius: 999px; background: rgba(0, 0, 0, .28); border: 1px solid var(--stroke); }
+.pt-range-switch button { padding: 4px 12px; border: 1px solid transparent; border-radius: 999px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; color: var(--text-dim); background: transparent; transition: background .2s, color .2s; }
+.pt-range-switch button:hover { color: var(--text); }
+.pt-range-switch button.active { color: var(--gold); background: var(--brand-soft); border-color: var(--brand-line); }
 .pt-col { position: relative; display: flex; flex-direction: column; align-items: center; min-width: 0; outline: none; cursor: default; }
 .pt-track { position: relative; flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
 .pt-bar {
@@ -1129,3 +1136,43 @@ body::before {
 
 .transfer-note-optional { text-transform: none; letter-spacing: 0; color: var(--text-faint); }
 .transfer-note-counter { margin: 6px 4px 0; font-size: 11.5px; color: var(--text-faint); }
+
+/* ==========================================================================
+   Solaryn világos téma - a fenti, sötét háttérre szabott fix értékek párja
+   (fehér-átlátszó keretek, fekete mezők, erős árnyékok).
+   ========================================================================== */
+:root[data-theme="solaryn-light"] {
+  --stroke: rgba(40, 30, 10, .09);
+  --stroke-2: rgba(40, 30, 10, .14);
+  --stroke-3: rgba(40, 30, 10, .22);
+  --field: #ffffff;
+  --glass: color-mix(in srgb, var(--panel) 90%, transparent);
+  --glass-strong: color-mix(in srgb, var(--panel) 97%, transparent);
+  --brand-soft: color-mix(in srgb, var(--gold) 12%, transparent);
+  --brand-line: color-mix(in srgb, var(--gold) 34%, transparent);
+  --shadow-soft: 0 18px 40px -30px rgba(70, 50, 15, .35);
+  --shadow-pop: 0 24px 50px -26px rgba(70, 50, 15, .4);
+}
+[data-theme="solaryn-light"] body::before { opacity: .7; }
+[data-theme="solaryn-light"] .particle-canvas { opacity: .35; }
+[data-theme="solaryn-light"] .app-content :is(input, select, textarea),
+[data-theme="solaryn-light"] .modal-card :is(input, select, textarea),
+[data-theme="solaryn-light"] .auth-form :is(input, select) { border-color: var(--stroke-2); background: #fff; color: var(--text); }
+[data-theme="solaryn-light"] .app-content :is(input, select, textarea):focus,
+[data-theme="solaryn-light"] .modal-card :is(input, select, textarea):focus,
+[data-theme="solaryn-light"] .auth-form :is(input, select):focus { background: #fff; }
+[data-theme="solaryn-light"] :is(.skin-drop, .dm-tabs, .nr-seg, .nr-filter, .auth-tabs, .rank-duration-switch,
+  .pt-range-switch, .rank-perk-filter) { background: rgba(40, 30, 10, .045); }
+[data-theme="solaryn-light"] :is(#homeSkinCanvas, #playerProfileSkinCanvas, #skinPreview3d) {
+  background: radial-gradient(circle at 50% 36%, color-mix(in srgb, var(--gold) 16%, transparent), transparent 62%), #efebe3;
+}
+[data-theme="solaryn-light"] :is(.btn-outline, .pill, .topbar-theme, .topbar-user, .mobile-menu-btn, .legal-tab, .perms-mode-tab) {
+  background: rgba(40, 30, 10, .035);
+}
+[data-theme="solaryn-light"] :is(.btn-outline, .pill):hover:not(:disabled) { background: rgba(40, 30, 10, .07); }
+[data-theme="solaryn-light"] .app-nav-item:hover { background: rgba(40, 30, 10, .05); }
+[data-theme="solaryn-light"] .btn-glow:disabled, [data-theme="solaryn-light"] .btn-buy:disabled { background: rgba(40, 30, 10, .06); }
+[data-theme="solaryn-light"] .modal-overlay { background: rgba(30, 24, 14, .45); }
+[data-theme="solaryn-light"] .rank-corner, [data-theme="solaryn-light"] .rank-row-perm th { background: var(--panel); }
+[data-theme="solaryn-light"] .app-sidebar { background: color-mix(in srgb, var(--panel) 85%, transparent); }
+.discount-target-hint { margin: 6px 2px 0; font-size: 12px; line-height: 1.5; color: var(--text-faint); }

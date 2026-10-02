@@ -1,7 +1,8 @@
 (function () {
   const STORAGE_KEY = 'solarcenter.theme';
   const THEMES = [
-    { key: 'solaryn', label: 'Solaryn (alap)' },
+    { key: 'solaryn', label: 'Solaryn sötét' },
+    { key: 'solaryn-light', label: 'Solaryn világos' },
     { key: 'ice', label: 'Jégkék' },
     { key: 'crimson', label: 'Bíbor' },
     { key: 'emerald', label: 'Smaragd' },

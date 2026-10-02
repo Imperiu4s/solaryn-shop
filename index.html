@@ -35,10 +35,10 @@
   <link rel="dns-prefetch" href="https://api.overclockgame.hu" />
   <link rel="preload" as="image" href="assets/solaryn-icon.png" />
 
-  <script src="theme.js?v=20261001b"></script>
-  <link rel="stylesheet" href="style.css?v=20261001b" />
-  <link rel="stylesheet" href="ui.css?v=20261001b" />
-  <link rel="stylesheet" href="design.css?v=20261001b" />
+  <script src="theme.js?v=20261002b"></script>
+  <link rel="stylesheet" href="style.css?v=20261002b" />
+  <link rel="stylesheet" href="ui.css?v=20261002b" />
+  <link rel="stylesheet" href="design.css?v=20261002b" />
 
   <script type="application/ld+json">
   {
@@ -481,8 +481,12 @@
             <div class="card playtime-week-card" id="homePlaytimeCard">
               <div class="playtime-week-head">
                 <div>
-                  <div class="card-title">Heti online időd</div>
+                  <div class="card-title" id="homePlaytimeTitle">Heti online időd</div>
                   <div class="playtime-week-sub" id="homePlaytimeRange">Az elmúlt 7 nap</div>
+                  <div class="pt-range-switch" role="radiogroup" aria-label="Időszak">
+                    <button type="button" class="active" data-pt-range="week" role="radio" aria-checked="true">Heti</button>
+                    <button type="button" data-pt-range="month" role="radio" aria-checked="false">Havi</button>
+                  </div>
                 </div>
                 <div class="playtime-week-total">
                   <span class="playtime-week-total-value" id="homePlaytimeTotal">0 óra</span>
@@ -491,7 +495,7 @@
               </div>
               <div class="playtime-chart" id="homePlaytimeChart" role="img" aria-label="Heti online idő oszlopdiagram"></div>
               <p class="playtime-week-note hidden" id="homePlaytimeEmpty">Ezen a héten még nem játszottál - amint felcsatlakozol a szerverre, itt látod majd a napi bontást.</p>
-              <table class="sr-only" id="homePlaytimeTable"><caption>Napi online idő az elmúlt 7 napban</caption><thead><tr><th scope="col">Nap</th><th scope="col">Online idő</th></tr></thead><tbody></tbody></table>
+              <table class="sr-only" id="homePlaytimeTable"><caption>Napi online idő</caption><thead><tr><th scope="col">Nap</th><th scope="col">Online idő</th></tr></thead><tbody></tbody></table>
             </div>
 
             <div class="card discord-card">
@@ -2070,6 +2074,11 @@
               <label class="gift-modal-label">Csomag</label>
               <select id="discountScopeItemSelect" class="gift-modal-input"></select>
             </div>
+            <label class="gift-modal-label">Kinek szól?</label>
+            <select id="discountTargetRankSelect" class="gift-modal-input">
+              <option value="">Mindenkinek</option>
+            </select>
+            <p class="discount-target-hint">Ha egy rangot választasz (pl. Moderátor), az akció csak azoknak jár, akiknek a szerveren ez a rangjuk.</p>
             <label class="gift-modal-label">Lejárat (nem kötelező)</label>
             <input type="date" id="discountExpiresInput" class="gift-modal-input" />
             <label class="check-row" style="margin-top:10px;">
@@ -3007,9 +3016,9 @@
     </div>
   </div>
 
-  <script src="skin3d.js?v=20261001b" defer></script>
-  <script src="app.js?v=20261001b" defer></script>
-  <script src="ui.js?v=20261001b" defer></script>
-  <script src="design.js?v=20261001b" defer></script>
+  <script src="skin3d.js?v=20261002b" defer></script>
+  <script src="app.js?v=20261002b" defer></script>
+  <script src="ui.js?v=20261002b" defer></script>
+  <script src="design.js?v=20261002b" defer></script>
 </body>
 </html>

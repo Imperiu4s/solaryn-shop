@@ -4608,6 +4608,25 @@ document.addEventListener('click', (e) => {
 
 let discountEditingId = null;
 let discountsAdminItems = [];
+let discountRankOptions = [];
+
+function rankDisplayName(rank) {
+  const s = String(rank || '');
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+// "Kinek szól?" lista: a szerveren előforduló rangok (játékosszámmal), plusz az
+// éppen szerkesztett akció rangja, ha az már nincs senkin.
+function populateDiscountTargetRankSelect(selected) {
+  const sel = $('#discountTargetRankSelect');
+  const ranks = discountRankOptions.map((r) => r.rank);
+  if (selected && !ranks.includes(selected)) ranks.unshift(selected);
+  sel.innerHTML = '<option value="">Mindenkinek</option>' + ranks.map((rank) => {
+    const info = discountRankOptions.find((r) => r.rank === rank);
+    return `<option value="${escapeHtml(rank)}">Csak: ${escapeHtml(rankDisplayName(rank))}${info ? ` (${info.players} játékos)` : ''}</option>`;
+  }).join('');
+  sel.value = selected || '';
+}
 
 function resetDiscountForm() {
   discountEditingId = null;
@@ -4622,6 +4641,7 @@ function resetDiscountForm() {
   $('#discountFormResult').className = 'redeem-result';
   $('#discountSaveBtn').textContent = 'Mentés';
   populateDiscountScopeItemSelect();
+  populateDiscountTargetRankSelect('');
 }
 
 function populateDiscountScopeItemSelect(selectedId) {
@@ -4656,7 +4676,7 @@ function renderDiscountsAdminList() {
     <div class="badges-admin-item">
       <div class="badges-admin-item-info">
         <div class="badges-admin-item-name">${escapeHtml(d.name)} - ${d.percent}%</div>
-        <div class="badges-admin-item-meta">${discountScopeLabel(d)}${d.expires_at ? ' - lejár: ' + formatLedgerDate(d.expires_at) : ''} - <span class="${statusClass}">${statusText}</span></div>
+        <div class="badges-admin-item-meta">${discountScopeLabel(d)}${d.target_rank ? ` - csak ${escapeHtml(rankDisplayName(d.target_rank))} rangúaknak` : ''}${d.expires_at ? ' - lejár: ' + formatLedgerDate(d.expires_at) : ''} - <span class="${statusClass}">${statusText}</span></div>
       </div>
       <div class="badges-admin-item-actions">
         <button type="button" class="news-edit-btn" data-discount-id="${d.id}">Szerkesztés</button>
@@ -4675,9 +4695,11 @@ async function loadDiscountsAdmin() {
     });
     const data = await res.json();
     discountsAdminItems = data.ok && Array.isArray(data.discounts) ? data.discounts : [];
+    discountRankOptions = data.ok && Array.isArray(data.rankOptions) ? data.rankOptions : [];
   } catch {
     discountsAdminItems = [];
   }
+  if (!discountEditingId) populateDiscountTargetRankSelect('');
   renderDiscountsAdminList();
 }
 
@@ -4691,6 +4713,7 @@ $('#discountSaveBtn').addEventListener('click', async () => {
   const scopeItemId = scope === 'item' ? $('#discountScopeItemSelect').value : undefined;
   const active = $('#discountActiveCheckbox').checked;
   const expiresAt = $('#discountExpiresInput').value || undefined;
+  const targetRank = $('#discountTargetRankSelect').value;
 
   if (!name) { resultEl.textContent = 'Adj meg egy nevet.'; resultEl.className = 'redeem-result error'; return; }
   if (!Number.isInteger(percent) || percent < 1 || percent > 100) {
@@ -4709,7 +4732,7 @@ $('#discountSaveBtn').addEventListener('click', async () => {
     const res = await fetch(url, {
       method: discountEditingId ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
-      body: JSON.stringify({ name, percent, scope, scopeItemId, active, expiresAt })
+      body: JSON.stringify({ name, percent, scope, scopeItemId, active, expiresAt, targetRank })
     });
     const data = await res.json();
     if (!data.ok) {
@@ -4738,6 +4761,7 @@ document.addEventListener('click', (e) => {
     $('#discountScopeSelect').value = item.scope;
     $('#discountScopeItemWrap').hidden = item.scope !== 'item';
     populateDiscountScopeItemSelect(item.scope_item_id);
+    populateDiscountTargetRankSelect(item.target_rank || '');
     $('#discountExpiresInput').value = item.expires_at ? item.expires_at.slice(0, 10) : '';
     $('#discountActiveCheckbox').checked = item.active === 1;
     $('#discountSaveBtn').textContent = 'Frissítés';
@@ -5625,6 +5649,9 @@ function renderPlaytimeChart(payload) {
     $('#homePlaytimeRange').textContent = `${first} - ${last}`;
   }
 
+  const many = parsed.length > 10;
+  chart.classList.toggle('is-month', many);
+  chart.style.setProperty('--pt-count', String(Math.max(1, parsed.length)));
   chart.innerHTML = `
     <div class="pt-grid" aria-hidden="true">
       ${ticks.slice().reverse().map((v) => `<div class="pt-gridline"><span>${tickLabel(v)}</span></div>`).join('')}
@@ -5638,7 +5665,9 @@ function renderPlaytimeChart(payload) {
              data-tip="${escapeHtml(long)}" data-value="${escapeHtml(formatDuration(d.seconds))}"
              aria-label="${escapeHtml(long)}: ${escapeHtml(formatDuration(d.seconds))}">
           <div class="pt-track"><div class="pt-bar${d.seconds > 0 ? '' : ' is-zero'}" style="--h:${pct.toFixed(2)}%"></div></div>
-          <span class="pt-day">${d.isToday ? 'Ma' : WEEKDAY_SHORT[d.date.getDay()]}</span>
+          <span class="pt-day">${many
+            ? (d.isToday ? 'Ma' : ((parsed.length - 1 - i) % 5 === 0 ? d.date.getDate() + '.' : ''))
+            : (d.isToday ? 'Ma' : WEEKDAY_SHORT[d.date.getDay()])}</span>
         </div>`;
       }).join('')}
     </div>
@@ -5687,21 +5716,46 @@ function bindPlaytimeTooltip() {
   chart.addEventListener('focusout', hide);
 }
 
+// A főoldali játékidő-diagram heti (7 nap) vagy havi (30 nap) nézetben.
+const PLAYTIME_RANGE_TEXT = {
+  week: { title: 'Heti online időd', empty: 'Ezen a héten még nem játszottál - amint felcsatlakozol a szerverre, itt látod majd a napi bontást.', error: 'A heti bontás most nem tölthető be - próbáld újra később.' },
+  month: { title: 'Havi online időd', empty: 'Az elmúlt 30 napban még nem játszottál a szerveren.', error: 'A havi bontás most nem tölthető be - próbáld újra később.' }
+};
+let playtimeRange = 'week';
+let playtimeLoadSeq = 0;
+
 async function loadHomePlaytimeWeek() {
   const card = $('#homePlaytimeCard');
   if (!card || !session || !session.token) return;
   bindPlaytimeTooltip();
+  const range = playtimeRange;
+  const text = PLAYTIME_RANGE_TEXT[range];
+  const seq = ++playtimeLoadSeq;
+  $('#homePlaytimeTitle').textContent = text.title;
+  $$('[data-pt-range]').forEach((b) => {
+    const on = b.dataset.ptRange === range;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-checked', on ? 'true' : 'false');
+  });
   try {
-    const res = await fetch(BACKEND_URL + '/api/me/playtime/week', { headers: { Authorization: 'Bearer ' + session.token } });
+    const res = await fetch(BACKEND_URL + '/api/me/playtime/' + range, { headers: { Authorization: 'Bearer ' + session.token } });
     const data = await res.json();
     if (!data.ok) throw new Error('bad');
-    $('#homePlaytimeEmpty').textContent = 'Ezen a héten még nem játszottál - amint felcsatlakozol a szerverre, itt látod majd a napi bontást.';
+    if (seq !== playtimeLoadSeq) return;
+    $('#homePlaytimeEmpty').textContent = text.empty;
     renderPlaytimeChart(data);
   } catch {
+    if (seq !== playtimeLoadSeq) return;
     renderPlaytimeChart({ days: [], today: '' });
-    $('#homePlaytimeEmpty').textContent = 'A heti bontás most nem tölthető be - próbáld újra később.';
+    $('#homePlaytimeEmpty').textContent = text.error;
   }
 }
+
+$$('[data-pt-range]').forEach((btn) => btn.addEventListener('click', () => {
+  if (btn.dataset.ptRange === playtimeRange) return;
+  playtimeRange = btn.dataset.ptRange;
+  loadHomePlaytimeWeek();
+}));
 
 function showToast(message, isError) {
   const el = document.createElement('div');
