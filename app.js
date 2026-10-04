@@ -1331,6 +1331,8 @@ async function enterApp(meData) {
   refreshTradeBadge();
 
   loadStaffApply({ announce: true });
+
+  refreshShopLockBanner();
 }
 
 async function refreshPpBalance() {
@@ -1824,6 +1826,9 @@ function switchView(view) {
   if (view === 'rankPerksAdmin') loadRankPerksAdmin();
   if (view === 'staffApply') loadStaffApply();
   if (view === 'staffAppsAdmin') loadStaffAppsAdmin();
+  if (view === 'registeredPlayers') loadRegisteredPlayers();
+  if (view === 'shopLock') loadShopLockAdmin();
+  if (isShopView(view)) refreshShopLockBanner();
   if (view === 'discounts') { resetDiscountForm(); loadDiscountsAdmin(); }
   if (view === 'coupons') { resetCouponForm(); loadCouponsAdmin(); }
   if (view === 'creatorCodes') { resetCreatorCodeForm(); loadCreatorCodesAdmin(); }
@@ -2087,6 +2092,24 @@ async function uploadCapeFile(file) {
   }
 }
 
+function couponRedeemLine(r) {
+  if (r.rewardType === 'cosmetic') {
+    const until = r.expiresAt
+      ? ` (${new Date(r.expiresAt.replace(' ', 'T')).toLocaleDateString('hu-HU')}-ig)`
+      : ' (örökre)';
+    return `Kiegészítő: ${r.cosmeticName}${until}. A Kiegészítők fülön veheted fel.`;
+  }
+  if (r.rewardType === 'rank') {
+    const until = r.rankDurationDays ? `${r.rankDurationDays} napra` : 'véglegesen';
+    return `${r.rankLabel} rang ${until}, a következő szerverre lépéskor kapod meg.`;
+  }
+  if (r.rewardType === 'badge') return `${r.badgeName} jelvény, a profilodon látható.`;
+  if (r.rewardType === 'casino_spin') return `+${r.rewardAmount} casino pörgetés.`;
+  if (r.rewardType === 'discount') return `${r.rewardAmount}% egyedi kedvezmény${r.discountDays ? ` ${r.discountDays} napig` : ''}, vásárláskor automatikusan érvényesül.`;
+  if (r.rewardType === 'wallet') return `+${formatHuf(r.rewardAmount)} az egyenlegeden.`;
+  return `+${formatPp(r.rewardAmount)}, a következő szerverre lépéskor íródik jóvá.`;
+}
+
 $('#redeemSubmit').addEventListener('click', async () => {
   const val = $('#redeemInput').value.trim();
   const resultEl = $('#redeemResult');
@@ -2107,27 +2130,10 @@ $('#redeemSubmit').addEventListener('click', async () => {
       resultEl.textContent = data.message || 'Ismeretlen kód.';
       return;
     }
-    if (data.rewardType === 'cosmetic') {
-      const until = data.expiresAt
-        ? ` Érvényes: ${new Date(data.expiresAt.replace(' ', 'T')).toLocaleDateString('hu-HU')}-ig.`
-        : ' Örökre a tiéd.';
-      resultEl.textContent = `Sikeres beváltás! Megkaptad ezt a kiegészítőt: ${data.cosmeticName}.${until} A Kiegészítők fülön veheted fel.`;
-    } else if (data.rewardType === 'rank') {
-      const until = data.rankDurationDays ? ` ${data.rankDurationDays} napra` : ' véglegesen';
-      resultEl.textContent = `Sikeres beváltás! A(z) ${data.rankLabel} rangot${until} a következő szerverre lépéskor kapod meg.`;
-    } else if (data.rewardType === 'badge') {
-      resultEl.textContent = `Sikeres beváltás! Megkaptad a(z) ${data.badgeName} jelvényt - a profilodon látható.`;
-    } else if (data.rewardType === 'casino_spin') {
-      resultEl.textContent = `Sikeres beváltás! +${data.rewardAmount} casino pörgetés jóváírva.`;
-    } else if (data.rewardType === 'discount') {
-      const until = data.discountDays ? ` ${data.discountDays} napig` : '';
-      resultEl.textContent = `Sikeres beváltás! ${data.rewardAmount}% egyedi kedvezményt kaptál${until} - vásárláskor automatikusan érvényesül.`;
-    } else if (data.rewardType === 'wallet') {
-      resultEl.textContent = `Sikeres beváltás! +${formatHuf(data.rewardAmount)} jóváírva az egyenlegeden.`;
-      refreshPpBalance();
-    } else {
-      resultEl.textContent = `Sikeres beváltás! +${formatPp(data.rewardAmount)} PP a következő szerverre lépéskor íródik jóvá.`;
-    }
+    const lines = (data.results || [data]).map(couponRedeemLine);
+    const skipped = (data.skipped || []).map((m) => `Nem kaptad meg: ${m}`);
+    resultEl.innerHTML = `Sikeres beváltás!<br>${[...lines, ...skipped].map(escapeHtml).join('<br>')}`;
+    if ((data.results || [data]).some((r) => r.rewardType === 'wallet')) refreshPpBalance();
     $('#redeemInput').value = '';
   } catch {
     resultEl.classList.add('error');
@@ -3933,6 +3939,9 @@ const ADMIN_ACTION_LABELS = {
   'staffApps.slotDelete': 'Szóbeli időpont törlése', 'staffApps.accept': 'Staff jelentkezés elfogadása',
   'staffApps.reject': 'Staff jelentkezés elutasítása', 'staffApps.reset': 'Staff jelentkezés visszaállítása',
   'staffApps.form': 'Tagfelvételi kérdőív módosítása',
+  'shop.lock': 'Vásárlások leállítása', 'shop.unlock': 'Vásárlások újraindítása',
+  'staffApps.typeCreate': 'Új tagfelvétel-típus', 'staffApps.typeRename': 'Tagfelvétel átnevezése',
+  'staffApps.typeDelete': 'Tagfelvétel törlése',
   'player.securityReset': '2FA / biztonsági kód visszaállítása',
   'playtime.milestone': 'Játékidő mérföldkő jutalom'
 };
@@ -4827,95 +4836,129 @@ document.addEventListener('click', (e) => {
 
 let couponEditingId = null;
 let couponsAdminItems = [];
+// A szerkesztett kupon jutalmai; mindegyik { rewardType, rewardAmount, ... }.
+let couponRewardsDraft = [];
 
-function syncCouponRewardTypeUI() {
-  const type = $('#couponRewardTypeSelect').value;
-  const isCosmetic = type === 'cosmetic';
-  const isRank = type === 'rank';
-  const isBadge = type === 'badge';
-  const isDiscount = type === 'discount';
-  $('#couponCosmeticRow').classList.toggle('hidden', !isCosmetic);
-  $('#couponRankRow')?.classList.toggle('hidden', !isRank);
-  $('#couponBadgeRow')?.classList.toggle('hidden', !isBadge);
-  $('#couponDiscountRow')?.classList.toggle('hidden', !isDiscount);
-  const amount = $('#couponRewardAmountInput');
-  const amountLabel = $('#couponRewardAmountLabel');
-  amount.classList.toggle('hidden', isRank || isBadge);
-  amountLabel.classList.toggle('hidden', isRank || isBadge);
-  amount.removeAttribute('max');
-  if (isCosmetic) {
-    amountLabel.textContent = 'Érvényesség napokban (0 = örökre)';
-    amount.min = '0';
-    amount.placeholder = 'Pl. 30 vagy 0';
-  } else if (isDiscount) {
-    amountLabel.textContent = 'Kedvezmény (%)';
-    amount.min = '1';
-    amount.max = '100';
-    amount.placeholder = 'Pl. 20';
-  } else if (type === 'casino_spin') {
-    amountLabel.textContent = 'Pörgetések száma';
-    amount.min = '1';
-    amount.placeholder = 'Pl. 3';
-  } else {
-    amountLabel.textContent = 'Jutalom mennyisége';
-    amount.min = '1';
-    amount.placeholder = 'Pl. 500';
-  }
-}
+const COUPON_REWARD_TYPES = [
+  ['pp', 'PrémiumPont'], ['wallet', 'Egyenleg (Ft)'], ['cosmetic', 'Kiegészítő'], ['rank', 'Rang'],
+  ['casino_spin', 'Casino pörgetés'], ['badge', 'Jelvény'], ['discount', 'Kedvezmény (%)']
+];
+const COUPON_MAX_REWARDS = 10;
 
-async function populateCouponBadgeSelect(selectedId) {
-  const sel = $('#couponBadgeSelect');
-  if (!sel) return;
-  allBadgesCache = [];
-  const all = await ensureAllBadgesLoaded();
-  sel.innerHTML = all.length
-    ? all.map((b) => `<option value="${b.id}">${escapeHtml(b.name)}</option>`).join('')
-    : '<option value="">- nincs létrehozott jelvény -</option>';
-  if (selectedId) sel.value = String(selectedId);
-}
-
-function populateCouponRewardRankSelect(selectedId) {
-  const sel = $('#couponRewardRankSelect');
-  if (!sel) return;
-  sel.innerHTML = shopRanks.length
-    ? shopRanks.map((r) => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.label)}</option>`).join('')
-    : '<option value="">- nincs elérhető rang -</option>';
-  if (selectedId) sel.value = String(selectedId);
+function couponNewReward(type = 'pp') {
+  return { rewardType: type, rewardAmount: '', rewardCosmeticId: null, rewardRank: null, rewardDurationDays: '', rewardBadgeId: null };
 }
 
 let couponCosmeticOptions = [];
-async function populateCouponCosmeticSelect(selectedId) {
-  const sel = $('#couponCosmeticSelect');
-  if (!sel) return;
+async function ensureCouponOptionsLoaded() {
   if (!couponCosmeticOptions.length) {
     try {
-      const res = await fetch(BACKEND_URL + '/api/admin/cosmetics', {
-        headers: { Authorization: 'Bearer ' + session.token }
-      });
+      const res = await fetch(BACKEND_URL + '/api/admin/cosmetics', { headers: { Authorization: 'Bearer ' + session.token } });
       const data = await res.json();
       couponCosmeticOptions = data.ok && Array.isArray(data.cosmetics) ? data.cosmetics : [];
     } catch {
       couponCosmeticOptions = [];
     }
   }
-  sel.innerHTML = couponCosmeticOptions.length
-    ? couponCosmeticOptions.map((c) => `<option value="${c.id}">${escapeHtml(c.name)} (${escapeHtml(c.slot || '')})</option>`).join('')
-    : '<option value="">- nincs elérhető kiegészítő -</option>';
-  if (selectedId) sel.value = String(selectedId);
+  allBadgesCache = [];
+  await ensureAllBadgesLoaded();
 }
 
-function resetCouponForm() {
+function couponSelectHtml(field, options, selected, emptyText) {
+  if (!options.length) return `<select class="gift-modal-input" data-cr="${field}"><option value="">${emptyText}</option></select>`;
+  return `<select class="gift-modal-input" data-cr="${field}">${options.map(([v, label]) => `<option value="${escapeHtml(String(v))}"${String(v) === String(selected ?? '') ? ' selected' : ''}>${escapeHtml(label)}</option>`).join('')}</select>`;
+}
+
+function couponRewardRowHtml(r, i) {
+  const typeSelect = couponSelectHtml('rewardType', COUPON_REWARD_TYPES, r.rewardType, '');
+  const amount = (label, placeholder, min, max) => `
+    <label class="coupon-reward-field"><span>${label}</span>
+      <input type="number" class="gift-modal-input" data-cr="rewardAmount" value="${escapeHtml(String(r.rewardAmount ?? ''))}" placeholder="${placeholder}" min="${min}"${max ? ` max="${max}"` : ''} step="1" />
+    </label>`;
+  const days = (label, placeholder) => `
+    <label class="coupon-reward-field"><span>${label}</span>
+      <input type="number" class="gift-modal-input" data-cr="rewardDurationDays" value="${escapeHtml(String(r.rewardDurationDays ?? ''))}" placeholder="${placeholder}" min="1" max="3650" step="1" />
+    </label>`;
+  let fields = '';
+  if (r.rewardType === 'pp') fields = amount('Mennyiség (PP)', 'Pl. 500', 1);
+  else if (r.rewardType === 'wallet') fields = amount('Összeg (Ft)', 'Pl. 1000', 1);
+  else if (r.rewardType === 'casino_spin') fields = amount('Pörgetések száma', 'Pl. 3', 1);
+  else if (r.rewardType === 'cosmetic') {
+    const opts = couponCosmeticOptions.map((c) => [c.id, `${c.name} (${c.slot || ''})`]);
+    fields = `<label class="coupon-reward-field coupon-reward-wide"><span>Kiegészítő</span>${couponSelectHtml('rewardCosmeticId', opts, r.rewardCosmeticId, '- nincs elérhető kiegészítő -')}</label>`
+      + amount('Érvényesség (nap, 0 = örökre)', 'Pl. 30 vagy 0', 0);
+  } else if (r.rewardType === 'rank') {
+    const opts = shopRanks.map((rk) => [rk.id, rk.label]);
+    fields = `<label class="coupon-reward-field coupon-reward-wide"><span>Rang</span>${couponSelectHtml('rewardRank', opts, r.rewardRank, '- nincs elérhető rang -')}</label>`
+      + days('Időtartam (nap, üresen végleges)', 'Pl. 30');
+  } else if (r.rewardType === 'badge') {
+    const opts = (allBadgesCache || []).map((b) => [b.id, b.name]);
+    fields = `<label class="coupon-reward-field coupon-reward-wide"><span>Jelvény</span>${couponSelectHtml('rewardBadgeId', opts, r.rewardBadgeId, '- nincs létrehozott jelvény -')}</label>`;
+  } else if (r.rewardType === 'discount') {
+    fields = amount('Kedvezmény (%)', 'Pl. 20', 1, 100) + days('Érvényesség (nap, üresen nem jár le)', 'Pl. 7');
+  }
+  return `
+    <div class="coupon-reward" data-cr-idx="${i}">
+      <div class="coupon-reward-top">
+        <span class="coupon-reward-num">${i + 1}.</span>
+        ${typeSelect}
+        <button type="button" class="sa-icon-btn" data-cr-remove title="Jutalom törlése" aria-label="Jutalom törlése"${couponRewardsDraft.length < 2 ? ' disabled' : ''}>&times;</button>
+      </div>
+      <div class="coupon-reward-fields">${fields}</div>
+    </div>`;
+}
+
+// A legördülő listák első elemét alapértelmezettnek vesszük, ha még nincs választás.
+function couponFillSelectDefaults() {
+  for (const r of couponRewardsDraft) {
+    if (r.rewardType === 'cosmetic' && !r.rewardCosmeticId && couponCosmeticOptions[0]) r.rewardCosmeticId = couponCosmeticOptions[0].id;
+    if (r.rewardType === 'rank' && !r.rewardRank && shopRanks[0]) r.rewardRank = shopRanks[0].id;
+    if (r.rewardType === 'badge' && !r.rewardBadgeId && allBadgesCache && allBadgesCache[0]) r.rewardBadgeId = allBadgesCache[0].id;
+  }
+}
+
+function renderCouponRewards() {
+  couponFillSelectDefaults();
+  $('#couponRewardsList').innerHTML = couponRewardsDraft.map(couponRewardRowHtml).join('');
+  $('#couponAddRewardBtn').disabled = couponRewardsDraft.length >= COUPON_MAX_REWARDS;
+}
+
+$('#couponRewardsList').addEventListener('input', (e) => {
+  const field = e.target.dataset.cr;
+  const row = e.target.closest('[data-cr-idx]');
+  if (!field || !row || field === 'rewardType') return;
+  couponRewardsDraft[Number(row.dataset.crIdx)][field] = e.target.value;
+});
+$('#couponRewardsList').addEventListener('change', (e) => {
+  const field = e.target.dataset.cr;
+  const row = e.target.closest('[data-cr-idx]');
+  if (!field || !row) return;
+  const idx = Number(row.dataset.crIdx);
+  if (field === 'rewardType') {
+    couponRewardsDraft[idx] = couponNewReward(e.target.value);
+    renderCouponRewards();
+  } else {
+    couponRewardsDraft[idx][field] = e.target.value;
+  }
+});
+$('#couponRewardsList').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-cr-remove]');
+  if (!btn || btn.disabled) return;
+  couponRewardsDraft.splice(Number(btn.closest('[data-cr-idx]').dataset.crIdx), 1);
+  renderCouponRewards();
+});
+$('#couponAddRewardBtn').addEventListener('click', () => {
+  if (couponRewardsDraft.length >= COUPON_MAX_REWARDS) return;
+  couponRewardsDraft.push(couponNewReward());
+  renderCouponRewards();
+});
+
+async function resetCouponForm() {
   couponEditingId = null;
   $('#couponFormTitle').textContent = 'Új kupon';
   $('#couponCodeInput').value = '';
-  $('#couponRewardTypeSelect').value = 'pp';
-  syncCouponRewardTypeUI();
-  populateCouponCosmeticSelect();
-  $('#couponRewardAmountInput').value = '';
-  populateCouponRewardRankSelect();
-  populateCouponBadgeSelect();
-  $('#couponRankDurationInput').value = '';
-  $('#couponDiscountDaysInput').value = '';
+  couponRewardsDraft = [couponNewReward()];
+  renderCouponRewards();
   $('#couponMaxUsesInput').value = '';
   $('#couponStartsInput').value = '';
   $('#couponExpiresInput').value = '';
@@ -4924,6 +4967,8 @@ function resetCouponForm() {
   $('#couponFormResult').className = 'redeem-result';
   $('#couponSaveBtn').textContent = 'Mentés';
   populateCouponRequiredRankSelect();
+  await ensureCouponOptionsLoaded();
+  if (!couponEditingId) renderCouponRewards();
 }
 
 function populateCouponRequiredRankSelect(selectedId) {
@@ -4933,27 +4978,27 @@ function populateCouponRequiredRankSelect(selectedId) {
   sel.value = selectedId || '';
 }
 
-function couponRewardLabel(c) {
-  if (c.reward_type === 'cosmetic') {
-    const name = c.rewardCosmetic ? c.rewardCosmetic.name : 'törölt kiegészítő';
-    const days = Number(c.reward_amount) || 0;
+function couponRewardItemLabel(r) {
+  if (r.rewardType === 'cosmetic') {
+    const name = r.cosmetic ? r.cosmetic.name : 'törölt kiegészítő';
+    const days = Number(r.rewardAmount) || 0;
     return `${escapeHtml(name)} (${days > 0 ? days + ' nap' : 'örökre'})`;
   }
-  if (c.reward_type === 'rank') {
-    const days = Number(c.reward_duration_days) || 0;
-    return `${escapeHtml(c.rewardRankLabel || c.reward_rank)} rang (${days > 0 ? days + ' nap' : 'végleges'})`;
+  if (r.rewardType === 'rank') {
+    const days = Number(r.rewardDurationDays) || 0;
+    return `${escapeHtml(r.rankLabel || r.rewardRank)} rang (${days > 0 ? days + ' nap' : 'végleges'})`;
   }
-  if (c.reward_type === 'badge') {
-    return `${escapeHtml(c.rewardBadgeName || 'törölt jelvény')} jelvény`;
+  if (r.rewardType === 'badge') return `${escapeHtml(r.badgeName || 'törölt jelvény')} jelvény`;
+  if (r.rewardType === 'casino_spin') return `${Number(r.rewardAmount) || 0} casino pörgetés`;
+  if (r.rewardType === 'discount') {
+    const days = Number(r.rewardDurationDays) || 0;
+    return `${Number(r.rewardAmount) || 0}% kedvezmény${days > 0 ? ` (${days} napig)` : ''}`;
   }
-  if (c.reward_type === 'casino_spin') {
-    return `${Number(c.reward_amount) || 0} casino pörgetés`;
-  }
-  if (c.reward_type === 'discount') {
-    const days = Number(c.reward_duration_days) || 0;
-    return `${Number(c.reward_amount) || 0}% kedvezmény${days > 0 ? ` (${days} napig)` : ''}`;
-  }
-  return c.reward_type === 'wallet' ? `${formatHuf(c.reward_amount)} egyenleg` : `${formatPp(c.reward_amount)} PP`;
+  return r.rewardType === 'wallet' ? `${formatHuf(r.rewardAmount)} egyenleg` : `${formatPp(r.rewardAmount)}`;
+}
+
+function couponRewardLabel(c) {
+  return (c.rewards || []).map(couponRewardItemLabel).join(' + ');
 }
 
 function couponRequiredRankLabel(requiredRank) {
@@ -5003,18 +5048,47 @@ async function loadCouponsAdmin() {
 }
 
 $('#couponDiscardBtn').addEventListener('click', resetCouponForm);
-$('#couponRewardTypeSelect')?.addEventListener('change', () => {
-  syncCouponRewardTypeUI();
-  if ($('#couponRewardTypeSelect').value === 'cosmetic') populateCouponCosmeticSelect();
-  if ($('#couponRewardTypeSelect').value === 'rank') populateCouponRewardRankSelect();
-  if ($('#couponRewardTypeSelect').value === 'badge') populateCouponBadgeSelect();
-});
+
+// Kliensoldali ellenőrzés jutalmanként; a hibaüzenet elé odaírjuk, melyik jutalomról van szó.
+function couponCheckRewards() {
+  const out = [];
+  for (const [i, r] of couponRewardsDraft.entries()) {
+    const prefix = couponRewardsDraft.length > 1 ? `${i + 1}. jutalom: ` : '';
+    const amount = Number(r.rewardAmount);
+    const days = String(r.rewardDurationDays ?? '').trim();
+    const item = { rewardType: r.rewardType };
+    if (['pp', 'wallet', 'casino_spin', 'discount', 'cosmetic'].includes(r.rewardType)) {
+      const min = r.rewardType === 'cosmetic' ? 0 : 1;
+      if (String(r.rewardAmount).trim() === '' || !Number.isInteger(amount) || amount < min) {
+        return { error: prefix + (r.rewardType === 'cosmetic' ? 'az érvényesség csak nemnegatív egész nap lehet (0 = örökre).' : 'adj meg egy érvényes mennyiséget.') };
+      }
+      if (r.rewardType === 'discount' && amount > 100) return { error: prefix + 'a kedvezmény legfeljebb 100% lehet.' };
+      item.rewardAmount = amount;
+    }
+    if (r.rewardType === 'cosmetic') {
+      item.rewardCosmeticId = Number(r.rewardCosmeticId);
+      if (!Number.isInteger(item.rewardCosmeticId)) return { error: prefix + 'válassz ki egy kiegészítőt.' };
+    }
+    if (r.rewardType === 'badge') {
+      item.rewardBadgeId = Number(r.rewardBadgeId);
+      if (!Number.isInteger(item.rewardBadgeId)) return { error: prefix + 'válassz ki egy jelvényt.' };
+    }
+    if (r.rewardType === 'rank') {
+      item.rewardRank = r.rewardRank;
+      if (!item.rewardRank) return { error: prefix + 'válassz ki egy rangot.' };
+    }
+    if (r.rewardType === 'rank' || r.rewardType === 'discount') {
+      if (days && (!Number.isInteger(Number(days)) || Number(days) < 1)) return { error: prefix + 'a napok száma csak pozitív egész lehet (vagy hagyd üresen).' };
+      item.rewardDurationDays = days ? Number(days) : undefined;
+    }
+    out.push(item);
+  }
+  return { rewards: out };
+}
 
 $('#couponSaveBtn').addEventListener('click', async () => {
   const resultEl = $('#couponFormResult');
   const code = $('#couponCodeInput').value.trim();
-  const rewardType = $('#couponRewardTypeSelect').value;
-  const rewardAmount = Number($('#couponRewardAmountInput').value);
   const maxUsesRaw = $('#couponMaxUsesInput').value;
   const maxUses = maxUsesRaw ? Number(maxUsesRaw) : undefined;
   const requiredRank = $('#couponRequiredRankSelect').value || undefined;
@@ -5023,61 +5097,15 @@ $('#couponSaveBtn').addEventListener('click', async () => {
   const active = $('#couponActiveCheckbox').checked;
 
   if (!code) { resultEl.textContent = 'Adj meg egy kódot.'; resultEl.className = 'redeem-result error'; return; }
-  if (rewardType !== 'rank' && rewardType !== 'badge') {
-    const minAmount = rewardType === 'cosmetic' ? 0 : 1;
-    if (!Number.isInteger(rewardAmount) || rewardAmount < minAmount) {
-      resultEl.textContent = rewardType === 'cosmetic'
-        ? 'Az érvényesség csak nemnegatív egész nap lehet (0 = örökre).'
-        : 'Adj meg egy érvényes jutalom-mennyiséget.';
-      resultEl.className = 'redeem-result error';
-      return;
-    }
-    if (rewardType === 'discount' && rewardAmount > 100) {
-      resultEl.textContent = 'A kedvezmény legfeljebb 100% lehet.';
-      resultEl.className = 'redeem-result error';
-      return;
-    }
-  }
-  const rewardBadgeId = rewardType === 'badge' ? Number($('#couponBadgeSelect').value) : undefined;
-  if (rewardType === 'badge' && !Number.isInteger(rewardBadgeId)) {
-    resultEl.textContent = 'Válassz ki egy jelvényt.';
-    resultEl.className = 'redeem-result error';
-    return;
-  }
-  const discountDaysRaw = $('#couponDiscountDaysInput').value.trim();
-  const discountDays = rewardType === 'discount' && discountDaysRaw ? Number(discountDaysRaw) : undefined;
-  if (rewardType === 'discount' && discountDaysRaw && (!Number.isInteger(discountDays) || discountDays < 1)) {
-    resultEl.textContent = 'A kedvezmény érvényessége csak pozitív egész nap lehet (vagy hagyd üresen, ha nem jár le).';
-    resultEl.className = 'redeem-result error';
-    return;
-  }
-  const rewardCosmeticId = rewardType === 'cosmetic' ? Number($('#couponCosmeticSelect').value) : undefined;
-  if (rewardType === 'cosmetic' && !Number.isInteger(rewardCosmeticId)) {
-    resultEl.textContent = 'Válassz ki egy kiegészítőt.';
-    resultEl.className = 'redeem-result error';
-    return;
-  }
-
-  const rewardRank = rewardType === 'rank' ? $('#couponRewardRankSelect').value : undefined;
-  if (rewardType === 'rank' && !rewardRank) {
-    resultEl.textContent = 'Válassz ki egy rangot.';
-    resultEl.className = 'redeem-result error';
-    return;
-  }
-  const rankDurationRaw = $('#couponRankDurationInput').value.trim();
-  const rewardDurationDays = rewardType === 'rank' && rankDurationRaw ? Number(rankDurationRaw) : undefined;
-  if (rewardType === 'rank' && rankDurationRaw && (!Number.isInteger(rewardDurationDays) || rewardDurationDays < 1)) {
-    resultEl.textContent = 'A rang időtartama csak pozitív egész nap lehet (vagy hagyd üresen a véglegeshez).';
-    resultEl.className = 'redeem-result error';
-    return;
-  }
+  const checked = couponCheckRewards();
+  if (checked.error) { resultEl.textContent = checked.error; resultEl.className = 'redeem-result error'; return; }
 
   try {
     const url = couponEditingId ? BACKEND_URL + '/api/admin/coupons/' + couponEditingId : BACKEND_URL + '/api/admin/coupons';
     const res = await fetch(url, {
       method: couponEditingId ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
-      body: JSON.stringify({ code, rewardType, rewardAmount, rewardCosmeticId, rewardRank, rewardBadgeId, rewardDurationDays: rewardType === 'discount' ? discountDays : rewardDurationDays, maxUses, requiredRank, startsAt, expiresAt, active })
+      body: JSON.stringify({ code, rewards: checked.rewards, maxUses, requiredRank, startsAt, expiresAt, active })
     });
     const data = await res.json();
     if (!data.ok) {
@@ -5094,22 +5122,25 @@ $('#couponSaveBtn').addEventListener('click', async () => {
   }
 });
 
-document.addEventListener('click', (e) => {
+document.addEventListener('click', async (e) => {
   const editBtn = e.target.closest('.news-edit-btn[data-coupon-id]');
   if (editBtn) {
     const item = couponsAdminItems.find((c) => String(c.id) === editBtn.dataset.couponId);
     if (!item) return;
+    await ensureCouponOptionsLoaded();
     couponEditingId = item.id;
     $('#couponFormTitle').textContent = 'Kupon szerkesztése';
     $('#couponCodeInput').value = item.code;
-    $('#couponRewardTypeSelect').value = item.reward_type;
-    syncCouponRewardTypeUI();
-    if (item.reward_type === 'cosmetic') populateCouponCosmeticSelect(item.reward_cosmetic_id);
-    populateCouponRewardRankSelect(item.reward_rank);
-    $('#couponRankDurationInput').value = item.reward_type === 'rank' ? (item.reward_duration_days || '') : '';
-    $('#couponDiscountDaysInput').value = item.reward_type === 'discount' ? (item.reward_duration_days || '') : '';
-    if (item.reward_type === 'badge') populateCouponBadgeSelect(item.reward_badge_id);
-    $('#couponRewardAmountInput').value = item.reward_amount;
+    couponRewardsDraft = (item.rewards || []).map((r) => ({
+      rewardType: r.rewardType,
+      rewardAmount: r.rewardAmount ?? '',
+      rewardCosmeticId: r.rewardCosmeticId ?? null,
+      rewardRank: r.rewardRank ?? null,
+      rewardDurationDays: r.rewardDurationDays ?? '',
+      rewardBadgeId: r.rewardBadgeId ?? null
+    }));
+    if (!couponRewardsDraft.length) couponRewardsDraft = [couponNewReward()];
+    renderCouponRewards();
     $('#couponMaxUsesInput').value = item.max_uses !== null ? item.max_uses : '';
     populateCouponRequiredRankSelect(item.required_rank);
     $('#couponStartsInput').value = item.starts_at ? item.starts_at.slice(0, 10) : '';
@@ -5117,6 +5148,7 @@ document.addEventListener('click', (e) => {
     $('#couponActiveCheckbox').checked = item.active === 1;
     $('#couponSaveBtn').textContent = 'Frissítés';
     $('#couponFormResult').textContent = '';
+    $('#couponFormTitle').scrollIntoView({ behavior: 'smooth', block: 'start' });
     return;
   }
   const deleteBtn = e.target.closest('.news-delete-btn[data-coupon-id]');
@@ -12708,6 +12740,14 @@ function infoModal(title, html, okLabel, cancelLabel) {
   });
 }
 
+// A játékos egyszerre több tagfelvételt is láthat (Staff, Építész...): minden
+// "entry" egy típus legutóbbi köre a játékos jelentkezésével együtt.
+let staffSelectedTypeId = null;
+
+function staffEntries() {
+  return (staffApplyState && staffApplyState.entries) || [];
+}
+
 function staffApplyNeedsAction(d) {
   const a = d && d.application;
   if (!a) return false;
@@ -12716,9 +12756,17 @@ function staffApplyNeedsAction(d) {
 }
 
 function syncStaffApplyNav() {
-  const d = staffApplyState;
-  $('#navStaffApply').classList.toggle('hidden', !(d && (d.open || d.application)));
-  $('#navStaffApplyBadge').classList.toggle('hidden', !staffApplyNeedsAction(d));
+  const entries = staffEntries();
+  $('#navStaffApply').classList.toggle('hidden', !entries.length);
+  $('#navStaffApplyBadge').classList.toggle('hidden', !entries.some(staffApplyNeedsAction));
+}
+
+function currentStaffEntry() {
+  const entries = staffEntries();
+  return entries.find((e) => e.type.id === staffSelectedTypeId)
+    || entries.find(staffApplyNeedsAction)
+    || entries[0]
+    || null;
 }
 
 async function loadStaffApply(opts = {}) {
@@ -12738,28 +12786,34 @@ async function loadStaffApply(opts = {}) {
   if (opts.announce) announceStaffDecision();
 }
 
-function markStaffDecisionSeen() {
-  const a = staffApplyState && staffApplyState.application;
+function markStaffDecisionSeen(d) {
+  const a = d && d.application;
   if (!a || a.decisionSeen) return;
   a.decisionSeen = true;
-  saFetch('/api/staff-apps/seen', 'POST', {}).catch(() => {});
+  saFetch('/api/staff-apps/seen', 'POST', { roundId: d.round.id }).catch(() => {});
   syncStaffApplyNav();
 }
 
 async function announceStaffDecision() {
-  const a = staffApplyState && staffApplyState.application;
-  if (!a || a.decisionSeen || a.status === 'pending') return;
-  if (a.status === 'accepted') {
-    const go = await infoModal('Továbbjutottál a tagfelvételen',
-      '<p>Átnéztük a jelentkezésed, és behívunk szóbelire. Válassz egy időpontot, ami neked jó.</p>',
-      'Időpont választása', 'Később');
-    markStaffDecisionSeen();
-    if (go) switchView('staffApply');
-    return;
+  for (const d of staffEntries()) {
+    const a = d.application;
+    if (!a || a.decisionSeen || a.status === 'pending') continue;
+    if (a.status === 'accepted') {
+      const go = await infoModal(`Továbbjutottál: ${d.type.name}`,
+        '<p>Átnéztük a jelentkezésed, és behívunk szóbelire. Válassz egy időpontot, ami neked jó.</p>',
+        'Időpont választása', 'Később');
+      markStaffDecisionSeen(d);
+      if (go) {
+        staffSelectedTypeId = d.type.id;
+        switchView('staffApply');
+        return;
+      }
+      continue;
+    }
+    const reason = a.rejectReason ? `<div class="sa-reason"><span>Indoklás</span><p>${escapeHtml(a.rejectReason)}</p></div>` : '';
+    await infoModal(`${d.type.name} jelentkezés`, `<p>Átnéztük a jelentkezésed, de ezúttal nem nyertél felvételt.</p>${reason}<p class="sa-muted">A következő tagfelvételen újra jelentkezhetsz.</p>`, 'Rendben');
+    markStaffDecisionSeen(d);
   }
-  const reason = a.rejectReason ? `<div class="sa-reason"><span>Indoklás</span><p>${escapeHtml(a.rejectReason)}</p></div>` : '';
-  await infoModal('Staff jelentkezés', `<p>Átnéztük a jelentkezésed, de ezúttal nem nyertél felvételt.</p>${reason}<p class="sa-muted">A következő tagfelvételen újra jelentkezhetsz.</p>`, 'Rendben');
-  markStaffDecisionSeen();
 }
 
 // --- Kérdőív (Forms-szerű űrlap) - a játékos oldalon és az admin előnézetben ---
@@ -12978,6 +13032,7 @@ function mountStaffForm(container, form, opts = {}) {
     for (const file of chosen) {
       if (file.size > 5 * 1024 * 1024) { showToast(`${file.name}: legfeljebb 5 MB lehet.`, true); continue; }
       const fd = new FormData();
+      if (opts.roundId) fd.append('roundId', String(opts.roundId));
       fd.append('file', file);
       const box = root.querySelector(`[data-sf-thumbs="${id}"]`);
       box?.insertAdjacentHTML('beforeend', '<div class="sf-thumb sf-thumb-loading"><span class="sf-thumb-wait"></span></div>');
@@ -13067,17 +13122,17 @@ function mountStaffForm(container, form, opts = {}) {
   renderStep();
 }
 
-function staffDraftKey() {
-  const round = staffApplyState && staffApplyState.round;
-  return `solarcenter.staffApplyDraft2.${session.username}.${round ? round.id : 0}`;
+function staffDraftKey(d) {
+  return `solarcenter.staffApplyDraft2.${session.username}.${d.round.id}`;
 }
 
 function mountStaffApplyForm(body, d) {
   mountStaffForm(body, d.form, {
     deadline: d.round.closesAt,
-    draftKey: staffDraftKey(),
+    draftKey: staffDraftKey(d),
+    roundId: d.round.id,
     onSubmit: async (answers) => {
-      await saFetch('/api/staff-apps/apply', 'POST', { answers });
+      await saFetch('/api/staff-apps/apply', 'POST', { roundId: d.round.id, answers });
       showToast('Jelentkezés elküldve.');
       loadStaffApply();
     }
@@ -13107,21 +13162,49 @@ function renderStaffSlotPicker(d) {
   return `<div class="sa-slot-pick" id="staffSlotPick">${options}</div>`;
 }
 
-function renderStaffApply() {
-  const d = staffApplyState;
-  const body = $('#staffApplyBody');
-  if (!d || !body) return;
+function staffEntryStatus(d) {
   const a = d.application;
+  if (!a) return d.open ? 'Nyitva' : 'Lezárva';
+  if (a.status === 'pending') return 'Elbírálás alatt';
+  if (a.status === 'rejected') return 'Elutasítva';
+  return a.slotId ? 'Szóbeli egyeztetve' : 'Válassz időpontot';
+}
+
+function renderStaffApply() {
+  const body = $('#staffApplyBody');
+  if (!body || !staffApplyState) return;
+  const entries = staffEntries();
+  if (!entries.length) {
+    body.innerHTML = `
+      <div class="card sa-status-card">
+        <div class="sa-status-title">Most nincs tagfelvétel</div>
+        <p class="sa-muted">Ha újra lesz, itt tudsz jelentkezni. Discordon is szólunk róla.</p>
+      </div>`;
+    return;
+  }
+  const d = currentStaffEntry();
+  staffSelectedTypeId = d.type.id;
+  const tabs = entries.length > 1 ? `
+    <div class="sa-type-tabs" role="tablist" aria-label="Tagfelvételek">
+      ${entries.map((e) => `
+        <button type="button" class="sa-type-tab${e === d ? ' active' : ''}" data-staff-type="${e.type.id}" role="tab" aria-selected="${e === d}">
+          <span class="sa-type-tab-name">${escapeHtml(e.type.name)}${staffApplyNeedsAction(e) ? '<i class="sa-type-dot" aria-hidden="true"></i>' : ''}</span>
+          <span class="sa-type-tab-state">${staffEntryStatus(e)}</span>
+        </button>`).join('')}
+    </div>` : '';
+  body.innerHTML = `${tabs}<div id="staffApplyEntry"></div>`;
+  body.querySelectorAll('[data-staff-type]').forEach((btn) => btn.addEventListener('click', () => {
+    staffSelectedTypeId = Number(btn.dataset.staffType);
+    renderStaffApply();
+  }));
+  renderStaffEntry($('#staffApplyEntry'), d);
+}
+
+function renderStaffEntry(body, d) {
+  const a = d.application;
+  const typeLine = `<div class="sa-type-name">${escapeHtml(d.type.name)} tagfelvétel</div>`;
 
   if (!a) {
-    if (!d.open) {
-      body.innerHTML = `
-        <div class="card sa-status-card">
-          <div class="sa-status-title">Most nincs tagfelvétel</div>
-          <p class="sa-muted">Ha újra lesz, itt tudsz jelentkezni. Discordon is szólunk róla.</p>
-        </div>`;
-      return;
-    }
     mountStaffApplyForm(body, d);
     return;
   }
@@ -13130,6 +13213,7 @@ function renderStaffApply() {
   if (a.status === 'pending') {
     body.innerHTML = `
       <div class="card sa-status-card">
+        ${typeLine}
         <span class="sa-chip sa-chip-pending">Elbírálás alatt</span>
         <div class="sa-status-title">Megkaptuk a jelentkezésed</div>
         <p class="sa-muted">${submitted}. Ha döntöttünk, itt látod, és Discordon vagy emailben is szólunk.</p>
@@ -13141,12 +13225,13 @@ function renderStaffApply() {
     const reason = a.rejectReason ? `<div class="sa-reason"><span>Indoklás</span><p>${escapeHtml(a.rejectReason)}</p></div>` : '';
     body.innerHTML = `
       <div class="card sa-status-card">
+        ${typeLine}
         <span class="sa-chip sa-chip-rejected">Elutasítva</span>
         <div class="sa-status-title">Most nem nyertél felvételt</div>
         ${reason}
         <p class="sa-muted">${submitted}. A következő tagfelvételen újra jelentkezhetsz.</p>
       </div>`;
-    if ($('.view.active')?.dataset.view === 'staffApply') markStaffDecisionSeen();
+    if ($('.view.active')?.dataset.view === 'staffApply') markStaffDecisionSeen(d);
     return;
   }
 
@@ -13156,6 +13241,7 @@ function renderStaffApply() {
     : 'Válassz egy időpontot, ami neked jó. Később még módosíthatod, amíg el nem kezdődik.';
   body.innerHTML = `
     <div class="card sa-status-card">
+      ${typeLine}
       <span class="sa-chip sa-chip-accepted">Továbbjutottál</span>
       <div class="sa-status-title">Behívunk szóbelire</div>
       <p class="sa-lead">${lead}</p>
@@ -13166,7 +13252,7 @@ function renderStaffApply() {
     if (!btn || btn.disabled || btn.classList.contains('chosen')) return;
     $$('#staffSlotPick [data-sa-pick]').forEach((b) => { b.disabled = true; });
     try {
-      await saFetch('/api/staff-apps/slot', 'POST', { slotId: Number(btn.dataset.saPick) });
+      await saFetch('/api/staff-apps/slot', 'POST', { roundId: d.round.id, slotId: Number(btn.dataset.saPick) });
       showToast('Időpont mentve.');
     } catch (err) {
       showToast(err.message, true);
@@ -13182,21 +13268,105 @@ function renderStaffApply() {
 let saAdminData = null;
 let saAdminFilter = 'all';
 let saAdminRoundId = null;
+let saAdminTypeId = null;
 let saOpenSlotDraft = [{ time: '', cap: '' }, { time: '', cap: '' }, { time: '', cap: '' }];
 const saExpandedApps = new Set();
 
 const SA_STATUS_LABELS = { pending: 'Függőben', accepted: 'Elfogadva', rejected: 'Elutasítva' };
 
 async function loadStaffAppsAdmin() {
-  const q = saAdminRoundId ? `?round=${saAdminRoundId}` : '';
+  const params = new URLSearchParams();
+  if (saAdminTypeId) params.set('type', saAdminTypeId);
+  if (saAdminRoundId) params.set('round', saAdminRoundId);
   try {
-    saAdminData = await saFetch('/api/admin/staff-apps' + q);
+    saAdminData = await saFetch('/api/admin/staff-apps?' + params.toString());
   } catch (err) {
     $('#saAdminState').innerHTML = `<p class="sa-muted" style="margin:0;">${escapeHtml(err.message)}</p>`;
     return;
   }
+  saAdminTypeId = saAdminData.type ? saAdminData.type.id : null;
+  renderSaTypeBar();
   renderSaAdmin();
+  if (!$('[data-sa-pane="form"]').hidden) loadSfEditor();
 }
+
+// Tagfelvétel-típusok (Staff, Építész...) - a kiválasztotthoz tartozik minden
+// alatta lévő beállítás és a kérdőív is.
+function renderSaTypeBar() {
+  const bar = $('#saTypeBar');
+  const types = saAdminData.types || [];
+  const chips = types.map((t) => {
+    const state = t.open ? 'Nyitva' : t.running ? 'Szóbelik' : 'Kikapcsolva';
+    const pending = t.pending ? `<span class="sa-typechip-count" title="Elbírálásra vár">${t.pending}</span>` : '';
+    return `
+      <button type="button" class="sa-typechip${t.id === saAdminTypeId ? ' active' : ''}" data-sa-type="${t.id}">
+        <span class="sa-dot ${t.open ? 'on' : t.running ? 'wait' : 'off'}"></span>
+        <span class="sa-typechip-name">${escapeHtml(t.name)}</span>
+        <span class="sa-typechip-state">${state}</span>
+        ${pending}
+      </button>`;
+  }).join('');
+  bar.innerHTML = `
+    <div class="sa-typechips">${chips}
+      <button type="button" class="sa-typechip sa-typechip-add" data-sa-type-add>+ Új tagfelvétel</button>
+    </div>
+    <div class="sa-type-actions">
+      <button type="button" class="sa-link-btn" data-sa-type-rename>Átnevezés</button>
+      <button type="button" class="sa-link-btn sa-link-danger" data-sa-type-delete${types.length < 2 ? ' disabled title="Legalább egy tagfelvételnek maradnia kell."' : ''}>Törlés</button>
+    </div>`;
+}
+
+async function saSwitchType(typeId) {
+  if (typeId === saAdminTypeId) return;
+  if (sfDirty && !(await confirmModal('Nem mentett változások', 'A kérdőívben nem mentett változások vannak. Elveted őket?', 'Elvetés'))) return;
+  sfSetDirty(false);
+  sfDraft = null;
+  saAdminTypeId = typeId;
+  saAdminRoundId = null;
+  saExpandedApps.clear();
+  saOpenSlotDraft = [{ time: '', cap: '' }, { time: '', cap: '' }, { time: '', cap: '' }];
+  saOpenDeadlineDraft = '';
+  loadStaffAppsAdmin();
+}
+
+$('#saTypeBar').addEventListener('click', async (e) => {
+  const chip = e.target.closest('[data-sa-type]');
+  if (chip) { saSwitchType(Number(chip.dataset.saType)); return; }
+  if (e.target.closest('[data-sa-type-add]')) {
+    const name = await textPromptModal('Új tagfelvétel', 'Mi legyen a neve? Például Építész vagy Média.', 'Név', 'Létrehozás');
+    if (!name) return;
+    try {
+      const data = await saFetch('/api/admin/staff-apps/types', 'POST', { name });
+      showToast('Tagfelvétel létrehozva. A Kérdőív fülön állíthatod be a kérdéseit.');
+      await saSwitchType(data.id);
+    } catch (err) { showToast(err.message, true); }
+    return;
+  }
+  const type = (saAdminData.types || []).find((t) => t.id === saAdminTypeId);
+  if (!type) return;
+  if (e.target.closest('[data-sa-type-rename]')) {
+    const name = await textPromptModal('Átnevezés', `Mi legyen a(z) <b>${escapeHtml(type.name)}</b> tagfelvétel új neve?`, type.name, 'Mentés');
+    if (!name || name === type.name) return;
+    try {
+      await saFetch(`/api/admin/staff-apps/types/${type.id}`, 'PUT', { name });
+      loadStaffAppsAdmin();
+    } catch (err) { showToast(err.message, true); }
+    return;
+  }
+  const del = e.target.closest('[data-sa-type-delete]');
+  if (del && !del.disabled) {
+    const ok = await confirmModal('Tagfelvétel törlése', `Biztosan törlöd a(z) <b>${escapeHtml(type.name)}</b> tagfelvételt? Ha már voltak jelentkezői, azok megmaradnak a megőrzési idő végéig, de a típus eltűnik a listából.`, 'Törlés');
+    if (!ok) return;
+    try {
+      await saFetch(`/api/admin/staff-apps/types/${type.id}`, 'DELETE');
+      sfSetDirty(false);
+      sfDraft = null;
+      saAdminTypeId = null;
+      saAdminRoundId = null;
+      loadStaffAppsAdmin();
+    } catch (err) { showToast(err.message, true); }
+  }
+});
 
 function saLatestRound() {
   return saAdminData && saAdminData.rounds[0] ? saAdminData.rounds[0] : null;
@@ -13237,7 +13407,7 @@ function renderSaAdminState() {
       const closesAt = datetimeLocalToIso($('#saDeadlineInput').value);
       if (!closesAt) return showToast('Adj meg egy időpontot.', true);
       try {
-        await saFetch('/api/admin/staff-apps/deadline', 'POST', { closesAt });
+        await saFetch('/api/admin/staff-apps/deadline', 'POST', { typeId: saAdminTypeId, closesAt });
         showToast('Határidő mentve.');
         loadStaffAppsAdmin();
       } catch (err) { showToast(err.message, true); }
@@ -13246,7 +13416,7 @@ function renderSaAdminState() {
       const ok = await confirmModal('Tagfelvétel kikapcsolása', 'Új jelentkezés nem érkezhet. A beküldött jelentkezéseket és a szóbeli időpontokat továbbra is itt kezelheted.', 'Kikapcsolás');
       if (!ok) return;
       try {
-        await saFetch('/api/admin/staff-apps/close', 'POST', {});
+        await saFetch('/api/admin/staff-apps/close', 'POST', { typeId: saAdminTypeId });
         showToast('A tagfelvétel kikapcsolva.');
         loadStaffAppsAdmin();
       } catch (err) { showToast(err.message, true); }
@@ -13306,7 +13476,7 @@ function renderSaAdminState() {
     }
     result.textContent = '';
     try {
-      await saFetch('/api/admin/staff-apps/open', 'POST', { closesAt, slots });
+      await saFetch('/api/admin/staff-apps/open', 'POST', { typeId: saAdminTypeId, closesAt, slots });
       saOpenSlotDraft = [{ time: '', cap: '' }, { time: '', cap: '' }, { time: '', cap: '' }];
       saOpenDeadlineDraft = '';
       saAdminRoundId = null;
@@ -13550,10 +13720,14 @@ function sfSetDirty(value) {
   if (el) el.hidden = !value;
 }
 
+let sfDraftTypeId = null;
+
 async function loadSfEditor() {
-  if (sfDraft && sfDirty) { renderSfEditor(); return; }
+  if (!saAdminTypeId) return;
+  if (sfDraft && sfDirty && sfDraftTypeId === saAdminTypeId) { renderSfEditor(); return; }
   try {
-    const data = await saFetch('/api/admin/staff-apps/form');
+    const data = await saFetch(`/api/admin/staff-apps/form?type=${saAdminTypeId}`);
+    sfDraftTypeId = saAdminTypeId;
     sfDraft = data.form;
     sfDraft._meta = { updatedBy: data.updatedBy, updatedAt: data.updatedAt };
   } catch (err) {
@@ -13794,7 +13968,7 @@ $('#sfEditor').addEventListener('click', async (e) => {
     if (sfSaving) return;
     sfSaving = true;
     try {
-      const data = await saFetch('/api/admin/staff-apps/form', 'PUT', { form: sfCleanForm() });
+      const data = await saFetch('/api/admin/staff-apps/form', 'PUT', { typeId: sfDraftTypeId, form: sfCleanForm() });
       sfDraft = data.form;
       sfDraft._meta = { updatedBy: session.username, updatedAt: new Date().toISOString() };
       sfSetDirty(false);
@@ -13864,4 +14038,145 @@ document.addEventListener('click', (e) => {
   if (!btn) return;
   const url = saUploadUrls[btn.dataset.saUpload];
   if (url) window.open(url, '_blank', 'noopener');
+});
+
+// ---------------------------------------------------------------------------
+// Vásárlások vészleállítója
+// ---------------------------------------------------------------------------
+
+// Függvény (és var), mert a nézetváltás már a fájl végének lefutása előtt is meghívhatja.
+function isShopView(view) {
+  return ['coin', 'wallet', 'ranks', 'sanction', 'cosmetics', 'market', 'trades', 'casino'].includes(view);
+}
+var shopLockState = { locked: false, message: null };
+
+async function refreshShopLockBanner() {
+  try {
+    const res = await fetch(BACKEND_URL + '/api/shop-status');
+    const data = await res.json();
+    if (data.ok) shopLockState = { locked: !!data.locked, message: data.message };
+  } catch {
+    return;
+  }
+  const banner = $('#shopLockBanner');
+  banner.classList.toggle('hidden', !shopLockState.locked);
+  banner.textContent = shopLockState.locked ? shopLockState.message : '';
+  $('#navShopLockBadge')?.classList.toggle('hidden', !shopLockState.locked);
+}
+
+function renderShopLockAdmin(data) {
+  const card = $('#shopLockCard');
+  const since = data.changedAt ? `${escapeHtml(data.changedBy || '?')}, ${escapeHtml(formatLedgerDate(data.changedAt))}` : '';
+  card.innerHTML = `
+    <div class="shoplock-status ${data.locked ? 'is-locked' : 'is-open'}">
+      <span class="shoplock-dot"></span>
+      <div>
+        <div class="shoplock-title">${data.locked ? 'A vásárlás le van állítva' : 'A vásárlás engedélyezve van'}</div>
+        ${since ? `<div class="sa-muted">Utoljára módosította: ${since}</div>` : ''}
+      </div>
+    </div>
+    <label class="gift-modal-label" for="shopLockMessage">Ezt látják a játékosok, amíg le van állítva</label>
+    <input type="text" id="shopLockMessage" class="gift-modal-input" maxlength="200" value="${escapeHtml(data.locked ? data.message : '')}" placeholder="A vásárlás most szünetel. Próbáld újra később." />
+    <button type="button" class="${data.locked ? 'btn-glow' : 'btn-glow shoplock-stop'}" id="shopLockToggle">${data.locked ? 'Vásárlások újraindítása' : 'Vásárlások leállítása'}</button>`;
+  $('#shopLockToggle').addEventListener('click', async () => {
+    const btn = $('#shopLockToggle');
+    btn.disabled = true;
+    try {
+      const next = await saFetch('/api/admin/shop-lock', 'POST', { locked: !data.locked, message: $('#shopLockMessage').value });
+      showToast(next.locked ? 'Minden vásárlás leállítva.' : 'A vásárlás újra engedélyezve.');
+      renderShopLockAdmin(next);
+      refreshShopLockBanner();
+    } catch (err) {
+      showToast(err.message, true);
+      btn.disabled = false;
+    }
+  });
+}
+
+async function loadShopLockAdmin() {
+  try {
+    renderShopLockAdmin(await saFetch('/api/admin/shop-lock'));
+  } catch (err) {
+    $('#shopLockCard').innerHTML = `<p class="sa-muted" style="margin:0;">${escapeHtml(err.message)}</p>`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Regisztrált játékosok (admin)
+// ---------------------------------------------------------------------------
+
+let regPage = 1;
+let regSearchTimer = null;
+
+function regRelative(ms) {
+  if (!ms) return '-';
+  const diff = Date.now() - ms;
+  if (diff < 60000) return 'most';
+  if (diff < 3600000) return `${Math.floor(diff / 60000)} perce`;
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)} órája`;
+  if (diff < 30 * 86400000) return `${Math.floor(diff / 86400000)} napja`;
+  return new Date(ms).toLocaleDateString('hu-HU');
+}
+
+async function loadRegisteredPlayers() {
+  const params = new URLSearchParams({ sort: $('#regSort').value, page: String(regPage) });
+  const q = $('#regSearch').value.trim();
+  if (q) params.set('q', q);
+  let data;
+  try {
+    data = await saFetch('/api/admin/registered-players?' + params.toString());
+  } catch (err) {
+    $('#regTableBody').innerHTML = `<tr><td colspan="7">${escapeHtml(err.message)}</td></tr>`;
+    return;
+  }
+  regPage = data.page;
+  const fmt = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  $('#regStats').innerHTML = [
+    ['Összesen', data.stats.total], ['Utolsó 24 óra', data.stats.last24h],
+    ['Utolsó 7 nap', data.stats.last7d], ['Utolsó 30 nap', data.stats.last30d]
+  ].map(([label, n]) => `<div class="reg-stat"><span>${label}</span><b>${fmt(n)}</b></div>`).join('');
+
+  const max = Math.max(1, ...data.daily.map((d) => d.count));
+  $('#regChart').innerHTML = data.daily.map((d, i) => {
+    const date = new Date(d.day + 'T12:00:00Z');
+    const label = date.toLocaleDateString('hu-HU', { month: 'short', day: 'numeric' });
+    return `<div class="reg-bar" title="${escapeHtml(label)}: ${d.count} regisztráció">
+      <i style="height:${Math.round((d.count / max) * 100)}%"></i>
+      <span>${i % 5 === 4 || i === data.daily.length - 1 ? escapeHtml(label) : ''}</span>
+    </div>`;
+  }).join('');
+
+  $('#regMatching').textContent = q ? `${fmt(data.matching)} találat` : '';
+  const offset = (data.page - 1) * 50;
+  $('#regTableBody').innerHTML = data.players.map((p, i) => `
+    <tr>
+      <td class="ledger-date">${fmt(offset + i + 1)}</td>
+      <td class="ledger-party"><button type="button" class="reg-name" data-reg-profile="${escapeHtml(p.username)}">${p.online ? '<i class="reg-online" title="Online"></i>' : ''}${escapeHtml(p.username)}</button>${p.locked ? ' <span class="reg-locked">zárolva</span>' : ''}</td>
+      <td class="ledger-date">${escapeHtml(formatLedgerDate(p.createdAt))}</td>
+      <td>${p.rank ? escapeHtml(p.rank) : '<span class="ledger-none">-</span>'}</td>
+      <td>${p.playtimeSeconds ? escapeHtml(formatPlaytime(p.playtimeSeconds)) : '<span class="ledger-none">-</span>'}</td>
+      <td class="ledger-date">${p.online ? 'online' : escapeHtml(regRelative(p.lastSeenAt))}</td>
+      <td>${p.discordLinked ? 'igen' : '<span class="ledger-none">nem</span>'}</td>
+    </tr>`).join('') || '<tr><td colspan="7" class="ledger-none">Nincs találat.</td></tr>';
+
+  $('#regPager').innerHTML = data.pages > 1 ? `
+    <button type="button" class="btn-outline" data-reg-page="${data.page - 1}"${data.page <= 1 ? ' disabled' : ''}>Előző</button>
+    <span>${data.page}. oldal / ${data.pages}</span>
+    <button type="button" class="btn-outline" data-reg-page="${data.page + 1}"${data.page >= data.pages ? ' disabled' : ''}>Következő</button>` : '';
+}
+
+$('#regSort').addEventListener('change', () => { regPage = 1; loadRegisteredPlayers(); });
+$('#regSearch').addEventListener('input', () => {
+  clearTimeout(regSearchTimer);
+  regSearchTimer = setTimeout(() => { regPage = 1; loadRegisteredPlayers(); }, 300);
+});
+document.querySelector('.view[data-view="registeredPlayers"]').addEventListener('click', (e) => {
+  const prof = e.target.closest('[data-reg-profile]');
+  if (prof) { openPlayerProfile(prof.dataset.regProfile); return; }
+  const pageBtn = e.target.closest('[data-reg-page]');
+  if (pageBtn && !pageBtn.disabled) {
+    regPage = Number(pageBtn.dataset.regPage);
+    loadRegisteredPlayers();
+    $('.reg-list-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 });

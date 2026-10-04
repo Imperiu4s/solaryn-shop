@@ -1485,3 +1485,93 @@ body::before {
   .sa-tabs { display: flex; }
   .sa-tab { flex: 1; padding: 8px 10px; }
 }
+
+/* Tagfelvétel-típusok: admin sáv és játékos fülek */
+.sa-typebar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+.sa-typechips { display: flex; flex-wrap: wrap; gap: 8px; }
+.sa-typechip { display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; border-radius: 12px; border: 1px solid var(--stroke-2); background: transparent; font: inherit; font-size: 13.5px; color: var(--text); cursor: pointer; }
+.sa-typechip:hover { border-color: var(--brand-line); }
+.sa-typechip.active { border-color: var(--gold); background: var(--brand-soft); }
+.sa-typechip-name { font-weight: 700; }
+.sa-typechip-state { font-size: 12px; color: var(--text-faint); }
+.sa-typechip-count { min-width: 20px; padding: 1px 6px; border-radius: 999px; background: var(--gold); color: var(--btn-ink, #1a1206); font-size: 11.5px; font-weight: 700; text-align: center; }
+.sa-typechip-add { border-style: dashed; color: var(--text-dim); }
+.sa-dot.off { background: var(--text-faint); }
+.sa-type-actions { display: flex; gap: 14px; }
+.sa-link-btn { padding: 0; border: 0; background: none; font: inherit; font-size: 13px; color: var(--text-dim); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.sa-link-btn:hover:not(:disabled) { color: var(--text); }
+.sa-link-btn:disabled { opacity: .4; cursor: default; }
+.sa-link-danger:hover:not(:disabled) { color: var(--danger); }
+
+.sa-type-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.sa-type-tab { display: grid; gap: 2px; min-width: 150px; padding: 10px 16px; border-radius: 12px; border: 1px solid var(--stroke-2); background: transparent; font: inherit; text-align: left; color: var(--text); cursor: pointer; }
+.sa-type-tab:hover { border-color: var(--brand-line); }
+.sa-type-tab.active { border-color: var(--gold); background: var(--brand-soft); }
+.sa-type-tab-name { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 700; }
+.sa-type-tab-state { font-size: 12px; color: var(--text-dim); }
+.sa-type-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--orange); }
+.sa-type-name { margin-bottom: 8px; font-size: 12.5px; font-weight: 600; color: var(--text-faint); }
+
+/* Firefox a letiltott gombokra nem küld jobb klikk eseményt, így ott a
+   contextmenu-tiltás nem futna le. Átengedjük a kattintást a szülőnek. */
+button:disabled, input:disabled, select:disabled, textarea:disabled { pointer-events: none; }
+
+/* Kupon: több jutalom */
+.coupon-rewards { display: grid; gap: 10px; margin-top: 6px; }
+.coupon-reward { padding: 12px 14px; border-radius: 12px; border: 1px solid var(--stroke-2); background: rgba(255, 255, 255, .02); }
+.coupon-reward-top { display: flex; align-items: center; gap: 10px; }
+.coupon-reward-top .gift-modal-input { margin: 0; flex: 1; }
+.coupon-reward-num { min-width: 22px; font-weight: 700; color: var(--text-dim); }
+.coupon-reward-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.coupon-reward-fields:not(:empty) { margin-top: 10px; }
+.coupon-reward-field { display: grid; gap: 4px; font-size: 12.5px; color: var(--text-dim); }
+.coupon-reward-field .gift-modal-input { margin: 0; }
+.coupon-reward-wide { grid-column: 1 / -1; }
+.coupon-add-reward { width: auto !important; margin: 10px 0 4px !important; padding: 9px 16px !important; }
+[data-theme="solaryn-light"] .coupon-reward { background: #fff; }
+
+/* Regisztrált játékosok */
+.reg-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 16px; border-radius: 14px; border: 1px solid var(--stroke); background: var(--glass); overflow: hidden; }
+.reg-stat { display: grid; gap: 4px; padding: 16px 20px; }
+.reg-stat + .reg-stat { border-left: 1px solid var(--stroke); }
+.reg-stat span { font-size: 12.5px; color: var(--text-dim); }
+.reg-stat b { font-size: 24px; color: var(--text); font-variant-numeric: tabular-nums; }
+.reg-chart-card, .reg-list-card { margin-bottom: 16px; }
+.reg-chart { display: grid; grid-template-columns: repeat(30, minmax(0, 1fr)); gap: 4px; height: 140px; align-items: end; padding-bottom: 20px; }
+.reg-bar { position: relative; height: 100%; display: flex; align-items: flex-end; }
+.reg-bar i { display: block; width: 100%; min-height: 2px; border-radius: 4px 4px 0 0; background: var(--gold); opacity: .85; }
+.reg-bar:hover i { opacity: 1; }
+.reg-bar span { position: absolute; left: 50%; bottom: -20px; transform: translateX(-50%); white-space: nowrap; font-size: 10.5px; color: var(--text-faint); }
+.reg-toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+.reg-toolbar .gift-modal-input { margin: 0; width: auto; }
+.reg-toolbar input { flex: 1; min-width: 200px; }
+.reg-matching { margin-bottom: 8px; font-size: 12.5px; color: var(--text-dim); }
+.reg-table { min-width: 760px; }
+.reg-name { display: inline-flex; align-items: center; gap: 6px; padding: 0; border: 0; background: none; font: inherit; font-weight: 600; color: var(--text); cursor: pointer; }
+.reg-name:hover { color: var(--gold); }
+.reg-online { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+.reg-locked { font-size: 11.5px; color: var(--danger); }
+.reg-pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 14px; font-size: 13px; color: var(--text-dim); }
+.reg-pager .btn-outline { width: auto; margin: 0; padding: 8px 16px; }
+
+/* Vásárlások vészleállítója */
+.shoplock-card { max-width: 640px; }
+.shoplock-status { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; padding: 16px 18px; border-radius: 12px; border: 1px solid var(--stroke-2); }
+.shoplock-status.is-locked { border-color: color-mix(in srgb, var(--danger) 55%, transparent); background: color-mix(in srgb, var(--danger) 8%, transparent); }
+.shoplock-status.is-open { border-color: color-mix(in srgb, var(--success) 45%, transparent); background: color-mix(in srgb, var(--success) 6%, transparent); }
+.shoplock-dot { width: 12px; height: 12px; flex: none; border-radius: 50%; background: var(--success); }
+.is-locked .shoplock-dot { background: var(--danger); }
+.shoplock-title { font-size: 16px; font-weight: 700; color: var(--text); }
+.shoplock-card .gift-modal-input { margin-bottom: 14px; }
+.shoplock-card .btn-glow { width: auto; margin: 0; padding: 12px 26px; }
+.shoplock-stop { background: var(--danger) !important; color: #fff !important; }
+.shop-lock-banner { margin: 0 0 16px; padding: 12px 16px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--danger) 50%, transparent); background: color-mix(in srgb, var(--danger) 10%, transparent); font-size: 14px; font-weight: 600; color: var(--text); }
+
+@media (max-width: 760px) {
+  .reg-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .reg-stat:nth-child(3) { border-left: 0; }
+  .reg-stat:nth-child(n+3) { border-top: 1px solid var(--stroke); }
+  .reg-chart { gap: 2px; }
+  .coupon-reward-fields { grid-template-columns: 1fr; }
+}
+.sf-progress[hidden], .sf-nav [hidden], .sf-item-error[hidden], .sf-nav-error[hidden] { display: none; }

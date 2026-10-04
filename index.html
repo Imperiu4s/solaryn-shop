@@ -35,10 +35,10 @@
   <link rel="dns-prefetch" href="https://api.overclockgame.hu" />
   <link rel="preload" as="image" href="assets/solaryn-icon.png" />
 
-  <script src="theme.js?v=20261002d"></script>
-  <link rel="stylesheet" href="style.css?v=20261002d" />
-  <link rel="stylesheet" href="ui.css?v=20261002d" />
-  <link rel="stylesheet" href="design.css?v=20261002d" />
+  <script src="theme.js?v=20261004a"></script>
+  <link rel="stylesheet" href="style.css?v=20261004a" />
+  <link rel="stylesheet" href="ui.css?v=20261004a" />
+  <link rel="stylesheet" href="design.css?v=20261004a" />
 
   <script type="application/ld+json">
   {
@@ -310,7 +310,7 @@
             <button class="app-nav-item" data-view="players"><span>Játékosok</span></button>
             <button class="app-nav-item" data-view="casino"><span>Casino</span></button>
             <button class="app-nav-item hidden" data-view="staffApply" id="navStaffApply">
-              <span>Staff jelentkezés</span>
+              <span>Tagfelvétel</span>
               <span class="app-nav-badge hidden" id="navStaffApplyBadge">1</span>
             </button>
           </div>
@@ -328,6 +328,8 @@
             <svg class="app-nav-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10l4 4 4-4"/></svg>
           </button>
           <div class="app-nav-sub">
+            <button class="app-nav-item admin-nav-item hidden" data-view="shopLock" data-permission="global.shopLock"><span>Vásárlások leállítása</span><span class="app-nav-badge hidden" id="navShopLockBadge">Le</span></button>
+            <button class="app-nav-item admin-nav-item hidden" data-view="registeredPlayers" data-permission="global.playersList"><span>Regisztrált játékosok</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="purchaseLogs" data-permission="global.logs"><span>Vásárlás napló</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="staffActionLogs" data-permission="global.staffActionLogs"><span>Napló (admin)</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="staffStats" data-permission="global.staffStats"><span>Csapat statisztika</span></button>
@@ -338,7 +340,7 @@
             <button class="app-nav-item admin-nav-item hidden" data-view="defaultMediaAdmin" data-permission="global.defaultMediaManage"><span>Alap skinek</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="nameRules" data-permission="global.nameRulesManage"><span>Tiltott nevek</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="rankPerksAdmin" data-permission="global.rankPerksManage"><span>Rangok jogai</span></button>
-            <button class="app-nav-item admin-nav-item hidden" data-view="staffAppsAdmin" data-permission="global.staffAppsManage"><span>Staff tagfelvétel</span></button>
+            <button class="app-nav-item admin-nav-item hidden" data-view="staffAppsAdmin" data-permission="global.staffAppsManage"><span>Tagfelvételek</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="cosmeticsAdmin" data-permission="global.cosmeticsManage,global.cosmeticsMarketManage"><span>Kiegészítők</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="mobsAdmin" data-permission="global.mobsManage"><span>Mobok</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="discounts" data-permission="global.discountsManage"><span>Akciók</span></button>
@@ -399,6 +401,7 @@
       </div>
 
       <main class="app-content" id="appMainContent" tabindex="-1">
+        <div class="shop-lock-banner hidden" id="shopLockBanner" role="status"></div>
 
         <section class="view active" data-view="home">
           <h1 class="page-title">Üdvözlünk, <span id="homeUsername"></span>!</h1>
@@ -960,8 +963,8 @@
         </section>
 
         <section class="view" data-view="staffApply">
-          <h1 class="page-title">Staff jelentkezés</h1>
-          <p class="page-note">Itt tudsz jelentkezni, ha éppen van tagfelvétel, és itt látod a jelentkezésed állapotát.</p>
+          <h1 class="page-title">Tagfelvétel</h1>
+          <p class="page-note">Itt jelentkezhetsz a nyitott tagfelvételekre, és itt látod a jelentkezéseid állapotát.</p>
           <div id="staffApplyBody"></div>
         </section>
 
@@ -1566,11 +1569,52 @@
           <div class="rp-rank-grid" id="rpRankGrid"></div>
         </section>
 
-        <section class="view" data-view="staffAppsAdmin">
-          <h1 class="page-title">Staff tagfelvétel</h1>
-          <p class="page-note">Itt kapcsolod be a tagfelvételt, itt bírálod el a jelentkezéseket, és itt szerkeszted a jelentkezési lap kérdéseit.</p>
+        <section class="view" data-view="shopLock">
+          <h1 class="page-title">Vásárlások leállítása</h1>
+          <p class="page-note">Egy kattintással letilthatsz minden vásárlást a SolarCenterben: bankkártyás fizetést, egyenlegből vásárlást, feltöltést, rangot, előfizetést, kiegészítőt, piacot, cserét és casino pörgetést. A játékosok a megadott üzenetet látják. A játékon belüli boltot ez nem állítja le.</p>
+          <div class="card shoplock-card" id="shopLockCard"></div>
+        </section>
 
-          <div class="sa-tabs" role="tablist" aria-label="Staff tagfelvétel">
+        <section class="view" data-view="registeredPlayers">
+          <h1 class="page-title">Regisztrált játékosok</h1>
+          <p class="page-note">A regisztrált fiókok száma és listája. A névre kattintva megnyílik a profil.</p>
+          <div class="reg-stats" id="regStats"></div>
+          <div class="card reg-chart-card">
+            <div class="card-title">Regisztrációk az elmúlt 30 napban</div>
+            <div class="reg-chart" id="regChart"></div>
+          </div>
+          <div class="card reg-list-card">
+            <div class="reg-toolbar">
+              <input type="search" id="regSearch" class="gift-modal-input" placeholder="Keresés névre" maxlength="32" aria-label="Keresés névre" />
+              <select id="regSort" class="gift-modal-input" aria-label="Sorrend">
+                <option value="newest">Legújabb elöl</option>
+                <option value="oldest">Legrégebbi elöl</option>
+                <option value="name_asc">Név szerint (A-Z)</option>
+                <option value="name_desc">Név szerint (Z-A)</option>
+                <option value="playtime_desc">Legtöbb játékidő</option>
+                <option value="last_seen_desc">Legutóbb aktív</option>
+              </select>
+            </div>
+            <div class="reg-matching" id="regMatching"></div>
+            <div class="ledger-table-wrap reg-table-wrap">
+              <table class="ledger-table reg-table">
+                <thead>
+                  <tr><th>#</th><th>Név</th><th>Regisztrált</th><th>Rang</th><th>Játékidő</th><th>Utoljára aktív</th><th>Discord</th></tr>
+                </thead>
+                <tbody id="regTableBody"></tbody>
+              </table>
+            </div>
+            <div class="reg-pager" id="regPager"></div>
+          </div>
+        </section>
+
+        <section class="view" data-view="staffAppsAdmin">
+          <h1 class="page-title">Tagfelvételek</h1>
+          <p class="page-note">Több tagfelvételt is futtathatsz egyszerre (például Staff, Építész, Média). Mindegyiknek saját kérdőíve, határideje és szóbeli időpontjai vannak.</p>
+
+          <div class="sa-typebar" id="saTypeBar"></div>
+
+          <div class="sa-tabs" role="tablist" aria-label="Tagfelvétel">
             <button type="button" class="sa-tab active" data-sa-tab="manage" role="tab" aria-selected="true">Tagfelvétel és jelentkezések</button>
             <button type="button" class="sa-tab" data-sa-tab="form" role="tab" aria-selected="false">Kérdőív</button>
           </div>
@@ -2153,42 +2197,15 @@
 
         <section class="view" data-view="coupons">
           <h1 class="page-title">Kuponok</h1>
-          <p class="page-note">A létrehozott kódokat a játékosok a "Kódbeváltás" nézeten válthatják be - a PrémiumPont-jutalom a következő szerverre lépéskor íródik jóvá (ugyanúgy, mint egy tulajdonosi PP-módosítás), az egyenleg-jutalom viszont azonnal.</p>
+          <p class="page-note">A kódokat a játékosok a Kódbeváltás oldalon váltják be. Egy kuponhoz több jutalom is tartozhat. A PrémiumPont és a rang a következő szerverre lépéskor íródik jóvá, a többi azonnal.</p>
 
           <div class="card">
             <div class="card-title" id="couponFormTitle">Új kupon</div>
             <label class="gift-modal-label" style="margin-top:0;">Kód</label>
             <input type="text" id="couponCodeInput" class="gift-modal-input" placeholder="Pl. NYAR2026" maxlength="12" style="text-transform:uppercase;" />
-            <label class="gift-modal-label">Jutalom típusa</label>
-            <select id="couponRewardTypeSelect" class="gift-modal-input">
-              <option value="pp">PrémiumPont</option>
-              <option value="wallet">Egyenleg (Ft)</option>
-              <option value="cosmetic">Kiegészítő</option>
-              <option value="rank">Rang</option>
-              <option value="casino_spin">Casino pörgetés</option>
-              <option value="badge">Jelvény</option>
-              <option value="discount">Kedvezmény (%)</option>
-            </select>
-            <div id="couponBadgeRow" class="hidden">
-              <label class="gift-modal-label">Melyik jelvény</label>
-              <select id="couponBadgeSelect" class="gift-modal-input"></select>
-            </div>
-            <div id="couponDiscountRow" class="hidden">
-              <label class="gift-modal-label">Érvényesség napokban (nem kötelező, üresen nem jár le)</label>
-              <input type="number" id="couponDiscountDaysInput" class="gift-modal-input" placeholder="Pl. 7" min="1" max="3650" step="1" />
-            </div>
-            <div id="couponCosmeticRow" class="hidden">
-              <label class="gift-modal-label">Melyik kiegészítő</label>
-              <select id="couponCosmeticSelect" class="gift-modal-input"></select>
-            </div>
-            <div id="couponRankRow" class="hidden">
-              <label class="gift-modal-label">Melyik rang</label>
-              <select id="couponRewardRankSelect" class="gift-modal-input"></select>
-              <label class="gift-modal-label">Mennyi időre (nap, üresen hagyva végleges)</label>
-              <input type="number" id="couponRankDurationInput" class="gift-modal-input" placeholder="Pl. 30" min="1" max="3650" step="1" />
-            </div>
-            <label class="gift-modal-label" id="couponRewardAmountLabel">Jutalom mennyisége</label>
-            <input type="number" id="couponRewardAmountInput" class="gift-modal-input" placeholder="Pl. 500" min="1" step="1" />
+            <span class="gift-modal-label">Jutalmak</span>
+            <div id="couponRewardsList" class="coupon-rewards"></div>
+            <button type="button" class="btn-outline coupon-add-reward" id="couponAddRewardBtn">+ Jutalom hozzáadása</button>
             <label class="gift-modal-label">Felhasználhatóság (nem kötelező, üres = korlátlan)</label>
             <input type="number" id="couponMaxUsesInput" class="gift-modal-input" placeholder="Pl. 100" min="1" step="1" />
             <label class="gift-modal-label">Szükséges rang (nem kötelező)</label>
@@ -2818,7 +2835,7 @@
                     <tr><td>Discord-összekötés</td><td>Discord-azonosító, felhasználónév, profilkép</td><td>b) szerződés teljesítése (te kéred)</td><td>amíg le nem választod</td></tr>
                     <tr><td>Fiókkal kapcsolatos emailek</td><td>email-cím</td><td>b) szerződés teljesítése</td><td>a fiók törléséig</td></tr>
                     <tr><td>Hírlevél</td><td>email-cím, a választott csatorna</td><td>a) hozzájárulás</td><td>a hozzájárulás visszavonásáig</td></tr>
-                    <tr><td>Staff jelentkezés</td><td>a jelentkezési lapon megadott válaszok és feltöltött képek (például életkor, Discord-név), a döntés és az indoklás, a választott szóbeli időpont</td><td>a) hozzájárulás (a jelentkezés beküldésével)</td><td>a tagfelvétel lezárása után 1 évig, vagy amíg vissza nem vonod</td></tr>
+                    <tr><td>Tagfelvételi jelentkezés (pl. staff)</td><td>a jelentkezési lapon megadott válaszok és feltöltött képek (például életkor, Discord-név), a döntés és az indoklás, a választott szóbeli időpont</td><td>a) hozzájárulás (a jelentkezés beküldésével)</td><td>a tagfelvétel lezárása után 1 évig, vagy amíg vissza nem vonod</td></tr>
                     <tr><td>Látogatottsági statisztika (SolarCenter)</td><td>a megnézett oldal, az eszköz típusa, honnan érkeztél, egy naponta cserélődő azonosító; IP-címet nem tárolunk</td><td>a) hozzájárulás (süti-beállítás)</td><td>400 napig</td></tr>
                     <tr><td>Ügyintézés</td><td>amit a ticketben vagy a leveledben írsz</td><td>b) szerződés teljesítése, illetve f) jogos érdek</td><td>a ticket lezárása után 1 évig</td></tr>
                   </tbody>
@@ -3128,9 +3145,9 @@
     </div>
   </div>
 
-  <script src="skin3d.js?v=20261002d" defer></script>
-  <script src="app.js?v=20261002d" defer></script>
-  <script src="ui.js?v=20261002d" defer></script>
-  <script src="design.js?v=20261002d" defer></script>
+  <script src="skin3d.js?v=20261004a" defer></script>
+  <script src="app.js?v=20261004a" defer></script>
+  <script src="ui.js?v=20261004a" defer></script>
+  <script src="design.js?v=20261004a" defer></script>
 </body>
 </html>
