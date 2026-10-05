@@ -414,6 +414,7 @@ async function doLogin() {
   }
   if (!res.ok) {
     if (res.locked) { showLockedScreen(res.reason); return; }
+    if (res.emailNotVerified) { showEmailVerifyModal(res, 'login'); return; }
     $('#authError').textContent = res.message || 'Sikertelen bejelentkezés.';
     return;
   }
@@ -585,10 +586,12 @@ async function submitRegistration(ids, errEl) {
     marketingConsent: marketingOk,
     marketingChannel: marketingOk ? marketingChannel : null,
     creatorCode: creatorCode || null,
-    termsAccepted: termsOk
+    termsAccepted: termsOk,
+    supportsEmailVerification: true
   });
   if (!res.ok) {
     if (res.field === 'username') return fail(res.message || 'Ez a felhasználónév nem választható.', ids.user);
+    if (res.field === 'email') return fail(res.message || 'Ez az email cím nem használható.', ids.email);
     errEl.textContent = res.message || 'Sikertelen regisztráció.';
     return null;
   }
@@ -611,10 +614,103 @@ $('#registerSubmit').addEventListener('click', doRegister);
 async function doRegister() {
   const res = await submitRegistration(REGISTER_FORM_IDS, $('#registerError'));
   if (!res) return;
+  if (res.verificationRequired) {
+    $('#switchToLogin')?.click();
+    $('#authUser').value = res.username;
+    showEmailVerifyModal(res, 'register');
+    return;
+  }
   session = { username: res.username, token: res.token };
   saveSession();
   enterApp();
 }
+
+// "Erősítsd meg az email címed" ablak: regisztráció után és ha egy meg nem
+// erősített fiókkal próbál belépni. Innen kérhet új levelet, vagy javíthatja
+// az elírt címet (a jegy a sikeres jelszavas belépésből / regisztrációból jön).
+function showEmailVerifyModal(info, mode) {
+  let ticket = info.resendTicket;
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  const lead = mode === 'register'
+    ? 'A fiókod létrejött. Már csak meg kell erősítened az email címed.'
+    : 'Ezt a fiókot még nem erősítetted meg, ezért nem tudsz belépni.';
+  const sentLine = info.sent === false
+    ? '<p class="ev-warn">A levelet most nem sikerült elküldeni. Kérj újat lent, vagy nyiss ticketet a Discordon.</p>'
+    : `<p>A megerősítő linket ide küldtük: <b>${escapeHtml(info.email || '')}</b>. Kattints rá a levélben, utána be tudsz lépni. Nézd meg a spam mappát is.</p>`;
+  overlay.innerHTML = `
+    <div class="modal-card ev-modal">
+      <h3>Erősítsd meg az email címed</h3>
+      <p>${lead}</p>
+      ${sentLine}
+      <div class="ev-actions">
+        <button type="button" class="btn-outline" data-ev-resend>Új levél kérése</button>
+        <button type="button" class="link-inline ev-change-toggle" data-ev-change>Rossz címet adtam meg</button>
+      </div>
+      <div class="ev-change hidden" data-ev-change-box>
+        <label class="gift-modal-label" style="margin-top:0;">Helyes email cím</label>
+        <input type="email" class="gift-modal-input" data-ev-email autocomplete="email" placeholder="pelda@gmail.com" />
+        <button type="button" class="btn-glow" data-ev-save style="margin-top:8px;">Mentés és levél küldése</button>
+      </div>
+      <p class="redeem-result" data-ev-result></p>
+      <div class="modal-actions">
+        <button type="button" class="btn-outline" data-ev-close>Bezárás</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const result = overlay.querySelector('[data-ev-result]');
+  const close = () => overlay.remove();
+  async function send(newEmail) {
+    result.className = 'redeem-result';
+    result.textContent = 'Küldés...';
+    const res = await apiPost('/api/email-verify/resend', { ticket, ...(newEmail ? { newEmail } : {}) });
+    result.className = 'redeem-result ' + (res.ok ? 'success' : 'error');
+    if (res.ok && !res.alreadyVerified) {
+      result.textContent = res.message || 'Elküldtük a levelet.';
+      overlay.querySelector('[data-ev-change-box]').classList.add('hidden');
+    } else if (res.ok) {
+      result.textContent = res.message;
+    } else {
+      result.textContent = res.suggestion ? `${res.message}` : (res.message || 'Nem sikerült elküldeni.');
+      if (res.suggestion) overlay.querySelector('[data-ev-email]').value = res.suggestion;
+    }
+  }
+  overlay.querySelector('[data-ev-resend]').addEventListener('click', () => send(null));
+  overlay.querySelector('[data-ev-change]').addEventListener('click', () => {
+    overlay.querySelector('[data-ev-change-box]').classList.toggle('hidden');
+    overlay.querySelector('[data-ev-email]').focus();
+  });
+  overlay.querySelector('[data-ev-save]').addEventListener('click', () => {
+    const value = overlay.querySelector('[data-ev-email]').value.trim();
+    if (!value) { result.className = 'redeem-result error'; result.textContent = 'Add meg a helyes email címet.'; return; }
+    send(value);
+  });
+  overlay.querySelector('[data-ev-close]').addEventListener('click', close);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+}
+
+// A levélben lévő link: ?verifyEmail=TOKEN
+(async function consumeEmailVerifyLink() {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('verifyEmail');
+  if (!token) return;
+  params.delete('verifyEmail');
+  const search = params.toString();
+  window.history.replaceState({}, '', window.location.pathname + (search ? '?' + search : '') + window.location.hash);
+  const res = await apiPost('/api/email-verify/confirm', { token });
+  if (!res.ok) {
+    infoModal('Email megerősítése', `<p>${escapeHtml(res.message || 'Nem sikerült megerősíteni az email címet.')}</p>`, 'Rendben');
+    return;
+  }
+  if (res.token) {
+    session = { username: res.username, token: res.token };
+    saveSession();
+    showToast('Az email címed megerősítve. Üdv a Solarynon!');
+    enterApp();
+  } else {
+    infoModal('Email megerősítése', '<p>Az email címed megerősítve. Most már bejelentkezhetsz.</p>', 'Rendben');
+  }
+})();
 
 async function tryAutoLogin() {
   if (!session || !session.token) return;
@@ -1480,6 +1576,7 @@ $('#btnDoAddAccount').addEventListener('click', async () => {
   const res = await performLogin(username, password, false);
   if (!res.ok) {
     if (res.locked) { closeAccountModal(); showLockedScreen(res.reason); return; }
+    if (res.emailNotVerified) { showEmailVerifyModal(res, 'login'); return; }
     errEl.textContent = res.message || 'Sikertelen bejelentkezés.';
     return;
   }
@@ -1503,6 +1600,12 @@ $('#modalRegSubmit').addEventListener('click', doModalRegister);
 async function doModalRegister() {
   const res = await submitRegistration(MODAL_REGISTER_FORM_IDS, $('#modalRegError'));
   if (!res) return;
+  if (res.verificationRequired) {
+    $('#modalRegCancel').click();
+    $('#addAcctUser').value = res.username;
+    showEmailVerifyModal(res, 'register');
+    return;
+  }
   session = { username: res.username, token: res.token };
   saveSession();
   closeAccountModal();
@@ -12005,7 +12108,37 @@ $('#nrAddBtn').addEventListener('click', addNameRule);
 $('#nrPattern').addEventListener('keydown', (e) => { if (e.key === 'Enter') addNameRule(); });
 $('#nrTestBtn').addEventListener('click', testUsernameAgainstRules);
 $('#nrTestInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') testUsernameAgainstRules(); });
-$('#nrScanBtn').addEventListener('click', scanExistingUsernames);
+$('#nrScanBtn').addEventListener('click', () => { scanExistingUsernames(); scanExistingEmails(); });
+
+const EMAIL_FLAG_LABELS = {
+  invalid: 'Érvénytelen', typo: 'Elírás', disposable: 'Eldobható', nodomain: 'Nem létező domain',
+  random: 'Véletlenszerű', unverified: 'Nincs megerősítve'
+};
+
+async function scanExistingEmails() {
+  const out = $('#emailScanResult');
+  out.innerHTML = '<p class="nr-scan-summary">Email címek ellenőrzése... (a domainek ellenőrzése eltarthat pár másodpercig)</p>';
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/name-rules/email-scan', { headers: nrAuthHeaders() });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.message);
+    const hits = data.hits || [];
+    if (!hits.length) {
+      out.innerHTML = `<div class="nr-empty nr-empty-ok"><b>Minden rendben.</b><span>${data.checked} email címet néztünk át, egyik sem gyanús.</span></div>`;
+      return;
+    }
+    out.innerHTML = `<p class="nr-scan-summary"><b>${hits.length}</b> gyanús email cím (${data.checked} címből):</p>
+      <div class="email-scan-list">${hits.map((h) => `
+        <div class="email-scan-row">
+          <button type="button" class="reg-name" data-nr-open="${escapeHtml(h.username)}">${escapeHtml(h.username)}</button>
+          <span class="email-scan-addr">${escapeHtml(h.email)}</span>
+          <span class="email-scan-flags">${h.flags.map((f) => `<span class="email-flag email-flag-${f.kind}" title="${escapeHtml(f.text)}">${EMAIL_FLAG_LABELS[f.kind] || f.kind}</span>`).join('')}</span>
+          <span class="email-scan-why">${h.flags.map((f) => escapeHtml(f.text)).join(' · ')}</span>
+        </div>`).join('')}</div>`;
+  } catch (err) {
+    out.innerHTML = `<p class="nr-scan-summary">${escapeHtml(err.message || 'Nem sikerült az email címek ellenőrzése.')}</p>`;
+  }
+}
 
 document.querySelector('.view[data-view="nameRules"]').addEventListener('click', async (e) => {
   const open = e.target.closest('[data-nr-open]');
