@@ -1380,6 +1380,7 @@ async function enterApp(meData) {
   $('#profileName').textContent = session.username;
 
   if (!meData) meData = await apiGetMe(session.token);
+  maybePromptTerms(meData);
   renderStatBadges($('#statBadgeGrid'), formatStats(meData), { own: true });
   renderDiscordLinkBadge($('#profileDiscordLink'), meData, { mode: 'self' });
   renderSanctionStatus($('#profileSanctionStatus'), meData);
@@ -1915,6 +1916,8 @@ function switchView(view) {
   if (view === 'skin') { endDefaultMediaTry(false); loadSkinPreview3d(); loadDefaultMediaGallery(); loadMySkinSubmissions(); }
   if (view === 'ranks') refreshPpBalance();
   if (view === 'wallet') refreshPpBalance();
+  // A kártyás fizetés állapota (teszt mód, tesztelők) közben változhatott.
+  if (view === 'coin' || view === 'sanction' || view === 'wallet') loadShopCatalog();
   if (view === 'security') { loadSecurityStatus(); loadSecurityPinStatus(); loadClientSettingsState(); loadPrivacySettings(); }
   if (view === 'ledger') loadLedger();
   if (view === 'purchaseLogs') loadPurchaseLogsGlobal();
@@ -1931,6 +1934,7 @@ function switchView(view) {
   if (view === 'staffAppsAdmin') loadStaffAppsAdmin();
   if (view === 'registeredPlayers') loadRegisteredPlayers();
   if (view === 'shopLock') loadShopLockAdmin();
+  if (view === 'paymentsAdmin') loadTbxAdmin();
   if (isShopView(view)) refreshShopLockBanner();
   if (view === 'discounts') { resetDiscountForm(); loadDiscountsAdmin(); }
   if (view === 'coupons') { resetCouponForm(); loadCouponsAdmin(); }
@@ -3113,8 +3117,36 @@ const ICONS = {
 
 let shopCatalog = [];
 
+// Kártyás (Tebex) fizetés: teszt módban csak a kijelölt tesztelőknek él,
+// mindenki másnál a "Vásárlás" és az "Ajándékozás" gomb le van tiltva
+// (egyenlegből továbbra is lehet venni).
+let cardPayment = { available: true, test: false, currency: null, topupAvailable: true, topupUnitHuf: null, topupUnitCents: null, message: null };
+
+async function loadCardPaymentStatus() {
+  try {
+    const res = await fetch(BACKEND_URL + '/api/shop/payment-status', session
+      ? { headers: { Authorization: 'Bearer ' + session.token } }
+      : undefined);
+    const data = await res.json();
+    if (data.ok) cardPayment = data;
+  } catch {
+    return;
+  }
+  $('#cardPayTestBanner')?.classList.toggle('hidden', !cardPayment.test);
+  updateWalletTopupForm();
+}
+
 function formatHuf(n) {
   return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ' Ft';
+}
+
+// A kártyás (Tebex) ár centben jön, a bolt pénznemében (EUR).
+function formatMoney(cents, currency) {
+  try {
+    return new Intl.NumberFormat('hu-HU', { style: 'currency', currency: currency || 'EUR' }).format(cents / 100);
+  } catch {
+    return (cents / 100).toFixed(2).replace('.', ',') + ' ' + (currency || '');
+  }
 }
 
 const GIFTABLE_TYPES = new Set(['sc', 'rank']);
@@ -3137,16 +3169,27 @@ function renderPkgCard(item, locked) {
   const lockedNote = locked
     ? `<div class="pkg-locked-note">Nincs aktív szankciód - nincs mit csökkenteni</div>`
     : '';
+  const hasCardPrice = item.cardPriceCents !== null && item.cardPriceCents !== undefined;
+  const cardOff = !cardPayment.available || !hasCardPrice;
   const giftBtn = GIFTABLE_TYPES.has(item.type)
-    ? `<button type="button" class="btn-outline btn-gift" data-gift-item-id="${item.id}">🎁 Ajándékozás</button>`
+    ? `<button type="button" class="btn-outline btn-gift" data-gift-item-id="${item.id}"${cardOff ? ' disabled' : ''}>🎁 Ajándékozás</button>`
     : '';
   const discountBadge = item.discountPercent > 0 ? `<div class="discount-badge">-${item.discountPercent}%</div>` : '';
-  const priceHtml = item.discountPercent > 0
+  // Kártyával euróban (Tebex), egyenlegből forintban lehet fizetni.
+  const cardPriceHtml = hasCardPrice
+    ? (item.discountPercent > 0
+      ? `<span class="price-original">${formatMoney(item.cardOriginalCents, item.cardCurrency)}</span>${formatMoney(item.cardPriceCents, item.cardCurrency)}`
+      : formatMoney(item.cardPriceCents, item.cardCurrency))
+    : null;
+  const hufPriceHtml = item.discountPercent > 0
     ? `<span class="price-original">${formatHuf(item.originalPriceHuf)}</span>${formatHuf(item.priceHuf)}`
     : formatHuf(item.priceHuf);
+  const priceHtml = cardPriceHtml
+    ? `${cardPriceHtml}<div class="pkg-price-alt">vagy ${hufPriceHtml} egyenlegből</div>`
+    : hufPriceHtml;
   const walletAffordable = currentWalletBalanceHuf >= item.priceHuf;
   const walletDisabled = locked || !walletAffordable;
-  const walletLabel = !locked && !walletAffordable ? 'Nincs elég egyenleged' : 'Fizetés egyenlegből';
+  const walletLabel = !locked && !walletAffordable ? 'Nincs elég egyenleged' : `Egyenlegből (${formatHuf(item.priceHuf)})`;
   const walletBtn = `<button type="button" class="btn-outline btn-buy-wallet" data-item-id="${item.id}"${walletDisabled ? ' disabled' : ''}>${walletLabel}</button>`;
   return `
     <div class="pkg-card${item.featured ? ' featured' : ''}${locked ? ' pkg-card-locked' : ''}">
@@ -3154,7 +3197,7 @@ function renderPkgCard(item, locked) {
       <div class="pkg-icon">${ICONS[item.icon] || ICONS.coin}</div>
       <div class="pkg-name">${item.short}</div>
       <div class="pkg-price">${priceHtml}</div>
-      <button type="button" class="btn-buy" data-item-id="${item.id}"${locked ? ' disabled' : ''}>Vásárlás</button>
+      <button type="button" class="btn-buy" data-item-id="${item.id}"${locked || cardOff ? ' disabled' : ''}>${cardOff ? 'Kártyás fizetés hamarosan' : 'Vásárlás kártyával'}</button>
       ${walletBtn}
       ${giftBtn}
       ${lockedNote}
@@ -3163,6 +3206,7 @@ function renderPkgCard(item, locked) {
 }
 
 async function loadShopCatalog() {
+  const statusLoaded = loadCardPaymentStatus();
   try {
     const res = await fetch(BACKEND_URL + '/api/shop/catalog', session
       ? { headers: { Authorization: 'Bearer ' + session.token } }
@@ -3172,6 +3216,7 @@ async function loadShopCatalog() {
   } catch {
     shopCatalog = [];
   }
+  await statusLoaded;
 
   const coinItems = shopCatalog.filter((i) => i.type === 'sc');
   const muteItems = shopCatalog.filter((i) => i.type === 'mute_reduction');
@@ -3722,7 +3767,7 @@ async function giftRank(rankId, buttonEl) {
 
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('.btn-gift[data-gift-item-id]');
-  if (btn) giftItem(btn.dataset.giftItemId, btn);
+  if (btn && !btn.disabled) giftItem(btn.dataset.giftItemId, btn);
 });
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('.btn-gift[data-gift-rank-id]');
@@ -3818,13 +3863,45 @@ $('#transferNoteInput').addEventListener('input', updateTransferNoteCounter);
 const WALLET_TOPUP_MIN_HUF = 500;
 const WALLET_TOPUP_MAX_HUF = 500000;
 
-$('#walletTopupInput').addEventListener('input', () => {
+// A Tebexen a feltöltés egy egységárú csomag x mennyiség, ezért csak az
+// egységár többszöröse tölthető fel.
+function walletTopupUnit() {
+  return cardPayment.topupUnitHuf > 0 ? cardPayment.topupUnitHuf : 500;
+}
+
+// Mennyibe kerül euróban a megadott forintösszeg feltöltése (egységár x darab).
+function walletTopupCostText(amountHuf) {
+  if (!(cardPayment.topupUnitCents > 0)) return '';
+  const qty = amountHuf / walletTopupUnit();
+  return formatMoney(qty * cardPayment.topupUnitCents, cardPayment.currency);
+}
+
+function updateWalletTopupForm() {
+  const input = $('#walletTopupInput');
+  if (!input) return;
+  const unit = walletTopupUnit();
+  input.step = String(unit);
+  input.min = String(Math.ceil(WALLET_TOPUP_MIN_HUF / unit) * unit);
+  $('#btnWalletTopup').disabled = !cardPayment.topupAvailable;
+  updateWalletTopupPreview();
+}
+
+function updateWalletTopupPreview() {
   const amount = parseInt($('#walletTopupInput').value, 10);
   const preview = $('#walletTopupPreview');
-  preview.innerHTML = Number.isInteger(amount) && amount > 0
-    ? `<b>${formatHuf(amount)}</b> kerül feltöltésre az egyenlegedre.`
-    : 'Add meg a feltöltendő összeget.';
-});
+  const unit = walletTopupUnit();
+  if (!cardPayment.topupAvailable) {
+    preview.textContent = 'A feltöltés jelenleg nem elérhető.';
+  } else if (Number.isInteger(amount) && amount > 0 && amount % unit !== 0) {
+    preview.textContent = `${formatHuf(unit)} többszörösét adhatod meg.`;
+  } else {
+    preview.innerHTML = Number.isInteger(amount) && amount > 0
+      ? `<b>${formatHuf(amount)}</b> kerül az egyenlegedre, ennyit fizetsz a Tebexen: <b>${walletTopupCostText(amount)}</b>.`
+      : `Add meg a feltöltendő összeget (${formatHuf(unit)} többszörösét; ${formatHuf(unit)} = ${walletTopupCostText(unit)}).`;
+  }
+}
+
+$('#walletTopupInput').addEventListener('input', updateWalletTopupPreview);
 
 $('#btnWalletTopup').addEventListener('click', async () => {
   const resultEl = $('#walletTopupResult');
@@ -3838,6 +3915,11 @@ $('#btnWalletTopup').addEventListener('click', async () => {
   const amountHuf = parseInt($('#walletTopupInput').value, 10);
   if (!Number.isInteger(amountHuf) || amountHuf < WALLET_TOPUP_MIN_HUF || amountHuf > WALLET_TOPUP_MAX_HUF) {
     resultEl.textContent = `Az összeg ${formatHuf(WALLET_TOPUP_MIN_HUF)} és ${formatHuf(WALLET_TOPUP_MAX_HUF)} között lehet.`;
+    resultEl.className = 'redeem-result error';
+    return;
+  }
+  if (amountHuf % walletTopupUnit() !== 0) {
+    resultEl.textContent = `Az összegnek ${formatHuf(walletTopupUnit())} többszörösének kell lennie.`;
     resultEl.className = 'redeem-result error';
     return;
   }
@@ -4283,7 +4365,8 @@ function buildRevenueCalendarHtml(months) {
   return sortedYears.map((year) => {
     const yearTotal = months
       .filter((m) => m.month.startsWith(year + '-'))
-      .reduce((sum, m) => sum + m.totalHuf, 0);
+      .reduce((sum, m) => sum + m.totalCents, 0);
+    const yearCurrency = (months.find((m) => m.currency) || {}).currency || 'EUR';
 
     const cards = REVENUE_MONTH_NAMES.map((name, i) => {
       const monthNum = i + 1;
@@ -4295,7 +4378,7 @@ function buildRevenueCalendarHtml(months) {
       return `
         <div class="revenue-month-card ${stateClass}" data-revenue-month="${monthKey}">
           <div class="revenue-month-name">${name}</div>
-          <div class="revenue-month-amount">${hasData ? formatHuf(entry.totalHuf) : (isFuture ? '-' : '0 Ft')}</div>
+          <div class="revenue-month-amount">${hasData ? formatMoney(entry.totalCents, entry.currency) : (isFuture ? '-' : formatMoney(0, yearCurrency))}</div>
           <div class="revenue-month-count">${hasData ? entry.purchaseCount + ' vásárlás' : (isFuture ? '' : 'Nincs adat')}</div>
         </div>
       `;
@@ -4303,7 +4386,7 @@ function buildRevenueCalendarHtml(months) {
 
     return `
       <div class="revenue-calendar-year">
-        <div class="revenue-calendar-year-title">${year}<span class="revenue-calendar-year-total">Éves összesen: ${formatHuf(yearTotal)}</span></div>
+        <div class="revenue-calendar-year-title">${year}<span class="revenue-calendar-year-total">Éves összesen: ${formatMoney(yearTotal, yearCurrency)}</span></div>
         <div class="revenue-month-grid">${cards}</div>
       </div>
     `;
@@ -4342,14 +4425,14 @@ async function loadRevenueDetail(month) {
     });
     const data = await res.json();
     if (!data.ok) return;
-    $('#revenueDetailTotal').textContent = formatHuf(data.totalHuf);
+    $('#revenueDetailTotal').textContent = formatMoney(data.totalCents, data.currency);
     $('#revenueDetailCount').textContent = `${data.purchaseCount} sikeres vásárlás`;
     $('#revenueDetailTableBody').innerHTML = data.purchases.map((p) => `
       <tr>
         <td>${formatLedgerDate(p.createdAt)}</td>
         <td>${escapeHtml(p.username)}</td>
         <td>${escapeHtml(p.label)}</td>
-        <td>${formatHuf(p.priceHuf)}</td>
+        <td>${formatMoney(p.paidCents, p.currency)}</td>
       </tr>
     `).join('');
     $('#revenueDetailEmptyNote').classList.toggle('hidden', data.purchases.length > 0);
@@ -5952,10 +6035,12 @@ document.addEventListener('click', (e) => {
 
 // Digitális tartalom: az elállási jog csak akkor szűnik meg, ha a vásárló
 // előre, kifejezetten kéri az azonnali teljesítést és ezt tudomásul veszi.
-function purchaseWaiverModal(itemId, okLabel) {
+function purchaseWaiverModal(itemId, okLabel, viaWallet) {
   const item = shopCatalog.find((i) => i.id === itemId);
   const name = item ? item.label : 'a termék';
-  const price = item ? formatHuf(item.priceHuf) : '';
+  let price = '';
+  if (item && viaWallet) price = formatHuf(item.priceHuf);
+  else if (item && item.cardPriceCents !== null && item.cardPriceCents !== undefined) price = formatMoney(item.cardPriceCents, item.cardCurrency);
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -5963,7 +6048,7 @@ function purchaseWaiverModal(itemId, okLabel) {
       <div class="modal-card waiver-modal">
         <h3>Vásárlás</h3>
         <p class="waiver-item"><span>${escapeHtml(name)}</span>${price ? `<b>${escapeHtml(price)}</b>` : ''}</p>
-        <p class="waiver-text">Ez digitális tartalom, amit a fizetés után néhány percen belül jóváírunk. Ehhez a beleegyezésed kell:</p>
+        <p class="waiver-text">${viaWallet ? '' : 'A fizetést a Tebex bonyolítja, euróban. '}Ez digitális tartalom, amit a fizetés után néhány percen belül jóváírunk. Ehhez a beleegyezésed kell:</p>
         <label class="check-row waiver-check">
           <input type="checkbox" data-waiver-check />
           <span>Kérem a teljesítés azonnali megkezdését, és tudomásul veszem, hogy ezzel elveszítem a 14 napos elállási jogomat.</span>
@@ -6024,7 +6109,7 @@ async function buyItemWithWallet(itemId, buttonEl) {
     showToast('A vásárláshoz jelentkezz be.', true);
     return;
   }
-  if (!(await purchaseWaiverModal(itemId, 'Vásárlás az egyenlegből'))) return;
+  if (!(await purchaseWaiverModal(itemId, 'Vásárlás az egyenlegből', true))) return;
   const originalText = buttonEl.textContent;
   buttonEl.disabled = true;
   buttonEl.textContent = 'Vásárlás...';
@@ -6217,7 +6302,90 @@ function openLegalModal(tab) {
 
 function closeLegalModal() {
   $('#legalModal').classList.add('hidden');
+  // Ha az ÁSZF-elfogadó ablakból nyitották meg, oda térünk vissza.
+  if (termsPromptState.pending) showTermsPrompt();
 }
+
+// ---------------------------------------------------------------------------
+// ÁSZF-változás: egyszer felugrik (elfogadom / nem fogadom el). Vásárolni
+// csak elfogadás után lehet; ha a backend termsRequired-del utasít el egy
+// vásárlást, az ablak újra megjelenik.
+// ---------------------------------------------------------------------------
+
+var termsPromptState = { version: null, pending: false };
+
+function maybePromptTerms(meData) {
+  if (!meData || !meData.termsVersion) return;
+  termsPromptState.version = meData.termsVersion;
+  if (!meData.termsAccepted && !meData.termsDeclined) showTermsPrompt();
+}
+
+function showTermsPrompt() {
+  if (!session || !termsPromptState.version || document.querySelector('.terms-prompt-overlay')) return;
+  termsPromptState.pending = true;
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay terms-prompt-overlay';
+  overlay.innerHTML = `
+    <div class="modal-card terms-prompt" role="dialog" aria-modal="true" aria-labelledby="termsPromptTitle">
+      <h3 id="termsPromptTitle">Megváltozott az ÁSZF</h3>
+      <p>Frissítettük az Általános Szerződési Feltételeket és az adatkezelési tájékoztatót. A fontosabb változások:</p>
+      <ul>
+        <li>A kártyás fizetést a Tebex bonyolítja viszonteladóként, euróban.</li>
+        <li>Az Egyenleg továbbra is forintban van, a Tebexen euróért tölthető fel.</li>
+        <li>Új üzemeltető: Kiss Lajos magánszemély, kapcsolat: solarynnetwork@gmail.com.</li>
+      </ul>
+      <p class="terms-prompt-note">Ha nem fogadod el, a SolarCenter és a szerver ugyanúgy használható, de vásárolni csak az elfogadás után tudsz.</p>
+      <p class="waiver-links"><a href="#legal" data-terms-read="aszf">ÁSZF</a> · <a href="#legal" data-terms-read="adatkezeles">Adatkezelési tájékoztató</a></p>
+      <div class="modal-actions">
+        <button type="button" class="btn-outline" data-terms-answer="decline">Nem fogadom el</button>
+        <button type="button" class="btn-glow" data-terms-answer="accept" style="margin-top:0;">Elfogadom</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.querySelectorAll('[data-terms-read]').forEach((a) => a.addEventListener('click', (e) => {
+    e.preventDefault();
+    overlay.remove();
+    openLegalModal(a.dataset.termsRead);
+  }));
+  overlay.querySelectorAll('[data-terms-answer]').forEach((btn) => btn.addEventListener('click', async () => {
+    const accept = btn.dataset.termsAnswer === 'accept';
+    overlay.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+    try {
+      const res = await fetch(BACKEND_URL + '/api/terms/respond', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+        body: JSON.stringify({ version: termsPromptState.version, accept })
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.message || 'Nem sikerült menteni.');
+      termsPromptState.pending = false;
+      overlay.remove();
+      showToast(accept ? 'Köszönjük, elfogadtad az új ÁSZF-et.' : 'Rendben. Vásárolni az ÁSZF elfogadása után tudsz.');
+    } catch (err) {
+      showToast(err.message || 'Nem sikerült elérni a szervert.', true);
+      overlay.querySelectorAll('button').forEach((b) => { b.disabled = false; });
+    }
+  }));
+}
+
+// Bármelyik vásárlási hívás termsRequired választ kaphat: ilyenkor újra
+// megmutatjuk az elfogadó ablakot (a hívó a szokásos hibaüzenetet írja ki).
+(function watchTermsRequired() {
+  const originalFetch = window.fetch.bind(window);
+  window.fetch = async (...args) => {
+    const res = await originalFetch(...args);
+    if (res.status === 403) {
+      res.clone().json().then((data) => {
+        if (data && data.termsRequired) {
+          termsPromptState.version = data.termsVersion || termsPromptState.version;
+          showTermsPrompt();
+        }
+      }).catch(() => {});
+    }
+    return res;
+  };
+})();
 
 $$('.view[data-view="legal"] .legal-tab').forEach((t) => t.addEventListener('click', () => setLegalTab(t.dataset.legal)));
 $$('[data-legal-link]').forEach((a) => {
@@ -14231,6 +14399,206 @@ async function loadShopLockAdmin() {
     renderShopLockAdmin(await saFetch('/api/admin/shop-lock'));
   } catch (err) {
     $('#shopLockCard').innerHTML = `<p class="sa-muted" style="margin:0;">${escapeHtml(err.message)}</p>`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Fizetés (Tebex) admin
+// ---------------------------------------------------------------------------
+
+const TBX_MODE_LABELS = {
+  off: ['Kikapcsolva', 'Senki nem fizethet kártyával. Egyenlegből továbbra is lehet vásárolni.'],
+  test: ['Teszt', 'Csak a lent megadott játékosok fizethetnek. Amíg a Tebex nem hagyta jóvá a boltot, csak teszt-fizetés megy át.'],
+  live: ['Éles', 'Mindenki fizethet. Előtte a Tebex panelen kapcsold ki a teszt-fizetést.']
+};
+const TBX_PAYMENT_STATUS = {
+  complete: 'Fizetve', refunded: 'Visszatérítve', chargeback: 'Visszaterhelés', declined: 'Elutasítva', dispute_won: 'Vita lezárva (javunkra)'
+};
+
+function tbxNum(n) {
+  return Number.isFinite(Number(n)) ? String(Math.round(Number(n))).replace(/\B(?=(\d{3})+(?!\d))/g, '.') : '-';
+}
+
+function renderTbxMode(data) {
+  const { mode, testers, changedBy, changedAt } = data.settings;
+  const since = changedAt ? `Utoljára módosította: ${escapeHtml(changedBy || '?')}, ${escapeHtml(formatLedgerDate(changedAt))}` : '';
+  const card = $('#tbxModeCard');
+  card.innerHTML = `
+    <div class="card-title">Kártyás fizetés</div>
+    <div class="tbx-modes" role="radiogroup">
+      ${Object.entries(TBX_MODE_LABELS).map(([key, [label, note]]) => `
+        <label class="tbx-mode${mode === key ? ' is-active' : ''}" data-mode="${key}">
+          <input type="radio" name="tbxMode" value="${key}"${mode === key ? ' checked' : ''} />
+          <span class="tbx-mode-label">${label}</span>
+          <span class="tbx-mode-note">${note}</span>
+        </label>`).join('')}
+    </div>
+    <div class="tbx-testers"${mode === 'test' ? '' : ' hidden'}>
+      <label class="gift-modal-label" for="tbxTesters">Tesztelők (felhasználónevek vesszővel)</label>
+      <input type="text" id="tbxTesters" class="gift-modal-input" value="${escapeHtml(testers.join(', '))}" placeholder="Üresen hagyva csak te" />
+    </div>
+    <button type="button" class="btn-glow" id="tbxModeSave">Mentés</button>
+    ${since ? `<p class="sa-muted tbx-since">${since}</p>` : ''}`;
+  card.querySelectorAll('input[name="tbxMode"]').forEach((radio) => radio.addEventListener('change', () => {
+    card.querySelectorAll('.tbx-mode').forEach((el) => el.classList.toggle('is-active', el.dataset.mode === radio.value));
+    card.querySelector('.tbx-testers').hidden = radio.value !== 'test';
+  }));
+  $('#tbxModeSave').addEventListener('click', async () => {
+    const next = card.querySelector('input[name="tbxMode"]:checked')?.value || 'off';
+    const testerList = $('#tbxTesters').value.split(',').map((t) => t.trim()).filter(Boolean);
+    if (next === 'live' && mode !== 'live') {
+      const ok = await confirmModal('Éles fizetés', 'Ezután minden játékos fizethet a Tebexen. A Tebex jóváhagyta a boltot, és kikapcsoltad a teszt-fizetést?', 'Élesítés');
+      if (!ok) return;
+    }
+    const btn = $('#tbxModeSave');
+    btn.disabled = true;
+    try {
+      renderTbxAdmin(await saFetch('/api/admin/tebex/settings', 'POST', { mode: next, testers: testerList }));
+      showToast('Mentve.');
+      loadShopCatalog();
+    } catch (err) {
+      showToast(err.message, true);
+      btn.disabled = false;
+    }
+  });
+}
+
+function renderTbxKeys(data) {
+  const webhookUrl = BACKEND_URL + data.webhookPath;
+  const store = data.store;
+  let storeLine;
+  if (data.storeError) storeLine = `<p class="tbx-warn">${escapeHtml(data.storeError)}</p>`;
+  else if (!store) storeLine = '<p class="sa-muted">Add meg a public tokent, és itt megjelenik a bolt.</p>';
+  else {
+    storeLine = `<p class="sa-muted">Bolt: <b>${escapeHtml(store.name || '?')}</b>, pénznem: <b>${escapeHtml(store.currency || '?')}</b>, ${store.packages.length} csomag.</p>`;
+  }
+  const field = (key, label, value, help, masked) => `
+    <label class="gift-modal-label" for="tbxKey_${key}">${label}</label>
+    <input type="text" id="tbxKey_${key}" class="gift-modal-input" data-key="${key}" autocomplete="off" spellcheck="false"
+      ${data.canEditKeys ? '' : 'disabled'} value="${masked ? '' : escapeHtml(value || '')}" placeholder="${escapeHtml(value || 'nincs megadva')}" />
+    <p class="tbx-help">${help}</p>`;
+  $('#tbxKeysCard').innerHTML = `
+    <div class="card-title">Kulcsok</div>
+    ${storeLine}
+    ${field('publicToken', 'Public token', data.config.publicToken, 'Tebex panel: Integrations &gt; API Keys, „Public Token”.', false)}
+    ${field('serverSecret', 'Szerver titkos kulcs', data.config.serverSecret, 'Tebex panel: Game Servers &gt; a lobby szerver &gt; Secret Key. Az akciós árakhoz kell (a Center egyszeri kupont hoz létre vele).', true)}
+    ${field('webhookSecret', 'Webhook titkos kulcs', data.config.webhookSecret, 'Tebex panel: Developers &gt; Webhooks. Végpontnak ezt az URL-t add meg:', true)}
+    <div class="tbx-copy"><code>${escapeHtml(webhookUrl)}</code><button type="button" class="btn-outline" id="tbxCopyWebhook">Másolás</button></div>
+    ${data.canEditKeys
+      ? '<button type="button" class="btn-glow" id="tbxKeysSave">Kulcsok mentése</button><p class="tbx-help">Az üresen hagyott titkos mező nem változik.</p>'
+      : '<p class="sa-muted">A kulcsokat csak a tulajdonos módosíthatja.</p>'}`;
+  $('#tbxCopyWebhook').addEventListener('click', () => {
+    navigator.clipboard?.writeText(webhookUrl).then(() => showToast('Másolva.'), () => showToast('Nem sikerült másolni.', true));
+  });
+  $('#tbxKeysSave')?.addEventListener('click', async () => {
+    const body = {};
+    $$('#tbxKeysCard input[data-key]').forEach((input) => {
+      const value = input.value.trim();
+      if (input.dataset.key === 'publicToken' ? value !== (data.config.publicToken || '') : value) body[input.dataset.key] = value;
+    });
+    if (!Object.keys(body).length) {
+      showToast('Nincs új kulcs.', true);
+      return;
+    }
+    const btn = $('#tbxKeysSave');
+    btn.disabled = true;
+    try {
+      renderTbxAdmin(await saFetch('/api/admin/tebex/config', 'POST', body));
+      showToast('Kulcsok mentve.');
+    } catch (err) {
+      showToast(err.message, true);
+      btn.disabled = false;
+    }
+  });
+}
+
+function renderTbxMap(data) {
+  const packages = data.store ? data.store.packages : [];
+  const byId = new Map(packages.map((p) => [p.id, p]));
+  const rows = data.items.map((item) => {
+    const pkg = item.packageId ? byId.get(item.packageId) : null;
+    let status;
+    if (!item.packageId) status = '<span class="tbx-chip tbx-chip-off">Nincs összekötve</span>';
+    else if (!pkg) status = data.store ? '<span class="tbx-chip tbx-chip-bad">Nincs ilyen csomag</span>' : '<span class="tbx-chip tbx-chip-off">?</span>';
+    else status = '<span class="tbx-chip tbx-chip-ok">Rendben</span>';
+    const options = ['<option value="">- nincs -</option>']
+      .concat(packages.map((p) => `<option value="${p.id}"${p.id === item.packageId ? ' selected' : ''}>#${p.id} ${escapeHtml(p.name)} (${formatMoney(Math.round(p.price * 100), p.currency)})</option>`));
+    if (item.packageId && !pkg) options.push(`<option value="${item.packageId}" selected>#${item.packageId} (nem található)</option>`);
+    return `
+      <tr>
+        <td><b>${escapeHtml(item.label)}</b><div class="tbx-sub">${escapeHtml(item.id)}</div></td>
+        <td>${item.priceHuf === null ? `${formatHuf(data.settings.topupUnitHuf)} / db` : formatHuf(item.priceHuf)}</td>
+        <td><select class="gift-modal-input tbx-select" data-map-item="${escapeHtml(item.id)}"${packages.length ? '' : ' disabled'}>${options.join('')}</select></td>
+        <td>${pkg ? formatMoney(Math.round(pkg.price * 100), pkg.currency) : '-'}</td>
+        <td>${status}</td>
+      </tr>`;
+  }).join('');
+  $('#tbxMapCard').innerHTML = `
+    <div class="card-title">Termékek és Tebex-csomagok</div>
+    <p class="sa-muted">Minden Center-termékhez kell egy Tebex-csomag, parancs nélkül. A kártyás ár mindig a Tebex-csomag ára (euróban), ezt a Center onnan olvassa ki; az egyenlegből fizetett forintár a Centerben marad. Az akciós árat a Center egyszeri kuponnal adja meg, a csomag árát ezért ne csökkentsd. Az egyenleg-feltöltő csomag egy darabja ennyi forintot ír jóvá (a csomagnál a mennyiséget engedélyezni kell):</p>
+    <div class="tbx-unit"><input type="number" id="tbxTopupUnit" class="gift-modal-input" min="100" max="50000" step="100" value="${data.settings.topupUnitHuf}" /><span>Ft / db</span><button type="button" class="btn-outline" id="tbxTopupUnitSave">Mentés</button></div>
+    <div class="ledger-table-wrap"><table class="ledger-table tbx-table">
+      <thead><tr><th>Center termék</th><th>Egyenlegből</th><th>Tebex-csomag</th><th>Kártyás ár</th><th>Állapot</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+    <button type="button" class="btn-outline tbx-refresh" id="tbxRefresh">Csomagok újratöltése a Tebexről</button>`;
+  $$('#tbxMapCard select[data-map-item]').forEach((select) => select.addEventListener('change', async () => {
+    select.disabled = true;
+    try {
+      renderTbxAdmin(await saFetch('/api/admin/tebex/map', 'POST', { itemId: select.dataset.mapItem, packageId: select.value || null }));
+    } catch (err) {
+      showToast(err.message, true);
+      select.disabled = false;
+    }
+  }));
+  $('#tbxRefresh').addEventListener('click', () => loadTbxAdmin(true));
+  $('#tbxTopupUnitSave').addEventListener('click', async () => {
+    try {
+      renderTbxAdmin(await saFetch('/api/admin/tebex/settings', 'POST', { topupUnitHuf: Number($('#tbxTopupUnit').value) }));
+      showToast('Mentve.');
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  });
+}
+
+function renderTbxPayments(data) {
+  const rows = data.payments.map((p) => `
+    <tr>
+      <td>${escapeHtml(formatLedgerDate(p.updated_at))}</td>
+      <td><code class="tbx-txn">${escapeHtml(p.transaction_id)}</code></td>
+      <td>${escapeHtml(p.username || '-')}</td>
+      <td>${p.amount !== null ? `${tbxNum(p.amount)} ${escapeHtml(p.currency || '')}` : '-'}</td>
+      <td><span class="tbx-chip ${p.status === 'complete' ? 'tbx-chip-ok' : p.status === 'declined' ? 'tbx-chip-off' : 'tbx-chip-bad'}">${escapeHtml(TBX_PAYMENT_STATUS[p.status] || p.status)}</span></td>
+      <td class="tbx-note">${escapeHtml(p.note || '')}</td>
+    </tr>`).join('');
+  $('#tbxPaymentsCard').innerHTML = `
+    <div class="card-title">Legutóbbi Tebex-fizetések</div>
+    ${rows
+      ? `<div class="ledger-table-wrap"><table class="ledger-table tbx-table">
+          <thead><tr><th>Idő</th><th>Tranzakció</th><th>Játékos</th><th>Összeg</th><th>Állapot</th><th>Megjegyzés</th></tr></thead>
+          <tbody>${rows}</tbody></table></div>
+         <p class="sa-muted">Visszatérítésnél a még ki nem szállított tételt a rendszer visszavonja, a feltöltött egyenleget levonja. Ha a PP már jóváíródott, azt a megjegyzés jelzi, és kézzel kell rendezni.</p>`
+      : '<p class="sa-muted" style="margin:0;">Még nem érkezett fizetés.</p>'}`;
+}
+
+function renderTbxAdmin(data) {
+  renderTbxMode(data);
+  renderTbxKeys(data);
+  renderTbxMap(data);
+  renderTbxPayments(data);
+  const badge = $('#navTebexBadge');
+  if (badge) {
+    badge.textContent = data.settings.mode === 'test' ? 'Teszt' : 'Ki';
+    badge.classList.toggle('hidden', data.settings.mode === 'live');
+  }
+}
+
+async function loadTbxAdmin(refresh) {
+  try {
+    renderTbxAdmin(await saFetch('/api/admin/tebex' + (refresh ? '?refresh=1' : '')));
+  } catch (err) {
+    $('#tbxModeCard').innerHTML = `<p class="sa-muted" style="margin:0;">${escapeHtml(err.message)}</p>`;
   }
 }
 

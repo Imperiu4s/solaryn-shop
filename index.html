@@ -35,10 +35,10 @@
   <link rel="dns-prefetch" href="https://api.overclockgame.hu" />
   <link rel="preload" as="image" href="assets/solaryn-icon.png" />
 
-  <script src="theme.js?v=20261005a"></script>
-  <link rel="stylesheet" href="style.css?v=20261005a" />
-  <link rel="stylesheet" href="ui.css?v=20261005a" />
-  <link rel="stylesheet" href="design.css?v=20261005a" />
+  <script src="theme.js?v=20261008a"></script>
+  <link rel="stylesheet" href="style.css?v=20261008a" />
+  <link rel="stylesheet" href="ui.css?v=20261008a" />
+  <link rel="stylesheet" href="design.css?v=20261008a" />
 
   <script type="application/ld+json">
   {
@@ -329,6 +329,7 @@
           </button>
           <div class="app-nav-sub">
             <button class="app-nav-item admin-nav-item hidden" data-view="shopLock" data-permission="global.shopLock"><span>Vásárlások leállítása</span><span class="app-nav-badge hidden" id="navShopLockBadge">Le</span></button>
+            <button class="app-nav-item admin-nav-item hidden" data-view="paymentsAdmin" data-permission="global.paymentsManage"><span>Fizetés (Tebex)</span><span class="app-nav-badge hidden" id="navTebexBadge">Teszt</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="registeredPlayers" data-permission="global.playersList"><span>Regisztrált játékosok</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="purchaseLogs" data-permission="global.logs"><span>Vásárlás napló</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="staffActionLogs" data-permission="global.staffActionLogs"><span>Napló (admin)</span></button>
@@ -402,6 +403,7 @@
 
       <main class="app-content" id="appMainContent" tabindex="-1">
         <div class="shop-lock-banner hidden" id="shopLockBanner" role="status"></div>
+        <div class="card-pay-test-banner hidden" id="cardPayTestBanner" role="status">Teszt mód: a kártyás fizetést most csak a tesztelők látják, a többi játékosnál a gomb le van tiltva.</div>
 
         <section class="view active" data-view="home">
           <h1 class="page-title">Üdvözlünk, <span id="homeUsername"></span>!</h1>
@@ -529,7 +531,7 @@
 
         <section class="view" data-view="wallet">
           <h1 class="page-title">Egyenleg</h1>
-          <p class="page-note">Tölts fel egyenleget tetszőleges összeggel - a feltöltött egyenlegből azonnal, kártyás fizetés nélkül vásárolhatsz PrémiumPontot vagy bármilyen más terméket, ha van rá elég fedezeted.</p>
+          <p class="page-note">Az Egyenleg forintban vezetett keret: a Tebexen euróért töltheted fel, és azonnal, újabb fizetés nélkül vásárolhatsz belőle PrémiumPontot vagy bármilyen más terméket.</p>
 
           <div class="content-grid">
             <div>
@@ -539,7 +541,7 @@
                 </div>
                 <p class="transfer-fee-note">Jelenlegi egyenleged: <b id="walletPageBalance">0 Ft</b></p>
                 <label>Feltöltendő összeg (Ft)</label>
-                <input type="number" id="walletTopupInput" placeholder="0" min="500" max="500000" step="1" />
+                <input type="number" id="walletTopupInput" placeholder="0" min="500" max="500000" step="500" />
                 <div class="transfer-fee-note" id="walletTopupPreview"></div>
                 <button type="button" class="btn-glow btn-glow-orange" id="btnWalletTopup">Feltöltés</button>
                 <p class="redeem-result" id="walletTopupResult"></p>
@@ -576,8 +578,8 @@
                   Fizetési módok
                 </div>
                 <ul class="info-list">
-                  <li>Bankkártyás fizetés (Stripe) áll rendelkezésre.</li>
-                  <li>Minden fizetési adat titkosítva és védve van - bankkártyaadatot mi nem tárolunk.</li>
+                  <li>A kártyás fizetést a Tebex bonyolítja, euróban: bankkártyával vagy a Tebex fizetési oldalán felkínált más módon fizethetsz. A forintban feltöltött Egyenlegből forintban vásárolhatsz.</li>
+                  <li>A fizetési adataidat a Tebex kezeli, mi bankkártyaadatot nem látunk és nem tárolunk.</li>
                 </ul>
               </div>
 
@@ -1576,6 +1578,17 @@
           <h1 class="page-title">Vásárlások leállítása</h1>
           <p class="page-note">Egy kattintással letilthatsz minden vásárlást a SolarCenterben: bankkártyás fizetést, egyenlegből vásárlást, feltöltést, rangot, előfizetést, kiegészítőt, piacot, cserét és casino pörgetést. A játékosok a megadott üzenetet látják. A játékon belüli boltot ez nem állítja le.</p>
           <div class="card shoplock-card" id="shopLockCard"></div>
+        </section>
+
+        <section class="view" data-view="paymentsAdmin">
+          <h1 class="page-title">Fizetés (Tebex)</h1>
+          <p class="page-note">A kártyás fizetés a Tebexen megy. Itt kapcsolod be (tesztként csak magadnak, vagy mindenkinek), itt adod meg a kulcsokat, és itt kötöd össze a Center termékeit a Tebex-csomagokkal. A jóváírást a webhook indítja, a kiszállítást a SolarCore végzi, ezért a Tebex-csomagokhoz nem kell parancs.</p>
+          <div class="tbx-layout">
+            <div class="card tbx-card" id="tbxModeCard"><p class="sa-muted" style="margin:0;">Betöltés...</p></div>
+            <div class="card tbx-card" id="tbxKeysCard"></div>
+            <div class="card tbx-card tbx-wide" id="tbxMapCard"></div>
+            <div class="card tbx-card tbx-wide" id="tbxPaymentsCard"></div>
+          </div>
         </section>
 
         <section class="view" data-view="registeredPlayers">
@@ -2700,7 +2713,7 @@
                 <svg class="faq-chevron" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/></svg>
               </button>
               <div class="faq-a-wrap"><div class="faq-a"><div>
-                A fiókod adatait (név, email, születési dátum), a játékbeli adataidat, a vásárlásaidat, és ha a SolarLaunchert használod, a géped néhány azonosítójának hash-ét. Bankkártyaadatot nem látunk, azt a Stripe kezeli. Hogy mit, miért és meddig, azt az <a href="#legal" data-legal-link="adatkezeles">Adatkezelési tájékoztató</a> táblázata írja le. A sütikről a lábléc <b>Süti beállítások</b> pontja szól.
+                A fiókod adatait (név, email, születési dátum), a játékbeli adataidat, a vásárlásaidat, és ha a SolarLaunchert használod, a géped néhány azonosítójának hash-ét. Bankkártyaadatot nem látunk, azt a Tebex kezeli. Hogy mit, miért és meddig, azt az <a href="#legal" data-legal-link="adatkezeles">Adatkezelési tájékoztató</a> táblázata írja le. A sütikről a lábléc <b>Süti beállítások</b> pontja szól.
               </div></div></div>
             </div>
 
@@ -2734,11 +2747,11 @@
           <div class="card legal-card">
             <div class="legal-panel active" data-legal-panel="aszf">
               <h3>Általános Szerződési Feltételek</h3>
-              <p class="legal-meta">Hatályos 2026. október 2-től. Az előző változat 2026. április 4-től volt érvényben.</p>
+              <p class="legal-meta">Hatályos 2026. október 8-tól: aki a SolarCenterben elfogadja, annak az elfogadás pillanatától, mindenki másnak 2026. október 23-tól. Az előző változat 2026. október 2-től volt érvényben.</p>
 
               <h4>1. Ki nyújtja a szolgáltatást</h4>
-              <p><b>Szolgáltató:</b> Nagy Szabolcs, magánszemély<br><b>A szolgáltatás neve:</b> Solaryn Network<br><b>Cím:</b> Budapest, Magyarország<br><b>Kapcsolat:</b> ticket a Discord szerverünkön (dc.solaryn.hu)<br><b>Weboldalak:</b> solaryn.hu, center.solaryn.hu (SolarCenter)</p>
-              <p>A Solaryn Network egy márkanév, nem külön cég: a szerződés közted és a fenti magánszemély között jön létre. A szövegben a Szolgáltató „mi”, a Felhasználó „te”.</p>
+              <p><b>Szolgáltató:</b> Kiss Lajos, magánszemély<br><b>A szolgáltatás neve:</b> Solaryn Network<br><b>Cím:</b> Kecskemét, Magyarország<br><b>Kapcsolat:</b> solarynnetwork@gmail.com, illetve ticket a Discord szerverünkön (dc.solaryn.hu)<br><b>Weboldalak:</b> solaryn.hu, center.solaryn.hu (SolarCenter)</p>
+              <p>A Solaryn Network egy márkanév, nem külön cég: a szolgáltatásra vonatkozó szerződés közted és a fenti magánszemély között jön létre. A kártyás vásárlások fizetését és értékesítését a Tebex Limited végzi (5. pont). A szövegben a Szolgáltató „mi”, a Felhasználó „te”.</p>
 
               <h4>2. Mire vonatkozik</h4>
               <p>Ez az ÁSZF a Solaryn Minecraft-szerverek, a SolarCenter, a SolarLauncher és a SolarClient használatára, valamint a SolarCenterben megvehető digitális tartalmakra vonatkozik. A játékszabályzat (solaryn.hu/szabalyzat) ennek a része.</p>
@@ -2749,8 +2762,8 @@
                 <li>A játékhoz Solaryn-fiók kell, amit ingyen hozhatsz létre a SolarCenterben.</li>
                 <li>14 éves kor alatt csak a szülőd vagy a törvényes képviselőd beleegyezésével regisztrálhatsz.</li>
                 <li>A fiókot csak te használhatod, nem adhatod el és nem adhatod tovább. A jelszavadat ne add meg senkinek, a személyzet sem kéri el soha.</li>
-                <li>Ha valaki illetéktelenül használja a fiókodat, minél előbb jelezd ticketben. Addig, amíg nem szólsz, a fiókkal végzett műveleteket a tiédnek tekintjük.</li>
-                <li>A fiókod törlését ticketben kérheted.</li>
+                <li>Ha valaki illetéktelenül használja a fiókodat, minél előbb jelezd ticketben vagy emailben. Addig, amíg nem szólsz, a fiókkal végzett műveleteket a tiédnek tekintjük.</li>
+                <li>A fiókod törlését ticketben vagy emailben kérheted.</li>
               </ul>
 
               <h4>4. Mit lehet vásárolni</h4>
@@ -2759,22 +2772,28 @@
                 <li><b>PrémiumPont (PP):</b> a szerver saját pontja, amiből rangot, kiegészítőt és más játékbeli dolgot vehetsz. Pénzre nem váltható vissza, és csak a Solaryn-en használható. Másik játékosnak átutalhatod, ilyenkor 10% díjat vonunk le.</li>
                 <li><b>Rang:</b> 30 vagy 60 napig érvényes. Ha előfizetést kapcsolsz be, lejáratkor automatikusan megújul a PP-egyenleged terhére. Az előfizetést a Rangok oldalon bármikor lemondhatod, a már kifizetett időszak ilyenkor is megmarad.</li>
                 <li><b>Szankció-csökkentés:</b> egy aktív némítás, kitiltás vagy kliens-tiltás idejét rövidíti le. A kitiltás teljes feloldása nem vásárolható meg: ezt ticketben lehet kérni, és minden esetet külön nézünk meg.</li>
-                <li><b>Egyenleg:</b> forintban feltöltött keret, amiből a SolarCenterben vásárolhatsz.</li>
+                <li><b>Egyenleg:</b> forintban vezetett keret, amiből a SolarCenterben vásárolhatsz. A Tebexen euróért töltheted fel, a SolarCenterben feltöltés előtt mutatott áron.</li>
               </ul>
-              <p>Az árak forintban szerepelnek, és a teljes fizetendő összeget mutatják. Az árakat és a kínálatot megváltoztathatjuk, de ez a már kifizetett vásárlásokat nem érinti.</p>
+              <p>A kártyás (Tebexen fizetett) árak euróban szerepelnek, az Egyenlegből fizetett árak forintban. Mindkettő a teljes fizetendő összeget mutatja, az adót is beleértve. Ha a bankszámládat nem euróban vezetik, a bankod átváltási díjat számíthat fel, erre nincs ráhatásunk. Az árakat és a kínálatot megváltoztathatjuk, de ez a már kifizetett vásárlásokat nem érinti.</p>
 
               <h4>5. Vásárlás és fizetés</h4>
-              <p>A terméket a SolarCenterben választod ki, és bankkártyával fizetsz a Stripe fizetési oldalán, vagy a SolarCenter Egyenlegedből. A szerződés a sikeres fizetéssel jön létre. A vásárlást a SolarCenter Napló oldalán látod.</p>
-              <p>A szerződés nyelve magyar. Írásba foglalt szerződésnek nem minősül, nem iktatjuk, a vásárlás adatai a Napló oldalon visszanézhetők. A bankkártyád adatait nem látjuk és nem tároljuk, azokat a Stripe kezeli.</p>
+              <p>A terméket a SolarCenterben választod ki, és kétféleképpen fizethetsz:</p>
+              <ul>
+                <li><b>Kártyával, a Tebex fizetési oldalán</b> (bankkártyával vagy az ott felkínált más módon), euróban. A fizetést és az értékesítést a Tebex Limited (5.2 Central House, 1 Ballards Lane, London, N3 1LQ, Egyesült Királyság; cégjegyzékszám: 08129184) végzi viszonteladóként (merchant of record): ennél a vásárlásnál a Tebex adja el neked a terméket, ezért a vásárlásra vonatkozó szerződés közted és a Tebex között jön létre, és a Tebex vásárlói feltételei (checkout.tebex.io/terms) is vonatkoznak rá. A számlát a Tebex állítja ki. A megvett tartalmat mi írjuk jóvá és mi biztosítjuk a játékban, ezért ha nem kaptad meg vagy nem működik, nálunk is jelezheted (7. pont).</li>
+                <li><b>A SolarCenter Egyenlegedből</b>, forintban. Ilyenkor a szerződés közted és köztünk jön létre.</li>
+              </ul>
+              <p>A szerződés a sikeres fizetéssel jön létre. A vásárlást a SolarCenter Napló oldalán látod.</p>
+              <p>A szerződés nyelve magyar. Írásba foglalt szerződésnek nem minősül, nem iktatjuk, a vásárlás adatai a Napló oldalon visszanézhetők. A bankkártyád és a többi fizetési adatod a Tebexhez kerül, mi ezeket nem látjuk és nem tároljuk.</p>
 
               <h4>6. Teljesítés és elállási jog</h4>
               <p>A digitális tartalmat általában a fizetés után néhány percen belül jóváírjuk. Ami a játékban aktiválódik (például egy rang), azt akkor kapod meg, amikor fent vagy a szerveren.</p>
               <p>Fogyasztóként a szerződéstől 14 napon belül indoklás nélkül elállhatsz. Digitális tartalomnál ez a jog megszűnik, ha a teljesítés a kifejezett, előzetes beleegyezéseddel kezdődött meg, és tudomásul vetted, hogy ezzel elveszíted az elállási jogodat (45/2014. (II. 26.) Korm. rendelet 29. § (1) bekezdés m) pont). Ezt a SolarCenter minden vásárlás előtt külön megkérdezi, és a válaszodat a vásárlással együtt eltároljuk. Beleegyezés nélkül a vásárlás nem indul el.</p>
-              <p>Az Egyenleg feltöltése még nem digitális tartalom vásárlása. A feltöltött, de el nem költött összeget a feltöltéstől számított 14 napon belül indoklás nélkül visszakérheted.</p>
-              <p>Az elállást bármilyen egyértelmű nyilatkozattal jelezheted ticketben vagy levélben, erre a 45/2014. (II. 26.) Korm. rendelet 2. melléklete szerinti nyilatkozatmintát is használhatod. A visszajáró összeget legkésőbb 14 napon belül, ugyanarra a fizetési módra utaljuk vissza.</p>
+              <p>A Tebexen fizetett vásárlásnál az elállást és a visszatérítést a Tebex intézi a saját feltételei szerint. Ha nálunk jelzed, segítünk elintézni.</p>
+              <p>Az Egyenleg feltöltése még nem digitális tartalom vásárlása. A feltöltött, de el nem költött összeget a feltöltéstől számított 14 napon belül indoklás nélkül visszakérheted ticketben vagy emailben. Ilyenkor a feltöltésért fizetett euróösszeg el nem költött részét a Tebexen keresztül, az eredeti fizetési módra térítjük vissza.</p>
+              <p>Az elállást bármilyen egyértelmű nyilatkozattal jelezheted ticketben vagy a solarynnetwork@gmail.com címen, erre a 45/2014. (II. 26.) Korm. rendelet 2. melléklete szerinti nyilatkozatmintát is használhatod. A visszajáró összeget legkésőbb 14 napon belül, ugyanarra a fizetési módra kapod vissza (Tebexes fizetésnél a Tebexen keresztül).</p>
 
               <h4>7. Ha valami nem működik</h4>
-              <p>Ha a megvett tartalmat nem kaptad meg, vagy nem úgy működik, ahogy a SolarCenterben leírtuk, nyiss ticketet, és írd meg a vásárlás idejét. Ilyenkor a 373/2021. (VI. 30.) Korm. rendelet szerint kérheted, hogy pótoljuk vagy kijavítsuk. Ha ez ésszerű időn belül nem sikerül, kérheted az ár arányos csökkentését vagy a teljes ár visszafizetését.</p>
+              <p>Ha a megvett tartalmat nem kaptad meg, vagy nem úgy működik, ahogy a SolarCenterben leírtuk, nyiss ticketet vagy írj emailt, és írd meg a vásárlás idejét. Ilyenkor a 373/2021. (VI. 30.) Korm. rendelet szerint kérheted, hogy pótoljuk vagy kijavítsuk. Ha ez ésszerű időn belül nem sikerül, kérheted az ár arányos csökkentését vagy a teljes ár visszafizetését.</p>
               <p>Ha a megvett tartalom leállás vagy adatvesztés miatt hosszabb ideig nem volt használható, azt is jelezd: pótoljuk, vagy meghosszabbítjuk az érintett időt.</p>
 
               <h4>8. Szabályok és szankciók</h4>
@@ -2799,14 +2818,16 @@
               <p>A szándékosan vagy súlyos gondatlansággal okozott kárért, valamint az életet, testi épséget vagy egészséget sértő kárért a felelősségünket nem zárjuk ki.</p>
 
               <h4>11. Panasz és jogvita</h4>
-              <p>Panaszt ticketben vagy a fenti címre küldött levélben tehetsz. Az írásbeli panaszra 30 napon belül írásban válaszolunk.</p>
-              <p>Ha nem sikerül megegyeznünk, fogyasztóként a lakóhelyed szerinti békéltető testülethez, vagy a mi címünk szerinti Budapesti Békéltető Testülethez fordulhatsz (1016 Budapest, Krisztina krt. 99. III. em. 310., bekelteto.testulet@bkik.hu). Fogyasztóvédelmi panasszal a lakóhelyed szerinti vármegyei kormányhivatalt is megkeresheted.</p>
-              <p>A szerződésre a magyar jog az irányadó. Ha másik EU-tagállamban élsz, az ottani jog kötelező fogyasztóvédelmi szabályai is megilletnek. Perben az illetékes bíróságot a hatásköri és illetékességi szabályok határozzák meg, fogyasztó ellen pedig csak a lakóhelye szerinti ország bírósága előtt indítható per.</p>
+              <p>Panaszt ticketben vagy a solarynnetwork@gmail.com címen tehetsz. Az írásbeli panaszra 30 napon belül írásban válaszolunk. A Tebexen fizetett vásárlás fizetési ügyeiben (például visszatérítés, számla) a Tebex ügyfélszolgálatához is fordulhatsz.</p>
+              <p>Ha nem sikerül megegyeznünk, fogyasztóként a lakóhelyed szerinti békéltető testülethez, vagy a mi lakóhelyünk szerinti Bács-Kiskun Vármegyei Békéltető Testülethez fordulhatsz (6000 Kecskemét, Árpád krt. 4.). Fogyasztóvédelmi panasszal a lakóhelyed szerinti vármegyei kormányhivatalt is megkeresheted.</p>
+              <p>A szerződésre a magyar jog az irányadó. Ha másik EU-tagállamban élsz, az ottani jog kötelező fogyasztóvédelmi szabályai is megilletnek. Perben az illetékes bíróságot a hatásköri és illetékességi szabályok határozzák meg, fogyasztó ellen pedig csak a lakóhelye szerinti ország bírósága előtt indítható per. A Tebexszel kötött szerződésre a Tebex feltételei szerinti jog vonatkozik, a kötelező fogyasztóvédelmi szabályok ott is megilletnek.</p>
 
               <h4>12. Az ÁSZF módosítása</h4>
-              <p>Az ÁSZF-et módosíthatjuk, például ha új terméket vezetünk be, vagy változik egy jogszabály. Az új szöveget a hatálybalépése előtt legalább 15 nappal közzétesszük a solaryn.hu/jogi oldalon és a SolarCenterben, és a Discordon is szólunk róla.</p>
+              <p>Az ÁSZF-et módosíthatjuk, például ha új terméket vezetünk be, vagy változik egy jogszabály. Az új szöveget a hatálybalépése előtt legalább 15 nappal közzétesszük a solaryn.hu/jogi oldalon és a SolarCenterben, és a Discordon is szólunk róla. A SolarCenterben belépéskor egy ablakban is értesítünk, ahol az új feltételeket elfogadhatod vagy elutasíthatod.</p>
               <ul>
-                <li>A módosítás csak a hatálybalépése utáni vásárlásokra vonatkozik.</li>
+                <li>Ha az új feltételeket elfogadod, azok az elfogadástól rád vonatkoznak; ha nem, a hatálybalépésük napjától.</li>
+                <li>Amíg az aktuális feltételeket nem fogadod el, a SolarCenterben nem tudsz vásárolni. A szerver és a SolarCenter többi része ilyenkor is ugyanúgy használható, és a fiókod törlését is bármikor kérheted.</li>
+                <li>A módosítás csak a hatálybalépése (illetve az elfogadása) utáni vásárlásokra vonatkozik.</li>
                 <li>A már megvett tartalomra (például egy futó rang hátralévő idejére) a vásárláskor érvényes feltételek maradnak, kivéve ha a változás neked kedvez.</li>
                 <li>Rang-előfizetésnél az új ár csak a hatálybalépés utáni első megújulástól érvényes. Ha nem fogadod el, előtte lemondhatod.</li>
                 <li>Ha egy jogszabály miatt azonnal kell módosítanunk, a 15 napnál rövidebb idővel is közölhetjük.</li>
@@ -2816,10 +2837,10 @@
 
             <div class="legal-panel" data-legal-panel="adatkezeles">
               <h3>Adatkezelési tájékoztató</h3>
-              <p class="legal-meta">Hatályos 2026. október 2-től.</p>
+              <p class="legal-meta">Hatályos 2026. október 8-tól.</p>
 
               <h4>1. Az adatkezelő</h4>
-              <p><b>Adatkezelő:</b> Nagy Szabolcs magánszemély, a Solaryn Network üzemeltetője<br><b>Cím:</b> Budapest, Magyarország<br><b>Kapcsolat adatvédelmi ügyben:</b> ticket a Discord szerverünkön (dc.solaryn.hu), vagy levél a fenti címre</p>
+              <p><b>Adatkezelő:</b> Kiss Lajos magánszemély, a Solaryn Network üzemeltetője<br><b>Cím:</b> Kecskemét, Magyarország<br><b>Kapcsolat adatvédelmi ügyben:</b> solarynnetwork@gmail.com, illetve ticket a Discord szerverünkön (dc.solaryn.hu)</p>
               <p>Adatvédelmi tisztviselő kijelölésére nem vagyunk kötelesek, ilyen nincs.</p>
 
               <h4>2. Milyen adatot, miért és meddig kezelünk</h4>
@@ -2829,37 +2850,38 @@
                     <tr><th>Mire</th><th>Milyen adatot</th><th>Jogalap (GDPR 6. cikk (1))</th><th>Meddig</th></tr>
                   </thead>
                   <tbody>
-                    <tr><td>Fiók</td><td>felhasználónév, email-cím, jelszó (csak hash-elve), születési dátum, az ÁSZF elfogadásának ideje, a megadott creator kód</td><td>b) szerződés teljesítése</td><td>a fiók törléséig</td></tr>
-                    <tr><td>Játék és SolarCenter</td><td>rang, PrémiumPont-egyenleg, játékidő, barátlista, kiegészítők, feltöltött skin és köpeny, jelvények</td><td>b) szerződés teljesítése</td><td>a fiók törléséig</td></tr>
+                    <tr><td>Fiók</td><td>felhasználónév, email-cím, jelszó (csak hash-elve), születési dátum, az ÁSZF elfogadásának ideje és az elfogadott (vagy elutasított) változata, a megadott creator kód</td><td>b) szerződés teljesítése</td><td>a fiók törléséig</td></tr>
+                    <tr><td>Játék és SolarCenter</td><td>rang, PrémiumPont-egyenleg, Egyenleg, játékidő, barátlista, kiegészítők, feltöltött skin és köpeny, jelvények</td><td>b) szerződés teljesítése</td><td>a fiók törléséig</td></tr>
                     <tr><td>Fiókvédelem</td><td>a kétlépcsős azonosítás kulcsa, a biztonsági kód hash-e, belépési előzmények</td><td>f) jogos érdek: a fiókod védelme</td><td>a fiók törléséig, a belépési előzmények 1 évig</td></tr>
                     <tr><td>Tiltások kijátszása elleni védelem</td><td>a SolarLauncher által küldött gépazonosítók hash-e (Windows gépazonosító, lemez- és alaplap-sorozatszám, MAC-cím); ezekből az eredeti érték nem fejthető vissza</td><td>f) jogos érdek: a kitiltások betartatása</td><td>az utolsó használattól 1 évig, kitiltott gépnél a tiltás végéig</td></tr>
                     <tr><td>Szankciók</td><td>némítás, kitiltás oka, ideje, ki adta; a játékszerverek naplójában a belépéskori IP-cím</td><td>f) jogos érdek: a szabályok betartatása</td><td>a szankció lejárta után 1 évig, az IP-cím 1 évig</td></tr>
-                    <tr><td>Vásárlás</td><td>a termék, az ár, az időpont, a Stripe tranzakció-azonosítója, ajándéknál a címzett és az üzenet, az elállási jogról tett nyilatkozat ideje, a PP-mozgások (Napló)</td><td>b) szerződés teljesítése; a bizonylatoknál c) jogi kötelezettség</td><td>5 évig (a polgári jogi elévülési idő); a bizonylatok a számviteli és adózási szabályok szerinti ideig, legfeljebb 8 évig</td></tr>
+                    <tr><td>Vásárlás</td><td>a termék, az ár, a Tebexen fizetett összeg és pénznem, az időpont, a Tebex tranzakció-azonosítója, ajándéknál a címzett és az üzenet, az elállási jogról tett nyilatkozat ideje, a PP-mozgások (Napló)</td><td>b) szerződés teljesítése; a bizonylatoknál c) jogi kötelezettség</td><td>5 évig (a polgári jogi elévülési idő); a bizonylatok a számviteli és adózási szabályok szerinti ideig, legfeljebb 8 évig</td></tr>
                     <tr><td>Discord-összekötés</td><td>Discord-azonosító, felhasználónév, profilkép</td><td>b) szerződés teljesítése (te kéred)</td><td>amíg le nem választod</td></tr>
                     <tr><td>Fiókkal kapcsolatos emailek</td><td>email-cím</td><td>b) szerződés teljesítése</td><td>a fiók törléséig</td></tr>
                     <tr><td>Hírlevél</td><td>email-cím, a választott csatorna</td><td>a) hozzájárulás</td><td>a hozzájárulás visszavonásáig</td></tr>
                     <tr><td>Tagfelvételi jelentkezés (pl. staff)</td><td>a jelentkezési lapon megadott válaszok és feltöltött képek (például életkor, Discord-név), a döntés és az indoklás, a választott szóbeli időpont</td><td>a) hozzájárulás (a jelentkezés beküldésével)</td><td>a tagfelvétel lezárása után 1 évig, vagy amíg vissza nem vonod</td></tr>
                     <tr><td>Látogatottsági statisztika (SolarCenter)</td><td>a megnézett oldal, az eszköz típusa, honnan érkeztél, egy naponta cserélődő azonosító; IP-címet nem tárolunk</td><td>a) hozzájárulás (süti-beállítás)</td><td>400 napig</td></tr>
-                    <tr><td>Ügyintézés</td><td>amit a ticketben vagy a leveledben írsz</td><td>b) szerződés teljesítése, illetve f) jogos érdek</td><td>a ticket lezárása után 1 évig</td></tr>
+                    <tr><td>Ügyintézés</td><td>amit a ticketben vagy az emailben írsz</td><td>b) szerződés teljesítése, illetve f) jogos érdek</td><td>az ügy lezárása után 1 évig</td></tr>
                   </tbody>
                 </table>
               </div>
-              <p>A SolarCenter szervere az IP-címedet nem menti el. Csak a túlterhelés és a jelszópróbálgatás elleni korlátozáshoz használja, rövid ideig, a memóriában.</p>
+              <p>A SolarCenter szervere az IP-címedet nem menti el. Csak a túlterhelés és a jelszópróbálgatás elleni korlátozáshoz használja, rövid ideig, a memóriában, valamint kártyás fizetés indításakor átadja a Tebexnek (lásd 3. pont).</p>
               <p>Ha 16 évesnél fiatalabb vagy, a hozzájáruláson alapuló adatkezeléshez (hírlevél, staff jelentkezés) a szülőd vagy a törvényes képviselőd hozzájárulása is kell.</p>
 
               <h4>3. Kik kapják meg az adatokat</h4>
               <ul>
-                <li><b>Stripe</b> (Stripe Payments Europe Ltd., Írország): kártyás fizetés. A kártyaadatokat ők kezelik, mi csak a tranzakció azonosítóját, összegét és állapotát kapjuk meg.</li>
+                <li><b>Tebex</b> (Tebex Limited, 5.2 Central House, 1 Ballards Lane, London, N3 1LQ, Egyesült Királyság; cégjegyzékszám: 08129184): a kártyás vásárlások értékesítése és a fizetés lebonyolítása viszonteladóként, önálló adatkezelőként. A fizetéshez szükséges adatokat (például név, email-cím, ország, kártyaadatok) a Tebex fizetési oldalán közvetlenül nekik adod meg, ezekre a Tebex adatkezelési tájékoztatója vonatkozik. Mi a fizetés indításakor átadjuk a felhasználóneved, a választott terméket és az IP-címedet (az ország és az adó meghatározásához, illetve csalásszűréshez); tőlük a tranzakció azonosítóját, összegét és állapotát kapjuk meg.</li>
                 <li><b>Resend</b> (Resend, Inc., USA): az emailek kiküldése (adatfeldolgozó).</li>
+                <li><b>Google</b> (Google Ireland Ltd.): a solarynnetwork@gmail.com címre küldött leveleid a Gmail szolgáltatásban tárolódnak.</li>
                 <li><b>Discord</b> (Discord Inc., USA): ha összekötöd a fiókodat, vagy a Discordon írsz nekünk.</li>
                 <li><b>A személyzet</b> tagjai: csak azt látják, ami a feladatukhoz kell, ezt jogosultságonként állítjuk be.</li>
                 <li><b>Hatóság</b>: csak ha jogszabály kötelez rá.</li>
               </ul>
-              <p>Az USA-ba történő továbbítás az Európai Bizottság megfelelőségi határozata (EU–USA adatvédelmi keret) vagy általános adatvédelmi kikötések alapján történik. Adatot nem adunk el, és reklámcélra senkinek nem adunk át.</p>
+              <p>Az USA-ba történő továbbítás az Európai Bizottság megfelelőségi határozata (EU–USA adatvédelmi keret) vagy általános adatvédelmi kikötések alapján, az Egyesült Királyságba történő továbbítás az Európai Bizottság megfelelőségi határozata alapján történik. Adatot nem adunk el, és reklámcélra senkinek nem adunk át.</p>
 
               <h4>4. Sütik és helyi tárolás</h4>
               <p>A <b>www.solaryn.hu</b> weboldal nem használ követő, statisztikai vagy hirdetési célú sütit, és harmadik féltől sem tölt be tartalmat (a betűkészletek is a saját szerverünkről érkeznek). Az egyetlen, amit a böngésződben, a saját eszközödön tárolunk: hogy a süti-tájékoztató sávot már bezártad-e (böngésző <i>localStorage</i>, nem hagyja el az eszközödet, nem küldjük el sehová). Ez bármikor törölhető a böngésződ beállításaiból, ez esetben a tájékoztató sáv a következő látogatáskor újra megjelenik.</p>
-              <p>A <b>SolarCenter</b> (center.solaryn.hu) a bejelentkezésed és a választott téma megőrzéséhez tárol adatot a böngésződben, ez nem kapcsolható ki. A névtelen statisztika és a beágyazott Discord-tartalom csak akkor működik, ha a lábléc „Süti beállítások” pontjában engedélyezed.</p>
+              <p>A <b>SolarCenter</b> (center.solaryn.hu) a bejelentkezésed és a választott téma megőrzéséhez tárol adatot a böngésződben, ez nem kapcsolható ki. A névtelen statisztika és a beágyazott Discord-tartalom csak akkor működik, ha a lábléc „Süti beállítások” pontjában engedélyezed. A Tebex fizetési oldala (checkout.tebex.io) a saját sütijeit használja, azokra a Tebex tájékoztatója vonatkozik.</p>
 
               <h4>5. Adatbiztonság</h4>
               <p>A jelszavakat csak hash-elve tároljuk, a kapcsolat titkosított (HTTPS). Kétlépcsős azonosítást és biztonsági kódot bárki bekapcsolhat a fiókjához. A személyzet csak a számára kiosztott jogosultságokkal fér hozzá az adatokhoz, és az adminisztrátori műveleteket naplózzuk.</p>
@@ -2873,26 +2895,33 @@
                 <li>Tiltakozhatsz a jogos érdeken alapuló adatkezelés ellen.</li>
                 <li>A hozzájárulásodat bármikor visszavonhatod. Ez nem érinti a visszavonás előtti adatkezelés jogszerűségét.</li>
               </ul>
-              <p>A kérésedet ticketben vagy levélben küldd el. Egy hónapon belül válaszolunk; ha a kérés bonyolult, ez legfeljebb két hónappal meghosszabbodhat, erről időben szólunk. Mielőtt bármit kiadunk vagy törlünk, ellenőrizzük, hogy tényleg a fiók tulajdonosa kéri-e (például a fiókhoz kötött Discordról vagy email-címről).</p>
+              <p>A kérésedet a solarynnetwork@gmail.com címre vagy ticketben küldd el. Egy hónapon belül válaszolunk; ha a kérés bonyolult, ez legfeljebb két hónappal meghosszabbodhat, erről időben szólunk. Mielőtt bármit kiadunk vagy törlünk, ellenőrizzük, hogy tényleg a fiók tulajdonosa kéri-e (például a fiókhoz kötött Discordról vagy email-címről). A Tebexnél kezelt fizetési adataiddal kapcsolatban a Tebexhez is fordulhatsz.</p>
 
               <h4>7. Jogorvoslat</h4>
               <p>Ha szerinted megsértettük a jogaidat, panaszt tehetsz a Nemzeti Adatvédelmi és Információszabadság Hatóságnál (NAIH): 1055 Budapest, Falk Miksa utca 9-11., postacím: 1363 Budapest, Pf. 9., ugyfelszolgalat@naih.hu, www.naih.hu. Bírósághoz is fordulhatsz, a pert a lakóhelyed szerinti törvényszék előtt is megindíthatod.</p>
 
               <h4>8. Módosítás</h4>
-              <p>Ha a tájékoztató változik, az új szöveget itt és a solaryn.hu/jogi oldalon tesszük közzé. Lényeges változásról a hatálybalépése előtt a Discordon is szólunk.</p>
+              <p>Ha a tájékoztató változik, az új szöveget itt és a solaryn.hu/jogi oldalon tesszük közzé. Lényeges változásról a hatálybalépése előtt a Discordon és a SolarCenterben is szólunk.</p>
             </div>
 
             <div class="legal-panel" data-legal-panel="impresszum">
               <h3>Impresszum</h3>
+              <p class="legal-meta">Utoljára frissítve: 2026. október 8.</p>
 
               <h4>Üzemeltető</h4>
-              <p><b>Név:</b> Nagy Szabolcs, magánszemély<br><b>A szolgáltatás neve:</b> Solaryn Network<br><b>Cím:</b> Budapest, Magyarország<br><b>Kapcsolat:</b> ticket a Discord szerverünkön (dc.solaryn.hu)<br><b>Weboldalak:</b> solaryn.hu, center.solaryn.hu</p>
+              <p><b>Név:</b> Kiss Lajos, magánszemély<br><b>A szolgáltatás neve:</b> Solaryn Network<br><b>Cím:</b> Kecskemét, Magyarország<br><b>Email:</b> solarynnetwork@gmail.com<br><b>Discord:</b> dc.solaryn.hu (ticket)<br><b>Weboldalak:</b> solaryn.hu, center.solaryn.hu</p>
               <p>A megkeresésekre ésszerű időn belül válaszolunk, a panaszokra legkésőbb 30 napon belül.</p>
 
+              <h4>Fizetés és értékesítés</h4>
+              <p>A SolarCenterben kártyával vásárolt termékeket a Tebex értékesíti viszonteladóként (merchant of record): ő bonyolítja a fizetést, ő állítja ki a számlát, és a fizetési adatokat is ő kezeli.</p>
+              <p><b>Cégnév:</b> Tebex Limited<br><b>Székhely:</b> 5.2 Central House, 1 Ballards Lane, London, N3 1LQ, Egyesült Királyság<br><b>Cégjegyzékszám (Anglia és Wales):</b> 08129184<br><b>Adószám:</b> GB167189962, EU372035465<br><b>Vásárlói feltételek:</b> checkout.tebex.io/terms</p>
+              <p>Az Egyenlegből fizetett vásárlásoknál az eladó az üzemeltető.</p>
+
               <h4>Egyéb</h4>
-              <p>A szerzői jogokról és a feltöltött tartalmakról az ÁSZF 9. pontja, a felelősségről a 10. pontja, a panaszokról és a jogvitákról a 11. pontja szól.</p>
+              <p>A vásárlásról és a fizetésről az ÁSZF 4–6. pontja, a szerzői jogokról és a feltöltött tartalmakról a 9. pontja, a felelősségről a 10. pontja, a panaszokról és a jogvitákról a 11. pontja szól.</p>
               <p>A Solaryn nem áll kapcsolatban a Mojang Studios-szal és a Microsofttal, és ők nem támogatják a szervert.</p>
             </div>
+
           </div>
         </section>
 
@@ -3148,9 +3177,9 @@
     </div>
   </div>
 
-  <script src="skin3d.js?v=20261005a" defer></script>
-  <script src="app.js?v=20261005a" defer></script>
-  <script src="ui.js?v=20261005a" defer></script>
-  <script src="design.js?v=20261005a" defer></script>
+  <script src="skin3d.js?v=20261008a" defer></script>
+  <script src="app.js?v=20261008a" defer></script>
+  <script src="ui.js?v=20261008a" defer></script>
+  <script src="design.js?v=20261008a" defer></script>
 </body>
 </html>
