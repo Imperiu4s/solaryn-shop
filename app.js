@@ -14484,6 +14484,7 @@ function renderTbxKeys(data) {
     ${field('serverSecret', 'Szerver titkos kulcs', data.config.serverSecret, 'Tebex panel: Game Servers &gt; a lobby szerver &gt; Secret Key. Az akciós árakhoz kell (a Center egyszeri kupont hoz létre vele).', true)}
     ${field('webhookSecret', 'Webhook titkos kulcs', data.config.webhookSecret, 'Tebex panel: Developers &gt; Webhooks. Végpontnak ezt az URL-t add meg:', true)}
     <div class="tbx-copy"><code>${escapeHtml(webhookUrl)}</code><button type="button" class="btn-outline" id="tbxCopyWebhook">Másolás</button></div>
+    ${field('privateKey', 'Privát kulcs (nem kötelező)', data.config.privateKey, 'Tebex panel: Integrations &gt; API Keys, „Private Key”. Ha megadod, a Tebex a vásárló IP-címéből határozza meg az országot (pontosabb adó és csalásszűrés); nélküle is működik a fizetés.', true)}
     ${data.canEditKeys
       ? '<button type="button" class="btn-glow" id="tbxKeysSave">Kulcsok mentése</button><p class="tbx-help">Az üresen hagyott titkos mező nem változik.</p>'
       : '<p class="sa-muted">A kulcsokat csak a tulajdonos módosíthatja.</p>'}`;
