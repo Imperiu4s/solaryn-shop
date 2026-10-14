@@ -592,6 +592,7 @@ async function submitRegistration(ids, errEl) {
   if (!res.ok) {
     if (res.field === 'username') return fail(res.message || 'Ez a felhasználónév nem választható.', ids.user);
     if (res.field === 'email') return fail(res.message || 'Ez az email cím nem használható.', ids.email);
+    if (res.field === 'creatorCode') return fail(res.message || 'Ez a creator kód nem használható.', ids.creatorCode);
     errEl.textContent = res.message || 'Sikertelen regisztráció.';
     return null;
   }
@@ -633,16 +634,21 @@ function showEmailVerifyModal(info, mode) {
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   const lead = mode === 'register'
-    ? 'A fiókod létrejött. Már csak meg kell erősítened az email címed.'
+    ? 'Már csak egy lépés: a fiókod akkor jön létre, ha megerősíted az email címed.'
     : 'Ezt a fiókot még nem erősítetted meg, ezért nem tudsz belépni.';
   const sentLine = info.sent === false
     ? '<p class="ev-warn">A levelet most nem sikerült elküldeni. Kérj újat lent, vagy nyiss ticketet a Discordon.</p>'
-    : `<p>A megerősítő linket ide küldtük: <b>${escapeHtml(info.email || '')}</b>. Kattints rá a levélben, utána be tudsz lépni. Nézd meg a spam mappát is.</p>`;
+    : `<p>Küldtünk egy 6 jegyű kódot ide: <b>${escapeHtml(info.email || '')}</b>. Írd be lent, vagy kattints a levélben lévő linkre. Nézd meg a spam mappát is.</p>`;
   overlay.innerHTML = `
     <div class="modal-card ev-modal">
       <h3>Erősítsd meg az email címed</h3>
       <p>${lead}</p>
       ${sentLine}
+      <div class="ev-code-row">
+        <input type="text" class="gift-modal-input ev-code-input" data-ev-code inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" aria-label="Megerősítő kód" />
+        <button type="button" class="btn-glow" data-ev-confirm>Megerősítés</button>
+      </div>
+      <p class="ev-note">Ha 48 órán belül nem erősíted meg, a regisztráció törlődik.</p>
       <div class="ev-actions">
         <button type="button" class="btn-outline" data-ev-resend>Új levél kérése</button>
         <button type="button" class="link-inline ev-change-toggle" data-ev-change>Rossz címet adtam meg</button>
@@ -675,6 +681,44 @@ function showEmailVerifyModal(info, mode) {
       if (res.suggestion) overlay.querySelector('[data-ev-email]').value = res.suggestion;
     }
   }
+  const codeInput = overlay.querySelector('[data-ev-code]');
+  const confirmBtn = overlay.querySelector('[data-ev-confirm]');
+  async function confirmCode() {
+    const code = codeInput.value.replace(/\D/g, '');
+    if (code.length !== 6) {
+      result.className = 'redeem-result error';
+      result.textContent = 'A kód 6 számjegyből áll.';
+      codeInput.focus();
+      return;
+    }
+    confirmBtn.disabled = true;
+    result.className = 'redeem-result';
+    result.textContent = 'Ellenőrzés...';
+    const res = await apiPost('/api/email-verify/code', { ticket, code });
+    confirmBtn.disabled = false;
+    if (!res.ok) {
+      result.className = 'redeem-result error';
+      result.textContent = res.message || 'Nem sikerült megerősíteni.';
+      codeInput.select();
+      return;
+    }
+    close();
+    if (res.token) {
+      session = { username: res.username, token: res.token };
+      saveSession();
+      showToast('Az email címed megerősítve. Üdv a Solarynon!');
+      enterApp();
+    } else {
+      infoModal('Email megerősítése', `<p>${escapeHtml(res.message || 'Az email címed megerősítve. Most már bejelentkezhetsz.')}</p>`, 'Rendben');
+    }
+  }
+  codeInput.addEventListener('input', () => {
+    codeInput.value = codeInput.value.replace(/\D/g, '').slice(0, 6);
+    if (codeInput.value.length === 6) confirmCode();
+  });
+  codeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') confirmCode(); });
+  confirmBtn.addEventListener('click', confirmCode);
+  setTimeout(() => codeInput.focus(), 50);
   overlay.querySelector('[data-ev-resend]').addEventListener('click', () => send(null));
   overlay.querySelector('[data-ev-change]').addEventListener('click', () => {
     overlay.querySelector('[data-ev-change-box]').classList.toggle('hidden');
@@ -813,10 +857,29 @@ function capitalizeFirst(s) {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
 
+// A LuckPerms csoportnevek kisbetűsek és szóköz nélküliek; így írjuk ki őket.
+const RANK_DISPLAY_NAMES = {
+  srmoderátor: 'Sr. Moderátor',
+  srmoderator: 'Sr. Moderátor',
+  jrmoderátor: 'Jr. Moderátor',
+  jrmoderator: 'Jr. Moderátor',
+  'moderátor': 'Moderátor',
+  'főadmin': 'Főadmin',
+  'fejlesztő': 'Fejlesztő',
+  'építész': 'Építész',
+  yuong: 'Young'
+};
+
+function formatRankName(rank) {
+  const s = String(rank || '').trim();
+  if (!s) return s;
+  return RANK_DISPLAY_NAMES[s.toLowerCase()] || capitalizeFirst(s);
+}
+
 function formatStats(data) {
   if (!data) return emptyStats();
   return {
-    rank: data.rank ? capitalizeFirst(data.rank) : '-',
+    rank: data.rank ? formatRankName(data.rank) : '-',
     coin: typeof data.scBalance === 'number' ? data.scBalance.toLocaleString('hu-HU') : '0',
     wallet: typeof data.walletBalanceHuf === 'number' ? formatHuf(data.walletBalanceHuf) : '0 Ft',
     time: formatPlaytime(data.playtimeSeconds)
@@ -1380,6 +1443,8 @@ async function enterApp(meData) {
   $('#profileName').textContent = session.username;
 
   if (!meData) meData = await apiGetMe(session.token);
+  // Bejelentkezve a teszt módú szezonális témák is látszhatnak.
+  if (window.SolarTheme) window.SolarTheme.refresh();
   maybePromptTerms(meData);
   renderStatBadges($('#statBadgeGrid'), formatStats(meData), { own: true });
   renderDiscordLinkBadge($('#profileDiscordLink'), meData, { mode: 'self' });
@@ -1925,6 +1990,7 @@ function switchView(view) {
   if (view === 'staffStats') loadStaffStats();
   if (view === 'analytics') loadAnalytics();
   if (view === 'revenue') loadRevenue();
+  if (view === 'seasonalThemesAdmin') loadSeasonalThemesAdmin();
   if (view === 'newsAdmin') { resetNewsForm(); loadNewsAdmin(); }
   if (view === 'badges') { resetBadgeForm(); loadBadgesAdmin(); }
   if (view === 'defaultMediaAdmin') { resetDmAdminForm(); loadDefaultMediaAdmin(); loadSkinSubmissionsAdmin(); }
@@ -3140,6 +3206,18 @@ function formatHuf(n) {
   return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ' Ft';
 }
 
+// Euró -> forint a kijelzéshez (a backend adja: EKB-árfolyam vagy az adminban
+// beállított fix érték). A fizetendő összeg mindig az euróár.
+let shopHufPerEur = null;
+function approxHufText(cents, currency) {
+  if (!Number.isFinite(Number(cents))) return '';
+  if (currency && String(currency).toUpperCase() === 'HUF') return formatHuf(Math.round(cents / 100));
+  const rate = shopHufPerEur || cardPayment.hufPerEur;
+  if (!(rate > 0)) return '';
+  // 10 Ft-ra kerekítve, hogy ne tűnjön pontos árnak.
+  return 'kb. ' + formatHuf(Math.round((cents / 100) * rate / 10) * 10);
+}
+
 // A kártyás (Tebex) ár centben jön, a bolt pénznemében (EUR).
 function formatMoney(cents, currency) {
   try {
@@ -3151,15 +3229,18 @@ function formatMoney(cents, currency) {
 
 const GIFTABLE_TYPES = new Set(['sc', 'rank']);
 
-// Ticket-only tétel (pl. a kitiltás teljes feloldása): nincs ár és vásárlás,
-// csak az, hogy hol lehet kérni.
+// Ticket-only tétel (pl. a kitiltás teljes feloldása): az ára látszik, de a
+// Centerben nem vehető meg - ticketben döntünk róla, a gomb a Discordra visz.
 function renderTicketOnlyCard(item) {
+  const hasPrice = Number(item.ticketPriceCents) > 0;
+  const approx = hasPrice ? approxHufText(item.ticketPriceCents, item.ticketCurrency) : '';
   return `
     <div class="pkg-card pkg-card-ticket">
       <div class="pkg-icon">${ICONS[item.icon] || ICONS.ban}</div>
       <div class="pkg-name">${escapeHtml(item.short)}</div>
-      <p class="pkg-ticket-note">Nem vásárolható. Nem minden kitiltást oldunk fel teljesen, ezért ticketben nézzük meg az indokot és döntünk.</p>
-      <a class="btn-outline pkg-ticket-btn" href="https://dc.solaryn.hu" target="_blank" rel="noopener noreferrer">Ticket nyitása</a>
+      ${hasPrice ? `<div class="pkg-price">${formatMoney(item.ticketPriceCents, item.ticketCurrency)}${approx ? `<div class="pkg-price-huf">${approx}</div>` : ''}</div>` : ''}
+      <p class="pkg-ticket-note">Nem minden kitiltást oldunk fel, ezért ticketben nézzük meg és ott fizethetsz.</p>
+      <a class="btn-glow pkg-ticket-btn" href="https://dc.solaryn.hu" target="_blank" rel="noopener noreferrer">Ticket nyitása Discordon</a>
     </div>
   `;
 }
@@ -3176,10 +3257,12 @@ function renderPkgCard(item, locked) {
     : '';
   const discountBadge = item.discountPercent > 0 ? `<div class="discount-badge">-${item.discountPercent}%</div>` : '';
   // Kártyával euróban (Tebex), egyenlegből forintban lehet fizetni.
+  const cardApprox = hasCardPrice ? approxHufText(item.cardPriceCents, item.cardCurrency) : '';
   const cardPriceHtml = hasCardPrice
     ? (item.discountPercent > 0
       ? `<span class="price-original">${formatMoney(item.cardOriginalCents, item.cardCurrency)}</span>${formatMoney(item.cardPriceCents, item.cardCurrency)}`
       : formatMoney(item.cardPriceCents, item.cardCurrency))
+      + (cardApprox ? `<div class="pkg-price-huf">${cardApprox}</div>` : '')
     : null;
   const hufPriceHtml = item.discountPercent > 0
     ? `<span class="price-original">${formatHuf(item.originalPriceHuf)}</span>${formatHuf(item.priceHuf)}`
@@ -3213,6 +3296,7 @@ async function loadShopCatalog() {
       : undefined);
     const data = await res.json();
     shopCatalog = data.ok && Array.isArray(data.items) ? data.items : [];
+    if (data.hufPerEur > 0) shopHufPerEur = data.hufPerEur;
   } catch {
     shopCatalog = [];
   }
@@ -3876,13 +3960,33 @@ function walletTopupCostText(amountHuf) {
   return formatMoney(qty * cardPayment.topupUnitCents, cardPayment.currency);
 }
 
+// Gyors választás: néhány kerek összeg (az egységár többszörösére igazítva).
+const WALLET_TOPUP_PRESETS_HUF = [1000, 2500, 5000, 10000, 20000];
+
+function walletTopupPresets() {
+  const unit = walletTopupUnit();
+  return [...new Set(WALLET_TOPUP_PRESETS_HUF.map((v) => Math.max(unit, Math.round(v / unit) * unit)))];
+}
+
+function renderWalletTopupPresets() {
+  const wrap = $('#walletTopupPresets');
+  if (!wrap) return;
+  const current = parseInt($('#walletTopupInput').value, 10);
+  wrap.innerHTML = walletTopupPresets().map((v) => `
+    <button type="button" class="topup-preset${v === current ? ' active' : ''}" data-topup-amount="${v}"${cardPayment.topupAvailable ? '' : ' disabled'}>
+      <b>${formatHuf(v)}</b>${cardPayment.topupUnitCents > 0 ? `<span>${walletTopupCostText(v)}</span>` : ''}
+    </button>`).join('');
+}
+
 function updateWalletTopupForm() {
   const input = $('#walletTopupInput');
   if (!input) return;
   const unit = walletTopupUnit();
   input.step = String(unit);
   input.min = String(Math.ceil(WALLET_TOPUP_MIN_HUF / unit) * unit);
+  input.disabled = !cardPayment.topupAvailable;
   $('#btnWalletTopup').disabled = !cardPayment.topupAvailable;
+  renderWalletTopupPresets();
   updateWalletTopupPreview();
 }
 
@@ -3891,17 +3995,26 @@ function updateWalletTopupPreview() {
   const preview = $('#walletTopupPreview');
   const unit = walletTopupUnit();
   if (!cardPayment.topupAvailable) {
-    preview.textContent = 'A feltöltés jelenleg nem elérhető.';
+    preview.textContent = cardPayment.available
+      ? 'Az egyenleg-feltöltés még nincs beállítva. Addig a termékeket közvetlenül kártyával is megveheted.'
+      : 'A feltöltés jelenleg nem elérhető.';
   } else if (Number.isInteger(amount) && amount > 0 && amount % unit !== 0) {
     preview.textContent = `${formatHuf(unit)} többszörösét adhatod meg.`;
   } else {
     preview.innerHTML = Number.isInteger(amount) && amount > 0
-      ? `<b>${formatHuf(amount)}</b> kerül az egyenlegedre, ennyit fizetsz a Tebexen: <b>${walletTopupCostText(amount)}</b>.`
-      : `Add meg a feltöltendő összeget (${formatHuf(unit)} többszörösét; ${formatHuf(unit)} = ${walletTopupCostText(unit)}).`;
+      ? `<b>${formatHuf(amount)}</b> kerül az egyenlegedre. Fizetendő a Tebexen: <b>${walletTopupCostText(amount)}</b>.`
+      : `Válassz összeget, vagy írd be (${formatHuf(unit)} többszörösét).`;
   }
+  $$('#walletTopupPresets [data-topup-amount]').forEach((b) => b.classList.toggle('active', Number(b.dataset.topupAmount) === amount));
 }
 
 $('#walletTopupInput').addEventListener('input', updateWalletTopupPreview);
+$('#walletTopupPresets').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-topup-amount]');
+  if (!btn || btn.disabled) return;
+  $('#walletTopupInput').value = btn.dataset.topupAmount;
+  updateWalletTopupPreview();
+});
 
 $('#btnWalletTopup').addEventListener('click', async () => {
   const resultEl = $('#walletTopupResult');
@@ -4321,7 +4434,7 @@ async function loadStaffStats() {
     <div class="staff-stat-card">
       <div class="staff-stat-card-head">
         <div class="staff-stat-card-name">${escapeHtml(s.username)}</div>
-        <div class="staff-stat-card-rank">${escapeHtml(s.rank)}</div>
+        <div class="staff-stat-card-rank">${escapeHtml(formatRankName(s.rank))}</div>
       </div>
       <div class="staff-stat-card-points">
         <span>Pontok</span>
@@ -4367,6 +4480,9 @@ function buildRevenueCalendarHtml(months) {
       .filter((m) => m.month.startsWith(year + '-'))
       .reduce((sum, m) => sum + m.totalCents, 0);
     const yearCurrency = (months.find((m) => m.currency) || {}).currency || 'EUR';
+    const yearHuf = months
+      .filter((m) => m.month.startsWith(year + '-'))
+      .reduce((sum, m) => sum + (m.totalHuf || 0), 0);
 
     const cards = REVENUE_MONTH_NAMES.map((name, i) => {
       const monthNum = i + 1;
@@ -4379,6 +4495,7 @@ function buildRevenueCalendarHtml(months) {
         <div class="revenue-month-card ${stateClass}" data-revenue-month="${monthKey}">
           <div class="revenue-month-name">${name}</div>
           <div class="revenue-month-amount">${hasData ? formatMoney(entry.totalCents, entry.currency) : (isFuture ? '-' : formatMoney(0, yearCurrency))}</div>
+          ${hasData ? `<div class="revenue-month-huf">${formatHuf(entry.totalHuf || 0)}</div>` : ''}
           <div class="revenue-month-count">${hasData ? entry.purchaseCount + ' vásárlás' : (isFuture ? '' : 'Nincs adat')}</div>
         </div>
       `;
@@ -4386,37 +4503,182 @@ function buildRevenueCalendarHtml(months) {
 
     return `
       <div class="revenue-calendar-year">
-        <div class="revenue-calendar-year-title">${year}<span class="revenue-calendar-year-total">Éves összesen: ${formatMoney(yearTotal, yearCurrency)}</span></div>
+        <div class="revenue-calendar-year-title">${year}<span class="revenue-calendar-year-total">Éves összesen: ${formatMoney(yearTotal, yearCurrency)} (${formatHuf(yearHuf)})</span></div>
         <div class="revenue-month-grid">${cards}</div>
       </div>
     `;
   }).join('');
 }
 
+// --- Bevétel grafikonok ------------------------------------------------------
+// Egy sorozat (a téma arany színe), a pontos értékek egérrel/érintéssel
+// buborékban látszanak; minden diagram mellett ott a táblázat is.
+
+function revenueMonthKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function percentChangeHtml(current, previous) {
+  if (!(previous > 0)) return current > 0 ? '<span class="rv-delta">új</span>' : '';
+  const pct = Math.round(((current - previous) / previous) * 100);
+  const cls = pct > 0 ? 'rv-delta-up' : pct < 0 ? 'rv-delta-down' : '';
+  return `<span class="rv-delta ${cls}">${pct > 0 ? '▲ +' : pct < 0 ? '▼ ' : ''}${pct}%</span>`;
+}
+
+// Oszlopdiagram SVG-ben. items: [{ label, value, tip, key? }]
+function revenueBarChartSvg(items, { height = 170, labelEvery = 1, clickable = false } = {}) {
+  const max = Math.max(1, ...items.map((i) => i.value));
+  const n = items.length;
+  const W = 600;
+  const top = 8;
+  const bottom = 22;
+  const plotH = height - top - bottom;
+  const slot = W / n;
+  const barW = Math.max(3, Math.min(34, slot - 4));
+  const gridVals = [0.5, 1].map((f) => Math.round(max * f));
+  const grid = gridVals.map((v) => {
+    const y = top + plotH - (v / max) * plotH;
+    return `<line x1="0" x2="${W}" y1="${y}" y2="${y}" class="rv-grid"/>`;
+  }).join('');
+  const bars = items.map((it, i) => {
+    const h = it.value > 0 ? Math.max(2, (it.value / max) * plotH) : 0;
+    const x = i * slot + (slot - barW) / 2;
+    const y = top + plotH - h;
+    const r = Math.min(4, barW / 2, h);
+    // Felül lekerekített, az alapvonalon egyenes oszlop.
+    const path = h > 0
+      ? `M${x},${top + plotH} V${y + r} Q${x},${y} ${x + r},${y} H${x + barW - r} Q${x + barW},${y} ${x + barW},${y + r} V${top + plotH} Z`
+      : '';
+    const label = i % labelEvery === 0 || i === n - 1
+      ? `<text x="${x + barW / 2}" y="${height - 6}" class="rv-axis" text-anchor="middle">${escapeHtml(it.label)}</text>` : '';
+    return `<g class="rv-bar${clickable && it.key ? ' rv-bar-click' : ''}" data-rv-tip="${escapeHtml(it.tip)}"${it.key ? ` data-revenue-month="${it.key}"` : ''}>
+      <rect x="${i * slot}" y="${top}" width="${slot}" height="${plotH}" class="rv-hit"/>
+      ${path ? `<path d="${path}" class="rv-bar-fill"/>` : ''}
+      ${label}
+    </g>`;
+  }).join('');
+  return `<svg class="rv-chart" viewBox="0 0 ${W} ${height}" preserveAspectRatio="none" role="img">
+    ${grid}<line x1="0" x2="${W}" y1="${top + plotH}" y2="${top + plotH}" class="rv-baseline"/>${bars}</svg>`;
+}
+
+// Vízszintes sávok (kategóriák, toplisták). rows: [{ label, value, valueText, sub }]
+function revenueHBarsHtml(rows, emptyText) {
+  if (!rows.length) return `<p class="rv-empty">${emptyText}</p>`;
+  const max = Math.max(1, ...rows.map((r) => r.value));
+  return `<div class="rv-hbars">${rows.map((r) => `
+    <div class="rv-hbar">
+      <div class="rv-hbar-top"><span class="rv-hbar-label">${escapeHtml(r.label)}</span><span class="rv-hbar-value">${r.valueText}</span></div>
+      <div class="rv-hbar-track"><span style="width:${Math.max(1.5, (r.value / max) * 100).toFixed(1)}%"></span></div>
+      ${r.sub ? `<div class="rv-hbar-sub">${r.sub}</div>` : ''}
+    </div>`).join('')}</div>`;
+}
+
+let revenueTipEl = null;
+function revenueTip(e) {
+  const bar = e.target.closest && e.target.closest('[data-rv-tip]');
+  if (!revenueTipEl) {
+    revenueTipEl = document.createElement('div');
+    revenueTipEl.className = 'rv-tooltip hidden';
+    document.body.appendChild(revenueTipEl);
+  }
+  $$('.rv-bar.is-hover').forEach((b) => { if (b !== bar) b.classList.remove('is-hover'); });
+  if (!bar) { revenueTipEl.classList.add('hidden'); return; }
+  bar.classList.add('is-hover');
+  revenueTipEl.innerHTML = bar.dataset.rvTip;
+  revenueTipEl.classList.remove('hidden');
+  const pad = 12;
+  const w = revenueTipEl.offsetWidth;
+  const x = Math.min(window.innerWidth - w - 8, Math.max(8, e.clientX - w / 2));
+  revenueTipEl.style.left = x + 'px';
+  revenueTipEl.style.top = Math.max(8, e.clientY - revenueTipEl.offsetHeight - pad) + 'px';
+}
+document.addEventListener('pointermove', (e) => {
+  if (e.target.closest && e.target.closest('.rv-chart')) revenueTip(e);
+  else if (revenueTipEl && !revenueTipEl.classList.contains('hidden')) revenueTip({ target: document.body });
+});
+// Nézetváltáskor / görgetéskor ne maradjon kint a buborék.
+['click', 'scroll', 'hashchange'].forEach((type) => window.addEventListener(type, () => {
+  if (revenueTipEl && !revenueTipEl.classList.contains('hidden')) revenueTip({ target: document.body });
+}, true));
+
+function buildRevenueOverviewHtml(months, currency) {
+  const byKey = Object.fromEntries(months.map((m) => [m.month, m]));
+  const now = new Date();
+  const last12 = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = revenueMonthKey(d);
+    const m = byKey[key] || { totalCents: 0, totalHuf: 0, purchaseCount: 0, buyerCount: 0 };
+    last12.push({ key, d, ...m });
+  }
+  const cur = last12[11];
+  const prev = last12[10];
+  const sum12 = last12.reduce((s, m) => s + m.totalCents, 0);
+  const sum12Huf = last12.reduce((s, m) => s + (m.totalHuf || 0), 0);
+  const count12 = last12.reduce((s, m) => s + m.purchaseCount, 0);
+  const avg = count12 ? Math.round(sum12 / count12) : 0;
+  const best = last12.reduce((b, m) => (m.totalCents > b.totalCents ? m : b), last12[0]);
+  const monthName = (m) => `${REVENUE_MONTH_NAMES[m.d.getMonth()]} ${m.d.getFullYear()}`;
+  const stat = (label, value, sub) => `<div class="rv-stat"><div class="rv-stat-label">${label}</div><div class="rv-stat-value">${value}</div>${sub ? `<div class="rv-stat-sub">${sub}</div>` : ''}</div>`;
+  const chart = revenueBarChartSvg(last12.map((m) => ({
+    key: m.key,
+    label: REVENUE_MONTH_NAMES[m.d.getMonth()],
+    value: m.totalCents,
+    tip: `<b>${monthName(m)}</b><br>${formatMoney(m.totalCents, currency)} · ${formatHuf(m.totalHuf || 0)}<br>${m.purchaseCount} vásárlás, ${m.buyerCount || 0} vásárló`
+  })), { clickable: true });
+  return `
+    <div class="card rv-overview">
+      <div class="rv-stats">
+        ${stat('Ebben a hónapban', formatMoney(cur.totalCents, currency), `${formatHuf(cur.totalHuf || 0)} · ${percentChangeHtml(cur.totalCents, prev.totalCents)} az előzőhöz képest`)}
+        ${stat('Utolsó 12 hónap', formatMoney(sum12, currency), `${formatHuf(sum12Huf)} · ${count12} vásárlás`)}
+        ${stat('Átlagos vásárlás', formatMoney(avg, currency), approxHufText(avg, currency))}
+        ${stat('Legjobb hónap', best.totalCents > 0 ? monthName(best) : '-', best.totalCents > 0 ? formatMoney(best.totalCents, currency) : '')}
+      </div>
+      <div class="rv-chart-wrap">${chart}</div>
+    </div>`;
+}
+
+function revenueFxNoteText(fx) {
+  if (!fx) return '';
+  const rate = String(Math.round(fx.hufPerEur * 10) / 10).replace('.', ',');
+  const source = fx.source === 'fixed' ? 'fix, az adminban beállított' : fx.source === 'ecb' ? 'EKB napi' : 'becsült';
+  return `A forintos értékek tájékoztatók: a fizetés napi árfolyamán, a régebbi tételeknél a mai ${source} árfolyamon (${rate} Ft/€).`;
+}
+
 async function loadRevenue() {
-  if (!session || !session.token || !isOwner) return;
+  if (!session || !session.token || !hasPerm('global.revenue')) return;
   let months = [];
+  let fx = null;
   try {
     const res = await fetch(BACKEND_URL + '/api/admin/revenue', {
       headers: { Authorization: 'Bearer ' + session.token }
     });
     const data = await res.json();
     months = data.ok && Array.isArray(data.months) ? data.months : [];
+    fx = data.fx || null;
+    if (fx && fx.hufPerEur > 0) shopHufPerEur = fx.hufPerEur;
   } catch {
     months = [];
   }
+  const currency = (months.find((m) => m.currency) || {}).currency || 'EUR';
+  $('#revenueOverview').innerHTML = buildRevenueOverviewHtml(months, currency);
   $('#revenueCalendar').innerHTML = buildRevenueCalendarHtml(months);
+  $('#revenueFxNote').textContent = revenueFxNoteText(fx);
 }
 
 document.addEventListener('click', (e) => {
-  const card = e.target.closest('.revenue-month-card[data-revenue-month]');
+  const card = e.target.closest('.revenue-month-card[data-revenue-month], .rv-bar-click[data-revenue-month]');
   if (card) loadRevenueDetail(card.dataset.revenueMonth);
 });
 
 async function loadRevenueDetail(month) {
-  $('#revenueDetailTitle').textContent = 'Havi bevétel - ' + month;
+  const [y, m] = month.split('-').map(Number);
+  $('#revenueDetailTitle').textContent = `Havi bevétel - ${y}. ${REVENUE_MONTH_NAMES[m - 1] || month}`;
   $('#revenueDetailTotal').textContent = '…';
+  $('#revenueDetailTotalHuf').textContent = '';
   $('#revenueDetailCount').textContent = '';
+  $('#revenueDetailStats').innerHTML = '';
+  ['#revenueDailyChart', '#revenueCategoryChart', '#revenueTopItems', '#revenueTopBuyers'].forEach((s) => { $(s).innerHTML = ''; });
   $('#revenueDetailTableBody').innerHTML = '';
   switchView('revenueDetail');
   try {
@@ -4425,14 +4687,43 @@ async function loadRevenueDetail(month) {
     });
     const data = await res.json();
     if (!data.ok) return;
-    $('#revenueDetailTotal').textContent = formatMoney(data.totalCents, data.currency);
-    $('#revenueDetailCount').textContent = `${data.purchaseCount} sikeres vásárlás`;
+    const cur = data.currency || 'EUR';
+    $('#revenueDetailTotal').textContent = formatMoney(data.totalCents, cur);
+    $('#revenueDetailTotalHuf').textContent = data.totalHuf ? `kb. ${formatHuf(data.totalHuf)}` : '';
+    $('#revenueDetailCount').innerHTML = `${data.purchaseCount} sikeres vásárlás · ${percentChangeHtml(data.totalCents, data.previous.totalCents)} az előző hónaphoz képest (${formatMoney(data.previous.totalCents, cur)})`;
+    $('#revenueDetailStats').innerHTML = `
+      <div class="rv-stat"><div class="rv-stat-label">Vásárlók</div><div class="rv-stat-value">${data.buyerCount}</div></div>
+      <div class="rv-stat"><div class="rv-stat-label">Átlagos vásárlás</div><div class="rv-stat-value">${formatMoney(data.avgCents, cur)}</div><div class="rv-stat-sub">${approxHufText(data.avgCents, cur)}</div></div>
+      <div class="rv-stat"><div class="rv-stat-label">Átlag / vásárló</div><div class="rv-stat-value">${formatMoney(data.buyerCount ? Math.round(data.totalCents / data.buyerCount) : 0, cur)}</div></div>`;
+
+    const daily = data.byDay.map((d) => ({
+      label: String(d.day),
+      value: d.cents,
+      tip: `<b>${m}. ${d.day}.</b><br>${formatMoney(d.cents, cur)}${d.cents ? ` · ${approxHufText(d.cents, cur)}` : ''}<br>${d.count} vásárlás`
+    }));
+    $('#revenueDailyChart').innerHTML = data.purchaseCount
+      ? `<div class="rv-chart-wrap">${revenueBarChartSvg(daily, { height: 150, labelEvery: 5 })}</div>`
+      : '<p class="rv-empty">Ebben a hónapban nem volt vásárlás.</p>';
+    $('#revenueCategoryChart').innerHTML = revenueHBarsHtml(data.byCategory.map((c) => ({
+      label: c.label,
+      value: c.cents,
+      valueText: `${formatMoney(c.cents, cur)} · ${data.totalCents ? Math.round((c.cents / data.totalCents) * 100) : 0}%`,
+      sub: `${c.count} vásárlás · ${formatHuf(c.huf)}`
+    })), 'Nincs adat.');
+    $('#revenueTopItems').innerHTML = revenueHBarsHtml(data.topItems.map((it) => ({
+      label: it.label, value: it.cents, valueText: formatMoney(it.cents, cur), sub: `${it.count} db`
+    })), 'Nincs adat.');
+    $('#revenueTopBuyers').innerHTML = revenueHBarsHtml(data.topBuyers.map((b) => ({
+      label: b.username, value: b.cents, valueText: formatMoney(b.cents, cur), sub: `${b.count} vásárlás · ${formatHuf(b.huf)}`
+    })), 'Nincs adat.');
+
     $('#revenueDetailTableBody').innerHTML = data.purchases.map((p) => `
       <tr>
         <td>${formatLedgerDate(p.createdAt)}</td>
         <td>${escapeHtml(p.username)}</td>
         <td>${escapeHtml(p.label)}</td>
         <td>${formatMoney(p.paidCents, p.currency)}</td>
+        <td>${p.paidHuf !== null && p.paidHuf !== undefined ? formatHuf(p.paidHuf) : '-'}</td>
       </tr>
     `).join('');
     $('#revenueDetailEmptyNote').classList.toggle('hidden', data.purchases.length > 0);
@@ -4842,8 +5133,7 @@ let discountsAdminItems = [];
 let discountRankOptions = [];
 
 function rankDisplayName(rank) {
-  const s = String(rank || '');
-  return s.charAt(0).toUpperCase() + s.slice(1);
+  return formatRankName(rank);
 }
 
 // "Kinek szól?" lista: a szerveren előforduló rangok (játékosszámmal), plusz az
@@ -5055,7 +5345,8 @@ function couponSelectHtml(field, options, selected, emptyText) {
   return `<select class="gift-modal-input" data-cr="${field}">${options.map(([v, label]) => `<option value="${escapeHtml(String(v))}"${String(v) === String(selected ?? '') ? ' selected' : ''}>${escapeHtml(label)}</option>`).join('')}</select>`;
 }
 
-function couponRewardRowHtml(r, i) {
+// A creator kódok ugyanezt a jutalom-szerkesztőt használják; ott a lista üres is lehet.
+function couponRewardRowHtml(r, i, list = couponRewardsDraft, minCount = 1) {
   const typeSelect = couponSelectHtml('rewardType', COUPON_REWARD_TYPES, r.rewardType, '');
   const amount = (label, placeholder, min, max) => `
     <label class="coupon-reward-field"><span>${label}</span>
@@ -5088,15 +5379,15 @@ function couponRewardRowHtml(r, i) {
       <div class="coupon-reward-top">
         <span class="coupon-reward-num">${i + 1}.</span>
         ${typeSelect}
-        <button type="button" class="sa-icon-btn" data-cr-remove title="Jutalom törlése" aria-label="Jutalom törlése"${couponRewardsDraft.length < 2 ? ' disabled' : ''}>&times;</button>
+        <button type="button" class="sa-icon-btn" data-cr-remove title="Jutalom törlése" aria-label="Jutalom törlése"${list.length <= minCount ? ' disabled' : ''}>&times;</button>
       </div>
       <div class="coupon-reward-fields">${fields}</div>
     </div>`;
 }
 
 // A legördülő listák első elemét alapértelmezettnek vesszük, ha még nincs választás.
-function couponFillSelectDefaults() {
-  for (const r of couponRewardsDraft) {
+function couponFillSelectDefaults(list = couponRewardsDraft) {
+  for (const r of list) {
     if (r.rewardType === 'cosmetic' && !r.rewardCosmeticId && couponCosmeticOptions[0]) r.rewardCosmeticId = couponCosmeticOptions[0].id;
     if (r.rewardType === 'rank' && !r.rewardRank && shopRanks[0]) r.rewardRank = shopRanks[0].id;
     if (r.rewardType === 'badge' && !r.rewardBadgeId && allBadgesCache && allBadgesCache[0]) r.rewardBadgeId = allBadgesCache[0].id;
@@ -5220,7 +5511,7 @@ function renderCouponsAdminList() {
 }
 
 async function loadCouponsAdmin() {
-  if (!session || !session.token || !isOwner) return;
+  if (!session || !session.token || !hasPerm('global.couponsManage')) return;
   try {
     const res = await fetch(BACKEND_URL + '/api/admin/coupons', {
       headers: { Authorization: 'Bearer ' + session.token }
@@ -5236,10 +5527,10 @@ async function loadCouponsAdmin() {
 $('#couponDiscardBtn').addEventListener('click', resetCouponForm);
 
 // Kliensoldali ellenőrzés jutalmanként; a hibaüzenet elé odaírjuk, melyik jutalomról van szó.
-function couponCheckRewards() {
+function couponCheckRewards(list = couponRewardsDraft) {
   const out = [];
-  for (const [i, r] of couponRewardsDraft.entries()) {
-    const prefix = couponRewardsDraft.length > 1 ? `${i + 1}. jutalom: ` : '';
+  for (const [i, r] of list.entries()) {
+    const prefix = list.length > 1 ? `${i + 1}. jutalom: ` : '';
     const amount = Number(r.rewardAmount);
     const days = String(r.rewardDurationDays ?? '').trim();
     const item = { rewardType: r.rewardType };
@@ -5360,59 +5651,88 @@ document.addEventListener('click', async (e) => {
 
 let creatorCodeEditingId = null;
 let creatorCodesAdminItems = [];
+// A szerkesztett creator kód jutalmai (a kupon-szerkesztő sorait használja).
+let ccRewardsDraft = [];
 
-function resetCreatorCodeForm() {
+function renderCcRewards() {
+  couponFillSelectDefaults(ccRewardsDraft);
+  $('#ccRewardsList').innerHTML = ccRewardsDraft.length
+    ? ccRewardsDraft.map((r, i) => couponRewardRowHtml(r, i, ccRewardsDraft, 0)).join('')
+    : '<p class="cc-no-reward">Nincs jutalom.</p>';
+  $('#ccAddRewardBtn').disabled = ccRewardsDraft.length >= COUPON_MAX_REWARDS;
+}
+
+$('#ccRewardsList').addEventListener('input', (e) => {
+  const field = e.target.dataset.cr;
+  const row = e.target.closest('[data-cr-idx]');
+  if (!field || !row || field === 'rewardType') return;
+  ccRewardsDraft[Number(row.dataset.crIdx)][field] = e.target.value;
+});
+$('#ccRewardsList').addEventListener('change', (e) => {
+  const field = e.target.dataset.cr;
+  const row = e.target.closest('[data-cr-idx]');
+  if (!field || !row) return;
+  const idx = Number(row.dataset.crIdx);
+  if (field === 'rewardType') {
+    ccRewardsDraft[idx] = couponNewReward(e.target.value);
+    renderCcRewards();
+  } else {
+    ccRewardsDraft[idx][field] = e.target.value;
+  }
+});
+$('#ccRewardsList').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-cr-remove]');
+  if (!btn || btn.disabled) return;
+  ccRewardsDraft.splice(Number(btn.closest('[data-cr-idx]').dataset.crIdx), 1);
+  renderCcRewards();
+});
+$('#ccAddRewardBtn').addEventListener('click', async () => {
+  if (ccRewardsDraft.length >= COUPON_MAX_REWARDS) return;
+  await ensureCouponOptionsLoaded();
+  ccRewardsDraft.push(couponNewReward());
+  renderCcRewards();
+});
+
+async function resetCreatorCodeForm() {
   creatorCodeEditingId = null;
   $('#creatorCodeFormTitle').textContent = 'Új creator kód';
   $('#creatorCodeCodeInput').value = '';
   $('#creatorCodeLabelInput').value = '';
-  $('#creatorCodeRewardTypeSelect').value = 'none';
-  $('#creatorCodeRewardAmountInput').value = '';
-  $('#creatorCodeDurationInput').value = '';
+  $('#creatorCodeMaxUsesInput').value = '';
   $('#creatorCodeValidFromInput').value = '';
   $('#creatorCodeValidUntilInput').value = '';
   $('#creatorCodeActiveCheckbox').checked = true;
   $('#creatorCodeFormResult').textContent = '';
   $('#creatorCodeFormResult').className = 'redeem-result';
   $('#creatorCodeSaveBtn').textContent = 'Mentés';
-  populateCreatorCodeRankSelect();
-  updateCreatorCodeRewardRowVisibility();
+  ccRewardsDraft = [];
+  renderCcRewards();
 }
-
-function populateCreatorCodeRankSelect(selectedId) {
-  const sel = $('#creatorCodeRewardRankSelect');
-  sel.innerHTML = shopRanks.map((r) => `<option value="${r.id}">${escapeHtml(r.label)}</option>`).join('');
-  sel.value = selectedId || (shopRanks[0] ? shopRanks[0].id : '');
-}
-
-function updateCreatorCodeRewardRowVisibility() {
-  const type = $('#creatorCodeRewardTypeSelect').value;
-  $('#creatorCodeAmountRow').classList.toggle('hidden', type !== 'pp' && type !== 'wallet');
-  $('#creatorCodeRankRow').classList.toggle('hidden', type !== 'rank');
-}
-$('#creatorCodeRewardTypeSelect').addEventListener('change', updateCreatorCodeRewardRowVisibility);
 
 function creatorCodeRewardLabel(c) {
-  if (c.reward_type === 'pp') return `${formatPp(c.reward_amount)} PP`;
-  if (c.reward_type === 'wallet') return `${formatHuf(c.reward_amount)} egyenleg`;
-  if (c.reward_type === 'rank') {
-    const rank = shopRanks.find((r) => r.id === c.reward_rank);
-    const rankLabel = rank ? rank.label : c.reward_rank;
-    return c.reward_duration_days ? `${escapeHtml(rankLabel)} rang (${c.reward_duration_days} napig)` : `${escapeHtml(rankLabel)} rang (végleges)`;
-  }
-  return 'Nincs jutalom';
+  const list = c.rewards || [];
+  if (!list.length) return 'Nincs jutalom';
+  return list.map((r) => {
+    if (r.rewardType === 'legacy_rank') {
+      return `${escapeHtml(formatRankName(r.rewardRank))} rang (${r.rewardDurationDays ? r.rewardDurationDays + ' napig' : 'végleges'}, régi)`;
+    }
+    return couponRewardItemLabel(r);
+  }).join(' + ');
 }
 
 function renderCreatorCodesAdminList() {
   $('#creatorCodesAdminList').innerHTML = creatorCodesAdminItems.map((c) => {
     const notStarted = c.valid_from && new Date(c.valid_from).getTime() > Date.now();
     const expired = c.valid_until && new Date(c.valid_until).getTime() <= Date.now();
-    const statusText = !c.active ? 'Kikapcsolva' : expired ? 'Lejárt' : notStarted ? 'Még nem aktív' : 'Aktív';
-    const statusClass = c.active && !expired && !notStarted ? 'discount-status-on' : 'discount-status-off';
+    const exhausted = c.max_uses && c.redemptionCount >= c.max_uses;
+    const statusText = !c.active ? 'Kikapcsolva' : exhausted ? 'Elfogyott' : expired ? 'Lejárt' : notStarted ? 'Még nem aktív' : 'Aktív';
+    const statusClass = c.active && !expired && !notStarted && !exhausted ? 'discount-status-on' : 'discount-status-off';
     const windowParts = [];
     if (c.valid_from) windowParts.push('érvényes ettől: ' + formatLedgerDate(c.valid_from));
     if (c.valid_until) windowParts.push('érvényes eddig: ' + formatLedgerDate(c.valid_until));
-    const metaParts = [creatorCodeRewardLabel(c), `${c.redemptionCount} regisztráció`, ...windowParts];
+    const pendingCount = Math.max(0, (c.registrationCount || 0) - c.redemptionCount);
+    const usesText = `${c.redemptionCount}${c.max_uses ? '/' + c.max_uses : ''} megerősített regisztráció${pendingCount ? ` (+${pendingCount} megerősítésre vár)` : ''}`;
+    const metaParts = [creatorCodeRewardLabel(c), usesText, ...windowParts];
     return `
     <div class="badges-admin-item">
       <div class="badges-admin-item-info">
@@ -5450,33 +5770,22 @@ $('#creatorCodeSaveBtn').addEventListener('click', async () => {
   const resultEl = $('#creatorCodeFormResult');
   const code = $('#creatorCodeCodeInput').value.trim();
   const creatorLabel = $('#creatorCodeLabelInput').value.trim() || undefined;
-  const rewardType = $('#creatorCodeRewardTypeSelect').value;
-  const rewardAmount = (rewardType === 'pp' || rewardType === 'wallet') ? Number($('#creatorCodeRewardAmountInput').value) : undefined;
-  const rewardRank = rewardType === 'rank' ? $('#creatorCodeRewardRankSelect').value : undefined;
-  const durationRaw = $('#creatorCodeDurationInput').value;
-  const rewardDurationDays = rewardType === 'rank' && durationRaw ? Number(durationRaw) : undefined;
+  const maxUsesRaw = $('#creatorCodeMaxUsesInput').value;
+  const maxUses = maxUsesRaw ? Number(maxUsesRaw) : undefined;
   const validFrom = $('#creatorCodeValidFromInput').value || undefined;
   const validUntil = $('#creatorCodeValidUntilInput').value || undefined;
   const active = $('#creatorCodeActiveCheckbox').checked;
 
   if (!code) { resultEl.textContent = 'Adj meg egy kódot.'; resultEl.className = 'redeem-result error'; return; }
-  if ((rewardType === 'pp' || rewardType === 'wallet') && (!Number.isInteger(rewardAmount) || rewardAmount < 1)) {
-    resultEl.textContent = 'Adj meg egy érvényes jutalom-mennyiséget.';
-    resultEl.className = 'redeem-result error';
-    return;
-  }
-  if (rewardType === 'rank' && !rewardRank) {
-    resultEl.textContent = 'Válassz egy rangot.';
-    resultEl.className = 'redeem-result error';
-    return;
-  }
+  const checked = couponCheckRewards(ccRewardsDraft);
+  if (checked.error) { resultEl.textContent = checked.error; resultEl.className = 'redeem-result error'; return; }
 
   try {
     const url = creatorCodeEditingId ? BACKEND_URL + '/api/admin/creator-codes/' + creatorCodeEditingId : BACKEND_URL + '/api/admin/creator-codes';
     const res = await fetch(url, {
       method: creatorCodeEditingId ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
-      body: JSON.stringify({ code, creatorLabel, rewardType, rewardAmount, rewardRank, rewardDurationDays, validFrom, validUntil, active })
+      body: JSON.stringify({ code, creatorLabel, rewards: checked.rewards, maxUses, validFrom, validUntil, active })
     });
     const data = await res.json();
     if (!data.ok) {
@@ -5493,15 +5802,24 @@ $('#creatorCodeSaveBtn').addEventListener('click', async () => {
   }
 });
 
-function renderCreatorCodeRedemptionsList(redemptions) {
-  $('#creatorCodeRedemptionsList').innerHTML = redemptions.map((r) => `
+function renderCreatorCodeRedemptionsList(redemptions, pending = []) {
+  const done = redemptions.map((r) => `
     <div class="badges-admin-item">
       <div class="badges-admin-item-info">
         <div class="badges-admin-item-name">${escapeHtml(r.username)}</div>
-        <div class="badges-admin-item-meta">${formatLedgerDate(r.redeemed_at)}${r.rank_expires_at ? (r.reverted ? ' - rang lejárt' : ' - rang lejár: ' + formatLedgerDate(r.rank_expires_at)) : ''}</div>
+        <div class="badges-admin-item-meta">${formatLedgerDate(r.redeemed_at)}${r.rank_expires_at ? (r.reverted ? ' - rang lejárt' : ' - rang lejár: ' + formatLedgerDate(r.rank_expires_at)) : ''}${r.rewards_note ? ` - <span class="discount-status-off">nem kapta meg: ${escapeHtml(r.rewards_note)}</span>` : ''}</div>
       </div>
     </div>
-  `).join('') || '<p class="redeem-result">Ezzel a kóddal még senki nem regisztrált.</p>';
+  `).join('');
+  const waiting = pending.map((p) => `
+    <div class="badges-admin-item">
+      <div class="badges-admin-item-info">
+        <div class="badges-admin-item-name">${escapeHtml(p.username)}</div>
+        <div class="badges-admin-item-meta">${formatLedgerDate(p.created_at)} - email megerősítésre vár</div>
+      </div>
+    </div>
+  `).join('');
+  $('#creatorCodeRedemptionsList').innerHTML = (done + waiting) || '<p class="redeem-result">Ezzel a kóddal még senki nem regisztrált.</p>';
 }
 
 async function openCreatorCodeRedemptions(id) {
@@ -5514,14 +5832,14 @@ async function openCreatorCodeRedemptions(id) {
       headers: { Authorization: 'Bearer ' + session.token }
     });
     const data = await res.json();
-    renderCreatorCodeRedemptionsList(data.ok && Array.isArray(data.redemptions) ? data.redemptions : []);
+    renderCreatorCodeRedemptionsList(data.ok && Array.isArray(data.redemptions) ? data.redemptions : [], data.ok && Array.isArray(data.pending) ? data.pending : []);
   } catch {
     $('#creatorCodeRedemptionsList').innerHTML = '<p class="redeem-result error">Nem sikerült elérni a szervert.</p>';
   }
 }
 $('#creatorCodeRedemptionsClose').addEventListener('click', () => $('#creatorCodeRedemptionsModal').classList.add('hidden'));
 
-document.addEventListener('click', (e) => {
+document.addEventListener('click', async (e) => {
   const redemptionsBtn = e.target.closest('[data-cc-redemptions-id]');
   if (redemptionsBtn) {
     openCreatorCodeRedemptions(redemptionsBtn.dataset.ccRedemptionsId);
@@ -5549,20 +5867,31 @@ document.addEventListener('click', (e) => {
   if (editBtn) {
     const item = creatorCodesAdminItems.find((c) => String(c.id) === editBtn.dataset.ccEditId);
     if (!item) return;
+    await ensureCouponOptionsLoaded();
     creatorCodeEditingId = item.id;
     $('#creatorCodeFormTitle').textContent = 'Creator kód szerkesztése';
     $('#creatorCodeCodeInput').value = item.code;
     $('#creatorCodeLabelInput').value = item.creator_label || '';
-    $('#creatorCodeRewardTypeSelect').value = item.reward_type;
-    $('#creatorCodeRewardAmountInput').value = item.reward_amount !== null ? item.reward_amount : '';
-    $('#creatorCodeDurationInput').value = item.reward_duration_days !== null ? item.reward_duration_days : '';
-    populateCreatorCodeRankSelect(item.reward_rank);
-    updateCreatorCodeRewardRowVisibility();
+    // A régi, tetszőleges rangot adó jutalmat nem lehet az új szerkesztőben
+    // megtartani: mentéskor elhagyjuk (ezt jelezzük is).
+    const legacy = (item.rewards || []).some((r) => r.rewardType === 'legacy_rank');
+    ccRewardsDraft = (item.rewards || []).filter((r) => r.rewardType !== 'legacy_rank').map((r) => ({
+      rewardType: r.rewardType,
+      rewardAmount: r.rewardAmount ?? '',
+      rewardCosmeticId: r.rewardCosmeticId ?? null,
+      rewardRank: r.rewardRank ?? null,
+      rewardDurationDays: r.rewardDurationDays ?? '',
+      rewardBadgeId: r.rewardBadgeId ?? null
+    }));
+    renderCcRewards();
+    $('#creatorCodeMaxUsesInput').value = item.max_uses ? item.max_uses : '';
     $('#creatorCodeValidFromInput').value = item.valid_from ? item.valid_from.slice(0, 10) : '';
     $('#creatorCodeValidUntilInput').value = item.valid_until ? item.valid_until.slice(0, 10) : '';
     $('#creatorCodeActiveCheckbox').checked = item.active === 1;
     $('#creatorCodeSaveBtn').textContent = 'Frissítés';
-    $('#creatorCodeFormResult').textContent = '';
+    $('#creatorCodeFormResult').className = 'redeem-result' + (legacy ? ' error' : '');
+    $('#creatorCodeFormResult').textContent = legacy ? 'Ennek a kódnak régi típusú rang-jutalma van. Válassz helyette rangot a jutalmak közül, különben mentéskor elmarad.' : '';
+    $('#creatorCodeFormTitle').scrollIntoView({ behavior: 'smooth', block: 'start' });
     return;
   }
 
@@ -5584,6 +5913,112 @@ document.addEventListener('click', (e) => {
         }
       }).catch(() => showToast('Nem sikerült elérni a szervert.', true));
     });
+  }
+});
+
+// Szezonális témák (admin). A kinézet a seasonal.css-ben van, itt csak az
+// állapot: ki / teszt / élő, automatikus bekapcsolás, tesztelők, lejárat.
+let seasonalThemesAdminItems = [];
+const SEASONAL_MODE_LABELS = { off: 'Ki', test: 'Teszt', live: 'Élő' };
+
+function seasonalThemeCardHtml(t) {
+  const status = t.mode === 'live'
+    ? `<span class="discount-status-on">Élő${t.activatedAt ? ' - ' + formatLedgerDate(t.activatedAt) + ' óta' : ''}</span>`
+    : t.mode === 'test' ? '<span class="st-status-test">Teszt</span>' : '<span class="discount-status-off">Kikapcsolva</span>';
+  return `
+    <div class="card st-card" data-st-key="${t.key}">
+      <div class="st-preview theme-swatch-${t.key}" aria-hidden="true"></div>
+      <div class="st-head">
+        <div class="st-name">${escapeHtml(t.label)}</div>
+        <div class="st-status">${status}</div>
+      </div>
+      <div class="st-seg" role="radiogroup" aria-label="Állapot">
+        ${['off', 'test', 'live'].map((m) => `<button type="button" class="${t.mode === m ? 'active' : ''}" data-st-mode="${m}" role="radio" aria-checked="${t.mode === m}">${SEASONAL_MODE_LABELS[m]}</button>`).join('')}
+      </div>
+      <label class="check-row st-check">
+        <input type="checkbox" data-st-auto${t.autoApply ? ' checked' : ''} />
+        Élesítéskor mindenkinél erre vált (utána bárki visszaválthat)
+      </label>
+      <label class="gift-modal-label">Tesztelők (vesszővel elválasztva)</label>
+      <input type="text" class="gift-modal-input" data-st-testers value="${escapeHtml(t.testers.join(', '))}" placeholder="A témakezelők mindig látják" />
+      <label class="gift-modal-label">Automatikus kikapcsolás (nem kötelező)</label>
+      <input type="date" class="gift-modal-input" data-st-ends value="${t.endsAt ? escapeHtml(t.endsAt.slice(0, 10)) : ''}" />
+      <p class="redeem-result" data-st-result></p>
+      <div class="st-actions">
+        <button type="button" class="btn-outline" data-st-preview>Előnézet nálam</button>
+        <button type="button" class="btn-glow" data-st-save>Mentés</button>
+      </div>
+    </div>`;
+}
+
+function renderSeasonalThemesAdmin() {
+  $('#seasonalThemesAdminList').innerHTML = seasonalThemesAdminItems.map(seasonalThemeCardHtml).join('')
+    || '<p class="redeem-result">Nem sikerült betölteni a témákat.</p>';
+}
+
+async function loadSeasonalThemesAdmin() {
+  if (!session || !session.token || !hasPerm('global.seasonalThemesManage')) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/seasonal-themes', { headers: { Authorization: 'Bearer ' + session.token } });
+    const data = await res.json();
+    seasonalThemesAdminItems = data.ok && Array.isArray(data.themes) ? data.themes : [];
+  } catch {
+    seasonalThemesAdminItems = [];
+  }
+  renderSeasonalThemesAdmin();
+}
+
+$('#seasonalThemesAdminList').addEventListener('click', async (e) => {
+  const card = e.target.closest('[data-st-key]');
+  if (!card) return;
+  const key = card.dataset.stKey;
+  const item = seasonalThemesAdminItems.find((t) => t.key === key);
+  const modeBtn = e.target.closest('[data-st-mode]');
+  if (modeBtn) {
+    card.querySelectorAll('[data-st-mode]').forEach((b) => {
+      b.classList.toggle('active', b === modeBtn);
+      b.setAttribute('aria-checked', String(b === modeBtn));
+    });
+    return;
+  }
+  if (e.target.closest('[data-st-preview]')) {
+    if (window.SolarTheme && item) {
+      window.SolarTheme.preview(key, item.label);
+      showToast(`Előnézet: ${item.label}. A témaválasztóban válthatsz vissza.`);
+    }
+    return;
+  }
+  if (!e.target.closest('[data-st-save]')) return;
+  const result = card.querySelector('[data-st-result]');
+  const mode = card.querySelector('[data-st-mode].active')?.dataset.stMode || 'off';
+  const testers = card.querySelector('[data-st-testers]').value.split(/[,\s]+/).map((s) => s.trim()).filter(Boolean);
+  const endsAt = card.querySelector('[data-st-ends]').value || '';
+  const autoApply = card.querySelector('[data-st-auto]').checked;
+  if (mode === 'live' && item && item.mode !== 'live') {
+    const ok = await confirmModal('Téma élesítése', `A(z) <b>${escapeHtml(item.label)}</b> téma mindenkinél megjelenik${autoApply ? ', és egyszer automatikusan be is kapcsol' : ''}. Mehet?`, 'Igen, élesítés');
+    if (!ok) return;
+  }
+  result.className = 'redeem-result';
+  result.textContent = 'Mentés...';
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/seasonal-themes/' + key, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ mode, testers, endsAt, autoApply })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      result.className = 'redeem-result error';
+      result.textContent = data.message || 'Nem sikerült menteni.';
+      return;
+    }
+    seasonalThemesAdminItems = data.themes;
+    renderSeasonalThemesAdmin();
+    showToast('Mentve.');
+    if (window.SolarTheme) window.SolarTheme.refresh();
+  } catch {
+    result.className = 'redeem-result error';
+    result.textContent = 'Nem sikerült elérni a szervert.';
   }
 });
 
@@ -5640,7 +6075,7 @@ async function loadRankSelect() {
     $('#permsRankNote').textContent = 'Jelenleg nincs a tulajdonoson kívüli rangja egyetlen szinkronizált játékosnak sem.';
     return;
   }
-  select.innerHTML = permRankListCache.map((r) => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join('');
+  select.innerHTML = permRankListCache.map((r) => `<option value="${escapeHtml(r)}">${escapeHtml(formatRankName(r))}</option>`).join('');
   loadPermsEditor(select.value);
 }
 $('#permsRankSelect').addEventListener('change', () => loadPermsEditor($('#permsRankSelect').value));
@@ -5832,7 +6267,7 @@ async function loadHomeStaffStats() {
     $('#homeStaffStatMutes').textContent = String(data.mutesIssued || 0);
     $('#homeStaffStatBans').textContent = String(data.bansIssued || 0);
     $('#homeStaffStatTickets').textContent = String(data.ticketsClosed || 0);
-    $('#homeStaffStatsRank').textContent = data.rank || '';
+    $('#homeStaffStatsRank').textContent = formatRankName(data.rank || '');
     renderHomeStaffPoints(data);
     $('#homeStaffStatsMonth').textContent =
       new Date().toLocaleDateString('hu-HU', { year: 'numeric', month: 'long' }) + ' - a hónap elejétől';
@@ -6040,7 +6475,10 @@ function purchaseWaiverModal(itemId, okLabel, viaWallet) {
   const name = item ? item.label : 'a termék';
   let price = '';
   if (item && viaWallet) price = formatHuf(item.priceHuf);
-  else if (item && item.cardPriceCents !== null && item.cardPriceCents !== undefined) price = formatMoney(item.cardPriceCents, item.cardCurrency);
+  else if (item && item.cardPriceCents !== null && item.cardPriceCents !== undefined) {
+    const approx = approxHufText(item.cardPriceCents, item.cardCurrency);
+    price = formatMoney(item.cardPriceCents, item.cardCurrency) + (approx ? ` (${approx})` : '');
+  }
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -11767,7 +12205,8 @@ function submissionImageUrl(id) {
 const SUBMISSION_STATUS = {
   pending: { label: 'Elbírálásra vár', cls: 'is-pending' },
   approved: { label: 'Elfogadva', cls: 'is-approved' },
-  rejected: { label: 'Elutasítva', cls: 'is-rejected' }
+  rejected: { label: 'Elutasítva', cls: 'is-rejected' },
+  expired: { label: 'Lejárt', cls: 'is-rejected' }
 };
 
 let skinSubmitVariant = 'classic';
@@ -11819,6 +12258,7 @@ async function loadMySkinSubmissions() {
 function renderMySkinSubmissions() {
   const list = $('#skinSubmitList');
   if (!list) return;
+  $('#skinSubmitClearBtn').classList.toggle('hidden', !mySkinSubmissions.some((it) => it.status !== 'pending'));
   if (!mySkinSubmissions.length) {
     list.innerHTML = '<p class="dm-empty">Még nem küldtél be skint.</p>';
     return;
@@ -11832,24 +12272,40 @@ function renderMySkinSubmissions() {
         <div class="skin-submit-row-text">
           <div class="skin-submit-row-name">${escapeHtml(it.name)}</div>
           <div class="skin-submit-row-meta">${it.hd ? 'HD · ' : ''}${it.width}x${it.height} · ${escapeHtml(when)}</div>
-          ${it.status === 'rejected' && it.rejectReason ? `<div class="skin-submit-row-reason">Indok: ${escapeHtml(it.rejectReason)}</div>` : ''}
+          ${(it.status === 'rejected' || it.status === 'expired') && it.rejectReason ? `<div class="skin-submit-row-reason">${it.status === 'rejected' ? 'Indok: ' : ''}${escapeHtml(it.rejectReason)}</div>` : ''}
         </div>
         <div class="skin-submit-row-side">
           <span class="submission-status ${st.cls}">${st.label}</span>
-          ${it.status === 'pending' ? `<button type="button" class="link-btn" data-submission-withdraw="${it.id}">Visszavonás</button>` : ''}
+          ${it.status === 'pending'
+            ? `<button type="button" class="link-btn" data-submission-withdraw="${it.id}">Visszavonás</button>`
+            : `<button type="button" class="link-btn" data-submission-hide="${it.id}">Törlés</button>`}
         </div>
       </div>`;
   }).join('');
+  // A kép minden állapotban a beküldött fájlból jön (a backend az elfogadott
+  // régebbi beküldéseknél az alap skin példányát adja helyette).
   list.querySelectorAll('[data-submission-thumb]').forEach(async (c) => {
     const item = mySkinSubmissions.find((x) => x.id === Number(c.dataset.submissionThumb));
-    if (!item || item.status === 'rejected') { c.classList.add('is-empty'); return; }
-    const img = item.status === 'approved'
-      ? (item.mediaId ? await loadImage(defaultMediaImageUrl(item.mediaId)) : null)
-      : await loadAuthImage(submissionImageUrl(item.id));
+    if (!item) return;
+    let img = await loadAuthImage(submissionImageUrl(item.id));
+    if (!img && item.status === 'approved' && item.mediaId) img = await loadImage(defaultMediaImageUrl(item.mediaId));
     if (img && c.isConnected) drawSkinFront(c, img, item.variant === 'slim');
     else c.classList.add('is-empty');
   });
 }
+
+$('#skinSubmitClearBtn').addEventListener('click', async () => {
+  const ok = await confirmModal('Előzmények törlése', 'Eltávolítod az összes elbírált beküldésedet a listából? A várakozók megmaradnak.', 'Igen, törlés');
+  if (!ok) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/default-media/submissions', { method: 'DELETE', headers: { Authorization: 'Bearer ' + session.token } });
+    const data = await res.json();
+    if (!data.ok) { showToast(data.message || 'Nem sikerült törölni.', true); return; }
+    loadMySkinSubmissions();
+  } catch {
+    showToast('Nem sikerült elérni a szervert.', true);
+  }
+});
 
 $$('[data-submit-variant]').forEach((b) => b.addEventListener('click', () => {
   skinSubmitVariant = b.dataset.submitVariant === 'slim' ? 'slim' : 'classic';
@@ -11917,6 +12373,18 @@ $('#skinSubmitBtn').addEventListener('click', async () => {
   }
 });
 $('#skinSubmitList').addEventListener('click', async (e) => {
+  const hideBtn = e.target.closest('[data-submission-hide]');
+  if (hideBtn) {
+    try {
+      const res = await fetch(BACKEND_URL + '/api/default-media/submissions/' + hideBtn.dataset.submissionHide, { method: 'DELETE', headers: { Authorization: 'Bearer ' + session.token } });
+      const data = await res.json();
+      if (!data.ok) { showToast(data.message || 'Nem sikerült törölni.', true); return; }
+      loadMySkinSubmissions();
+    } catch {
+      showToast('Nem sikerült elérni a szervert.', true);
+    }
+    return;
+  }
   const btn = e.target.closest('[data-submission-withdraw]');
   if (!btn) return;
   const it = mySkinSubmissions.find((x) => x.id === Number(btn.dataset.submissionWithdraw));
@@ -11988,12 +12456,40 @@ function renderSkinSubmissionsAdmin() {
       return `<div class="dm-review-history-row">
         <span class="submission-status ${st.cls}">${st.label}</span>
         <b>${escapeHtml(it.name)}</b>
-        <span>${escapeHtml(it.username)} · ${escapeHtml(it.reviewedBy || '-')} · ${escapeHtml(formatSanctionUntil(it.reviewedAt))}</span>
+        <span>${escapeHtml(it.username)} · ${escapeHtml(it.reviewedBy || (it.status === 'expired' ? 'automatikus' : '-'))} · ${escapeHtml(formatSanctionUntil(it.reviewedAt))}</span>
         ${it.rejectReason ? `<em>${escapeHtml(it.rejectReason)}</em>` : ''}
+        <button type="button" class="link-btn dm-history-del" data-review-history-del="${it.id}">Törlés</button>
       </div>`;
     }).join('')
     : '<p class="dm-empty">Még nincs elbírált beküldés.</p>';
+  $('#dmReviewHistoryClear').classList.toggle('hidden', !dmReviewHistory.length);
 }
+
+$('#dmReviewHistory').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-review-history-del]');
+  if (!btn) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/default-media/submissions/' + btn.dataset.reviewHistoryDel, { method: 'DELETE', headers: dmAdminAuth() });
+    const data = await res.json();
+    if (!data.ok) { showToast(data.message || 'Nem sikerült törölni.', true); return; }
+    loadSkinSubmissionsAdmin();
+  } catch {
+    showToast('Nem sikerült elérni a szervert.', true);
+  }
+});
+$('#dmReviewHistoryClear').addEventListener('click', async () => {
+  const ok = await confirmModal('Előzmények törlése', 'Törlöd az összes elbírált beküldést az előzményekből? A már elfogadott skinek megmaradnak az alap skinek között.', 'Igen, törlés');
+  if (!ok) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/default-media/submissions/history', { method: 'DELETE', headers: dmAdminAuth() });
+    const data = await res.json();
+    if (!data.ok) { showToast(data.message || 'Nem sikerült törölni.', true); return; }
+    showToast(`${data.removed} előzmény törölve.`);
+    loadSkinSubmissionsAdmin();
+  } catch {
+    showToast('Nem sikerült elérni a szervert.', true);
+  }
+});
 
 $('#dmReviewList').addEventListener('click', async (e) => {
   const variantBtn = e.target.closest('[data-review-variant]');
@@ -14538,6 +15034,9 @@ function renderTbxMap(data) {
     <div class="card-title">Termékek és Tebex-csomagok</div>
     <p class="sa-muted">Minden Center-termékhez kell egy Tebex-csomag, parancs nélkül. A kártyás ár mindig a Tebex-csomag ára (euróban), ezt a Center onnan olvassa ki; az egyenlegből fizetett forintár a Centerben marad. Az akciós árat a Center egyszeri kuponnal adja meg, a csomag árát ezért ne csökkentsd. Az egyenleg-feltöltő csomag egy darabja ennyi forintot ír jóvá (a csomagnál a mennyiséget engedélyezni kell):</p>
     <div class="tbx-unit"><input type="number" id="tbxTopupUnit" class="gift-modal-input" min="100" max="50000" step="100" value="${data.settings.topupUnitHuf}" /><span>Ft / db</span><button type="button" class="btn-outline" id="tbxTopupUnitSave">Mentés</button></div>
+    ${data.topupCheck ? `<p class="tbx-topup-check ${data.topupCheck.ok ? 'is-ok' : 'is-bad'}"><b>Egyenleg-feltöltés:</b> ${escapeHtml(data.topupCheck.message)}</p>` : ''}
+    ${data.fx ? `<p class="sa-muted" style="margin-top:14px;">Forint-kijelzés árfolyama (a játékosok az euróár mellett ezt látják, tájékoztatásul). Üresen hagyva az EKB napi árfolyama: <b>${tbxNum(data.fx.autoHufPerEur || data.fx.hufPerEur)} Ft/€</b>.</p>
+    <div class="tbx-unit"><input type="text" id="tbxFxRate" class="gift-modal-input" inputmode="decimal" placeholder="Automatikus" value="${data.fx.fixedHufPerEur ? escapeHtml(String(data.fx.fixedHufPerEur).replace('.', ',')) : ''}" /><span>Ft / €</span><button type="button" class="btn-outline" id="tbxFxSave">Mentés</button></div>` : ''}
     <div class="ledger-table-wrap"><table class="ledger-table tbx-table">
       <thead><tr><th>Center termék</th><th>Egyenlegből</th><th>Tebex-csomag</th><th>Kártyás ár</th><th>Állapot</th></tr></thead>
       <tbody>${rows}</tbody>
@@ -14553,6 +15052,14 @@ function renderTbxMap(data) {
     }
   }));
   $('#tbxRefresh').addEventListener('click', () => loadTbxAdmin(true));
+  $('#tbxFxSave')?.addEventListener('click', async () => {
+    try {
+      renderTbxAdmin(await saFetch('/api/admin/tebex/fx', 'POST', { fixedHufPerEur: $('#tbxFxRate').value.trim() || null }));
+      showToast('Mentve.');
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  });
   $('#tbxTopupUnitSave').addEventListener('click', async () => {
     try {
       renderTbxAdmin(await saFetch('/api/admin/tebex/settings', 'POST', { topupUnitHuf: Number($('#tbxTopupUnit').value) }));
@@ -14655,7 +15162,7 @@ async function loadRegisteredPlayers() {
       <td class="ledger-date">${fmt(offset + i + 1)}</td>
       <td class="ledger-party"><button type="button" class="reg-name" data-reg-profile="${escapeHtml(p.username)}">${p.online ? '<i class="reg-online" title="Online"></i>' : ''}${escapeHtml(p.username)}</button>${p.locked ? ' <span class="reg-locked">zárolva</span>' : ''}</td>
       <td class="ledger-date">${escapeHtml(formatLedgerDate(p.createdAt))}</td>
-      <td>${p.rank ? escapeHtml(p.rank) : '<span class="ledger-none">-</span>'}</td>
+      <td>${p.rank ? escapeHtml(formatRankName(p.rank)) : '<span class="ledger-none">-</span>'}</td>
       <td>${p.playtimeSeconds ? escapeHtml(formatPlaytime(p.playtimeSeconds)) : '<span class="ledger-none">-</span>'}</td>
       <td class="ledger-date">${p.online ? 'online' : escapeHtml(regRelative(p.lastSeenAt))}</td>
       <td>${p.discordLinked ? 'igen' : '<span class="ledger-none">nem</span>'}</td>

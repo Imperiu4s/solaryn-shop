@@ -372,7 +372,9 @@ a { color: inherit; }
   transition: max-height .26s cubic-bezier(.2,.7,.3,1), opacity .2s;
   opacity: 0;
 }
-.app-nav-group.open > .app-nav-sub { max-height: 640px; opacity: 1; }
+/* Bőven nagyobb, mint a leghosszabb (admin) almenü: a 640px levágta a lista
+   végét (Kuponok, Creator kódok, Jogok). */
+.app-nav-group.open > .app-nav-sub { max-height: 2000px; opacity: 1; }
 .app-nav-sub .app-nav-item {
   padding: 10px 16px 10px 48px; font-size: 13px; font-weight: 600;
   letter-spacing: .01em;

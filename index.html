@@ -35,10 +35,11 @@
   <link rel="dns-prefetch" href="https://api.overclockgame.hu" />
   <link rel="preload" as="image" href="assets/solaryn-icon.png" />
 
-  <script src="theme.js?v=20261008b"></script>
-  <link rel="stylesheet" href="style.css?v=20261008b" />
-  <link rel="stylesheet" href="ui.css?v=20261008b" />
-  <link rel="stylesheet" href="design.css?v=20261008b" />
+  <script src="theme.js?v=20261014a"></script>
+  <link rel="stylesheet" href="style.css?v=20261014a" />
+  <link rel="stylesheet" href="ui.css?v=20261014a" />
+  <link rel="stylesheet" href="design.css?v=20261014a" />
+  <link rel="stylesheet" href="seasonal.css?v=20261014a" />
 
   <script type="application/ld+json">
   {
@@ -347,6 +348,7 @@
             <button class="app-nav-item admin-nav-item hidden" data-view="discounts" data-permission="global.discountsManage"><span>Akciók</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="coupons" data-permission="global.couponsManage"><span>Kuponok</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="creatorCodes" data-permission="global.creatorCodesManage"><span>Creator kódok</span></button>
+            <button class="app-nav-item admin-nav-item hidden" data-view="seasonalThemesAdmin" data-permission="global.seasonalThemesManage"><span>Szezonális témák</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="permissions" id="navPermissionsBtn"><span>Jogok</span></button>
           </div>
         </div>
@@ -531,7 +533,7 @@
 
         <section class="view" data-view="wallet">
           <h1 class="page-title">Egyenleg</h1>
-          <p class="page-note">Az Egyenleg forintban vezetett keret: a Tebexen euróért töltheted fel, és azonnal, újabb fizetés nélkül vásárolhatsz belőle PrémiumPontot vagy bármilyen más terméket.</p>
+          <p class="page-note">Az Egyenleg forintban vezetett keret. A feltöltést a Tebexen euróban fizeted, utána bármit megvehetsz belőle újabb fizetés nélkül.</p>
 
           <div class="content-grid">
             <div>
@@ -541,7 +543,8 @@
                 </div>
                 <p class="transfer-fee-note">Jelenlegi egyenleged: <b id="walletPageBalance">0 Ft</b></p>
                 <label>Feltöltendő összeg (Ft)</label>
-                <input type="number" id="walletTopupInput" placeholder="0" min="500" max="500000" step="500" />
+                <div class="topup-presets" id="walletTopupPresets"></div>
+                <input type="number" id="walletTopupInput" placeholder="Vagy írd be az összeget" min="500" max="500000" step="500" />
                 <div class="transfer-fee-note" id="walletTopupPreview"></div>
                 <button type="button" class="btn-glow btn-glow-orange" id="btnWalletTopup">Feltöltés</button>
                 <p class="redeem-result" id="walletTopupResult"></p>
@@ -796,7 +799,7 @@
                 <button type="button" class="btn-glow" id="skinSubmitBtn">Beküldés elbírálásra</button>
               </div>
               <div class="skin-submit-list-col">
-                <div class="skin-submit-list-title">Beküldéseid</div>
+                <div class="skin-submit-list-title">Beküldéseid <button type="button" class="link-btn hidden" id="skinSubmitClearBtn">Előzmények törlése</button></div>
                 <div class="skin-submit-list" id="skinSubmitList"></div>
               </div>
             </div>
@@ -1251,9 +1254,11 @@
 
         <section class="view" data-view="revenue">
           <h1 class="page-title">Havi bevétel</h1>
-          <p class="page-note">Kattints egy hónapra a részletekért - minden sikeres (pénzes) vásárlást számol, visszamenőleg is.</p>
+          <p class="page-note">A Tebexen ténylegesen kifizetett összegek. Kattints egy hónapra a részletekért.</p>
 
+          <div id="revenueOverview"></div>
           <div id="revenueCalendar"></div>
+          <p class="rv-fx-note" id="revenueFxNote"></p>
         </section>
 
         <section class="view" data-view="revenueDetail">
@@ -1266,7 +1271,28 @@
           <div class="card revenue-summary-card">
             <div class="revenue-summary-label">Összes bevétel</div>
             <div class="revenue-summary-amount" id="revenueDetailTotal">0 Ft</div>
+            <div class="revenue-summary-huf" id="revenueDetailTotalHuf"></div>
             <div class="revenue-summary-count" id="revenueDetailCount"></div>
+            <div class="rv-stats" id="revenueDetailStats"></div>
+          </div>
+
+          <div class="rv-detail-grid">
+            <div class="card rv-chart-card">
+              <div class="card-title">Napi bevétel</div>
+              <div id="revenueDailyChart"></div>
+            </div>
+            <div class="card rv-chart-card">
+              <div class="card-title">Miből jött</div>
+              <div id="revenueCategoryChart"></div>
+            </div>
+            <div class="card rv-chart-card">
+              <div class="card-title">Legtöbbet hozó termékek</div>
+              <div id="revenueTopItems"></div>
+            </div>
+            <div class="card rv-chart-card">
+              <div class="card-title">Legtöbbet költő játékosok</div>
+              <div id="revenueTopBuyers"></div>
+            </div>
           </div>
 
           <div class="revenue-detail-divider"></div>
@@ -1279,6 +1305,7 @@
                   <th>Játékos</th>
                   <th>Termék</th>
                   <th>Összeg</th>
+                  <th>Forintban (kb.)</th>
                 </tr>
               </thead>
               <tbody id="revenueDetailTableBody"></tbody>
@@ -1420,10 +1447,11 @@
 
           <div class="card dm-review-card" id="dmReviewCard">
             <div class="card-title">Játékosok által beküldött skinek <span class="dm-tab-count" id="dmReviewCount">0</span></div>
-            <p class="page-note" style="margin-bottom:18px;">Az elfogadott skin azonnal megjelenik a játékosoknak az alap skinek között, a beküldő nevével. Elfogadás előtt átnevezheted és a kar-modellt is átállíthatod. Az elutasított beküldés képe törlődik, az indokot a játékos látja.</p>
+            <p class="page-note" style="margin-bottom:18px;">Az elfogadott skin azonnal megjelenik a játékosoknak az alap skinek között, a beküldő nevével. Elfogadás előtt átnevezheted és a kar-modellt is átállíthatod. Az elutasítás indokát a játékos látja. Amit 3 napig senki nem bírál el, az magától lejár.</p>
             <div class="dm-grid" id="dmReviewList"></div>
             <details class="dm-review-history">
               <summary>Legutóbb elbírált beküldések</summary>
+              <div class="dm-review-history-tools"><button type="button" class="link-btn" id="dmReviewHistoryClear">Összes előzmény törlése</button></div>
               <div class="dm-review-history-list" id="dmReviewHistory"></div>
             </details>
           </div>
@@ -2249,38 +2277,26 @@
 
         <section class="view" data-view="creatorCodes">
           <h1 class="page-title">Creator kódok</h1>
-          <p class="page-note">A regisztrációs űrlap "Support / Creator kód" mezőjében megadható kódok - a jutalom (ha van) az ÚJ fiók regisztrációjakor egyszer íródik jóvá. Egy kikapcsolt kód elmentve marad, később bármikor újra aktiválható.</p>
+          <p class="page-note">A regisztrációnál a "Support / Creator kód" mezőbe írható kódok. A jutalmat a játékos akkor kapja meg, amikor megerősíti az email címét.</p>
 
           <div class="card">
             <div class="card-title" id="creatorCodeFormTitle">Új creator kód</div>
             <label class="gift-modal-label" style="margin-top:0;">Kód</label>
             <input type="text" id="creatorCodeCodeInput" class="gift-modal-input" placeholder="Pl. PEWDIEPIE" maxlength="32" style="text-transform:uppercase;" />
-            <label class="gift-modal-label">Creator neve (nem kötelező, csak megjelenítéshez)</label>
+            <label class="gift-modal-label">Creator neve (nem kötelező)</label>
             <input type="text" id="creatorCodeLabelInput" class="gift-modal-input" placeholder="Pl. a creator csatorna neve" maxlength="64" />
-            <label class="gift-modal-label">Jutalom típusa</label>
-            <select id="creatorCodeRewardTypeSelect" class="gift-modal-input">
-              <option value="none">Nincs jutalom</option>
-              <option value="pp">PrémiumPont</option>
-              <option value="wallet">Egyenleg (Ft)</option>
-              <option value="rank">Rang</option>
-            </select>
-            <div id="creatorCodeAmountRow">
-              <label class="gift-modal-label">Jutalom mennyisége</label>
-              <input type="number" id="creatorCodeRewardAmountInput" class="gift-modal-input" placeholder="Pl. 500" min="1" step="1" />
-            </div>
-            <div id="creatorCodeRankRow" class="hidden">
-              <label class="gift-modal-label">Rang</label>
-              <select id="creatorCodeRewardRankSelect" class="gift-modal-input"></select>
-              <label class="gift-modal-label">Időtartam napokban (nem kötelező, üres = végleges)</label>
-              <input type="number" id="creatorCodeDurationInput" class="gift-modal-input" placeholder="Pl. 30" min="1" step="1" />
-            </div>
+            <span class="gift-modal-label">Jutalmak (üresen hagyva a kód jutalom nélküli)</span>
+            <div id="ccRewardsList" class="coupon-rewards"></div>
+            <button type="button" class="btn-outline coupon-add-reward" id="ccAddRewardBtn">+ Jutalom hozzáadása</button>
+            <label class="gift-modal-label">Felhasználhatóság (nem kötelező, üres = korlátlan)</label>
+            <input type="number" id="creatorCodeMaxUsesInput" class="gift-modal-input" placeholder="Pl. 200" min="1" step="1" />
             <label class="gift-modal-label">A kód érvényes ettől (nem kötelező)</label>
             <input type="date" id="creatorCodeValidFromInput" class="gift-modal-input" />
             <label class="gift-modal-label">A kód érvényes eddig (nem kötelező)</label>
             <input type="date" id="creatorCodeValidUntilInput" class="gift-modal-input" />
             <label class="check-row" style="margin-top:10px;">
               <input type="checkbox" id="creatorCodeActiveCheckbox" checked />
-              Aktív (a kikapcsolt kód mentve marad, de nem alkalmazódik regisztrációkor)
+              Aktív (a kikapcsolt kód mentve marad, de regisztrációkor nem fogadjuk el)
             </label>
             <p class="redeem-result" id="creatorCodeFormResult"></p>
             <div class="modal-actions" style="margin-top:14px;">
@@ -2291,6 +2307,12 @@
 
           <div class="admin-subsection-title">Meglévő creator kódok</div>
           <div id="creatorCodesAdminList"></div>
+        </section>
+
+        <section class="view" data-view="seasonalThemesAdmin">
+          <h1 class="page-title">Szezonális témák</h1>
+          <p class="page-note">Ünnepi témák a Centerhez és a launcherhez. Teszt módban csak a tesztelők és a témakezelők látják, élesben mindenki; a témaválasztóban 2 hétig „Új” jelölést kap.</p>
+          <div class="st-grid" id="seasonalThemesAdminList"></div>
         </section>
 
         <section class="view" data-view="permissions">
@@ -3177,9 +3199,10 @@
     </div>
   </div>
 
-  <script src="skin3d.js?v=20261008b" defer></script>
-  <script src="app.js?v=20261008b" defer></script>
-  <script src="ui.js?v=20261008b" defer></script>
-  <script src="design.js?v=20261008b" defer></script>
+  <script src="skin3d.js?v=20261014a" defer></script>
+  <script src="app.js?v=20261014a" defer></script>
+  <script src="ui.js?v=20261014a" defer></script>
+  <script src="design.js?v=20261014a" defer></script>
+  <script src="season-fx.js?v=20261014a" defer></script>
 </body>
 </html>

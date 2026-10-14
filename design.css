@@ -724,11 +724,23 @@ body::before {
 .auth-heading p { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--text-dim); }
 .auth-tabs { margin-bottom: 18px; }
 
-.auth-form .auth-input-icon { padding-left: 40px; background-repeat: no-repeat; background-position: 14px 50%; background-size: 16px 16px; }
-.auth-form .auth-icon-user { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238d8d97' stroke-width='1.8'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M4 20c1.5-3.6 4.4-5.5 8-5.5s6.5 1.9 8 5.5' stroke-linecap='round'/%3E%3C/svg%3E"); }
-.auth-form .auth-icon-lock { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238d8d97' stroke-width='1.8'%3E%3Crect x='5' y='10.5' width='14' height='10' rx='2.5'/%3E%3Cpath d='M8 10.5V8a4 4 0 0 1 8 0v2.5' stroke-linecap='round'/%3E%3C/svg%3E"); }
-.auth-form .auth-icon-mail { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238d8d97' stroke-width='1.8'%3E%3Crect x='3.5' y='5.5' width='17' height='13' rx='2.5'/%3E%3Cpath d='M4.5 7l7.5 6 7.5-6' stroke-linejoin='round'/%3E%3C/svg%3E"); }
-.auth-form .auth-icon-gift { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238d8d97' stroke-width='1.8'%3E%3Crect x='4' y='9' width='16' height='11' rx='2'/%3E%3Cpath d='M3 9h18M12 9v11M12 9c-1.5-3.5-5.5-4-5.5-1.5S10 9 12 9zm0 0c1.5-3.5 5.5-4 5.5-1.5S14 9 12 9z' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+/* A mező ikonja háttérképként. A fókusz/hover szabályok "background"
+   rövidítése törölné, ezért a hosszú alakok !important-tal maradnak meg.
+   Világos témán fekete ikonok. */
+.auth-form .auth-input-icon { padding-left: 40px; }
+.auth-form input.auth-input-icon {
+  background-repeat: no-repeat !important;
+  background-position: 14px 50% !important;
+  background-size: 16px 16px !important;
+}
+.auth-form input.auth-icon-user { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238d8d97' stroke-width='1.8'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M4 20c1.5-3.6 4.4-5.5 8-5.5s6.5 1.9 8 5.5' stroke-linecap='round'/%3E%3C/svg%3E") !important; }
+.auth-form input.auth-icon-lock { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238d8d97' stroke-width='1.8'%3E%3Crect x='5' y='10.5' width='14' height='10' rx='2.5'/%3E%3Cpath d='M8 10.5V8a4 4 0 0 1 8 0v2.5' stroke-linecap='round'/%3E%3C/svg%3E") !important; }
+.auth-form input.auth-icon-mail { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238d8d97' stroke-width='1.8'%3E%3Crect x='3.5' y='5.5' width='17' height='13' rx='2.5'/%3E%3Cpath d='M4.5 7l7.5 6 7.5-6' stroke-linejoin='round'/%3E%3C/svg%3E") !important; }
+.auth-form input.auth-icon-gift { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238d8d97' stroke-width='1.8'%3E%3Crect x='4' y='9' width='16' height='11' rx='2'/%3E%3Cpath d='M3 9h18M12 9v11M12 9c-1.5-3.5-5.5-4-5.5-1.5S10 9 12 9zm0 0c1.5-3.5 5.5-4 5.5-1.5S14 9 12 9z' stroke-linejoin='round'/%3E%3C/svg%3E") !important; }
+[data-theme="solaryn-light"] .auth-form input.auth-icon-user { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231d1a15' stroke-width='1.8'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M4 20c1.5-3.6 4.4-5.5 8-5.5s6.5 1.9 8 5.5' stroke-linecap='round'/%3E%3C/svg%3E") !important; }
+[data-theme="solaryn-light"] .auth-form input.auth-icon-lock { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231d1a15' stroke-width='1.8'%3E%3Crect x='5' y='10.5' width='14' height='10' rx='2.5'/%3E%3Cpath d='M8 10.5V8a4 4 0 0 1 8 0v2.5' stroke-linecap='round'/%3E%3C/svg%3E") !important; }
+[data-theme="solaryn-light"] .auth-form input.auth-icon-mail { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231d1a15' stroke-width='1.8'%3E%3Crect x='3.5' y='5.5' width='17' height='13' rx='2.5'/%3E%3Cpath d='M4.5 7l7.5 6 7.5-6' stroke-linejoin='round'/%3E%3C/svg%3E") !important; }
+[data-theme="solaryn-light"] .auth-form input.auth-icon-gift { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231d1a15' stroke-width='1.8'%3E%3Crect x='4' y='9' width='16' height='11' rx='2'/%3E%3Cpath d='M3 9h18M12 9v11M12 9c-1.5-3.5-5.5-4-5.5-1.5S10 9 12 9zm0 0c1.5-3.5 5.5-4 5.5-1.5S14 9 12 9z' stroke-linejoin='round'/%3E%3C/svg%3E") !important; }
 
 /* A jelölőnégyzetek szövege ne örökölje a mezőcímkék csupa nagybetűs stílusát. */
 .auth-form label.check-row { display: flex; margin: 0; font-size: 12.5px; letter-spacing: 0; text-transform: none; color: var(--text-dim); }
@@ -1630,6 +1642,10 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { pointer-ev
 .ev-actions .btn-outline { width: auto; margin: 0; padding: 10px 18px; }
 .ev-change-toggle { padding: 0; border: 0; background: none; font: inherit; font-size: 13px; cursor: pointer; }
 .ev-change { margin: 6px 0 4px; }
+.ev-code-row { display: flex; gap: 10px; align-items: stretch; margin: 14px 0 6px; }
+.ev-code-row .ev-code-input { flex: 1; margin: 0; font-size: 24px; font-weight: 700; letter-spacing: 8px; text-align: center; font-variant-numeric: tabular-nums; }
+.ev-code-row .btn-glow { width: auto; margin: 0; padding: 0 20px; }
+.ev-note { font-size: 12.5px; color: var(--text-faint); margin: 0 0 14px; }
 
 /* Átvizsgálás: gyanús email címek */
 .email-scan-head { margin: 22px 0 4px; padding-top: 18px; border-top: 1px solid var(--stroke); font-size: 15px; font-weight: 700; color: var(--text); }
@@ -1646,3 +1662,100 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { pointer-ev
   .email-scan-flags { justify-content: flex-start; }
   .email-scan-why { grid-column: 1; }
 }
+
+/* ---- 2026-10-14: szezonális témák, forintos árak, feltöltés, bevétel ---- */
+
+/* Témaválasztó: ünnepi témák felül, "Új" / "Teszt" jelöléssel */
+.topbar-theme-dropdown { min-width: 190px; }
+.topbar-theme-option { justify-content: space-between; gap: 10px; }
+.topbar-theme-option.active { color: var(--gold); }
+.topbar-theme-badge { flex: none; padding: 2px 7px; border-radius: 999px; font-size: 10.5px; font-weight: 700; line-height: 1.4; }
+.topbar-theme-badge-new { background: var(--gold); color: var(--btn-ink); }
+.topbar-theme-badge-test { border: 1px solid var(--stroke-3); color: var(--text-dim); }
+.topbar-theme-sep { height: 1px; margin: 5px 6px; background: var(--stroke-2); }
+
+/* Szezonális témák admin */
+.st-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.st-card { display: flex; flex-direction: column; padding: 16px; }
+.st-preview { height: 34px; border-radius: 10px; margin-bottom: 12px; border: 1px solid var(--stroke-2); }
+.st-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.st-name { font-size: 16px; font-weight: 700; color: var(--text); }
+.st-status { font-size: 12.5px; text-align: right; }
+.st-status-test { color: var(--gold); }
+.st-seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; border-radius: 12px; background: rgba(255, 255, 255, .04); border: 1px solid var(--stroke); }
+.st-seg button { padding: 7px 0; border: 0; border-radius: 9px; background: none; color: var(--text-dim); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.st-seg button.active { background: var(--gold); color: var(--btn-ink); }
+.st-check { margin-top: 12px; font-size: 13px; }
+.st-actions { display: flex; gap: 8px; margin-top: auto; padding-top: 6px; }
+.st-actions > * { flex: 1; margin: 0; }
+[data-theme="solaryn-light"] .st-seg { background: rgba(40, 30, 10, .045); }
+
+/* Creator kód: üres jutalomlista */
+.cc-no-reward { margin: 4px 0 8px; font-size: 13px; color: var(--text-faint); }
+
+/* Forintos ár az euró alatt */
+.pkg-price-huf { margin-top: 2px; font-size: 13px; font-weight: 600; color: var(--text-dim); }
+.pkg-card-ticket .pkg-price { margin-bottom: 4px; }
+
+/* Egyenleg feltöltés: gyors összegek */
+.topup-presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; margin: 6px 0 10px; }
+.topup-preset { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 9px 6px; border-radius: 12px; border: 1px solid var(--stroke-2); background: rgba(255, 255, 255, .03); color: var(--text); font: inherit; cursor: pointer; }
+.topup-preset b { font-size: 14px; }
+.topup-preset span { font-size: 11.5px; color: var(--text-dim); }
+.topup-preset:hover:not(:disabled) { border-color: var(--brand-line); }
+.topup-preset.active { border-color: var(--gold); background: var(--brand-soft); }
+.topup-preset:disabled { opacity: .45; cursor: not-allowed; }
+[data-theme="solaryn-light"] .topup-preset { background: #fff; }
+
+/* Beküldések: előzmény-törlés */
+.skin-submit-list-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.skin-submit-list-title .link-btn { font-size: 11.5px; letter-spacing: 0; text-transform: none; font-weight: 600; }
+.dm-review-history-tools { display: flex; justify-content: flex-end; margin: 8px 0 4px; }
+.dm-history-del { margin-left: auto; font-size: 12px; }
+
+/* Havi bevétel */
+.rv-overview { margin-bottom: 18px; }
+.rv-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0; margin-top: 12px; border-top: 1px solid var(--stroke); }
+.rv-overview .rv-stats { margin-top: 0; border-top: 0; border-bottom: 1px solid var(--stroke); padding-bottom: 14px; margin-bottom: 14px; }
+.rv-stat { padding: 10px 14px 0; border-left: 1px solid var(--stroke); }
+.rv-stat:first-child { border-left: 0; padding-left: 0; }
+.rv-stat-label { font-size: 12.5px; color: var(--text-dim); }
+.rv-stat-value { font-size: 20px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; margin-top: 2px; }
+.rv-stat-sub { font-size: 12.5px; color: var(--text-dim); margin-top: 2px; }
+.rv-delta { font-weight: 700; color: var(--text-dim); }
+.rv-delta-up { color: var(--success); }
+.rv-delta-down { color: var(--danger); }
+.rv-chart-wrap { width: 100%; }
+.rv-chart { display: block; width: 100%; height: 170px; overflow: visible; }
+.rv-chart .rv-grid { stroke: var(--stroke); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.rv-chart .rv-baseline { stroke: var(--stroke-3); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.rv-chart .rv-hit { fill: transparent; }
+.rv-chart .rv-bar-fill { fill: var(--gold); opacity: .85; transition: opacity .15s; }
+.rv-chart .rv-bar.is-hover .rv-bar-fill { opacity: 1; }
+.rv-chart .rv-bar.is-hover .rv-hit { fill: color-mix(in srgb, var(--gold) 7%, transparent); }
+.rv-chart .rv-bar-click { cursor: pointer; }
+.rv-chart .rv-axis { fill: var(--text-faint); font-size: 11px; }
+.rv-tooltip { position: fixed; z-index: 3000; pointer-events: none; padding: 8px 11px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--stroke-3); color: var(--text); font-size: 12.5px; line-height: 1.45; box-shadow: 0 12px 30px -12px rgba(0, 0, 0, .6); white-space: nowrap; }
+.rv-tooltip b { color: var(--text); }
+.revenue-month-huf { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+.revenue-summary-huf { font-size: 15px; font-weight: 600; color: var(--text-dim); margin-top: 2px; }
+.rv-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
+.rv-detail-grid .rv-chart-card:first-child { grid-column: 1 / -1; }
+.rv-detail-grid .rv-chart { height: 150px; }
+.rv-hbars { display: grid; gap: 12px; }
+.rv-hbar-top { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+.rv-hbar-label { color: var(--text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-hbar-value { color: var(--text-dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rv-hbar-track { height: 8px; margin-top: 5px; border-radius: 4px; background: rgba(255, 255, 255, .05); overflow: hidden; }
+.rv-hbar-track span { display: block; height: 100%; border-radius: 4px; background: var(--gold); }
+.rv-hbar-sub { margin-top: 3px; font-size: 11.5px; color: var(--text-faint); }
+.rv-empty { margin: 4px 0; font-size: 13px; color: var(--text-faint); }
+.rv-fx-note { margin-top: 14px; font-size: 12px; color: var(--text-faint); }
+[data-theme="solaryn-light"] .rv-hbar-track { background: rgba(40, 30, 10, .06); }
+@media (max-width: 760px) {
+  .rv-detail-grid { grid-template-columns: 1fr; }
+  .rv-stat { border-left: 0; padding-left: 0; }
+}
+.tbx-topup-check { margin: 10px 0 0; padding: 9px 12px; border-radius: 10px; font-size: 13px; line-height: 1.5; border: 1px solid var(--stroke-2); }
+.tbx-topup-check.is-ok { border-color: color-mix(in srgb, var(--success) 35%, transparent); color: var(--text-dim); }
+.tbx-topup-check.is-bad { border-color: color-mix(in srgb, var(--danger) 40%, transparent); background: color-mix(in srgb, var(--danger) 7%, transparent); color: var(--text); }

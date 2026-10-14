@@ -1,0 +1,99 @@
+/* Szezonális (ünnepi) témák. Ugyanez a fájl van a launcherben is
+   (SolarLauncher/src/renderer/seasonal.css) - a kettőt együtt kell módosítani.
+   Hogy melyik téma él éppen, azt a backend mondja meg (/api/themes/seasonal),
+   a theme.js teszi ki a választóba; a díszítést a season-fx.js rajzolja. */
+
+:root[data-theme="halloween"] {
+  --bg: #0c090e; --bg-2: #130e16; --panel: #1a1320; --panel-2: #22192a; --line: #35253d;
+  --text: #f6efe9; --text-dim: #b6a3a9; --text-faint: #7a6873;
+  --gold: #ff8a1f; --gold-rgb: 255, 138, 31; --gold-2: #e2600b; --gold-2-rgb: 226, 96, 11;
+  --gold-glow-rgb: 255, 120, 20; --gold-glow: rgba(255, 120, 20, 0.45);
+  --orange: #b46cff; --orange-rgb: 180, 108, 255; --orange-2: #8f45e6;
+  --orange-glow-rgb: 160, 80, 255; --orange-glow: rgba(160, 80, 255, 0.45);
+  --danger: #ff5a5a; --danger-rgb: 255, 90, 90; --discord: #5865f2; --success: #7bd88f; --btn-ink: #1e0d02;
+}
+
+:root[data-theme="christmas"] {
+  --bg: #07100b; --bg-2: #0b1711; --panel: #102019; --panel-2: #162a20; --line: #244330;
+  --text: #f2f7f3; --text-dim: #9fb8a7; --text-faint: #66806e;
+  --gold: #ff4f4f; --gold-rgb: 255, 79, 79; --gold-2: #d62f3a; --gold-2-rgb: 214, 47, 58;
+  --gold-glow-rgb: 255, 70, 70; --gold-glow: rgba(255, 70, 70, 0.42);
+  --orange: #f2c14e; --orange-rgb: 242, 193, 78; --orange-2: #d9a22b;
+  --orange-glow-rgb: 242, 193, 78; --orange-glow: rgba(242, 193, 78, 0.42);
+  --danger: #ff6b6b; --danger-rgb: 255, 107, 107; --discord: #5865f2; --success: #4fd17c; --btn-ink: #ffffff;
+}
+
+:root[data-theme="newyear"] {
+  --bg: #07080f; --bg-2: #0c0e18; --panel: #121522; --panel-2: #191c2d; --line: #2a2e47;
+  --text: #f3f4fb; --text-dim: #a2a6c2; --text-faint: #686d8c;
+  --gold: #f5cf5b; --gold-rgb: 245, 207, 91; --gold-2: #e0ad2e; --gold-2-rgb: 224, 173, 46;
+  --gold-glow-rgb: 245, 200, 80; --gold-glow: rgba(245, 200, 80, 0.42);
+  --orange: #b9c6ff; --orange-rgb: 185, 198, 255; --orange-2: #8e9ef5;
+  --orange-glow-rgb: 160, 175, 255; --orange-glow: rgba(160, 175, 255, 0.42);
+  --danger: #ff5a5a; --danger-rgb: 255, 90, 90; --discord: #5865f2; --success: #2ecc71; --btn-ink: #1d1503;
+}
+
+:root[data-theme="valentine"] {
+  --bg: #10090d; --bg-2: #170d13; --panel: #1f1219; --panel-2: #291821; --line: #432433;
+  --text: #fbeff4; --text-dim: #c2a0b0; --text-faint: #86667a;
+  --gold: #ff5c8a; --gold-rgb: 255, 92, 138; --gold-2: #e5356b; --gold-2-rgb: 229, 53, 107;
+  --gold-glow-rgb: 255, 80, 130; --gold-glow: rgba(255, 80, 130, 0.45);
+  --orange: #ff9ec0; --orange-rgb: 255, 158, 192; --orange-2: #f06d9a;
+  --orange-glow-rgb: 255, 140, 180; --orange-glow: rgba(255, 140, 180, 0.42);
+  --danger: #ff4b4b; --danger-rgb: 255, 75, 75; --discord: #5865f2; --success: #2ecc71; --btn-ink: #2b0613;
+}
+
+:root[data-theme="carnival"] {
+  --bg: #0b0a12; --bg-2: #110f1b; --panel: #17152a; --panel-2: #1f1c36; --line: #322d52;
+  --text: #f4f2ff; --text-dim: #a9a4cc; --text-faint: #6f6a92;
+  --gold: #ffd23f; --gold-rgb: 255, 210, 63; --gold-2: #f5a623; --gold-2-rgb: 245, 166, 35;
+  --gold-glow-rgb: 255, 200, 60; --gold-glow: rgba(255, 200, 60, 0.42);
+  --orange: #43d3ff; --orange-rgb: 67, 211, 255; --orange-2: #1fb0e6;
+  --orange-glow-rgb: 60, 200, 255; --orange-glow: rgba(60, 200, 255, 0.42);
+  --danger: #ff5a6e; --danger-rgb: 255, 90, 110; --discord: #5865f2; --success: #3ee08a; --btn-ink: #231a02;
+}
+
+:root[data-theme="easter"] {
+  --bg: #0a0f0c; --bg-2: #0f1611; --panel: #152019; --panel-2: #1b2920; --line: #2c4033;
+  --text: #f3faf5; --text-dim: #a7c2b2; --text-faint: #6b8676;
+  --gold: #9be3a8; --gold-rgb: 155, 227, 168; --gold-2: #6fcf8a; --gold-2-rgb: 111, 207, 138;
+  --gold-glow-rgb: 140, 220, 160; --gold-glow: rgba(140, 220, 160, 0.4);
+  --orange: #f7b3d4; --orange-rgb: 247, 179, 212; --orange-2: #e58bb7;
+  --orange-glow-rgb: 240, 160, 200; --orange-glow: rgba(240, 160, 200, 0.4);
+  --danger: #ff6b6b; --danger-rgb: 255, 107, 107; --discord: #5865f2; --success: #6fcf8a; --btn-ink: #0d2414;
+}
+
+:root[data-theme="national"] {
+  --bg: #0a0b0b; --bg-2: #101212; --panel: #171a19; --panel-2: #1e2221; --line: #303735;
+  --text: #f5f6f5; --text-dim: #aab2ae; --text-faint: #6f7874;
+  --gold: #e8343f; --gold-rgb: 232, 52, 63; --gold-2: #c4212c; --gold-2-rgb: 196, 33, 44;
+  --gold-glow-rgb: 232, 52, 63; --gold-glow: rgba(232, 52, 63, 0.4);
+  --orange: #3fae5a; --orange-rgb: 63, 174, 90; --orange-2: #2b8c45;
+  --orange-glow-rgb: 63, 174, 90; --orange-glow: rgba(63, 174, 90, 0.4);
+  --danger: #ff6b6b; --danger-rgb: 255, 107, 107; --discord: #5865f2; --success: #3fae5a; --btn-ink: #ffffff;
+}
+
+:root[data-theme="summer"] {
+  --bg: #061013; --bg-2: #0a181c; --panel: #0f2025; --panel-2: #152a30; --line: #22434c;
+  --text: #eefafc; --text-dim: #94bcc5; --text-faint: #5d8590;
+  --gold: #ffcf3a; --gold-rgb: 255, 207, 58; --gold-2: #ffab1f; --gold-2-rgb: 255, 171, 31;
+  --gold-glow-rgb: 255, 200, 50; --gold-glow: rgba(255, 200, 50, 0.42);
+  --orange: #2fd0e3; --orange-rgb: 47, 208, 227; --orange-2: #14a8bd;
+  --orange-glow-rgb: 40, 200, 225; --orange-glow: rgba(40, 200, 225, 0.42);
+  --danger: #ff5a5a; --danger-rgb: 255, 90, 90; --discord: #5865f2; --success: #2ecc71; --btn-ink: #1f1602;
+}
+
+.theme-swatch-halloween { background: linear-gradient(135deg, #ff8a1f 0 50%, #8f45e6 50% 100%); }
+.theme-swatch-christmas { background: linear-gradient(135deg, #d62f3a 0 50%, #1f6b3f 50% 100%); }
+.theme-swatch-newyear { background: linear-gradient(135deg, #f5cf5b 0 50%, #2a2e47 50% 100%); }
+.theme-swatch-valentine { background: linear-gradient(135deg, #ff5c8a, #ff9ec0); }
+.theme-swatch-carnival { background: linear-gradient(135deg, #ffd23f 0 33%, #43d3ff 33% 66%, #ff5a6e 66% 100%); }
+.theme-swatch-easter { background: linear-gradient(135deg, #9be3a8 0 50%, #f7b3d4 50% 100%); }
+.theme-swatch-national { background: linear-gradient(180deg, #e8343f 0 33%, #ffffff 33% 66%, #3fae5a 66% 100%); }
+.theme-swatch-summer { background: linear-gradient(135deg, #ffcf3a 0 50%, #2fd0e3 50% 100%); }
+
+/* A díszítés (season-fx.js) két rétege: a háttér a tartalom mögött, a felső
+   réteg (figurák, égősor...) a tartalom fölött, de a felugró ablakok alatt.
+   Egyik sem fogja meg a kattintást. */
+.season-canvas { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+.season-overlay { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 40; }
