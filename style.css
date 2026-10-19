@@ -1053,6 +1053,9 @@ a { color: inherit; }
 }
 .staff-stat-card:hover { transform: translateY(-3px); border-color: var(--gold-2); }
 .staff-stat-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.staff-stat-card.is-clickable { cursor: pointer; }
+.staff-stat-card.is-clickable:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.staff-stat-card-adjust { font-size: 11.5px; color: var(--text-faint); margin: -8px 0 12px; }
 .staff-stat-card-name { font-size: 16px; font-weight: 800; }
 .staff-stat-card-rank { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--gold); }
 .staff-stat-rows { display: flex; flex-direction: column; gap: 12px; }

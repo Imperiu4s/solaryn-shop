@@ -6,7 +6,7 @@
   const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
   const reduced = () => motionQuery.matches;
 
-  const BACKEND_ORIGIN = (typeof BACKEND_URL === 'string' && BACKEND_URL) || 'https://api.overclockgame.hu:8908';
+  const BACKEND_ORIGIN = (typeof BACKEND_URL === 'string' && BACKEND_URL) || 'https://api.solaryn.hu:25572';
 
   function setStaggerIndexes(root) {
     const scope = root || document;

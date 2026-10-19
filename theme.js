@@ -6,7 +6,7 @@
   const SEASON_CACHE_KEY = 'solarcenter.seasonal';
   // Melyik élesítésnél kapcsoltuk már be automatikusan (kulcs + élesítés ideje).
   const AUTO_KEY_PREFIX = 'solarcenter.seasonAuto.';
-  const BACKEND = 'https://api.overclockgame.hu:8908';
+  const BACKEND = 'https://api.solaryn.hu:25572';
   const NEW_BADGE_DAYS = 14;
 
   const THEMES = [

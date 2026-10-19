@@ -2,7 +2,7 @@
 <html lang="hu">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://api.overclockgame.hu:8908 https://cdn.discordapp.com https://media.discordapp.net; connect-src 'self' https://api.overclockgame.hu:8908; media-src 'self' blob: https://api.overclockgame.hu:8908; font-src 'self' data:; frame-src https://discord.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://api.solaryn.hu:25572 https://cdn.discordapp.com https://media.discordapp.net; connect-src 'self' https://api.solaryn.hu:25572; media-src 'self' blob: https://api.solaryn.hu:25572; font-src 'self' data:; frame-src https://discord.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests" />
   <meta name="referrer" content="strict-origin-when-cross-origin" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 
@@ -31,8 +31,8 @@
   <meta name="twitter:description" content="A SolarynNetwork hivatalos játékosportálja: skin, kiegészítők, PrémiumPont, rangok és fiókbiztonság egy helyen." />
   <meta name="twitter:image" content="https://center.solaryn.hu/assets/solaryn-wordmark.png" />
 
-  <link rel="preconnect" href="https://api.overclockgame.hu:8908" crossorigin />
-  <link rel="dns-prefetch" href="https://api.overclockgame.hu" />
+  <link rel="preconnect" href="https://api.solaryn.hu:25572" crossorigin />
+  <link rel="dns-prefetch" href="https://api.solaryn.hu" />
   <link rel="preload" as="image" href="assets/solaryn-icon.png" />
 
   <script src="theme.js?v=20261014a"></script>
@@ -3072,6 +3072,19 @@
       <div class="modal-actions">
         <button type="button" class="btn-outline" id="accountModalClose">Bezárás</button>
       </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden" id="staffDetailModal" role="dialog" aria-modal="true" aria-labelledby="staffDetailTitle">
+    <div class="modal-card staff-detail-card">
+      <div class="staff-detail-head">
+        <div>
+          <h3 id="staffDetailTitle">Staff</h3>
+          <div class="staff-detail-sub" id="staffDetailSub"></div>
+        </div>
+        <button type="button" class="staff-detail-close" id="staffDetailClose" aria-label="Bezárás">&times;</button>
+      </div>
+      <div id="staffDetailBody"></div>
     </div>
   </div>
 

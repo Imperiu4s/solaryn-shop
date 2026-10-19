@@ -1,6 +1,6 @@
 const CENTER_VERSION = '20260930a';
 
-const BACKEND_URL = 'https://api.overclockgame.hu:8908';
+const BACKEND_URL = 'https://api.solaryn.hu:25572';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -4431,7 +4431,7 @@ async function loadStaffStats() {
   renderStaffStatsSummary(staff);
 
   grid.innerHTML = staff.map((s) => `
-    <div class="staff-stat-card">
+    <div class="staff-stat-card is-clickable" role="button" tabindex="0" data-staff-detail="${escapeHtml(s.username)}" title="Részletek">
       <div class="staff-stat-card-head">
         <div class="staff-stat-card-name">${escapeHtml(s.username)}</div>
         <div class="staff-stat-card-rank">${escapeHtml(formatRankName(s.rank))}</div>
@@ -4440,6 +4440,7 @@ async function loadStaffStats() {
         <span>Pontok</span>
         <b>${formatPoints(s.points)}</b>
       </div>
+      ${s.pointAdjustment ? `<div class="staff-stat-card-adjust">ebből kézi módosítás: ${s.pointAdjustment > 0 ? '+' : ''}${formatPoints(s.pointAdjustment)}</div>` : ''}
       <div class="staff-stat-rows">
         <div class="staff-stat-row">
           <div class="staff-stat-row-icon">${STAT_ICONS.time}</div>
@@ -4461,7 +4462,211 @@ async function loadStaffStats() {
     </div>
   `).join('');
   $('#staffStatsEmptyNote').classList.toggle('hidden', staff.length > 0);
+  if (staffDetailUsername && !$('#staffDetailModal').classList.contains('hidden')) loadStaffDetail();
 }
+
+// Egy staff-tag havi tevékenysége (kártyára kattintva) + kézi pontmódosítás.
+let staffDetailUsername = null;
+
+const STAFF_SANCTION_LABEL = { mute: 'Némítás', ban: 'Kitiltás', timeout: 'Időkorlát', kick: 'Kirúgás' };
+
+function staffDurationText(fromIso, untilIso, permanent) {
+  if (permanent) return 'végleges';
+  if (!untilIso) return '-';
+  const ms = new Date(untilIso).getTime() - new Date(fromIso).getTime();
+  if (!Number.isFinite(ms) || ms <= 0) return '-';
+  const min = Math.round(ms / 60000);
+  if (min < 60) return `${min} perc`;
+  const hours = Math.round(min / 60);
+  if (hours < 48) return `${hours} óra`;
+  return `${Math.round(hours / 24)} nap`;
+}
+
+function staffDetailSection(title, count, rowsHtml, emptyText) {
+  return `
+    <div class="staff-detail-section">
+      <div class="staff-detail-section-title">${title}<span>${count}</span></div>
+      ${rowsHtml || `<p class="staff-detail-empty">${emptyText}</p>`}
+    </div>`;
+}
+
+function renderStaffDetail(d) {
+  const p = d.points || {};
+  const cfg = d.config || {};
+  const isCurrent = d.month === d.currentMonth;
+  $('#staffDetailTitle').textContent = d.username;
+  $('#staffDetailSub').textContent = `${formatRankName(d.rank)} · ${monthOptionLabel(d.month)}${isCurrent ? ' (folyamatban)' : ''}`;
+
+  const breakdown = [
+    [`Némítás (${d.mutesIssued} db, ${cfg.mutesPerPoint || '-'} = 1 pont)`, p.fromMutes],
+    [`Kitiltás (${d.bansIssued} db, ${cfg.bansPerPoint || '-'} = 1 pont)`, p.fromBans],
+    [`Lezárt ticket (${d.ticketsClosed} db, ${cfg.ticketsPerPoint || '-'} = 1 pont)`, p.fromTickets],
+    ['Kézi módosítás', p.adjustments]
+  ].map(([label, v]) => `<div class="staff-detail-break-row"><span>${label}</span><b>${(v > 0 && label === 'Kézi módosítás') ? '+' : ''}${formatPoints(v)}</b></div>`).join('');
+
+  const actionRows = (d.actions || []).map((a) => `
+    <div class="staff-detail-row">
+      <div class="staff-detail-row-main">
+        <span class="staff-detail-tag tag-${a.type}">${STAFF_SANCTION_LABEL[a.type] || a.type}</span>
+        <b>${a.target ? escapeHtml(a.target) : '<span class="staff-detail-faint">ismeretlen játékos</span>'}</b>
+        <span class="staff-detail-faint">${staffDurationText(a.at, a.until, a.permanent)}</span>
+      </div>
+      <div class="staff-detail-row-meta">${formatLedgerDate(a.at)} · ${a.reason ? escapeHtml(a.reason) : '<span class="staff-detail-faint">nincs ok megadva</span>'}</div>
+    </div>`).join('');
+
+  const ticketRows = (d.tickets || []).map((t) => `
+    <div class="staff-detail-row">
+      <div class="staff-detail-row-main">
+        <span class="staff-detail-tag tag-ticket">Ticket</span>
+        <b>${t.opener ? escapeHtml(t.opener) : `<span class="staff-detail-faint">Discord ${escapeHtml(t.openerDiscordId || '?')}</span>`}</b>
+      </div>
+      <div class="staff-detail-row-meta">Nyitva: ${formatLedgerDate(t.openedAt)} · Lezárva: ${formatLedgerDate(t.closedAt)}${t.reason ? ' · ' + escapeHtml(t.reason) : ''}</div>
+    </div>`).join('');
+
+  const discordRows = (d.discordActions || []).map((a) => `
+    <div class="staff-detail-row">
+      <div class="staff-detail-row-main">
+        <span class="staff-detail-tag tag-${a.type}">${STAFF_SANCTION_LABEL[a.type] || a.type}</span>
+        <b>${a.target ? escapeHtml(a.target) : `<span class="staff-detail-faint">Discord ${escapeHtml(a.targetDiscordId || '?')}</span>`}</b>
+        <span class="staff-detail-faint">${staffDurationText(a.at, a.until, false)}</span>
+      </div>
+      <div class="staff-detail-row-meta">${formatLedgerDate(a.at)} · ${a.reason ? escapeHtml(a.reason) : '<span class="staff-detail-faint">nincs ok megadva</span>'}</div>
+    </div>`).join('');
+
+  const adjustRows = (d.adjustments || []).map((a) => `
+    <div class="staff-detail-row">
+      <div class="staff-detail-row-main">
+        <span class="staff-detail-tag ${a.delta > 0 ? 'tag-plus' : 'tag-minus'}">${a.delta > 0 ? '+' : ''}${a.delta} pont</span>
+        <b>${escapeHtml(a.reason)}</b>
+        <button type="button" class="staff-detail-remove" data-staff-adjust-remove="${a.id}">Visszavonás</button>
+      </div>
+      <div class="staff-detail-row-meta">${escapeHtml(a.by)} · ${formatLedgerDate(a.at)}</div>
+    </div>`).join('');
+
+  const playRows = (d.playtimeDays || []).map((r) => `
+    <div class="staff-detail-play"><span>${escapeHtml(String(r.day).replace(/-/g, '. '))}.</span><b>${formatPlaytime(r.seconds)}</b></div>`).join('');
+
+  $('#staffDetailBody').innerHTML = `
+    <div class="staff-detail-points">
+      <div class="staff-detail-total"><span>Pontok</span><b>${formatPoints(p.total)}</b></div>
+      <div class="staff-detail-break">${breakdown}</div>
+    </div>
+
+    <form class="staff-detail-adjust" id="staffAdjustForm">
+      <div class="staff-detail-section-title">Pont hozzáadása / elvétele</div>
+      <div class="staff-detail-adjust-fields">
+        <input type="number" id="staffAdjustDelta" class="gift-modal-input" step="1" min="-1000" max="1000" placeholder="Pl. 2 vagy -1" inputmode="numeric" required />
+        <input type="text" id="staffAdjustReason" class="gift-modal-input" maxlength="200" placeholder="Miért? (pl. eseményt vezetett)" required />
+        <button type="submit" class="btn-glow" id="staffAdjustSubmit">Mentés</button>
+      </div>
+      <p class="staff-detail-hint">A ${monthOptionLabel(d.month).toLowerCase()} hónaphoz adódik. Negatív szám = levonás.</p>
+    </form>
+
+    ${staffDetailSection('Kézi pontmódosítások', (d.adjustments || []).length, adjustRows, 'Ebben a hónapban nem volt kézi módosítás.')}
+    ${staffDetailSection('Játékbeli büntetések', (d.actions || []).length, actionRows, 'Ebben a hónapban nem adott ki némítást vagy kitiltást.')}
+    ${staffDetailSection('Lezárt ticketek', (d.tickets || []).length, ticketRows, d.discordLinked ? 'Ebben a hónapban nem zárt le ticketet.' : 'Nincs összekötött Discord-fiókja, ezért a ticketjei nem láthatók.')}
+    ${(d.discordActions || []).length ? staffDetailSection('Discord büntetések (pont nem jár érte)', d.discordActions.length, discordRows, '') : ''}
+    ${staffDetailSection('Online idő naponta', (d.playtimeDays || []).length + ' nap', playRows, 'Ebben a hónapban nem volt fent a szerveren.')}
+  `;
+}
+
+async function loadStaffDetail() {
+  if (!staffDetailUsername) return;
+  const query = staffStatsMonth ? '?month=' + encodeURIComponent(staffStatsMonth) : '';
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/staff-stats/' + encodeURIComponent(staffDetailUsername) + query, {
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      $('#staffDetailBody').innerHTML = `<p class="redeem-result error">${escapeHtml(data.message || 'Nem sikerült betölteni.')}</p>`;
+      return;
+    }
+    renderStaffDetail(data);
+  } catch {
+    $('#staffDetailBody').innerHTML = '<p class="redeem-result error">Nem sikerült elérni a szervert.</p>';
+  }
+}
+
+function openStaffDetail(username) {
+  staffDetailUsername = username;
+  $('#staffDetailTitle').textContent = username;
+  $('#staffDetailSub').textContent = '';
+  $('#staffDetailBody').innerHTML = '<p class="redeem-result">Betöltés...</p>';
+  $('#staffDetailModal').classList.remove('hidden');
+  loadStaffDetail();
+}
+
+function closeStaffDetail() {
+  $('#staffDetailModal').classList.add('hidden');
+  staffDetailUsername = null;
+}
+
+$('#staffStatsGrid')?.addEventListener('click', (e) => {
+  const card = e.target.closest('[data-staff-detail]');
+  if (card) openStaffDetail(card.dataset.staffDetail);
+});
+$('#staffStatsGrid')?.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const card = e.target.closest('[data-staff-detail]');
+  if (!card) return;
+  e.preventDefault();
+  openStaffDetail(card.dataset.staffDetail);
+});
+$('#staffDetailClose')?.addEventListener('click', closeStaffDetail);
+$('#staffDetailModal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'staffDetailModal') closeStaffDetail();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !$('#staffDetailModal').classList.contains('hidden')) closeStaffDetail();
+});
+
+$('#staffDetailBody')?.addEventListener('submit', async (e) => {
+  if (e.target.id !== 'staffAdjustForm') return;
+  e.preventDefault();
+  const delta = Number(String($('#staffAdjustDelta').value).trim());
+  const reason = $('#staffAdjustReason').value.trim();
+  if (!Number.isInteger(delta) || delta === 0 || Math.abs(delta) > 1000) {
+    showToast('A pont -1000 és 1000 közötti, nem nulla egész szám lehet.', true);
+    return;
+  }
+  if (!reason) { showToast('Írd be, miért kapja / veszíti el a pontot.', true); return; }
+  const btn = $('#staffAdjustSubmit');
+  if (typeof window.setButtonLoading === 'function') window.setButtonLoading(btn, true);
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/staff-stats/' + encodeURIComponent(staffDetailUsername) + '/adjustments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ delta, reason, month: staffStatsMonth || undefined })
+    });
+    const data = await res.json();
+    if (!data.ok) { showToast(data.message || 'Nem sikerült menteni.', true); return; }
+    showToast(delta > 0 ? `+${delta} pont hozzáadva.` : `${delta} pont levonva.`);
+    loadStaffStats();
+  } catch {
+    showToast('Nem sikerült elérni a szervert.', true);
+  } finally {
+    if (typeof window.setButtonLoading === 'function') window.setButtonLoading(btn, false);
+  }
+});
+
+$('#staffDetailBody')?.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-staff-adjust-remove]');
+  if (!btn) return;
+  if (!confirm('Biztosan visszavonod ezt a pontmódosítást?')) return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/staff-stats/adjustments/' + encodeURIComponent(btn.dataset.staffAdjustRemove), {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer ' + session.token }
+    });
+    const data = await res.json();
+    if (!data.ok) { showToast(data.message || 'Nem sikerült visszavonni.', true); return; }
+    showToast('Pontmódosítás visszavonva.');
+    loadStaffStats();
+  } catch {
+    showToast('Nem sikerült elérni a szervert.', true);
+  }
+});
 
 const REVENUE_MONTH_NAMES = ['Jan', 'Feb', 'Márc', 'Ápr', 'Máj', 'Jún', 'Júl', 'Aug', 'Szept', 'Okt', 'Nov', 'Dec'];
 

@@ -958,6 +958,49 @@ body::before {
 .staff-stat-card-points span { font-size: 10.5px; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; color: var(--text-faint); }
 .staff-stat-card-points b { font-family: var(--font-display); font-size: 18px; color: var(--gold); font-variant-numeric: tabular-nums; }
 
+.staff-detail-card { width: 680px; max-width: calc(100vw - 32px); max-height: none; padding: 26px 28px; }
+.staff-detail-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+.staff-detail-head h3 { margin: 0 0 2px; }
+.staff-detail-sub { font-size: 12.5px; color: var(--text-faint); }
+.staff-detail-close {
+  width: 34px; height: 34px; flex-shrink: 0; border-radius: 10px; border: 1px solid var(--stroke-2, var(--line));
+  background: transparent; color: var(--text-dim); font-size: 22px; line-height: 1; cursor: pointer;
+}
+.staff-detail-close:hover { color: var(--text); border-color: var(--gold); }
+.staff-detail-points { display: grid; grid-template-columns: 140px 1fr; gap: 16px; padding: 14px 16px; border-radius: var(--r-sm); background: var(--brand-soft); border: 1px solid var(--brand-line); margin-bottom: 18px; }
+.staff-detail-total { display: flex; flex-direction: column; justify-content: center; }
+.staff-detail-total span { font-size: 10.5px; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; color: var(--text-faint); }
+.staff-detail-total b { font-family: var(--font-display); font-size: 30px; color: var(--gold); font-variant-numeric: tabular-nums; }
+.staff-detail-break { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; }
+.staff-detail-break-row { display: flex; justify-content: space-between; gap: 10px; color: var(--text-dim); }
+.staff-detail-break-row b { color: var(--text); font-variant-numeric: tabular-nums; }
+.staff-detail-adjust { margin-bottom: 20px; }
+.staff-detail-adjust-fields { display: grid; grid-template-columns: 120px 1fr auto; gap: 8px; }
+.staff-detail-adjust-fields input { margin: 0; width: 100%; }
+.staff-detail-adjust-fields .btn-glow { width: auto; margin: 0; padding: 10px 20px; }
+.modal-card p.staff-detail-hint { font-size: 11.5px; color: var(--text-faint); margin: 6px 0 0; }
+.staff-detail-section { margin-bottom: 18px; }
+.staff-detail-section-title { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 8px; }
+.staff-detail-section-title span { font-weight: 600; color: var(--text-faint); letter-spacing: 0; text-transform: none; }
+.staff-detail-row { padding: 9px 0; border-top: 1px solid var(--line); }
+.staff-detail-row-main { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13.5px; }
+.staff-detail-row-meta { font-size: 12px; color: var(--text-dim); margin-top: 3px; overflow-wrap: anywhere; }
+.staff-detail-faint { color: var(--text-faint); font-weight: 500; }
+.staff-detail-tag { font-size: 10.5px; font-weight: 750; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--text-dim); }
+.staff-detail-tag.tag-mute, .staff-detail-tag.tag-timeout { color: var(--gold); border-color: var(--brand-line); }
+.staff-detail-tag.tag-ban, .staff-detail-tag.tag-minus { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
+.staff-detail-tag.tag-plus { color: #4fc27a; border-color: color-mix(in srgb, #4fc27a 40%, transparent); }
+.staff-detail-remove { margin-left: auto; font-size: 11.5px; background: none; border: none; color: var(--text-faint); cursor: pointer; text-decoration: underline; }
+.staff-detail-remove:hover { color: var(--danger); }
+.modal-card p.staff-detail-empty { font-size: 12.5px; color: var(--text-faint); margin: 0; padding: 8px 0; border-top: 1px solid var(--line); }
+.staff-detail-play { display: flex; justify-content: space-between; font-size: 12.5px; padding: 5px 0; border-top: 1px solid var(--line); color: var(--text-dim); }
+.staff-detail-play b { color: var(--text); font-variant-numeric: tabular-nums; }
+@media (max-width: 560px) {
+  .staff-detail-card { padding: 20px 16px; }
+  .staff-detail-points { grid-template-columns: 1fr; }
+  .staff-detail-adjust-fields { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 900px) {
   .staff-points-admin { grid-template-columns: 1fr; }
   .staff-points-fields { grid-template-columns: 1fr; }
