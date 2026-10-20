@@ -1352,13 +1352,14 @@ async function buyCasinoSpin() {
     });
     const data = await res.json();
     if (!data.ok) {
-      resultEl.textContent = 'Nem sikerült elindítani a vásárlást.';
+      resultEl.textContent = data.message || 'Nem sikerült megvenni a próbálkozást.';
       resultEl.className = 'redeem-result error';
       btn.disabled = false;
       return;
     }
-    resultEl.textContent = data.message || 'A vásárlás elindult.';
+    resultEl.textContent = data.message || 'Megvetted a próbálkozást.';
     resultEl.className = 'redeem-result';
+    applyPpBalance(data.ppBalance);
     casinoState = data;
     renderCasinoButtons();
   } catch {
@@ -1459,6 +1460,7 @@ async function enterApp(meData) {
   loadRanks();
   currentPpBalance = typeof meData?.scBalance === 'number' ? meData.scBalance : 0;
   renderProfilePpBadge();
+  startPpLivePoll();
   currentWalletBalanceHuf = typeof meData?.walletBalanceHuf === 'number' ? meData.walletBalanceHuf : 0;
   renderWalletBadge();
   isOwner = typeof meData?.rank === 'string' && meData.rank.toLowerCase() === 'tulajdonos';
@@ -1507,6 +1509,39 @@ async function refreshPpBalance() {
     renderWalletBadge();
     if ($('#rankGrid').dataset.loaded === '1') renderRankGrid();
   }
+}
+
+// A PrémiumPont a backendben él, minden művelet azonnal válaszol az új
+// egyenleggel (ppBalance) - ezt rögtön megjelenítjük mindenhol.
+function applyPpBalance(balance) {
+  if (typeof balance !== 'number' || !Number.isFinite(balance)) return;
+  currentPpBalance = balance;
+  renderProfilePpBadge();
+  $$('.stat-badge[data-stat="coin"] .stat-badge-value').forEach((el) => {
+    if (el.closest('#statBadgeGrid')) el.textContent = balance.toLocaleString('hu-HU');
+  });
+  if ($('#rankGrid') && $('#rankGrid').dataset.loaded === '1') renderRankGrid();
+}
+
+// Élő egyenleg: ha máshol változik (Tebex, játék, ajándék), pár másodpercen
+// belül itt is látszik - csak látható lapon kérdezünk, és csak ha változott.
+let ppLivePollTimer = null;
+async function pollPpBalance() {
+  if (!session || !session.token || document.visibilityState !== 'visible') return;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/points/me', { headers: { Authorization: 'Bearer ' + session.token } });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.ok && data.migrated && data.balance !== currentPpBalance) applyPpBalance(data.balance);
+  } catch {
+  }
+}
+function startPpLivePoll() {
+  if (ppLivePollTimer) return;
+  ppLivePollTimer = setInterval(pollPpBalance, 15000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') pollPpBalance();
+  });
 }
 
 function sideRailHtml() {
@@ -2274,13 +2309,13 @@ function couponRedeemLine(r) {
   }
   if (r.rewardType === 'rank') {
     const until = r.rankDurationDays ? `${r.rankDurationDays} napra` : 'véglegesen';
-    return `${r.rankLabel} rang ${until}, a következő szerverre lépéskor kapod meg.`;
+    return `${r.rankLabel} rang ${until}, pár másodpercen belül aktiválódik.`;
   }
   if (r.rewardType === 'badge') return `${r.badgeName} jelvény, a profilodon látható.`;
   if (r.rewardType === 'casino_spin') return `+${r.rewardAmount} casino pörgetés.`;
   if (r.rewardType === 'discount') return `${r.rewardAmount}% egyedi kedvezmény${r.discountDays ? ` ${r.discountDays} napig` : ''}, vásárláskor automatikusan érvényesül.`;
   if (r.rewardType === 'wallet') return `+${formatHuf(r.rewardAmount)} az egyenlegeden.`;
-  return `+${formatPp(r.rewardAmount)}, a következő szerverre lépéskor íródik jóvá.`;
+  return `+${formatPp(r.rewardAmount)}, már az egyenlegeden.`;
 }
 
 $('#redeemSubmit').addEventListener('click', async () => {
@@ -2306,7 +2341,7 @@ $('#redeemSubmit').addEventListener('click', async () => {
     const lines = (data.results || [data]).map(couponRedeemLine);
     const skipped = (data.skipped || []).map((m) => `Nem kaptad meg: ${m}`);
     resultEl.innerHTML = `Sikeres beváltás!<br>${[...lines, ...skipped].map(escapeHtml).join('<br>')}`;
-    if ((data.results || [data]).some((r) => r.rewardType === 'wallet')) refreshPpBalance();
+    if ((data.results || [data]).some((r) => r.rewardType === 'wallet' || r.rewardType === 'pp')) refreshPpBalance();
     $('#redeemInput').value = '';
   } catch {
     resultEl.classList.add('error');
@@ -2735,7 +2770,9 @@ $('#adminPpAdjustBtn').addEventListener('click', async () => {
       statusEl.className = 'redeem-result error';
       return;
     }
-    statusEl.textContent = 'Módosítás elindítva - kb. 1 percen belül megtörténik.';
+    statusEl.textContent = data.queued
+      ? 'Módosítás rögzítve - az átállás lezárulása után teljesül.'
+      : `Kész - ${lastAdminPlayerUsername} új egyenlege: ${formatPp(data.ppBalance || 0)}.`;
     statusEl.className = 'redeem-result';
     $('#adminPpAdjustAmountInput').value = '';
     $('#adminPpAdjustReasonInput').value = '';
@@ -3661,7 +3698,8 @@ async function subscribeRank(rankId, buttonEl) {
     if (!data.ok) {
       showToast(data.message || 'Nem sikerült elindítani az előfizetést.', true);
     } else {
-      showToast('Előfizetés elindítva - az első terhelés kb. 1 percen belül lezajlik.');
+      showToast('Előfizetés elindítva - az első havi díjat levontuk, a rang pár másodpercen belül aktiválódik.');
+      applyPpBalance(data.ppBalance);
       await loadMySubscriptions();
       renderRankGrid();
     }
@@ -3779,7 +3817,10 @@ async function buyRank(rankId, buttonEl, giftTo, giftMessage) {
     if (!data.ok) {
       showToast(data.message || 'Nem sikerült elindítani a vásárlást.', true);
     } else {
-      showToast(giftTo ? `Ajándékozás elindítva - ${giftTo} kb. 1 percen belül megkapja a rangot.` : 'Vásárlás elindítva - ha elég PrémiumPontod van, kb. 1 percen belül megkapod a rangot.');
+      showToast(giftTo
+        ? `Megajándékoztad ${giftTo}-t - a rang pár másodpercen belül aktiválódik nála.`
+        : 'Megvetted! A rang pár másodpercen belül aktiválódik. Ha bármi elakad, a PP automatikusan visszajár.');
+      applyPpBalance(data.ppBalance);
     }
   } catch {
     showToast('Nem sikerült elérni a szervert.', true);
@@ -3922,7 +3963,8 @@ $('#transferSubmitBtn').addEventListener('click', async () => {
       resultEl.textContent = data.message || 'Nem sikerült elindítani az átutalást.';
       resultEl.className = 'redeem-result error';
     } else {
-      showToast('Átutalás elindítva - kb. 1 percen belül megtörténik.');
+      showToast(`Elküldve! ${recipient} megkapta a(z) ${formatPp(amount)}-t.`);
+      applyPpBalance(data.ppBalance);
       $('#transferRecipientInput').value = '';
       $('#transferAmountInput').value = '';
       $('#transferNoteInput').value = '';
@@ -4091,7 +4133,17 @@ const LEDGER_TYPE_LABELS = {
   cosmetic_market_buy: 'Kiegészítő (piacról)',
   cosmetic_market_sell: 'Kiegészítő eladás (piac)',
   cosmetic_trade_buy: 'Kiegészítő (csere)',
-  cosmetic_trade_sell: 'Kiegészítő eladás (csere)'
+  cosmetic_trade_sell: 'Kiegészítő eladás (csere)',
+  admin_set: 'Admin beállítás',
+  account_deleted: 'Fiók törölve',
+  migration: 'Átköltöztetés',
+  refund: 'Visszatérítés',
+  reward: 'Jutalom',
+  plugin: 'Szerver',
+  vote: 'Szavazás',
+  event: 'Esemény',
+  credit: 'Jóváírás',
+  debit: 'Levonás'
 };
 
 let ledgerEntries = [];
@@ -6691,7 +6743,7 @@ function purchaseWaiverModal(itemId, okLabel, viaWallet) {
       <div class="modal-card waiver-modal">
         <h3>Vásárlás</h3>
         <p class="waiver-item"><span>${escapeHtml(name)}</span>${price ? `<b>${escapeHtml(price)}</b>` : ''}</p>
-        <p class="waiver-text">${viaWallet ? '' : 'A fizetést a Tebex bonyolítja, euróban. '}Ez digitális tartalom, amit a fizetés után néhány percen belül jóváírunk. Ehhez a beleegyezésed kell:</p>
+        <p class="waiver-text">${viaWallet ? '' : 'A fizetést a Tebex bonyolítja, euróban. '}Ez digitális tartalom, amit a fizetés után azonnal jóváírunk. Ehhez a beleegyezésed kell:</p>
         <label class="check-row waiver-check">
           <input type="checkbox" data-waiver-check />
           <span>Kérem a teljesítés azonnali megkezdését, és tudomásul veszem, hogy ezzel elveszítem a 14 napos elállási jogomat.</span>
@@ -6792,7 +6844,7 @@ function showPurchaseSuccessModal() {
         </svg>
       </div>
       <h3>Sikeres vásárlás!</h3>
-      <p>A jóváírás/aktiválás automatikusan, néhány percen belül megtörténik - legyél elérhető a szerveren.</p>
+      <p>A PrémiumPont a fizetés után azonnal jóváíródik, a szankció-csökkentés pár másodpercen belül érvényes.</p>
       <div class="modal-actions">
         <button type="button" class="btn-outline" id="purchaseSuccessClose">Rendben</button>
       </div>
@@ -7584,7 +7636,7 @@ document.addEventListener('click', async (e) => {
     if (!item) return;
     const confirmed = await confirmModal(
       'Kiegészítő megvásárlása',
-      `Megveszed a(z) "${escapeHtml(item.name)}" kiegészítőt ${item.priceSc.toLocaleString('hu-HU')} PrémiumPontért? A levonás a következő szerverre lépésedkor történik meg, utána jelenik meg a kiegészítőid között.`,
+      `Megveszed a(z) "${escapeHtml(item.name)}" kiegészítőt <b>${formatPp(item.priceSc)}</b>-ért? Azonnal levonjuk az egyenlegedből, és rögtön a kiegészítőid között lesz.`,
       'Igen, megveszem'
     );
     if (!confirmed) return;
@@ -7596,7 +7648,10 @@ document.addEventListener('click', async (e) => {
       });
       const data = await res.json();
       if (!data.ok) { showToast(data.message || 'Nem sikerült megvásárolni.', true); return; }
-      showToast(data.message || 'A vásárlás rögzítve.');
+      showToast(data.message || 'Megvetted!');
+      applyPpBalance(data.ppBalance);
+      loadMyCosmetics();
+      loadCosmeticShop();
     } catch {
       showToast('Nem sikerült elérni a szervert.', true);
     }
@@ -7777,7 +7832,7 @@ document.addEventListener('click', async (e) => {
   if (buyBtn) {
     const confirmed = await confirmModal(
       'Vásárlás a piacról',
-      'Megveszed ezt a kiegészítőt? A PrémiumPont levonása a következő szerverre lépésedkor történik meg - utána kerül át hozzád a kiegészítő. Ha nincs elég PrémiumPontod, a vásárlás visszavonódik.',
+      'Megveszed ezt a kiegészítőt? Az árát azonnal levonjuk az egyenlegedből, és rögtön a tiéd lesz.',
       'Igen, megveszem'
     );
     if (!confirmed) return;
@@ -7790,8 +7845,10 @@ document.addEventListener('click', async (e) => {
       });
       const data = await res.json();
       if (!data.ok) { showToast(data.message || 'Nem sikerült megvásárolni.', true); buyBtn.disabled = false; return; }
-      showToast(data.message || 'A vásárlás rögzítve.');
+      showToast(data.message || 'Megvetted!');
+      applyPpBalance(data.ppBalance);
       loadMarket();
+      loadMyCosmetics();
     } catch {
       showToast('Nem sikerült elérni a szervert.', true);
       buyBtn.disabled = false;
@@ -8027,7 +8084,7 @@ document.addEventListener('click', async (e) => {
   if (acceptBtn) {
     const confirmed = await confirmModal(
       'Ajánlat elfogadása',
-      'Elfogadod ezt az ajánlatot? A PrémiumPont levonása a következő szerverre lépésedkor történik meg - utána kerül át hozzád a kiegészítő. Ha nincs elég PrémiumPontod, az elfogadás visszavonódik.',
+      'Elfogadod ezt az ajánlatot? Az árát azonnal levonjuk az egyenlegedből, és a kiegészítő rögtön a tiéd lesz.',
       'Igen, elfogadom'
     );
     if (!confirmed) return;
@@ -8066,6 +8123,7 @@ async function tradeAction(path, offerId, successToast, onError) {
       return;
     }
     showToast(successToast || data.message || 'Kész.');
+    applyPpBalance(data.ppBalance);
     loadTrades();
   } catch {
     showToast('Nem sikerült elérni a szervert.', true);
