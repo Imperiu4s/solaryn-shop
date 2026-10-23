@@ -867,7 +867,8 @@ const RANK_DISPLAY_NAMES = {
   'főadmin': 'Főadmin',
   'fejlesztő': 'Fejlesztő',
   'építész': 'Építész',
-  yuong: 'Young'
+  yuong: 'Young',
+  default: 'Játékos'
 };
 
 function formatRankName(rank) {
