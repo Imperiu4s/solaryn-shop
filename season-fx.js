@@ -1,14 +1,3 @@
-// Szezonális témák díszítése, amíg egy ünnepi téma aktív. Ugyanez a fájl van a
-// launcherben is (SolarLauncher/src/renderer/season-fx.js) - a kettőt együtt
-// kell módosítani.
-//
-// Két réteg van:
-//  - háttér (.season-canvas, a tartalom mögött): hulló/szálló részecskék és a
-//    háttérben futó jelenetek (tűzijáték, hókupac, szerpentin...)
-//  - felső réteg (.season-overlay, a tartalom fölött, de a felugró ablakok
-//    alatt; a kattintásokat átengedi): ritkán felbukkanó figurák (denevérek,
-//    szellem, pók, nyuszi, sirályok...) és a fix díszek (égősor, kokárda, nap).
-// Aktív szezonnál az alap részecske-réteget (#particleCanvas) elrejtjük.
 (function () {
   const SPRITE = 64;
   const TAU = Math.PI * 2;
@@ -16,9 +5,6 @@
   const rand = (a, b) => a + Math.random() * (b - a);
   const pick = (list) => list[Math.floor(Math.random() * list.length)];
 
-  // ---------------------------------------------------------------------------
-  // Részecskék (háttér)
-  // ---------------------------------------------------------------------------
   const PARTICLES = {
     christmas: { kind: 'snow', colors: ['#ffffff', '#e8f4ff', '#d6ecff'], count: 70 },
     halloween: { kind: 'leaf', colors: ['#ff8a1f', '#e2600b', '#b4441a', '#8a2f1d', '#b46cff'], count: 24 },
@@ -92,11 +78,6 @@
     };
   }
 
-  // ---------------------------------------------------------------------------
-  // Figurák és díszek
-  // ---------------------------------------------------------------------------
-
-  // Denevér: test + két csipkés szárny, a szárnycsapás fázisa "flap" (-1..1).
   function drawBat(g, x, y, s, flap, dir) {
     g.save();
     g.translate(x, y);
@@ -107,14 +88,14 @@
     g.lineWidth = 1.2;
     g.beginPath();
     g.moveTo(0, -s * 0.15);
-    // bal szárny
+
     g.quadraticCurveTo(-s * 0.5, -s * 0.35 - lift, -s * 1.15, -s * 0.2 - lift);
     g.quadraticCurveTo(-s * 0.95, s * 0.05 - lift * 0.4, -s * 0.8, s * 0.1 - lift * 0.3);
     g.quadraticCurveTo(-s * 0.62, -s * 0.02 - lift * 0.3, -s * 0.45, s * 0.12 - lift * 0.15);
     g.quadraticCurveTo(-s * 0.3, 0, -s * 0.12, s * 0.18);
-    // test alja
+
     g.quadraticCurveTo(0, s * 0.42, s * 0.12, s * 0.18);
-    // jobb szárny
+
     g.quadraticCurveTo(s * 0.3, 0, s * 0.45, s * 0.12 - lift * 0.15);
     g.quadraticCurveTo(s * 0.62, -s * 0.02 - lift * 0.3, s * 0.8, s * 0.1 - lift * 0.3);
     g.quadraticCurveTo(s * 0.95, s * 0.05 - lift * 0.4, s * 1.15, -s * 0.2 - lift);
@@ -122,7 +103,7 @@
     g.closePath();
     g.fill();
     g.stroke();
-    // fül + szem
+
     g.beginPath();
     g.moveTo(-s * 0.1, -s * 0.15); g.lineTo(-s * 0.14, -s * 0.36); g.lineTo(-s * 0.02, -s * 0.2);
     g.moveTo(s * 0.1, -s * 0.15); g.lineTo(s * 0.14, -s * 0.36); g.lineTo(s * 0.02, -s * 0.2);
@@ -147,7 +128,7 @@
     g.lineTo(-s * 0.55, -s * 0.05);
     g.arc(0, -s * 0.05, s * 0.55, Math.PI, 0);
     g.lineTo(s * 0.55, s * 0.6);
-    // hullámzó, csipkés alj (3 ív jobbról balra)
+
     const sway = Math.sin(t * 0.005) * s * 0.06;
     for (let i = 0; i < 3; i++) {
       const x1 = s * 0.55 - (s * 1.1 * (i + 1)) / 3;
@@ -216,7 +197,6 @@
     g.restore();
   }
 
-  // Karácsonyi égősor a felső szélen: belógó vezeték, pislákoló izzók.
   function drawGarland(g, w, t) {
     const span = 130;
     const sag = 16;
@@ -273,7 +253,7 @@
     g.fillStyle = '#9a6538';
     g.lineWidth = 1.6;
     g.lineCap = 'round';
-    // két rénszarvas
+
     for (let k = 0; k < 2; k++) {
       const rx = s * 1.6 + k * s * 1.25;
       const bob = Math.sin(t * 0.02 + k) * s * 0.06;
@@ -290,10 +270,10 @@
       g.fillStyle = '#ff3b3b';
       g.beginPath(); g.arc(s * 1.6 + s * 1.25 + s * 0.7, Math.sin(t * 0.02 + 1) * s * 0.06 - s * 0.3, s * 0.06, 0, TAU); g.fill();
     }
-    // gyeplő
+
     g.strokeStyle = 'rgba(255,215,120,0.5)';
     g.beginPath(); g.moveTo(s * 0.55, -s * 0.15); g.lineTo(s * 1.3, 0); g.stroke();
-    // szán
+
     g.fillStyle = '#b3242c';
     g.beginPath();
     g.moveTo(-s * 0.7, -s * 0.3); g.lineTo(s * 0.55, -s * 0.3); g.quadraticCurveTo(s * 0.7, -s * 0.05, s * 0.45, s * 0.12); g.lineTo(-s * 0.6, s * 0.12); g.closePath();
@@ -309,7 +289,6 @@
   }
   function k0RedNose(t) { return Math.sin(t * 0.01) > -0.2; }
 
-  // Tűzijáték: rakéta fel, majd szétrobbanó szikrák.
   function newFirework(w, h, colors) {
     return { x: rand(w * 0.08, w * 0.92), y: h + 10, ty: rand(h * 0.12, h * 0.45), vy: rand(-7.5, -5.5), color: pick(colors), sparks: null, age: 0 };
   }
@@ -409,7 +388,6 @@
     g.restore();
   }
 
-  // Szerpentin: hullámzó, lassan hulló szalag.
   function drawStreamer(g, st, t) {
     g.save();
     g.strokeStyle = st.color;
@@ -474,7 +452,7 @@
     g.save();
     g.translate(x, y);
     g.rotate(Math.sin(t * 0.0015) * 0.12);
-    // szalagvégek
+
     for (const [dx, color] of [[-0.25, '#e8343f'], [0.05, '#ffffff'], [0.3, '#3fae5a']]) {
       g.fillStyle = color;
       g.beginPath();
@@ -528,10 +506,6 @@
     g.restore();
   }
 
-  // ---------------------------------------------------------------------------
-  // Jelenetek: témánként mit rajzolunk a háttérre (bg) és a felső rétegre (fg).
-  // A "walkers" ritkán felbukkanó figurák; mindegyiknek van élettartama.
-  // ---------------------------------------------------------------------------
   function scheduleNext(state, key, min, max) { state.next[key] = state.t + rand(min, max) * 1000; }
   const due = (state, key) => state.t >= (state.next[key] || 0);
 
@@ -557,7 +531,7 @@
           scheduleNext(st, 'spider', 26, 45);
           st.walkers.push({ type: 'spider', x: rand(w * 0.15, w * 0.85), born: st.t, life: 11000, depth: rand(110, 220), s: rand(20, 26) });
         }
-        // tökök a jobb alsó sarokban (a bal alsó sarokban menü / fiók van)
+
         drawPumpkin(g, w - 36, h - 26, 18, st.t);
         drawPumpkin(g, w - 78, h - 22, 13, st.t + 900);
       }
@@ -651,7 +625,6 @@
     }
   };
 
-  // A figurák mozgatása és kirajzolása; false = eltűnt, kivesszük.
   function stepWalker(g, wk, st, w, h) {
     const t = st.t;
     switch (wk.type) {
@@ -708,9 +681,6 @@
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Motor
-  // ---------------------------------------------------------------------------
   let bg = null;
   let fg = null;
   let bgCtx = null;

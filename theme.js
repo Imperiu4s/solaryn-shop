@@ -1,10 +1,10 @@
 (function () {
   const STORAGE_KEY = 'solarcenter.theme';
-  // A szezonális téma bekapcsolása előtti téma: ide váltunk vissza, ha a szezon véget ér.
+
   const PREV_KEY = 'solarcenter.theme.beforeSeason';
-  // Az utolsó lekért szezonális lista: induláskor ebből dolgozunk, így nem villan.
+
   const SEASON_CACHE_KEY = 'solarcenter.seasonal';
-  // Melyik élesítésnél kapcsoltuk már be automatikusan (kulcs + élesítés ideje).
+
   const AUTO_KEY_PREFIX = 'solarcenter.seasonAuto.';
   const BACKEND = 'https://api.solaryn.hu:25572';
   const NEW_BADGE_DAYS = 14;
@@ -18,7 +18,7 @@
     { key: 'amethyst', label: 'Ametiszt' },
     { key: 'turquoise', label: 'Türkiz' }
   ];
-  // A szezonális témák kinézete a seasonal.css-ben van; hogy melyik él, azt a backend mondja meg.
+
   const SEASONAL_KEYS = ['halloween', 'christmas', 'newyear', 'valentine', 'carnival', 'easter', 'national', 'summer'];
 
   const store = {
@@ -79,8 +79,6 @@
     }
   }
 
-  // A friss szezonális lista alapján: automatikus bekapcsolás (élesítésenként
-  // egyszer), illetve visszaváltás, ha a használt ünnepi téma már nem él.
   function reconcile() {
     for (const t of seasonal) {
       if (!t.autoApply || !t.activatedAt) continue;
@@ -134,7 +132,6 @@
       + THEMES.map((t) => optionHtml(t.key, t.label, null)).join('');
   }
 
-  // Admin előnézet: csak ebben a böngészőlapban, mentés nélkül.
   function preview(key, label) {
     if (!isSeasonal(key)) return;
     previewKey = key;

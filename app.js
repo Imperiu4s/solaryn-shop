@@ -53,8 +53,6 @@ initPasswordToggles();
   });
   resize();
 
-  // Egy buborék előre megrajzolva (üveges perem + fényfolt), a téma színével.
-  // Képkockánként csak drawImage fut, így sok buborék sem terhel.
   const SPRITE = 128;
   const sprites = [];
   function buildSprites() {
@@ -66,7 +64,7 @@ initPasswordToggles();
       c.width = c.height = SPRITE;
       const g = c.getContext('2d');
       const r = SPRITE / 2;
-      // áttetsző belső, a perem felé erősödő színnel
+
       const body = g.createRadialGradient(r, r, 0, r, r, r);
       body.addColorStop(0, 'rgba(255,255,255,0.02)');
       body.addColorStop(0.7, 'rgba(255,255,255,0.04)');
@@ -75,7 +73,7 @@ initPasswordToggles();
       g.globalAlpha = 0.45;
       g.fillStyle = body;
       g.beginPath(); g.arc(r, r, r, 0, Math.PI * 2); g.fill();
-      // vékony, fent világos perem
+
       const rim = g.createLinearGradient(0, 0, SPRITE, SPRITE);
       rim.addColorStop(0, 'rgba(255,255,255,0.95)');
       rim.addColorStop(0.45, color);
@@ -84,7 +82,7 @@ initPasswordToggles();
       g.strokeStyle = rim;
       g.lineWidth = SPRITE * 0.022;
       g.beginPath(); g.arc(r, r, r * 0.95, 0, Math.PI * 2); g.stroke();
-      // fényfolt bal fent + halvány tükröződés jobb lent
+
       const shine = g.createRadialGradient(r * 0.62, r * 0.55, 0, r * 0.62, r * 0.55, r * 0.3);
       shine.addColorStop(0, 'rgba(255,255,255,0.95)');
       shine.addColorStop(1, 'rgba(255,255,255,0)');
@@ -253,8 +251,6 @@ $('#authIpCopy').addEventListener('click', async () => {
   }
 });
 
-// Jelszóerősség-jelző a regisztrációnál (csak tájékoztató, a backend a
-// minimum 6 karaktert követeli meg).
 const PW_LEVELS = ['Adj meg egy jelszót', 'Gyenge', 'Közepes', 'Jó', 'Erős'];
 $('#regPass').addEventListener('input', () => {
   const pw = $('#regPass').value;
@@ -626,9 +622,6 @@ async function doRegister() {
   enterApp();
 }
 
-// "Erősítsd meg az email címed" ablak: regisztráció után és ha egy meg nem
-// erősített fiókkal próbál belépni. Innen kérhet új levelet, vagy javíthatja
-// az elírt címet (a jegy a sikeres jelszavas belépésből / regisztrációból jön).
 function showEmailVerifyModal(info, mode) {
   let ticket = info.resendTicket;
   const overlay = document.createElement('div');
@@ -733,7 +726,6 @@ function showEmailVerifyModal(info, mode) {
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 }
 
-// A levélben lévő link: ?verifyEmail=TOKEN
 (async function consumeEmailVerifyLink() {
   const params = new URLSearchParams(window.location.search);
   const token = params.get('verifyEmail');
@@ -857,7 +849,6 @@ function capitalizeFirst(s) {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
 
-// A LuckPerms csoportnevek kisbetűsek és szóköz nélküliek; így írjuk ki őket.
 const RANK_DISPLAY_NAMES = {
   srmoderátor: 'Sr. Moderátor',
   srmoderator: 'Sr. Moderátor',
@@ -1445,7 +1436,7 @@ async function enterApp(meData) {
   $('#profileName').textContent = session.username;
 
   if (!meData) meData = await apiGetMe(session.token);
-  // Bejelentkezve a teszt módú szezonális témák is látszhatnak.
+
   if (window.SolarTheme) window.SolarTheme.refresh();
   maybePromptTerms(meData);
   renderStatBadges($('#statBadgeGrid'), formatStats(meData), { own: true });
@@ -1512,8 +1503,6 @@ async function refreshPpBalance() {
   }
 }
 
-// A PrémiumPont a backendben él, minden művelet azonnal válaszol az új
-// egyenleggel (ppBalance) - ezt rögtön megjelenítjük mindenhol.
 function applyPpBalance(balance) {
   if (typeof balance !== 'number' || !Number.isFinite(balance)) return;
   currentPpBalance = balance;
@@ -1524,8 +1513,6 @@ function applyPpBalance(balance) {
   if ($('#rankGrid') && $('#rankGrid').dataset.loaded === '1') renderRankGrid();
 }
 
-// Élő egyenleg: ha máshol változik (Tebex, játék, ajándék), pár másodpercen
-// belül itt is látszik - csak látható lapon kérdezünk, és csak ha változott.
 let ppLivePollTimer = null;
 async function pollPpBalance() {
   if (!session || !session.token || document.visibilityState !== 'visible') return;
@@ -2017,7 +2004,7 @@ function switchView(view) {
   if (view === 'skin') { endDefaultMediaTry(false); loadSkinPreview3d(); loadDefaultMediaGallery(); loadMySkinSubmissions(); }
   if (view === 'ranks') refreshPpBalance();
   if (view === 'wallet') refreshPpBalance();
-  // A kártyás fizetés állapota (teszt mód, tesztelők) közben változhatott.
+
   if (view === 'coin' || view === 'sanction' || view === 'wallet') loadShopCatalog();
   if (view === 'security') { loadSecurityStatus(); loadSecurityPinStatus(); loadClientSettingsState(); loadPrivacySettings(); }
   if (view === 'ledger') loadLedger();
@@ -2254,8 +2241,6 @@ $('#capeResetBtn').addEventListener('click', async () => {
   }
 });
 
-// A backend csak PNG-t fogad - más képformátumot (JPG, WebP...) a böngészőben
-// alakítunk át, a méretet pedig a backend igazítja a legközelebbi érvényes köpeny-méretre.
 async function toPngBlob(file) {
   if (file.type === 'image/png') return file;
   const bitmap = await createImageBitmap(file);
@@ -3221,9 +3206,6 @@ const ICONS = {
 
 let shopCatalog = [];
 
-// Kártyás (Tebex) fizetés: teszt módban csak a kijelölt tesztelőknek él,
-// mindenki másnál a "Vásárlás" és az "Ajándékozás" gomb le van tiltva
-// (egyenlegből továbbra is lehet venni).
 let cardPayment = { available: true, test: false, currency: null, topupAvailable: true, topupUnitHuf: null, topupUnitCents: null, message: null };
 
 async function loadCardPaymentStatus() {
@@ -3244,19 +3226,16 @@ function formatHuf(n) {
   return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ' Ft';
 }
 
-// Euró -> forint a kijelzéshez (a backend adja: EKB-árfolyam vagy az adminban
-// beállított fix érték). A fizetendő összeg mindig az euróár.
 let shopHufPerEur = null;
 function approxHufText(cents, currency) {
   if (!Number.isFinite(Number(cents))) return '';
   if (currency && String(currency).toUpperCase() === 'HUF') return formatHuf(Math.round(cents / 100));
   const rate = shopHufPerEur || cardPayment.hufPerEur;
   if (!(rate > 0)) return '';
-  // 10 Ft-ra kerekítve, hogy ne tűnjön pontos árnak.
+
   return 'kb. ' + formatHuf(Math.round((cents / 100) * rate / 10) * 10);
 }
 
-// A kártyás (Tebex) ár centben jön, a bolt pénznemében (EUR).
 function formatMoney(cents, currency) {
   try {
     return new Intl.NumberFormat('hu-HU', { style: 'currency', currency: currency || 'EUR' }).format(cents / 100);
@@ -3267,8 +3246,6 @@ function formatMoney(cents, currency) {
 
 const GIFTABLE_TYPES = new Set(['sc', 'rank']);
 
-// Ticket-only tétel (pl. a kitiltás teljes feloldása): az ára látszik, de a
-// Centerben nem vehető meg - ticketben döntünk róla, a gomb a Discordra visz.
 function renderTicketOnlyCard(item) {
   const hasPrice = Number(item.ticketPriceCents) > 0;
   const approx = hasPrice ? approxHufText(item.ticketPriceCents, item.ticketCurrency) : '';
@@ -3294,7 +3271,7 @@ function renderPkgCard(item, locked) {
     ? `<button type="button" class="btn-outline btn-gift" data-gift-item-id="${item.id}"${cardOff ? ' disabled' : ''}>🎁 Ajándékozás</button>`
     : '';
   const discountBadge = item.discountPercent > 0 ? `<div class="discount-badge">-${item.discountPercent}%</div>` : '';
-  // Kártyával euróban (Tebex), egyenlegből forintban lehet fizetni.
+
   const cardApprox = hasCardPrice ? approxHufText(item.cardPriceCents, item.cardCurrency) : '';
   const cardPriceHtml = hasCardPrice
     ? (item.discountPercent > 0
@@ -3375,8 +3352,6 @@ function formatSubscriptionDate(iso) {
   return d.toLocaleDateString('hu-HU');
 }
 
-// Rangonkénti színek és embléma - az ismeretlen (később felvett) rangok a
-// RANK_THEME_FALLBACK-et kapják, így a táblázat új ranggal sem törik el.
 const RANK_THEMES = {
   helios: { c1: '#ffb347', c2: '#ff6a1a', ink: '#2b1203', tagline: 'Az első sugarak' },
   chronovoid: { c1: '#b197fc', c2: '#5b4bdb', ink: '#ffffff', tagline: 'Az idő ura' },
@@ -3386,9 +3361,6 @@ const RANK_THEMES = {
 };
 const RANK_THEME_FALLBACK = { c1: '#ffc42e', c2: '#ff9d17', ink: '#1a1206', tagline: '' };
 
-// idSuffix: ha ugyanaz a rang-embléma többször is szerepel az oldalon (pl. a
-// Rangok táblázat és az admin kártyák), a gradiens-id-knek egyedinek kell lenniük,
-// különben a rejtett nézetben lévő példány gradiensére hivatkoznak és nem látszanak.
 function rankEmblemSvg(rankId, idSuffix) {
   const g = `rkg-${rankId}${idSuffix ? `-${idSuffix}` : ''}`;
   const defs = `<defs>
@@ -3433,13 +3405,6 @@ function rankEmblemSvg(rankId, idSuffix) {
 
 const RANK_INHERIT_RE = /^el[őo]z[őo] rangok? jogai$/i;
 
-// A backend rangonként a jogok listáját adja (perks: {text, serverId}, ahol
-// serverId null = általános jog), a szerverek nevét pedig a perkServers-ben.
-// Ebből építünk összehasonlító mátrixot szerverenkénti szekciókkal: a
-// "<Rangnév> Napi Jutalom"-féle sorokat egy közös "Napi Jutalom" sorba vonjuk
-// össze, az "Előző rangok jogai" (inheritPrevious) pedig az összes korábbi
-// rang jogát is megadja az adott rangnak. A régi, csak "perms" szöveglistás
-// választ is kezeljük (általános jogként).
 function buildRankMatrix(ranks, servers) {
   const groups = [{ id: null, name: 'Általános', rows: [] }, ...(servers || []).map((s) => ({ id: s.id, name: s.name, rows: [] }))];
   const groupById = new Map(groups.map((g) => [g.id, g]));
@@ -3484,8 +3449,6 @@ let rankPerkFilter = 'all';
 const RANK_SERVER_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="17" height="6.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="3.5" y="13.5" width="17" height="6.5" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="7.5" cy="7.25" r="1.1" fill="currentColor"/><circle cx="7.5" cy="16.75" r="1.1" fill="currentColor"/></svg>';
 const RANK_GLOBE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M3.5 12h17M12 3.5c2.4 2.4 3.6 5.2 3.6 8.5s-1.2 6.1-3.6 8.5c-2.4-2.4-3.6-5.2-3.6-8.5s1.2-6.1 3.6-8.5z" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>';
 
-// A kiválasztott időtartam (30 / 60 nap) szerinti ár. A backend rangonként
-// durationOptions-t ad; ha egy régi backend nem ad, a 30 napos árat használjuk.
 let rankDurationDays = 30;
 
 function rankOffer(rank) {
@@ -3990,20 +3953,16 @@ $('#transferNoteInput').addEventListener('input', updateTransferNoteCounter);
 const WALLET_TOPUP_MIN_HUF = 500;
 const WALLET_TOPUP_MAX_HUF = 500000;
 
-// A Tebexen a feltöltés egy egységárú csomag x mennyiség, ezért csak az
-// egységár többszöröse tölthető fel.
 function walletTopupUnit() {
   return cardPayment.topupUnitHuf > 0 ? cardPayment.topupUnitHuf : 500;
 }
 
-// Mennyibe kerül euróban a megadott forintösszeg feltöltése (egységár x darab).
 function walletTopupCostText(amountHuf) {
   if (!(cardPayment.topupUnitCents > 0)) return '';
   const qty = amountHuf / walletTopupUnit();
   return formatMoney(qty * cardPayment.topupUnitCents, cardPayment.currency);
 }
 
-// Gyors választás: néhány kerek összeg (az egységár többszörösére igazítva).
 const WALLET_TOPUP_PRESETS_HUF = [1000, 2500, 5000, 10000, 20000];
 
 function walletTopupPresets() {
@@ -4107,7 +4066,6 @@ $('#btnWalletTopup').addEventListener('click', async () => {
   }
 });
 
-// A Napló "Művelet" oszlopának színe típusonként.
 const LEDGER_TYPE_TONES = {
   transfer_in: 'transfer', transfer_out: 'transfer',
   purchase: 'purchase', game_purchase: 'game',
@@ -4289,6 +4247,7 @@ const ADMIN_ACTION_LABELS = {
   'staffApps.deadline': 'Tagfelvétel határidejének módosítása', 'staffApps.slotAdd': 'Szóbeli időpont hozzáadása',
   'staffApps.slotDelete': 'Szóbeli időpont törlése', 'staffApps.accept': 'Staff jelentkezés elfogadása',
   'staffApps.reject': 'Staff jelentkezés elutasítása', 'staffApps.reset': 'Staff jelentkezés visszaállítása',
+  'staffApps.delete': 'Staff jelentkezés törlése',
   'staffApps.form': 'Tagfelvételi kérdőív módosítása',
   'shop.lock': 'Vásárlások leállítása', 'shop.unlock': 'Vásárlások újraindítása',
   'staffApps.typeCreate': 'Új tagfelvétel-típus', 'staffApps.typeRename': 'Tagfelvétel átnevezése',
@@ -4518,7 +4477,6 @@ async function loadStaffStats() {
   if (staffDetailUsername && !$('#staffDetailModal').classList.contains('hidden')) loadStaffDetail();
 }
 
-// Egy staff-tag havi tevékenysége (kártyára kattintva) + kézi pontmódosítás.
 let staffDetailUsername = null;
 
 const STAFF_SANCTION_LABEL = { mute: 'Némítás', ban: 'Kitiltás', timeout: 'Időkorlát', kick: 'Kirúgás' };
@@ -4768,10 +4726,6 @@ function buildRevenueCalendarHtml(months) {
   }).join('');
 }
 
-// --- Bevétel grafikonok ------------------------------------------------------
-// Egy sorozat (a téma arany színe), a pontos értékek egérrel/érintéssel
-// buborékban látszanak; minden diagram mellett ott a táblázat is.
-
 function revenueMonthKey(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
@@ -4783,7 +4737,6 @@ function percentChangeHtml(current, previous) {
   return `<span class="rv-delta ${cls}">${pct > 0 ? '▲ +' : pct < 0 ? '▼ ' : ''}${pct}%</span>`;
 }
 
-// Oszlopdiagram SVG-ben. items: [{ label, value, tip, key? }]
 function revenueBarChartSvg(items, { height = 170, labelEvery = 1, clickable = false } = {}) {
   const max = Math.max(1, ...items.map((i) => i.value));
   const n = items.length;
@@ -4803,7 +4756,7 @@ function revenueBarChartSvg(items, { height = 170, labelEvery = 1, clickable = f
     const x = i * slot + (slot - barW) / 2;
     const y = top + plotH - h;
     const r = Math.min(4, barW / 2, h);
-    // Felül lekerekített, az alapvonalon egyenes oszlop.
+
     const path = h > 0
       ? `M${x},${top + plotH} V${y + r} Q${x},${y} ${x + r},${y} H${x + barW - r} Q${x + barW},${y} ${x + barW},${y + r} V${top + plotH} Z`
       : '';
@@ -4819,7 +4772,6 @@ function revenueBarChartSvg(items, { height = 170, labelEvery = 1, clickable = f
     ${grid}<line x1="0" x2="${W}" y1="${top + plotH}" y2="${top + plotH}" class="rv-baseline"/>${bars}</svg>`;
 }
 
-// Vízszintes sávok (kategóriák, toplisták). rows: [{ label, value, valueText, sub }]
 function revenueHBarsHtml(rows, emptyText) {
   if (!rows.length) return `<p class="rv-empty">${emptyText}</p>`;
   const max = Math.max(1, ...rows.map((r) => r.value));
@@ -4854,7 +4806,7 @@ document.addEventListener('pointermove', (e) => {
   if (e.target.closest && e.target.closest('.rv-chart')) revenueTip(e);
   else if (revenueTipEl && !revenueTipEl.classList.contains('hidden')) revenueTip({ target: document.body });
 });
-// Nézetváltáskor / görgetéskor ne maradjon kint a buborék.
+
 ['click', 'scroll', 'hashchange'].forEach((type) => window.addEventListener(type, () => {
   if (revenueTipEl && !revenueTipEl.classList.contains('hidden')) revenueTip({ target: document.body });
 }, true));
@@ -5394,8 +5346,6 @@ function rankDisplayName(rank) {
   return formatRankName(rank);
 }
 
-// "Kinek szól?" lista: a szerveren előforduló rangok (játékosszámmal), plusz az
-// éppen szerkesztett akció rangja, ha az már nincs senkin.
 function populateDiscountTargetRankSelect(selected) {
   const sel = $('#discountTargetRankSelect');
   const ranks = discountRankOptions.map((r) => r.rank);
@@ -5570,7 +5520,7 @@ document.addEventListener('click', (e) => {
 
 let couponEditingId = null;
 let couponsAdminItems = [];
-// A szerkesztett kupon jutalmai; mindegyik { rewardType, rewardAmount, ... }.
+
 let couponRewardsDraft = [];
 
 const COUPON_REWARD_TYPES = [
@@ -5603,7 +5553,6 @@ function couponSelectHtml(field, options, selected, emptyText) {
   return `<select class="gift-modal-input" data-cr="${field}">${options.map(([v, label]) => `<option value="${escapeHtml(String(v))}"${String(v) === String(selected ?? '') ? ' selected' : ''}>${escapeHtml(label)}</option>`).join('')}</select>`;
 }
 
-// A creator kódok ugyanezt a jutalom-szerkesztőt használják; ott a lista üres is lehet.
 function couponRewardRowHtml(r, i, list = couponRewardsDraft, minCount = 1) {
   const typeSelect = couponSelectHtml('rewardType', COUPON_REWARD_TYPES, r.rewardType, '');
   const amount = (label, placeholder, min, max) => `
@@ -5643,7 +5592,6 @@ function couponRewardRowHtml(r, i, list = couponRewardsDraft, minCount = 1) {
     </div>`;
 }
 
-// A legördülő listák első elemét alapértelmezettnek vesszük, ha még nincs választás.
 function couponFillSelectDefaults(list = couponRewardsDraft) {
   for (const r of list) {
     if (r.rewardType === 'cosmetic' && !r.rewardCosmeticId && couponCosmeticOptions[0]) r.rewardCosmeticId = couponCosmeticOptions[0].id;
@@ -5784,7 +5732,6 @@ async function loadCouponsAdmin() {
 
 $('#couponDiscardBtn').addEventListener('click', resetCouponForm);
 
-// Kliensoldali ellenőrzés jutalmanként; a hibaüzenet elé odaírjuk, melyik jutalomról van szó.
 function couponCheckRewards(list = couponRewardsDraft) {
   const out = [];
   for (const [i, r] of list.entries()) {
@@ -5909,7 +5856,7 @@ document.addEventListener('click', async (e) => {
 
 let creatorCodeEditingId = null;
 let creatorCodesAdminItems = [];
-// A szerkesztett creator kód jutalmai (a kupon-szerkesztő sorait használja).
+
 let ccRewardsDraft = [];
 
 function renderCcRewards() {
@@ -6130,8 +6077,7 @@ document.addEventListener('click', async (e) => {
     $('#creatorCodeFormTitle').textContent = 'Creator kód szerkesztése';
     $('#creatorCodeCodeInput').value = item.code;
     $('#creatorCodeLabelInput').value = item.creator_label || '';
-    // A régi, tetszőleges rangot adó jutalmat nem lehet az új szerkesztőben
-    // megtartani: mentéskor elhagyjuk (ezt jelezzük is).
+
     const legacy = (item.rewards || []).some((r) => r.rewardType === 'legacy_rank');
     ccRewardsDraft = (item.rewards || []).filter((r) => r.rewardType !== 'legacy_rank').map((r) => ({
       rewardType: r.rewardType,
@@ -6174,8 +6120,6 @@ document.addEventListener('click', async (e) => {
   }
 });
 
-// Szezonális témák (admin). A kinézet a seasonal.css-ben van, itt csak az
-// állapot: ki / teszt / élő, automatikus bekapcsolás, tesztelők, lejárat.
 let seasonalThemesAdminItems = [];
 const SEASONAL_MODE_LABELS = { off: 'Ki', test: 'Teszt', live: 'Élő' };
 
@@ -6663,7 +6607,6 @@ function bindPlaytimeTooltip() {
   chart.addEventListener('focusout', hide);
 }
 
-// A főoldali játékidő-diagram heti (7 nap) vagy havi (30 nap) nézetben.
 const PLAYTIME_RANGE_TEXT = {
   week: { title: 'Heti online időd', empty: 'Ezen a héten még nem játszottál - amint felcsatlakozol a szerverre, itt látod majd a napi bontást.', error: 'A heti bontás most nem tölthető be - próbáld újra később.' },
   month: { title: 'Havi online időd', empty: 'Az elmúlt 30 napban még nem játszottál a szerveren.', error: 'A havi bontás most nem tölthető be - próbáld újra később.' }
@@ -6726,8 +6669,6 @@ document.addEventListener('click', (e) => {
   if (btn && !btn.disabled) buyItemWithWallet(btn.dataset.itemId, btn);
 });
 
-// Digitális tartalom: az elállási jog csak akkor szűnik meg, ha a vásárló
-// előre, kifejezetten kéri az azonnali teljesítést és ezt tudomásul veszi.
 function purchaseWaiverModal(itemId, okLabel, viaWallet) {
   const item = shopCatalog.find((i) => i.id === itemId);
   const name = item ? item.label : 'a termék';
@@ -6967,8 +6908,7 @@ function loadDiscordWidget() {}
 let lastViewBeforeLegal = 'home';
 
 function openLegal(tab) {
-  // Bejelentkezés előtt (és felugró ablakból) nincs látható nézet, ahová
-  // váltani lehetne - ilyenkor a jogi szöveg külön ablakban nyílik meg.
+
   if ($('#appScreen').classList.contains('hidden')) { openLegalModal(tab); return; }
   const activeEl = document.querySelector('.view.active');
   if (activeEl && activeEl.dataset.view !== 'legal') lastViewBeforeLegal = activeEl.dataset.view;
@@ -6998,15 +6938,9 @@ function openLegalModal(tab) {
 
 function closeLegalModal() {
   $('#legalModal').classList.add('hidden');
-  // Ha az ÁSZF-elfogadó ablakból nyitották meg, oda térünk vissza.
+
   if (termsPromptState.pending) showTermsPrompt();
 }
-
-// ---------------------------------------------------------------------------
-// ÁSZF-változás: egyszer felugrik (elfogadom / nem fogadom el). Vásárolni
-// csak elfogadás után lehet; ha a backend termsRequired-del utasít el egy
-// vásárlást, az ablak újra megjelenik.
-// ---------------------------------------------------------------------------
 
 var termsPromptState = { version: null, pending: false };
 
@@ -7065,8 +6999,6 @@ function showTermsPrompt() {
   }));
 }
 
-// Bármelyik vásárlási hívás termsRequired választ kaphat: ilyenkor újra
-// megmutatjuk az elfogadó ablakot (a hívó a szokásos hibaüzenetet írja ki).
 (function watchTermsRequired() {
   const originalFetch = window.fetch.bind(window);
   window.fetch = async (...args) => {
@@ -7090,8 +7022,7 @@ $$('[data-legal-link]').forEach((a) => {
     openLegal(a.dataset.legalLink);
   });
 });
-// A regisztrációs jelölőnégyzet szövegében lévő linkek: a kattintás ne
-// pipálja be/ki a négyzetet, csak nyissa meg a dokumentumot.
+
 document.addEventListener('click', (e) => {
   const link = e.target.closest('[data-legal-modal]');
   if (!link) return;
@@ -11994,18 +11925,12 @@ function suggestMobRootPivot(partIndex) {
   return pivot.map((n) => Math.round(n * 100) / 100);
 }
 
-// ---------------------------------------------------------------------------
-// Alap skinek és köpenyek (játékos oldal + admin)
-// ---------------------------------------------------------------------------
-
 const DM_CATEGORY_LABELS = { skin: 'Skin', skin_hd: 'HD skin', cape: 'Köpeny', cape_hd: 'HD köpeny' };
 
 function defaultMediaImageUrl(id) {
   return BACKEND_URL + '/api/default-media/' + id + '/image';
 }
 
-// Egy skin elölnézete 2D-ben (fej, test, karok, lábak + a második réteg),
-// 16x32 "skin-pixel" rácsra rajzolva. HD és régi 64x32 skint is kezel.
 function drawSkinFront(canvas, img, slim) {
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingEnabled = false;
@@ -12051,7 +11976,6 @@ function drawSkinFront(canvas, img, slim) {
   part(4, 52, 4, 12, 8, 20);
 }
 
-// A köpeny hátulról látszó oldala (a textúra 1,1-es 10x16-os mezője).
 function drawCapeFront(canvas, img) {
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingEnabled = false;
@@ -12215,8 +12139,6 @@ $('#defaultMediaGrid').addEventListener('click', (e) => {
 });
 $('#dmTryCancel').addEventListener('click', () => endDefaultMediaTry(true));
 $('#dmTryApply').addEventListener('click', (e) => { if (dmTrying) applyDefaultMedia(dmTrying, e.currentTarget); });
-
-// --- admin ---
 
 let dmAdminItems = [];
 let dmAdminCategory = 'skin';
@@ -12546,8 +12468,7 @@ function renderMySkinSubmissions() {
         </div>
       </div>`;
   }).join('');
-  // A kép minden állapotban a beküldött fájlból jön (a backend az elfogadott
-  // régebbi beküldéseknél az alap skin példányát adja helyette).
+
   list.querySelectorAll('[data-submission-thumb]').forEach(async (c) => {
     const item = mySkinSubmissions.find((x) => x.id === Number(c.dataset.submissionThumb));
     if (!item) return;
@@ -12818,10 +12739,6 @@ $('#dmReviewList').addEventListener('click', async (e) => {
     }
   }
 });
-
-// ---------------------------------------------------------------------------
-// Tiltott felhasználónevek (admin)
-// ---------------------------------------------------------------------------
 
 let nameRules = [];
 let nameRulesFilter = 'all';
@@ -13117,10 +13034,6 @@ document.querySelector('.view[data-view="nameRules"]').addEventListener('change'
 });
 syncNameRuleForm();
 
-// ---------------------------------------------------------------------------
-// Játékosprofil: kiegészítők panel (mindenki láthatja)
-// ---------------------------------------------------------------------------
-
 let profileCosmeticsToken = 0;
 
 async function loadProfileCosmetics(username) {
@@ -13176,7 +13089,6 @@ async function loadProfileCosmetics(username) {
     </div>`).join('');
   hydrateCosmeticThumbs(grid);
 }
-
 
 tryAutoLogin();
 
@@ -13365,10 +13277,6 @@ $('#btnResetClientSettings')?.addEventListener('click', async () => {
     showToast('Nem sikerült elérni a szervert.', true);
   }
 });
-
-// ---------------------------------------------------------------------------
-// Rangok jogai (admin) - a Rangok oldal összehasonlító táblázata innen olvas
-// ---------------------------------------------------------------------------
 
 let rpServers = [];
 let rpRanks = [];
@@ -13690,10 +13598,6 @@ function openRankPerkEditor(rankId) {
   setTimeout(() => overlay.querySelector('[data-rp-new-text]').focus(), 40);
 }
 
-// ---------------------------------------------------------------------------
-// Adatvédelem (Biztonság oldal) - kiegészítők elrejtése a profilon
-// ---------------------------------------------------------------------------
-
 async function loadPrivacySettings() {
   const toggle = $('#privacyCosmeticsToggle');
   const result = $('#privacyCosmeticsResult');
@@ -13735,10 +13639,6 @@ $('#privacyCosmeticsToggle').addEventListener('change', async (e) => {
     toggle.disabled = false;
   }
 });
-
-// ---------------------------------------------------------------------------
-// Staff tagfelvétel (TGF) - játékos oldal
-// ---------------------------------------------------------------------------
 
 let staffApplyState = null;
 
@@ -13801,8 +13701,6 @@ function infoModal(title, html, okLabel, cancelLabel) {
   });
 }
 
-// A játékos egyszerre több tagfelvételt is láthat (Staff, Építész...): minden
-// "entry" egy típus legutóbbi köre a játékos jelentkezésével együtt.
 let staffSelectedTypeId = null;
 
 function staffEntries() {
@@ -13872,12 +13770,10 @@ async function announceStaffDecision() {
       continue;
     }
     const reason = a.rejectReason ? `<div class="sa-reason"><span>Indoklás</span><p>${escapeHtml(a.rejectReason)}</p></div>` : '';
-    await infoModal(`${d.type.name} jelentkezés`, `<p>Átnéztük a jelentkezésed, de ezúttal nem nyertél felvételt.</p>${reason}<p class="sa-muted">A következő tagfelvételen újra jelentkezhetsz.</p>`, 'Rendben');
+    await infoModal(`${d.type.name} jelentkezés`, `<p>Átnéztük a jelentkezésed, de ezúttal nem nyertél felvételt.</p>${reason}<p class="sa-muted">${escapeHtml(staffReapplyText(d))}</p>`, 'Rendben');
     markStaffDecisionSeen(d);
   }
 }
-
-// --- Kérdőív (Forms-szerű űrlap) - a játékos oldalon és az admin előnézetben ---
 
 const SF_TYPE_LABELS = {
   short: 'Rövid válasz', long: 'Hosszú válasz', number: 'Szám', choice: 'Egy választás',
@@ -13910,8 +13806,6 @@ function sfIsEmpty(value) {
   return value === undefined || value === null || (typeof value === 'string' && !value.trim()) || (Array.isArray(value) && !value.length);
 }
 
-// Egy lépés kérdéseinek ellenőrzése; az első hibás kérdés azonosítóját és a
-// hibaüzenetet adja vissza.
 function sfValidateStep(items, answers) {
   for (const it of items) {
     if (!SF_QUESTION_TYPES.has(it.type)) continue;
@@ -13976,7 +13870,6 @@ function sfItemHtml(it, answers, opts) {
     </div>`;
 }
 
-// opts: { preview, deadline, draftKey, onSubmit(answers) -> Promise }
 function mountStaffForm(container, form, opts = {}) {
   const steps = sfSteps(form.items || []);
   const thumbUrls = {};
@@ -14037,7 +13930,6 @@ function mountStaffForm(container, form, opts = {}) {
     if (drop && item) drop.classList.toggle('hidden', list.length >= (item.maxFiles || 1));
   }
 
-  // A vázlatból visszatöltött képek előnézete (hitelesítve kérjük le).
   async function loadDraftThumb(id, uid) {
     if (thumbUrls[uid] || opts.preview) return;
     try {
@@ -14223,6 +14115,15 @@ function renderStaffSlotPicker(d) {
   return `<div class="sa-slot-pick" id="staffSlotPick">${options}</div>`;
 }
 
+function staffReapplyText(d) {
+  const at = d.application && d.application.reapplyAt;
+  if (d.canApply) return 'Újra jelentkezhetsz, ha szeretnél.';
+  if (at && d.open && Date.parse(at) < Date.parse(d.round.closesAt)) {
+    return `${formatSaDate(at)}-tól újra jelentkezhetsz, vagy a következő tagfelvételen.`;
+  }
+  return 'A következő tagfelvételen újra jelentkezhetsz.';
+}
+
 function staffEntryStatus(d) {
   const a = d.application;
   if (!a) return d.open ? 'Nyitva' : 'Lezárva';
@@ -14290,8 +14191,10 @@ function renderStaffEntry(body, d) {
         <span class="sa-chip sa-chip-rejected">Elutasítva</span>
         <div class="sa-status-title">Most nem nyertél felvételt</div>
         ${reason}
-        <p class="sa-muted">${submitted}. A következő tagfelvételen újra jelentkezhetsz.</p>
+        <p class="sa-muted">${submitted}. ${escapeHtml(staffReapplyText(d))}</p>
+        ${d.canApply ? '<button type="button" class="btn-glow sa-reapply-btn" id="staffReapplyBtn">Új jelentkezés</button>' : ''}
       </div>`;
+    $('#staffReapplyBtn')?.addEventListener('click', () => mountStaffApplyForm(body, d));
     if ($('.view.active')?.dataset.view === 'staffApply') markStaffDecisionSeen(d);
     return;
   }
@@ -14322,10 +14225,6 @@ function renderStaffEntry(body, d) {
   });
 }
 
-// ---------------------------------------------------------------------------
-// Staff tagfelvétel (TGF) - admin oldal
-// ---------------------------------------------------------------------------
-
 let saAdminData = null;
 let saAdminFilter = 'all';
 let saAdminRoundId = null;
@@ -14351,8 +14250,6 @@ async function loadStaffAppsAdmin() {
   if (!$('[data-sa-pane="form"]').hidden) loadSfEditor();
 }
 
-// Tagfelvétel-típusok (Staff, Építész...) - a kiválasztotthoz tartozik minden
-// alatta lévő beállítás és a kérdőív is.
 function renderSaTypeBar() {
   const bar = $('#saTypeBar');
   const types = saAdminData.types || [];
@@ -14610,14 +14507,16 @@ function renderSaAdminApps() {
   }
   list.innerHTML = shown.map((a) => {
     const open = saExpandedApps.has(a.id);
-    let meta = `Beküldve: ${formatSaDate(a.createdAt)}`;
+    const attempt = apps.filter((o) => o.username === a.username && o.id <= a.id).length;
+    let meta = `${attempt > 1 ? `${attempt}. jelentkezés · ` : ''}Beküldve: ${formatSaDate(a.createdAt)}`;
     if (a.status === 'accepted') meta += a.slotStartsAt ? ` · Szóbeli: ${formatSaDate(a.slotStartsAt)}` : ' · Még nem választott időpontot';
     const reason = a.status === 'rejected' && a.rejectReason ? `<div class="sa-reason"><span>Indoklás</span><p>${escapeHtml(a.rejectReason)}</p></div>` : '';
     const reviewed = a.reviewedBy ? `<p class="sa-muted sa-reviewed">Döntött: ${escapeHtml(a.reviewedBy)}, ${escapeHtml(formatSaDate(a.reviewedAt))}</p>` : '';
+    const superseded = apps.some((o) => o.username === a.username && o.id > a.id);
     const actions = a.status === 'pending'
       ? `<button type="button" class="btn-glow sa-btn-accept" data-sa-accept="${a.id}">Elfogadás</button>
          <button type="button" class="btn-outline sa-btn-danger" data-sa-reject="${a.id}">Elutasítás</button>`
-      : `<button type="button" class="btn-outline" data-sa-reset="${a.id}">Vissza függőbe</button>`;
+      : superseded ? '' : `<button type="button" class="btn-outline" data-sa-reset="${a.id}">Vissza függőbe</button>`;
     return `
       <div class="sa-app sa-app-${a.status}${open ? ' open' : ''}">
         <button type="button" class="sa-app-head" data-sa-toggle="${a.id}" aria-expanded="${open}">
@@ -14633,6 +14532,7 @@ function renderSaAdminApps() {
           <div class="sa-app-actions">
             ${actions}
             <button type="button" class="btn-outline" data-sa-profile="${escapeHtml(a.username)}">Profil</button>
+            <button type="button" class="btn-outline sa-btn-danger sa-app-delete" data-sa-delete="${a.id}">Lap törlése</button>
           </div>
         </div>
       </div>`;
@@ -14727,9 +14627,10 @@ document.querySelector('.view[data-view="staffAppsAdmin"]').addEventListener('cl
   const accept = e.target.closest('[data-sa-accept]');
   const reject = e.target.closest('[data-sa-reject]');
   const reset = e.target.closest('[data-sa-reset]');
-  const btn = accept || reject || reset;
+  const del = e.target.closest('[data-sa-delete]');
+  const btn = accept || reject || reset || del;
   if (!btn) return;
-  const id = Number(btn.dataset.saAccept || btn.dataset.saReject || btn.dataset.saReset);
+  const id = Number(btn.dataset.saAccept || btn.dataset.saReject || btn.dataset.saReset || btn.dataset.saDelete);
   const app = saAdminData.applications.find((a) => a.id === id);
   if (!app) return;
   try {
@@ -14743,6 +14644,13 @@ document.querySelector('.view[data-view="staffAppsAdmin"]').addEventListener('cl
       if (reason === null) return;
       await saFetch(`/api/admin/staff-apps/${id}/reject`, 'POST', { reason });
       showToast(`${app.username} elutasítva.`);
+    } else if (del) {
+      const again = saAdminData.round && saAdminData.round.open ? ' Mivel a tagfelvétel nyitva van, újra jelentkezhet.' : '';
+      const ok = await confirmModal('Lap törlése', `Biztosan törlöd <b>${escapeHtml(app.username)}</b> jelentkezési lapját? A válaszok és a feltöltött képek véglegesen törlődnek, és erről nem kap értesítést.${again}`, 'Törlés');
+      if (!ok) return;
+      await saFetch(`/api/admin/staff-apps/${id}`, 'DELETE');
+      saExpandedApps.delete(id);
+      showToast('Lap törölve.');
     } else {
       const ok = await confirmModal('Vissza függőbe', `<b>${escapeHtml(app.username)}</b> jelentkezése újra függőben lesz, a választott időpontja törlődik. Erről nem kap értesítést.`, 'Vissza függőbe');
       if (!ok) return;
@@ -14751,10 +14659,6 @@ document.querySelector('.view[data-view="staffAppsAdmin"]').addEventListener('cl
     loadStaffAppsAdmin();
   } catch (err) { showToast(err.message, true); }
 });
-
-// ---------------------------------------------------------------------------
-// Staff tagfelvétel - kérdőív-szerkesztő (admin)
-// ---------------------------------------------------------------------------
 
 let sfDraft = null;
 let sfDirty = false;
@@ -15058,8 +14962,6 @@ window.addEventListener('beforeunload', (e) => {
   if (sfDirty) { e.preventDefault(); e.returnValue = ''; }
 });
 
-// --- Válaszok megjelenítése az admin listában ---
-
 const saUploadUrls = {};
 
 function renderSaAnswers(a) {
@@ -15101,11 +15003,6 @@ document.addEventListener('click', (e) => {
   if (url) window.open(url, '_blank', 'noopener');
 });
 
-// ---------------------------------------------------------------------------
-// Vásárlások vészleállítója
-// ---------------------------------------------------------------------------
-
-// Függvény (és var), mert a nézetváltás már a fájl végének lefutása előtt is meghívhatja.
 function isShopView(view) {
   return ['coin', 'wallet', 'ranks', 'sanction', 'cosmetics', 'market', 'trades', 'casino'].includes(view);
 }
@@ -15161,10 +15058,6 @@ async function loadShopLockAdmin() {
     $('#shopLockCard').innerHTML = `<p class="sa-muted" style="margin:0;">${escapeHtml(err.message)}</p>`;
   }
 }
-
-// ---------------------------------------------------------------------------
-// Fizetés (Tebex) admin
-// ---------------------------------------------------------------------------
 
 const TBX_MODE_LABELS = {
   off: ['Kikapcsolva', 'Senki nem fizethet kártyával. Egyenlegből továbbra is lehet vásárolni.'],
@@ -15373,10 +15266,6 @@ async function loadTbxAdmin(refresh) {
     $('#tbxModeCard').innerHTML = `<p class="sa-muted" style="margin:0;">${escapeHtml(err.message)}</p>`;
   }
 }
-
-// ---------------------------------------------------------------------------
-// Regisztrált játékosok (admin)
-// ---------------------------------------------------------------------------
 
 let regPage = 1;
 let regSearchTimer = null;

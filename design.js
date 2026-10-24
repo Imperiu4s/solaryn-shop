@@ -1,10 +1,10 @@
 (function () {
   'use strict';
 
-  // Szerkezeti díszítések a dizájnréteghez (design.css): minden nézet címét és
-  // leírását egy "page-hero" fejlécbe csomagolja a menüpont ikonjával, és a
-  // felső sávba morzsamenüt tesz. A meglévő elemek (és az id-jaik) csak
-  // átkerülnek a fejlécbe, így az app.js továbbra is ugyanúgy megtalálja őket.
+   
+   
+   
+   
 
   const $ = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
@@ -12,7 +12,7 @@
   const FALLBACK_ICON = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5" fill="currentColor"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
   const LEGAL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 12h7M9 16h7" stroke-linecap="round"/></svg>';
 
-  // Nézetek, amelyekhez nincs saját menüpont: melyik menüpont "alá" tartoznak.
+   
   const PARENT_VIEW = {
     playerProfile: { view: 'players', label: 'Játékosprofil' },
     deviceDetail: { view: 'players', label: 'Eszköz részletei' },
@@ -48,9 +48,9 @@
     };
   }
 
-  // Lágy, modern nap: izzó mag, halvány korona, elmosott és elvékonyodó
-  // sugarak két ellentétesen, lassan forgó rétegben. A színeket a téma
-  // változóiból veszi, így minden színtémához igazodik.
+   
+   
+   
   let sunSeq = 0;
   function sunSvg() {
     const id = 'sun' + (++sunSeq);

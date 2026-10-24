@@ -28,9 +28,6 @@
   --btn-ink: #1a1206;
 }
 
-/* Solaryn világos: a sötét alaptéma párja - meleg törtfehér háttér, fehér
-   panelek, és a jó olvashatóság miatt sötétebb arany. A design.css végén lévő
-   "világos téma" blokk igazítja a sötét háttérre szabott fix értékeket. */
 :root[data-theme="solaryn-light"] {
   color-scheme: light;
   --bg: #f5f3ee;
@@ -372,8 +369,7 @@ a { color: inherit; }
   transition: max-height .26s cubic-bezier(.2,.7,.3,1), opacity .2s;
   opacity: 0;
 }
-/* Bőven nagyobb, mint a leghosszabb (admin) almenü: a 640px levágta a lista
-   végét (Kuponok, Creator kódok, Jogok). */
+
 .app-nav-group.open > .app-nav-sub { max-height: 2000px; opacity: 1; }
 .app-nav-sub .app-nav-item {
   padding: 10px 16px 10px 48px; font-size: 13px; font-weight: 600;
