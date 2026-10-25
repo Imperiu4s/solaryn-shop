@@ -2401,3 +2401,4 @@ a { color: inherit; }
 .mob-rig-stale {
   margin: 0 0 10px;
 }
+.email-hint { font-size: 12px; line-height: 1.45; color: var(--text-faint); margin: 6px 0 2px; }
