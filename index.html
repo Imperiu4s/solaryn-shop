@@ -2735,7 +2735,7 @@
                 <svg class="faq-chevron" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/></svg>
               </button>
               <div class="faq-a-wrap"><div class="faq-a"><div>
-                A fiókod adatait (név, email, születési dátum), a játékbeli adataidat, a vásárlásaidat, és ha a SolarLaunchert használod, a géped néhány azonosítójának hash-ét. Bankkártyaadatot nem látunk, azt a Tebex kezeli. Hogy mit, miért és meddig, azt az <a href="#legal" data-legal-link="adatkezeles">Adatkezelési tájékoztató</a> táblázata írja le. A sütikről a lábléc <b>Süti beállítások</b> pontja szól.
+                A fiókod adatait (név, email, születési dátum), a játékbeli adataidat, a vásárlásaidat, és ha a SolarLaunchert használod, a géped néhány azonosítójának hash-ét. Bankkártyaadatot nem látunk, azt a Tebex kezeli. Hogy mit, miért és meddig, azt az <a href="#legal" data-legal-link="adatkezeles">Adatkezelési tájékoztató</a> táblázata írja le. Hogy a launcher és a kliens mit csinál a gépeden, azt a <a href="#legal" data-legal-link="kliens">Kliens és launcher</a> rész írja le. A sütikről a lábléc <b>Süti beállítások</b> pontja szól.
               </div></div></div>
             </div>
 
@@ -2763,6 +2763,7 @@
           <div class="legal-tabs">
             <button class="legal-tab active" data-legal="aszf">ÁSZF</button>
             <button class="legal-tab" data-legal="adatkezeles">Adatkezelés</button>
+            <button class="legal-tab" data-legal="kliens">Kliens és launcher</button>
             <button class="legal-tab" data-legal="impresszum">Impresszum</button>
           </div>
 
@@ -2875,7 +2876,7 @@
                     <tr><td>Fiók</td><td>felhasználónév, email-cím, jelszó (csak hash-elve), születési dátum, az ÁSZF elfogadásának ideje és az elfogadott (vagy elutasított) változata, a megadott creator kód</td><td>b) szerződés teljesítése</td><td>a fiók törléséig</td></tr>
                     <tr><td>Játék és SolarCenter</td><td>rang, PrémiumPont-egyenleg, Egyenleg, játékidő, barátlista, kiegészítők, feltöltött skin és köpeny, jelvények</td><td>b) szerződés teljesítése</td><td>a fiók törléséig</td></tr>
                     <tr><td>Fiókvédelem</td><td>a kétlépcsős azonosítás kulcsa, a biztonsági kód hash-e, belépési előzmények</td><td>f) jogos érdek: a fiókod védelme</td><td>a fiók törléséig, a belépési előzmények 1 évig</td></tr>
-                    <tr><td>Tiltások kijátszása elleni védelem</td><td>a SolarLauncher által küldött gépazonosítók hash-e (Windows gépazonosító, lemez- és alaplap-sorozatszám, MAC-cím); ezekből az eredeti érték nem fejthető vissza</td><td>f) jogos érdek: a kitiltások betartatása</td><td>az utolsó használattól 1 évig, kitiltott gépnél a tiltás végéig</td></tr>
+                    <tr><td>Tiltások kijátszása elleni védelem</td><td>a SolarLauncher által küldött gépazonosítók hash-e (Windows gépazonosító, lemez- és alaplap-sorozatszám, MAC-cím); ezekből az eredeti érték nem fejthető vissza; részletesen a „SolarClient és launcher” részben</td><td>f) jogos érdek: a kitiltások betartatása</td><td>az utolsó használattól 1 évig, kitiltott gépnél a tiltás végéig</td></tr>
                     <tr><td>Szankciók</td><td>némítás, kitiltás oka, ideje, ki adta; a játékszerverek naplójában a belépéskori IP-cím</td><td>f) jogos érdek: a szabályok betartatása</td><td>a szankció lejárta után 1 évig, az IP-cím 1 évig</td></tr>
                     <tr><td>Vásárlás</td><td>a termék, az ár, a Tebexen fizetett összeg és pénznem, az időpont, a Tebex tranzakció-azonosítója, ajándéknál a címzett és az üzenet, az elállási jogról tett nyilatkozat ideje, a PP-mozgások (Napló)</td><td>b) szerződés teljesítése; a bizonylatoknál c) jogi kötelezettség</td><td>5 évig (a polgári jogi elévülési idő); a bizonylatok a számviteli és adózási szabályok szerinti ideig, legfeljebb 8 évig</td></tr>
                     <tr><td>Discord-összekötés</td><td>Discord-azonosító, felhasználónév, profilkép</td><td>b) szerződés teljesítése (te kéred)</td><td>amíg le nem választod</td></tr>
@@ -2924,6 +2925,68 @@
 
               <h4>8. Módosítás</h4>
               <p>Ha a tájékoztató változik, az új szöveget itt és a solaryn.hu/jogi oldalon tesszük közzé. Lényeges változásról a hatálybalépése előtt a Discordon és a SolarCenterben is szólunk.</p>
+            </div>
+
+            <div class="legal-panel" data-legal-panel="kliens">
+              <h3>A SolarLauncher és a SolarClient</h3>
+              <p class="legal-meta">Hatályos 2026. október 25-től. Ez a rész az Adatkezelési tájékoztató kiegészítése: azt írja le, mit csinál a launcher és a kliens a gépeden, és mit küld el. Az adatkezelő, a jogaid és a panasztétel módja ugyanaz, mint az Adatkezelési tájékoztatóban.</p>
+
+              <h4>1. Röviden</h4>
+              <ul>
+                <li>A launcher és a kliens <b>nem olvassa a személyes fájljaidat</b>, nem készít képet a képernyődről, nem rögzíti, mit gépelsz, és nem fér hozzá a böngésződhöz vagy a jelszavaidhoz.</li>
+                <li>A <b>csalásvédelem a gépeden fut</b>, és amit talál, az ott is marad: nekünk nem küld jelentést (3. pont).</li>
+                <li>A szerverünkre csak az megy, ami a fiókodhoz, a játékhoz és a tiltások betartatásához kell (2. pont).</li>
+                <li>Az egyetlen, a gépedhez kötődő adat, amit elküldünk, néhány gépazonosító <b>hash-e</b>. Ez a gépeden készül, és az eredeti érték nem fejthető vissza belőle.</li>
+              </ul>
+
+              <h4>2. Mit küld a launcher és a kliens a szerverünkre</h4>
+              <div class="legal-table-wrap">
+                <table class="legal-table">
+                  <thead>
+                    <tr><th>Mikor</th><th>Mit</th><th>Miért</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr><td>Bejelentkezéskor</td><td>felhasználónév és jelszó, illetve a kétlépcsős azonosítás vagy a biztonsági kód, ha bekapcsoltad. A jelszavadat a launcher nem menti el: a gépeden csak egy titkosítva tárolt belépési azonosító marad, amíg ki nem jelentkezel.</td><td>a belépéshez</td></tr>
+                    <tr><td>Minden játékindításkor</td><td>a gépazonosítók hash-e (Windows gépazonosító, az első lemez és az alaplap sorozatszáma, a hálózati kártya MAC-címe) és az időpont</td><td>a kitiltások kijátszása elleni védelem (ld. Adatkezelési tájékoztató, 2. pont)</td></tr>
+                    <tr><td>Minden játékindításkor</td><td>egy egyszer használatos belépőjegy kérése a fiókodhoz</td><td>hogy a szerverre csak a hivatalos launcherrel, a saját fiókoddal lehessen belépni</td></tr>
+                    <tr><td>Játék közben, percenként</td><td>a felhasználóneved és a belépőjegy</td><td>hogy a többi SolarClient-es játékos lássa, hogy te is a SolarClientet használod; csak az utolsó jelzés idejét tároljuk</td></tr>
+                    <tr><td>Játékindításkor és ha módosítod a kliens beállításait</td><td>a kliens beállításai (modulok, HUD-elrendezés, színek)</td><td>hogy másik gépen is megmaradjanak a beállításaid</td></tr>
+                    <tr><td>Játék közben</td><td>a közeledben lévő játékosok felhasználóneve, amikor a kliens letölti a kiegészítőiket; a saját neved, amikor a PrémiumPont-egyenlegedet mutatja</td><td>a kiegészítők megjelenítése, az egyenleg kiírása</td></tr>
+                    <tr><td>Ha skint vagy köpenyt töltesz fel</td><td>a feltöltött kép</td><td>hogy a szerveren és a SolarCenterben megjelenjen</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <p>A hírek, a kiegészítők, az emojik, a modellek és a kliensfrissítések letöltésekor nem küldünk rólad adatot, a szerverünk csak a kérést kapja meg. Ezeknél is érvényes, hogy a SolarCenter és a launcher kiszolgálója az IP-címedet nem menti el.</p>
+
+              <h4>3. Mit néz a csalásvédelem</h4>
+              <p>A SolarClient beépített csalásvédelme csak addig fut, amíg a játék fut, és kizárólag a játék ellenőrzésére szolgál. Ezeket nézi:</p>
+              <ul>
+                <li>a játék saját folyamatát: milyen programfájlok (DLL-ek) töltődtek be, alá vannak-e írva, és nem jutott-e idegen kód a játékba;</li>
+                <li>a játékba betöltött modokat és a játék indítási beállításait: csak a beépített és a Bővítmények menüben elérhető modok engedélyezettek;</li>
+                <li>a gépeden futó programok nevét és a nyitott ablakok címét, de csak azért, hogy összevesse őket az ismert csaló-, autoclicker- és makróprogramok listájával;</li>
+                <li>a kattintásaid ritmusát a játékban, hogy kiszűrje a gépies, autoclickerre jellemző egyenletességet.</li>
+              </ul>
+              <p>Amit a csalásvédelem lát, abból <b>semmit nem küld el nekünk</b>. Ha talál valamit, leállítja a játékot, a launcherben megmutatja az okát, és a játék mappájában a <i>logs/solaryn-security.txt</i> fájlba is beírja. Ez a fájl a gépeden marad, csak akkor látjuk, ha te elküldöd nekünk (például egy ticketben). A kitiltásokról a személyzet dönt, a csalásvédelem magától nem tilt ki senkit.</p>
+
+              <h4>4. Mit tárol a launcher a gépeden</h4>
+              <ul>
+                <li>a launcher beállításait és a belépési azonosítódat (ez utóbbit a Windows saját titkosításával);</li>
+                <li>a játékidőd helyi statisztikáját, a játék beállításait, képernyőképeit és naplóit;</li>
+                <li>a letöltött játékfájlokat, a Java futtatókörnyezetet és a Bővítményekből telepített modokat, textúracsomagokat és shadereket;</li>
+                <li>ha a launcherben kiválasztod, melyik videokártyán fusson a játék, ezt a Windows saját grafikai beállításai közé írja be.</li>
+              </ul>
+              <p>Ezek közül a képernyőképeket és a naplókat a launcher sehová nem tölti fel. Az egészet törölheted a launcher eltávolításával és a játék mappájának törlésével.</p>
+
+              <h4>5. Kikhez kapcsolódik még a launcher és a kliens</h4>
+              <p>A játékhoz szükséges fájlokat a launcher közvetlenül a készítőiktől tölti le. Ilyenkor ők, mint bármelyik letöltésnél, látják az IP-címedet, de a fiókod adatait nem kapják meg.</p>
+              <ul>
+                <li><b>Mojang / Microsoft</b>: a Minecraft játékfájljai.</li>
+                <li><b>Eclipse Adoptium</b>: a Java futtatókörnyezet.</li>
+                <li><b>FabricMC és Legacy Fabric</b>: a modbetöltő.</li>
+                <li><b>Modrinth</b> (Rinth, Inc., USA): a Bővítmények menü modjai, textúracsomagjai és shaderei. A launcher és a kliens a telepített modjaid ujjlenyomatát (hash-ét) is elküldi a Modrinthnak, hogy ellenőrizze, valóban az engedélyezett modokról van-e szó.</li>
+                <li><b>mcsrvstat.us</b>: a launcher ezen keresztül kérdezi le, hogy fut-e a szerver, és hányan vannak fent.</li>
+                <li><b>Discord</b>: ha a gépeden fut a Discord, a kliens megmutatja a Discord-profilodon, hogy a Solaryn-en játszol, melyik játékmódban, a Minecraft-neveddel és a fejképeddel. A fejképet a Discord a mi szerverünkről vagy az mc-heads.net-ről tölti le. Ezt a launcher beállításaiban, a „Discord állapot” kapcsolóval kikapcsolhatod.</li>
+              </ul>
             </div>
 
             <div class="legal-panel" data-legal-panel="impresszum">
@@ -3206,6 +3269,7 @@
       <div class="legal-tabs" id="legalModalTabs">
         <button type="button" class="legal-tab" data-legal-modal-tab="aszf">ÁSZF</button>
         <button type="button" class="legal-tab" data-legal-modal-tab="adatkezeles">Adatkezelés</button>
+        <button type="button" class="legal-tab" data-legal-modal-tab="kliens">Kliens és launcher</button>
         <button type="button" class="legal-tab" data-legal-modal-tab="impresszum">Impresszum</button>
       </div>
       <div class="legal-modal-body" id="legalModalBody"></div>
