@@ -774,8 +774,9 @@ const STAT_ICONS = {
   spin: '<svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M4 12a8 8 0 0 1 14.6-4.5M20 12a8 8 0 0 1-14.6 4.5M18.6 7.5V4m0 3.5H15M5.4 16.5V20m0-3.5H9"/></svg>'
 };
 
-const RICH_TEXT_TAGS = new Set(['B', 'STRONG', 'I', 'EM', 'U', 'SPAN', 'DIV', 'FONT', 'BR']);
+const RICH_TEXT_TAGS = new Set(['B', 'STRONG', 'I', 'EM', 'U', 'S', 'SPAN', 'DIV', 'FONT', 'BR', 'IMG']);
 const RICH_TEXT_COLOR_RE = /^(#[0-9a-f]{3,6}|rgb\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\))$/i;
+const RICH_TEXT_EMOJI_SRC_RE = /^https:\/\/cdn\.discordapp\.com\/emojis\/\d{5,25}\.(png|webp|gif)(\?size=\d{2,3})?$/;
 
 function sanitizeRichText(html) {
   const tpl = document.createElement('template');
@@ -796,7 +797,19 @@ function sanitizeRichText(html) {
       const align = node.style ? node.style.textAlign : '';
       const fontSize = node.getAttribute('size');
       const fontColor = node.getAttribute('color');
+      const imgSrc = node.getAttribute('src') || '';
+      const imgAlt = (node.getAttribute('alt') || '').slice(0, 40);
       for (const attr of Array.from(node.attributes)) node.removeAttribute(attr.name);
+      if (node.tagName === 'IMG') {
+        if (!RICH_TEXT_EMOJI_SRC_RE.test(imgSrc)) {
+          node.replaceWith(document.createTextNode(imgAlt));
+          continue;
+        }
+        node.setAttribute('src', imgSrc);
+        node.setAttribute('alt', imgAlt);
+        node.setAttribute('class', 'rt-emoji');
+        continue;
+      }
       if (node.tagName === 'SPAN' || node.tagName === 'DIV') {
         if (color && RICH_TEXT_COLOR_RE.test(color)) node.style.color = color;
         if (/^(left|center|right)$/.test(align)) node.style.textAlign = align;
@@ -2006,7 +2019,7 @@ function switchView(view) {
   if (view === 'wallet') refreshPpBalance();
 
   if (view === 'coin' || view === 'sanction' || view === 'wallet') loadShopCatalog();
-  if (view === 'security') { loadSecurityStatus(); loadSecurityPinStatus(); loadClientSettingsState(); loadPrivacySettings(); }
+  if (view === 'security') { loadSecurityStatus(); loadSecurityPinStatus(); loadClientSettingsState(); loadPrivacySettings(); loadNewsletterSetting(); }
   if (view === 'ledger') loadLedger();
   if (view === 'purchaseLogs') loadPurchaseLogsGlobal();
   if (view === 'staffActionLogs') loadStaffActionLogsGlobal();
@@ -4972,7 +4985,157 @@ function restoreRichTextSelection() {
   sel.addRange(richTextSavedRange);
 }
 
+const DISCORD_MD_HINT_RE = /\*\*|__|~~|\|\||<a?:\w{2,32}:\d{5,25}>|<t:-?\d+(:[tTdDfFR])?>|<@[!&]?\d+>|<#\d+>|^\s*(#{1,3}|-#|>{1,3})\s|^\s*```/m;
+const DISCORD_QUOTE_BAR = '<span style="color:#4e5058">▎</span>';
+const DISCORD_MUTED = '#949ba4';
+
+function discordEmojiImg(id, animated, name) {
+  return `<img class="rt-emoji" src="https://cdn.discordapp.com/emojis/${id}.${animated ? 'gif' : 'webp'}?size=48" alt=":${escapeHtml(name)}:">`;
+}
+
+function discordTimestamp(seconds, style) {
+  const d = new Date(Number(seconds) * 1000);
+  if (Number.isNaN(d.getTime())) return '';
+  if (style === 't') return d.toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' });
+  if (style === 'T') return d.toLocaleTimeString('hu-HU');
+  if (style === 'd') return d.toLocaleDateString('hu-HU');
+  if (style === 'D') return d.toLocaleDateString('hu-HU', { year: 'numeric', month: 'long', day: 'numeric' });
+  if (style === 'F') return d.toLocaleString('hu-HU', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleString('hu-HU', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function discordInlineToHtml(text) {
+  const codes = [];
+  const keep = (html) => {
+    codes.push(html);
+    return `\u0000${codes.length - 1}\u0000`;
+  };
+  let s = text.replace(/`([^`\n]+)`/g, (_, code) => keep(escapeHtml(code)));
+  s = escapeHtml(s);
+  s = s.replace(/&lt;(a?):(\w{2,32}):(\d{5,25})&gt;/g, (_, a, name, id) => keep(discordEmojiImg(id, a === 'a', name)));
+  s = s.replace(/&lt;t:(-?\d+)(?::([tTdDfFR]))?&gt;/g, (_, ts, style) => keep(escapeHtml(discordTimestamp(ts, style))));
+  s = s.replace(/&lt;@&amp;\d+&gt;/g, '@rang').replace(/&lt;@!?\d+&gt;/g, '@tag').replace(/&lt;#\d+&gt;/g, '#csatorna');
+  s = s.replace(/\[([^\]\n]+)\]\((?:https?:\/\/[^)\s]+)\)/g, '$1');
+  s = s.replace(/\|\|(.+?)\|\|/g, '$1');
+  s = s.replace(/\*\*\*(.+?)\*\*\*/g, '<b><i>$1</i></b>');
+  s = s.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+  s = s.replace(/__(.+?)__/g, '<u>$1</u>');
+  s = s.replace(/~~(.+?)~~/g, '<s>$1</s>');
+  s = s.replace(/(^|[^\w*])\*(?!\s)(.+?)\*(?!\w)/g, '$1<i>$2</i>');
+  s = s.replace(/(^|[^\w])_(?!\s)(.+?)_(?!\w)/g, '$1<i>$2</i>');
+  return s.replace(/\u0000(\d+)\u0000/g, (_, i) => codes[Number(i)]);
+}
+
+function discordMarkdownToHtml(md) {
+  const lines = String(md).replace(/\r\n?/g, '\n').split('\n');
+  const out = [];
+  let inCode = false;
+  let quoteRest = false;
+  for (const rawLine of lines) {
+    if (/^\s*```/.test(rawLine)) {
+      inCode = !inCode;
+      const after = rawLine.replace(/^\s*```\w*/, '').replace(/```\s*$/, '');
+      if (after.trim()) out.push(`<div>${escapeHtml(after)}</div>`);
+      continue;
+    }
+    if (inCode) {
+      out.push(`<div>${escapeHtml(rawLine) || '<br>'}</div>`);
+      continue;
+    }
+    let line = rawLine;
+    let quoted = quoteRest;
+    const multi = line.match(/^\s*>>>\s?(.*)$/);
+    if (multi) {
+      quoteRest = true;
+      quoted = true;
+      line = multi[1];
+    } else {
+      const single = line.match(/^\s*>\s?(.*)$/);
+      if (single) {
+        quoted = true;
+        line = single[1];
+      }
+    }
+    let html;
+    const heading = line.match(/^(#{1,3})\s+(.*)$/);
+    const sub = line.match(/^-#\s+(.*)$/);
+    const bullet = line.match(/^(\s*)[-*]\s+(.*)$/);
+    if (heading) {
+      const size = { 1: 6, 2: 5, 3: 4 }[heading[1].length];
+      html = `<font size="${size}"><b>${discordInlineToHtml(heading[2])}</b></font>`;
+    } else if (sub) {
+      html = `<font size="2"><span style="color:${DISCORD_MUTED}">${discordInlineToHtml(sub[1])}</span></font>`;
+    } else if (bullet) {
+      html = `${'&nbsp;'.repeat(Math.min(bullet[1].length, 8) * 2)}• ${discordInlineToHtml(bullet[2])}`;
+    } else {
+      html = discordInlineToHtml(line);
+    }
+    if (quoted) html = `${DISCORD_QUOTE_BAR} ${html}`;
+    out.push(`<div>${html || '<br>'}</div>`);
+  }
+  return out.join('');
+}
+
+function discordHtmlToRichText(html) {
+  const tpl = document.createElement('template');
+  tpl.innerHTML = String(html || '');
+  const BLOCKS = new Set(['DIV', 'P', 'LI', 'H1', 'H2', 'H3', 'H4', 'BLOCKQUOTE', 'PRE', 'UL', 'OL', 'TR']);
+  const SKIP = new Set(['SCRIPT', 'STYLE', 'TEMPLATE', 'IFRAME', 'OBJECT', 'SVG', 'BUTTON', 'META', 'LINK', 'TITLE']);
+  const walk = (node, ctx) => {
+    if (node.nodeType === Node.TEXT_NODE) return escapeHtml(node.nodeValue.replace(/​/g, ''));
+    if (node.nodeType !== Node.ELEMENT_NODE || SKIP.has(node.tagName)) return '';
+    const tag = node.tagName;
+    if (tag === 'BR') return '<br>';
+    if (tag === 'IMG') {
+      const src = node.getAttribute('src') || '';
+      const alt = node.getAttribute('alt') || node.getAttribute('aria-label') || '';
+      const m = src.match(/^https:\/\/(?:cdn|media)\.discordapp\.(?:com|net)\/emojis\/(\d{5,25})\.(png|webp|gif)/);
+      if (m) return discordEmojiImg(m[1], m[2] === 'gif' || /animated=true/.test(src), alt.replace(/^:|:$/g, '') || 'emoji');
+      return escapeHtml(alt);
+    }
+    const quoted = ctx.quoted || tag === 'BLOCKQUOTE';
+    let inner = '';
+    for (const child of Array.from(node.childNodes)) inner += walk(child, { quoted });
+    if (tag === 'STRONG' || tag === 'B') return inner.trim() ? `<b>${inner}</b>` : inner;
+    if (tag === 'EM' || tag === 'I') return inner.trim() ? `<i>${inner}</i>` : inner;
+    if (tag === 'U') return inner.trim() ? `<u>${inner}</u>` : inner;
+    if (tag === 'S' || tag === 'DEL' || tag === 'STRIKE') return inner.trim() ? `<s>${inner}</s>` : inner;
+    if (tag === 'SMALL') return `<font size="2"><span style="color:${DISCORD_MUTED}">${inner}</span></font>`;
+    if (tag === 'H1' || tag === 'H2' || tag === 'H3') {
+      return `<div><font size="${{ H1: 6, H2: 5, H3: 4 }[tag]}"><b>${inner}</b></font></div>`;
+    }
+    if (tag === 'LI') return `<div>• ${inner}</div>`;
+    if (tag === 'BLOCKQUOTE') {
+      return inner.split(/<br>|(?=<div>)/).filter((part) => part.replace(/<\/?div>/g, '').trim())
+        .map((part) => `<div>${DISCORD_QUOTE_BAR} ${part.replace(/<\/?div>/g, '')}</div>`).join('');
+    }
+    if (BLOCKS.has(tag)) return inner.trim() ? `<div>${inner}</div>` : '';
+    return inner;
+  };
+  let out = '';
+  for (const child of Array.from(tpl.content.childNodes)) out += walk(child, { quoted: false });
+  return out;
+}
+
+function handleRichTextPaste(e) {
+  const data = e.clipboardData;
+  if (!data) return;
+  const plain = data.getData('text/plain') || '';
+  const html = data.getData('text/html') || '';
+  let out;
+  if (plain && (DISCORD_MD_HINT_RE.test(plain) || !html)) {
+    out = discordMarkdownToHtml(plain);
+  } else if (html) {
+    out = discordHtmlToRichText(html);
+  } else {
+    return;
+  }
+  e.preventDefault();
+  document.execCommand('insertHTML', false, sanitizeRichText(out));
+}
+
 function initRichTextToolbar(toolbarEl, editableEl) {
+  editableEl.addEventListener('paste', handleRichTextPaste);
   editableEl.addEventListener('mouseup', () => saveRichTextSelection(editableEl));
   editableEl.addEventListener('keyup', () => saveRichTextSelection(editableEl));
   editableEl.addEventListener('focus', () => saveRichTextSelection(editableEl));
@@ -13631,6 +13794,50 @@ $('#privacyCosmeticsToggle').addEventListener('change', async (e) => {
     const data = await res.json();
     if (!data.ok) throw new Error(data.message);
     result.textContent = wanted ? 'Mostantól mások nem látják a kiegészítőidet.' : 'A kiegészítőid újra láthatók a profilodon.';
+  } catch (err) {
+    toggle.checked = !wanted;
+    result.classList.add('error');
+    result.textContent = (err && err.message) || 'Nem sikerült menteni.';
+  } finally {
+    toggle.disabled = false;
+  }
+});
+
+async function loadNewsletterSetting() {
+  const toggle = $('#newsletterToggle');
+  const result = $('#newsletterResult');
+  if (!session || !session.token) return;
+  toggle.disabled = true;
+  result.classList.remove('error');
+  result.textContent = '';
+  try {
+    const res = await fetch(BACKEND_URL + '/api/me/newsletter', { headers: { Authorization: 'Bearer ' + session.token } });
+    const data = await res.json();
+    if (!data.ok) throw new Error();
+    toggle.checked = !!data.enabled;
+    toggle.disabled = !data.hasEmail && !data.enabled;
+    if (!data.hasEmail) result.textContent = 'A hírlevélhez email cím szükséges a fiókodon.';
+  } catch {
+    result.classList.add('error');
+    result.textContent = 'A beállítás most nem tölthető be.';
+  }
+}
+
+$('#newsletterToggle').addEventListener('change', async (e) => {
+  const toggle = e.target;
+  const result = $('#newsletterResult');
+  const wanted = toggle.checked;
+  toggle.disabled = true;
+  result.classList.remove('error');
+  try {
+    const res = await fetch(BACKEND_URL + '/api/me/newsletter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.token },
+      body: JSON.stringify({ enabled: wanted })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.message);
+    result.textContent = wanted ? 'Feliratkoztál a hírlevélre.' : 'Leiratkoztál a hírlevélről, több ilyen levelet nem küldünk.';
   } catch (err) {
     toggle.checked = !wanted;
     result.classList.add('error');

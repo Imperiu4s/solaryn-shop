@@ -1396,6 +1396,7 @@ a { color: inherit; }
   min-height: 44px; cursor: text; line-height: 1.5;
 }
 .richtext-editable-tall { min-height: 140px; }
+.rt-emoji { width: 1.375em; height: 1.375em; vertical-align: -0.3em; object-fit: contain; display: inline-block; }
 .richtext-editable:empty:before {
   content: attr(data-placeholder); color: var(--text-faint); pointer-events: none;
 }
