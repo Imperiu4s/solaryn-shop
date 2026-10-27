@@ -13120,8 +13120,11 @@ $('#nrScanBtn').addEventListener('click', () => { scanExistingUsernames(); scanE
 
 const EMAIL_FLAG_LABELS = {
   invalid: 'Érvénytelen', typo: 'Elírás', disposable: 'Eldobható', nodomain: 'Nem létező domain',
-  random: 'Véletlenszerű', unverified: 'Nincs megerősítve'
+  random: 'Véletlenszerű', unverified: 'Nincs megerősítve', notallowed: 'Nem engedélyezett'
 };
+
+// Az utolsó átvizsgálásban talált, tömegesen törölhető fiókok.
+let emailScanDeletable = [];
 
 async function scanExistingEmails() {
   const out = $('#emailScanResult');
@@ -13131,11 +13134,20 @@ async function scanExistingEmails() {
     const data = await res.json();
     if (!data.ok) throw new Error(data.message);
     const hits = data.hits || [];
+    emailScanDeletable = [];
     if (!hits.length) {
       out.innerHTML = `<div class="nr-empty nr-empty-ok"><b>Minden rendben.</b><span>${data.checked} email címet néztünk át, egyik sem gyanús.</span></div>`;
       return;
     }
-    out.innerHTML = `<p class="nr-scan-summary"><b>${hits.length}</b> gyanús email cím (${data.checked} címből):</p>
+    const blocked = hits.filter((h) => h.blocked);
+    emailScanDeletable = blocked.filter((h) => !h.protectedReason).map((h) => h.username);
+    const kept = blocked.length - emailScanDeletable.length;
+    const bulkBox = blocked.length && hasPerm('player.action.delete') ? `
+      <div class="email-bulk">
+        <p><b>${blocked.length}</b> fiók olyan email címmel regisztrált, amivel ma már nem lehetne.${kept ? ` Ebből ${kept} nem törölhető tömegesen (rangja, egyenlege vagy vásárlása van) - ezeket a profiljukból lehet.` : ''}</p>
+        ${emailScanDeletable.length ? `<button type="button" class="btn-outline sa-btn-danger" id="emailBulkDeleteBtn">${emailScanDeletable.length} fiók törlése</button>` : ''}
+      </div>` : '';
+    out.innerHTML = `${bulkBox}<p class="nr-scan-summary"><b>${hits.length}</b> gyanús email cím (${data.checked} címből):</p>
       <div class="email-scan-list">${hits.map((h) => `
         <div class="email-scan-row">
           <button type="button" class="reg-name" data-nr-open="${escapeHtml(h.username)}">${escapeHtml(h.username)}</button>
@@ -13148,9 +13160,37 @@ async function scanExistingEmails() {
   }
 }
 
+async function bulkDeleteBlockedEmails(btn) {
+  const usernames = [...emailScanDeletable];
+  if (!usernames.length) return;
+  const ok = await confirmModal(
+    'Fiókok végleges törlése',
+    `Ez <b>VÉGLEGES</b> - biztosan törlöd ezt a <b>${usernames.length}</b> fiókot a skinjükkel és az előzményeikkel együtt? Ez NEM vonható vissza.`,
+    `Igen, törlöm mind a ${usernames.length}-t`
+  );
+  if (!ok) return;
+  if (typeof window.setButtonLoading === 'function') window.setButtonLoading(btn, true);
+  try {
+    const res = await fetch(BACKEND_URL + '/api/admin/name-rules/email-scan/delete-blocked', {
+      method: 'POST', headers: nrAuthHeaders(true), body: JSON.stringify({ usernames })
+    });
+    const data = await res.json();
+    if (!data.ok) { showToast(data.message || 'Nem sikerült a törlés.', true); return; }
+    const skipped = data.skipped || [];
+    showToast(`${data.deleted.length} fiók törölve.${skipped.length ? ` ${skipped.length} kimaradt.` : ''}`);
+    scanExistingEmails();
+  } catch {
+    showToast('Nem sikerült elérni a szervert.', true);
+  } finally {
+    if (typeof window.setButtonLoading === 'function') window.setButtonLoading(btn, false);
+  }
+}
+
 document.querySelector('.view[data-view="nameRules"]').addEventListener('click', async (e) => {
   const open = e.target.closest('[data-nr-open]');
   if (open) { openPlayerProfile(open.dataset.nrOpen); return; }
+  const bulkDelete = e.target.closest('#emailBulkDeleteBtn');
+  if (bulkDelete) { bulkDeleteBlockedEmails(bulkDelete); return; }
   const allowName = e.target.closest('[data-nr-allow-name]');
   if (allowName) {
     nrAction = 'allow';
