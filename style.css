@@ -259,6 +259,8 @@ a { color: inherit; }
 }
 .pw-toggle-btn:hover { color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); }
 .auth-error { color: var(--danger); font-size: 12px; min-height: 16px; margin: 10px 2px 4px; }
+.captcha-box { display: flex; justify-content: center; min-height: 65px; margin: 12px 0 2px; }
+.captcha-box.hidden { display: none; }
 .auth-forgot-link {
   display: block; text-align: center; margin-top: 14px;
   color: var(--text-dim); font-size: 12px; text-decoration: underline;

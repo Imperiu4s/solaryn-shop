@@ -207,6 +207,70 @@ async function apiPost(path, body) {
   }
 }
 
+// Robotellenőrzés (Cloudflare Turnstile) a regisztrációnál. Hogy kell-e, és
+// melyik kulccsal, azt a backend mondja meg (/api/captcha), így ott kapcsolható.
+const registerCaptcha = { config: null, script: null, widgets: new Map() };
+
+async function captchaConfig() {
+  if (registerCaptcha.config) return registerCaptcha.config;
+  try {
+    const res = await fetch(BACKEND_URL + '/api/captcha', { cache: 'no-store' });
+    const data = await res.json();
+    registerCaptcha.config = data && data.ok ? data : { enabled: false };
+    return registerCaptcha.config;
+  } catch {
+    // Hibánál nem jegyezzük meg: a következő próbálkozás újra lekéri.
+    return { enabled: false };
+  }
+}
+
+function loadTurnstileScript() {
+  if (window.turnstile) return Promise.resolve();
+  if (!registerCaptcha.script) {
+    registerCaptcha.script = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+      script.async = true;
+      script.onload = () => resolve();
+      script.onerror = () => {
+        registerCaptcha.script = null;
+        script.remove();
+        reject(new Error('A robotellenőrzés nem töltődött be.'));
+      };
+      document.head.appendChild(script);
+    });
+  }
+  return registerCaptcha.script;
+}
+
+async function mountCaptcha(selector) {
+  const box = $(selector);
+  if (!box || registerCaptcha.widgets.has(selector)) return;
+  const config = await captchaConfig();
+  if (!config.enabled || !config.siteKey) return;
+  try {
+    await loadTurnstileScript();
+  } catch {
+    return;
+  }
+  if (registerCaptcha.widgets.has(selector)) return;
+  box.classList.remove('hidden');
+  const id = window.turnstile.render(box, { sitekey: config.siteKey, action: config.action || 'register', language: 'hu', theme: 'auto' });
+  registerCaptcha.widgets.set(selector, id);
+}
+
+function captchaToken(selector) {
+  const id = registerCaptcha.widgets.get(selector);
+  if (id === undefined || !window.turnstile) return null;
+  return window.turnstile.getResponse(id) || null;
+}
+
+// A token egyszer használható, ezért minden beküldés után újat kérünk.
+function resetCaptcha(selector) {
+  const id = registerCaptcha.widgets.get(selector);
+  if (id !== undefined && window.turnstile) window.turnstile.reset(id);
+}
+
 async function apiGetMe(token) {
   try {
     const res = await fetch(BACKEND_URL + '/api/me', { headers: { Authorization: 'Bearer ' + token } });
@@ -234,10 +298,20 @@ function setAuthMode(mode) {
   $('#authSubheading').textContent = sub;
   $('#authError').textContent = '';
   $('#registerError').textContent = '';
+  if (mode === 'register') mountCaptcha('#registerCaptcha');
 }
 $$('.auth-tab').forEach((tab) => tab.addEventListener('click', () => setAuthMode(tab.dataset.tab)));
 $('#switchToLogin').addEventListener('click', () => setAuthMode('login'));
 $('#switchToRegister').addEventListener('click', () => setAuthMode('register'));
+// A launcher "Regisztráció" gombja ide küld: center.solaryn.hu/?register=1
+(() => {
+  const params = new URLSearchParams(window.location.search);
+  if (!params.has('register')) return;
+  params.delete('register');
+  const search = params.toString();
+  window.history.replaceState({}, '', window.location.pathname + (search ? '?' + search : '') + window.location.hash);
+  setAuthMode('register');
+})();
 
 $('#authIpCopy').addEventListener('click', async () => {
   const btn = $('#authIpCopy');
@@ -574,6 +648,13 @@ async function submitRegistration(ids, errEl) {
   if (!termsOk) return fail('Az ÁSZF és az Adatvédelmi nyilatkozat elfogadása kötelező.', ids.terms);
   if (!ageOk) return fail('Erősítsd meg, hogy betöltötted a 14. életévedet.', ids.age);
 
+  const captchaNeeded = (await captchaConfig()).enabled;
+  const captchaResponse = captchaToken(ids.captcha);
+  if (captchaNeeded && !captchaResponse) {
+    mountCaptcha(ids.captcha);
+    return fail('Igazold, hogy nem vagy robot: oldd meg az ellenőrzést a gomb fölött.');
+  }
+
   const res = await apiPost('/api/register', {
     username,
     email,
@@ -583,9 +664,16 @@ async function submitRegistration(ids, errEl) {
     marketingChannel: marketingOk ? marketingChannel : null,
     creatorCode: creatorCode || null,
     termsAccepted: termsOk,
-    supportsEmailVerification: true
+    supportsEmailVerification: true,
+    captchaToken: captchaResponse
   });
+  resetCaptcha(ids.captcha);
   if (!res.ok) {
+    if (res.field === 'captcha') {
+      registerCaptcha.config = null;
+      mountCaptcha(ids.captcha);
+      return fail(res.captchaFailed ? res.message : 'Igazold, hogy nem vagy robot: oldd meg az ellenőrzést a gomb fölött.');
+    }
     if (res.field === 'username') return fail(res.message || 'Ez a felhasználónév nem választható.', ids.user);
     if (res.field === 'email') return fail(res.message || 'Ez az email cím nem használható.', ids.email);
     if (res.field === 'creatorCode') return fail(res.message || 'Ez a creator kód nem használható.', ids.creatorCode);
@@ -598,12 +686,14 @@ async function submitRegistration(ids, errEl) {
 const REGISTER_FORM_IDS = {
   user: '#regUser', email: '#regEmail', email2: '#regEmail2', pass: '#regPass', pass2: '#regPass2',
   year: '#regYear', month: '#regMonth', day: '#regDay', creatorCode: '#regCreatorCode',
-  terms: '#regTerms', age: '#regAge', marketing: '#regMarketing', marketingChannel: '#regMarketingChannel'
+  terms: '#regTerms', age: '#regAge', marketing: '#regMarketing', marketingChannel: '#regMarketingChannel',
+  captcha: '#registerCaptcha'
 };
 const MODAL_REGISTER_FORM_IDS = {
   user: '#modalRegUser', email: '#modalRegEmail', email2: '#modalRegEmail2', pass: '#modalRegPass', pass2: '#modalRegPass2',
   year: '#modalRegYear', month: '#modalRegMonth', day: '#modalRegDay', creatorCode: '#modalRegCreatorCode',
-  terms: '#modalRegTerms', age: '#modalRegAge', marketing: '#modalRegMarketing', marketingChannel: '#modalRegMarketingChannel'
+  terms: '#modalRegTerms', age: '#modalRegAge', marketing: '#modalRegMarketing', marketingChannel: '#modalRegMarketingChannel',
+  captcha: '#modalRegCaptcha'
 };
 
 $('#registerSubmit').addEventListener('click', doRegister);
@@ -1475,6 +1565,9 @@ async function enterApp(meData) {
     el.classList.toggle('hidden', !keys.some(hasPerm));
   });
   $('#navPermissionsBtn')?.classList.toggle('hidden', !isOwner);
+  // Média naptár: a média rangúaknak és akinek joga van rá (a tulajdonos mindig látja).
+  const mediaRank = ['média', 'media'].includes(String(meData?.rank || '').toLowerCase());
+  $('#navMediaCalendar')?.classList.toggle('hidden', !(mediaRank || hasPerm('global.mediaCalendarView') || hasPerm('global.mediaCalendarManage')));
   const adminGroup = document.querySelector('.app-nav-group[data-nav-group="admin"]');
   if (adminGroup) {
     const anyVisible = adminGroup.querySelectorAll('.app-nav-sub .app-nav-item:not(.hidden)').length > 0;
@@ -1692,6 +1785,7 @@ $('#accountAddSwitchToRegister').addEventListener('click', () => {
   $('#addAccountForm').classList.add('hidden');
   $('#modalRegError').textContent = '';
   $('#accountAddRegisterForm').classList.remove('hidden');
+  mountCaptcha('#modalRegCaptcha');
 });
 $('#modalRegCancel').addEventListener('click', () => {
   $('#accountAddRegisterForm').classList.add('hidden');
@@ -2033,6 +2127,7 @@ function switchView(view) {
   if (view === 'nameRules') loadNameRules();
   if (view === 'rankPerksAdmin') loadRankPerksAdmin();
   if (view === 'staffApply') loadStaffApply();
+  if (view === 'mediaCalendar' && typeof loadMediaCalendar === 'function') loadMediaCalendar();
   if (view === 'staffAppsAdmin') loadStaffAppsAdmin();
   if (view === 'registeredPlayers') loadRegisteredPlayers();
   if (view === 'shopLock') loadShopLockAdmin();
@@ -13120,11 +13215,21 @@ $('#nrScanBtn').addEventListener('click', () => { scanExistingUsernames(); scanE
 
 const EMAIL_FLAG_LABELS = {
   invalid: 'Érvénytelen', typo: 'Elírás', disposable: 'Eldobható', nodomain: 'Nem létező domain',
-  random: 'Véletlenszerű', unverified: 'Nincs megerősítve', notallowed: 'Nem engedélyezett'
+  random: 'Véletlenszerű', unverified: 'Nincs megerősítve', notallowed: 'Nem engedélyezett',
+  botpattern: 'Bot-minta', wave: 'Hullám'
 };
 
-// Az utolsó átvizsgálásban talált, tömegesen törölhető fiókok.
-let emailScanDeletable = [];
+// Az utolsó átvizsgálás találatai és a törlésre kipipált fiókok.
+let emailScanHits = [];
+const emailScanSelected = new Set();
+
+function emailScanCanDelete() { return hasPerm('player.action.delete'); }
+
+function emailScanVisibleHits() {
+  const q = ($('#emailScanSearch')?.value || '').trim().toLowerCase();
+  if (!q) return emailScanHits;
+  return emailScanHits.filter((h) => h.username.toLowerCase().includes(q) || h.email.toLowerCase().includes(q));
+}
 
 async function scanExistingEmails() {
   const out = $('#emailScanResult');
@@ -13133,51 +13238,97 @@ async function scanExistingEmails() {
     const res = await fetch(BACKEND_URL + '/api/admin/name-rules/email-scan', { headers: nrAuthHeaders() });
     const data = await res.json();
     if (!data.ok) throw new Error(data.message);
-    const hits = data.hits || [];
-    emailScanDeletable = [];
-    if (!hits.length) {
+    emailScanHits = data.hits || [];
+    emailScanSelected.clear();
+    if (!emailScanHits.length) {
       out.innerHTML = `<div class="nr-empty nr-empty-ok"><b>Minden rendben.</b><span>${data.checked} email címet néztünk át, egyik sem gyanús.</span></div>`;
       return;
     }
-    const blocked = hits.filter((h) => h.blocked);
-    emailScanDeletable = blocked.filter((h) => !h.protectedReason).map((h) => h.username);
-    const kept = blocked.length - emailScanDeletable.length;
-    const bulkBox = blocked.length && hasPerm('player.action.delete') ? `
+    const canDelete = emailScanCanDelete();
+    const kindCounts = {};
+    for (const h of emailScanHits) {
+      if (h.protectedReason) continue;
+      for (const kind of new Set(h.flags.map((f) => f.kind))) kindCounts[kind] = (kindCounts[kind] || 0) + 1;
+    }
+    const quick = Object.entries(kindCounts).sort((a, b) => b[1] - a[1]).map(([kind, n]) =>
+      `<button type="button" class="email-quick" data-email-quick="${escapeHtml(kind)}">+ ${EMAIL_FLAG_LABELS[kind] || escapeHtml(kind)} <span>${n}</span></button>`).join('');
+    const toolbar = canDelete ? `
       <div class="email-bulk">
-        <p><b>${blocked.length}</b> fiók olyan email címmel regisztrált, amivel ma már nem lehetne.${kept ? ` Ebből ${kept} nem törölhető tömegesen (rangja, egyenlege vagy vásárlása van) - ezeket a profiljukból lehet.` : ''}</p>
-        ${emailScanDeletable.length ? `<button type="button" class="btn-outline sa-btn-danger" id="emailBulkDeleteBtn">${emailScanDeletable.length} fiók törlése</button>` : ''}
+        <div class="email-bulk-top">
+          <label class="email-check-all"><input type="checkbox" id="emailScanAll" /> <span>Összes kijelölése</span></label>
+          <input type="search" id="emailScanSearch" class="email-scan-search" placeholder="Szűrés névre vagy címre" />
+          <span class="email-bulk-count" id="emailScanCount">0 kijelölve</span>
+          <button type="button" class="btn-outline sa-btn-danger" id="emailBulkDeleteBtn" disabled>Kijelöltek törlése</button>
+        </div>
+        ${quick ? `<div class="email-bulk-quick"><span>Gyors kijelölés:</span>${quick}<button type="button" class="email-quick email-quick-clear" id="emailScanClear">Kijelölés törlése</button></div>` : ''}
+        <p class="nr-hint" style="margin:0;">A rangos, egyenleges vagy vásárlással rendelkező fiókok nem jelölhetők ki, ezeket a profiljukból lehet törölni. A pontos gmail-címek között valódi játékosok is lehetnek: törlés előtt nézd át a listát.</p>
       </div>` : '';
-    out.innerHTML = `${bulkBox}<p class="nr-scan-summary"><b>${hits.length}</b> gyanús email cím (${data.checked} címből):</p>
-      <div class="email-scan-list">${hits.map((h) => `
-        <div class="email-scan-row">
-          <button type="button" class="reg-name" data-nr-open="${escapeHtml(h.username)}">${escapeHtml(h.username)}</button>
-          <span class="email-scan-addr">${escapeHtml(h.email)}</span>
-          <span class="email-scan-flags">${h.flags.map((f) => `<span class="email-flag email-flag-${f.kind}" title="${escapeHtml(f.text)}">${EMAIL_FLAG_LABELS[f.kind] || f.kind}</span>`).join('')}</span>
-          <span class="email-scan-why">${h.flags.map((f) => escapeHtml(f.text)).join(' · ')}</span>
-        </div>`).join('')}</div>`;
+    out.innerHTML = `${toolbar}<p class="nr-scan-summary"><b>${emailScanHits.length}</b> gyanús email cím (${data.checked} címből):</p>
+      <div class="email-scan-list${canDelete ? ' email-scan-selectable' : ''}" id="emailScanList"></div>`;
+    renderEmailScanRows();
   } catch (err) {
     out.innerHTML = `<p class="nr-scan-summary">${escapeHtml(err.message || 'Nem sikerült az email címek ellenőrzése.')}</p>`;
   }
 }
 
-async function bulkDeleteBlockedEmails(btn) {
-  const usernames = [...emailScanDeletable];
+function renderEmailScanRows() {
+  const list = $('#emailScanList');
+  if (!list) return;
+  const canDelete = emailScanCanDelete();
+  const hits = emailScanVisibleHits();
+  list.innerHTML = hits.length ? hits.map((h) => `
+    <div class="email-scan-row${emailScanSelected.has(h.username) ? ' selected' : ''}">
+      ${canDelete ? `<input type="checkbox" class="email-scan-check" data-email-pick="${escapeHtml(h.username)}" ${emailScanSelected.has(h.username) ? 'checked' : ''} ${h.protectedReason ? `disabled title="Nem törölhető tömegesen: ${escapeHtml(h.protectedReason)}"` : ''} aria-label="${escapeHtml(h.username)} kijelölése" />` : ''}
+      <button type="button" class="reg-name" data-nr-open="${escapeHtml(h.username)}">${escapeHtml(h.username)}</button>
+      <span class="email-scan-addr">${escapeHtml(h.email)}</span>
+      <span class="email-scan-flags">${h.flags.map((f) => `<span class="email-flag email-flag-${f.kind}" title="${escapeHtml(f.text)}">${EMAIL_FLAG_LABELS[f.kind] || f.kind}</span>`).join('')}</span>
+      <span class="email-scan-why">${h.createdAt ? `Regisztrált: ${escapeHtml(String(h.createdAt).slice(0, 16))} · ` : ''}${h.flags.map((f) => escapeHtml(f.text)).join(' · ')}${h.protectedReason ? ` · <b>védett: ${escapeHtml(h.protectedReason)}</b>` : ''}</span>
+    </div>`).join('') : '<p class="nr-hint">Nincs a szűrésnek megfelelő találat.</p>';
+  syncEmailScanToolbar();
+}
+
+function syncEmailScanToolbar() {
+  const n = emailScanSelected.size;
+  const count = $('#emailScanCount');
+  if (count) count.textContent = `${n} kijelölve`;
+  const btn = $('#emailBulkDeleteBtn');
+  if (btn) { btn.disabled = n === 0; btn.textContent = n ? `${n} fiók törlése` : 'Kijelöltek törlése'; }
+  const all = $('#emailScanAll');
+  if (all) {
+    const selectable = emailScanVisibleHits().filter((h) => !h.protectedReason);
+    const picked = selectable.filter((h) => emailScanSelected.has(h.username)).length;
+    all.checked = selectable.length > 0 && picked === selectable.length;
+    all.indeterminate = picked > 0 && picked < selectable.length;
+  }
+}
+
+function setEmailScanPicked(hits, on) {
+  for (const h of hits) {
+    if (h.protectedReason) continue;
+    if (on) emailScanSelected.add(h.username); else emailScanSelected.delete(h.username);
+  }
+  renderEmailScanRows();
+}
+
+async function bulkDeleteSelectedEmails(btn) {
+  const usernames = [...emailScanSelected];
   if (!usernames.length) return;
+  const preview = usernames.slice(0, 8).map((u) => `<b>${escapeHtml(u)}</b>`).join(', ') + (usernames.length > 8 ? ` és még ${usernames.length - 8}` : '');
   const ok = await confirmModal(
     'Fiókok végleges törlése',
-    `Ez <b>VÉGLEGES</b> - biztosan törlöd ezt a <b>${usernames.length}</b> fiókot a skinjükkel és az előzményeikkel együtt? Ez NEM vonható vissza.`,
+    `Ez <b>VÉGLEGES</b> - biztosan törlöd ezt a <b>${usernames.length}</b> fiókot a skinjükkel és az előzményeikkel együtt? (${preview}) Ez NEM vonható vissza.`,
     `Igen, törlöm mind a ${usernames.length}-t`
   );
   if (!ok) return;
   if (typeof window.setButtonLoading === 'function') window.setButtonLoading(btn, true);
   try {
-    const res = await fetch(BACKEND_URL + '/api/admin/name-rules/email-scan/delete-blocked', {
+    const res = await fetch(BACKEND_URL + '/api/admin/name-rules/email-scan/delete-selected', {
       method: 'POST', headers: nrAuthHeaders(true), body: JSON.stringify({ usernames })
     });
     const data = await res.json();
     if (!data.ok) { showToast(data.message || 'Nem sikerült a törlés.', true); return; }
     const skipped = data.skipped || [];
-    showToast(`${data.deleted.length} fiók törölve.${skipped.length ? ` ${skipped.length} kimaradt.` : ''}`);
+    showToast(`${data.deleted.length} fiók törölve.${skipped.length ? ` ${skipped.length} kimaradt (${skipped.slice(0, 3).map((s) => `${s.username}: ${s.reason}`).join(', ')}).` : ''}`, skipped.length > 0);
     scanExistingEmails();
   } catch {
     showToast('Nem sikerült elérni a szervert.', true);
@@ -13186,11 +13337,28 @@ async function bulkDeleteBlockedEmails(btn) {
   }
 }
 
+$('#emailScanResult').addEventListener('change', (e) => {
+  const pick = e.target.closest('[data-email-pick]');
+  if (pick) {
+    if (pick.checked) emailScanSelected.add(pick.dataset.emailPick); else emailScanSelected.delete(pick.dataset.emailPick);
+    pick.closest('.email-scan-row')?.classList.toggle('selected', pick.checked);
+    syncEmailScanToolbar();
+    return;
+  }
+  if (e.target.id === 'emailScanAll') setEmailScanPicked(emailScanVisibleHits(), e.target.checked);
+});
+$('#emailScanResult').addEventListener('input', (e) => {
+  if (e.target.id === 'emailScanSearch') renderEmailScanRows();
+});
+
 document.querySelector('.view[data-view="nameRules"]').addEventListener('click', async (e) => {
   const open = e.target.closest('[data-nr-open]');
   if (open) { openPlayerProfile(open.dataset.nrOpen); return; }
   const bulkDelete = e.target.closest('#emailBulkDeleteBtn');
-  if (bulkDelete) { bulkDeleteBlockedEmails(bulkDelete); return; }
+  if (bulkDelete) { bulkDeleteSelectedEmails(bulkDelete); return; }
+  const quick = e.target.closest('[data-email-quick]');
+  if (quick) { setEmailScanPicked(emailScanVisibleHits().filter((h) => h.flags.some((f) => f.kind === quick.dataset.emailQuick)), true); return; }
+  if (e.target.closest('#emailScanClear')) { emailScanSelected.clear(); renderEmailScanRows(); return; }
   const allowName = e.target.closest('[data-nr-allow-name]');
   if (allowName) {
     nrAction = 'allow';
