@@ -1901,3 +1901,116 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { pointer-ev
   .mc-form-row3, .mc-form-row2 { grid-template-columns: 1fr; }
   .mc-seg { min-width: 0; width: 100%; }
 }
+
+/* ---------- Csomagok (Vásárlás oldal) ---------- */
+.bundle-shelf { margin-bottom: 8px; container-type: inline-size; }
+.bundle-shelf-title { font-size: 17px; font-weight: 750; color: var(--text); margin: 4px 2px 12px; }
+.bundle-card {
+  display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); overflow: hidden;
+  background: var(--glass); border: 1px solid var(--stroke); border-radius: var(--r-lg);
+  box-shadow: var(--shadow-soft); margin-bottom: 22px;
+}
+.bundle-card.is-expired { opacity: .55; }
+.bundle-media { position: relative; min-height: 100%; background: var(--panel-2); }
+.bundle-media img { display: block; width: 100%; height: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+.bundle-media-empty { aspect-ratio: 16 / 9; }
+.bundle-timer {
+  position: absolute; left: 14px; top: 14px; padding: 6px 11px; border-radius: 999px;
+  font-size: 12.5px; font-weight: 700; color: #fff; background: rgba(10, 6, 14, .72);
+  border: 1px solid rgba(255, 255, 255, .14);
+}
+.bundle-body { display: flex; flex-direction: column; gap: 10px; padding: 22px 24px; min-width: 0; }
+.bundle-name { font-size: 21px; font-weight: 800; color: var(--text); margin: 0; }
+.bundle-desc { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--text-dim); }
+.bundle-items { list-style: none; margin: 2px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.bundle-item {
+  display: flex; align-items: center; gap: 11px; padding: 6px 8px; border-radius: 12px;
+  background: rgba(255, 255, 255, .025); border: 1px solid var(--stroke);
+}
+.bundle-item-thumb { flex-shrink: 0; display: flex; }
+.bundle-item-thumb .cosmetic-thumb { width: 44px; height: 44px; border-radius: 9px; }
+.bundle-item-icon { width: 44px; height: 44px; border-radius: 9px; background: var(--panel-2); padding: 9px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; }
+.bundle-item-rank { font-weight: 800; color: var(--gold); font-size: 16px; }
+.bundle-item-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.bundle-item-text b { font-size: 14px; color: var(--text); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bundle-item-text small { font-size: 12px; color: var(--text-faint); }
+.bundle-item.rarity-rare .bundle-item-text small { color: #5b9dff; }
+.bundle-item.rarity-epic .bundle-item-text small { color: var(--epic); }
+.bundle-item.rarity-legendary .bundle-item-text small { color: #f5a524; }
+.bundle-item.rarity-mythic .bundle-item-text small { color: #ff5d7a; }
+.bundle-owned { font-size: 11.5px; font-weight: 700; color: var(--success); padding: 3px 8px; border-radius: 999px; background: color-mix(in srgb, var(--success) 14%, transparent); }
+.bundle-price { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-top: 4px; }
+.bundle-price b { font-size: 22px; font-weight: 800; color: var(--gold); }
+.bundle-price span { font-size: 12.5px; color: var(--text-dim); }
+.bundle-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.bundle-actions .bundle-btn { width: auto; flex: 1 1 180px; margin: 0; padding: 11px 16px; font-size: 13.5px; }
+.bundle-note { margin: 0; font-size: 12px; color: var(--text-faint); }
+@container (max-width: 720px) {
+  .bundle-card { grid-template-columns: 1fr; }
+  .bundle-body { padding: 18px 16px; }
+}
+
+/* ---------- PP visszaváltás (Egyenleg oldal) ---------- */
+.pp-exchange-card { margin-top: 18px; }
+.pp-exchange-icon img { width: 28px; height: 28px; }
+.pp-exchange-title { text-align: center; font-size: 16px; font-weight: 750; color: var(--text); margin: -6px 0 6px; }
+.px-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 4px; }
+.px-grid .gift-modal-label { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.px-rate { display: flex; align-items: center; gap: 8px; }
+.px-rate input { min-width: 0; }
+.px-rate span { font-size: 13px; color: var(--text-dim); white-space: nowrap; }
+@media (max-width: 760px) { .px-grid { grid-template-columns: 1fr; } }
+
+/* ---------- Admin > Csomagok ---------- */
+.bundle-admin-bar { display: flex; gap: 10px; margin-bottom: 16px; }
+.bundle-admin-bar .btn-glow { width: auto; margin: 0; padding: 10px 22px; }
+.bundle-editor { margin-bottom: 18px; }
+.bundle-editor-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 22px; }
+.bundle-editor textarea { resize: vertical; font: inherit; }
+.bundle-add-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+.bundle-add-row > select { width: 150px; flex-shrink: 0; }
+.bundle-add-fields { display: flex; flex-wrap: wrap; gap: 8px; flex: 1; min-width: 220px; }
+.bundle-add-fields > * { flex: 1 1 140px; min-width: 0; }
+.bundle-add-row .gift-modal-input { margin: 0; }
+.bundle-add-fields #bundleCosmeticSelect { flex: 2 1 220px; }
+.bundle-add-fields #bundleCosmeticDays, .bundle-add-fields #bundleRankDays { flex: 0 1 130px; }
+.bundle-add-row .btn-outline { width: auto; margin: 0; padding: 10px 16px; }
+.bundle-items-edit .bundle-item { padding-right: 6px; }
+.bundle-item-remove {
+  width: 30px; height: 30px; border-radius: 9px; border: 1px solid var(--stroke-2); background: transparent;
+  color: var(--text-dim); font-size: 18px; line-height: 1; cursor: pointer; flex-shrink: 0;
+}
+.bundle-item-remove:hover { color: var(--danger); border-color: var(--danger); }
+.bundle-price-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; margin-top: 8px; }
+.bundle-field { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: var(--text-dim); }
+.bundle-field-wide { grid-column: 1 / -1; }
+.bundle-image-preview {
+  aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; border: 1px dashed var(--stroke-2);
+  display: flex; align-items: center; justify-content: center; background: var(--panel-2); margin-bottom: 10px;
+}
+.bundle-image-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.bundle-editor .modal-actions > button { width: auto; flex: 0 0 auto; padding: 10px 22px; }
+.bundle-editor .bundle-delete { margin-right: auto; color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+.bundle-admin-list { display: flex; flex-direction: column; gap: 10px; }
+.bundle-admin-card {
+  display: grid; grid-template-columns: 160px minmax(0, 1fr) auto; gap: 16px; align-items: center;
+  padding: 12px; border-radius: var(--r-md); background: var(--glass); border: 1px solid var(--stroke);
+}
+.bundle-admin-card.is-editing { border-color: var(--brand-line); }
+.bundle-admin-thumb { aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: var(--panel-2); }
+.bundle-admin-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.bundle-admin-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.bundle-admin-info .sa-muted { font-size: 12.5px; margin: 0; }
+.bundle-admin-name { font-weight: 750; font-size: 15px; color: var(--text); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.bundle-admin-actions { display: flex; flex-direction: column; gap: 6px; }
+.bundle-admin-actions .btn-outline { width: auto; margin: 0; padding: 8px 14px; font-size: 13px; }
+@media (max-width: 860px) {
+  .bundle-editor-grid { grid-template-columns: 1fr; }
+  .bundle-admin-card { grid-template-columns: 110px minmax(0, 1fr); }
+  .bundle-admin-actions { grid-column: 1 / -1; flex-direction: row; }
+}
+
+/* ---------- Zárolt fiók: minden aktív szankció ---------- */
+.locked-sanctions { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: -6px 0 18px; }
+.locked-sanctions-label { font-size: 12.5px; color: var(--text-faint); }
+.locked-sanctions .sanction-icon-row { justify-content: center; }

@@ -36,9 +36,9 @@
   <link rel="preload" as="image" href="assets/solaryn-icon.png" />
 
   <script src="theme.js?v=20261014a"></script>
-  <link rel="stylesheet" href="style.css?v=20261101a" />
+  <link rel="stylesheet" href="style.css?v=20261103a" />
   <link rel="stylesheet" href="ui.css?v=20261014a" />
-  <link rel="stylesheet" href="design.css?v=20261101b" />
+  <link rel="stylesheet" href="design.css?v=20261103a" />
   <link rel="stylesheet" href="seasonal.css?v=20261014a" />
 
   <script type="application/ld+json">
@@ -241,6 +241,10 @@
         </div>
         <h1 class="ban-modal-title">A karaktered zárolás alá került</h1>
         <p class="ban-modal-desc">Ameddig a zárolás fennáll, nem tudod használni a SolarCentert és a SolarLaunchert sem.</p>
+        <div class="locked-sanctions hidden" id="lockedSanctionsWrap">
+          <span class="locked-sanctions-label">Aktív szankcióid</span>
+          <div class="profile-sanction-status" id="lockedSanctionStatus"></div>
+        </div>
         <div class="ban-modal-details">
           <div class="ban-modal-row"><span>Indok</span><b id="lockedReasonText">-</b></div>
         </div>
@@ -347,6 +351,7 @@
             <button class="app-nav-item admin-nav-item hidden" data-view="rankPerksAdmin" data-permission="global.rankPerksManage"><span>Rangok jogai</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="staffAppsAdmin" data-permission="global.staffAppsManage"><span>Tagfelvételek</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="cosmeticsAdmin" data-permission="global.cosmeticsManage,global.cosmeticsMarketManage"><span>Kiegészítők</span></button>
+            <button class="app-nav-item admin-nav-item hidden" data-view="bundlesAdmin" data-permission="global.bundlesManage"><span>Csomagok</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="mobsAdmin" data-permission="global.mobsManage"><span>Mobok</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="discounts" data-permission="global.discountsManage"><span>Akciók</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="coupons" data-permission="global.couponsManage"><span>Kuponok</span></button>
@@ -536,7 +541,7 @@
 
         <section class="view" data-view="wallet">
           <h1 class="page-title">Egyenleg</h1>
-          <p class="page-note">Az Egyenleg forintban vezetett keret. A feltöltést a Tebexen euróban fizeted, utána bármit megvehetsz belőle újabb fizetés nélkül.</p>
+          <p class="page-note">Az Egyenleg forintban vezetett keret. Feltöltheted kártyával (a Tebexen, euróban), vagy PrémiumPontból is visszaválthatod. Belőle bármit megvehetsz újabb fizetés nélkül.</p>
 
           <div class="content-grid">
             <div>
@@ -552,6 +557,7 @@
                 <button type="button" class="btn-glow btn-glow-orange" id="btnWalletTopup">Feltöltés</button>
                 <p class="redeem-result" id="walletTopupResult"></p>
               </div>
+              <div class="card transfer-card pp-exchange-card hidden" id="ppExchangeCard"></div>
             </div>
 
             <div class="side-rail" data-side-rail="wallet"></div>
@@ -564,6 +570,7 @@
 
           <div class="content-grid">
             <div>
+              <div class="bundle-shelf hidden" id="bundleShelf"></div>
               <div class="pkg-grid" id="coinPkgGrid"></div>
 
               <div class="info-box">
@@ -1636,6 +1643,7 @@
           <div class="tbx-layout">
             <div class="card tbx-card" id="tbxModeCard"><p class="sa-muted" style="margin:0;">Betöltés...</p></div>
             <div class="card tbx-card" id="tbxKeysCard"></div>
+            <div class="card tbx-card tbx-wide" id="tbxExchangeCard"></div>
             <div class="card tbx-card tbx-wide" id="tbxMapCard"></div>
             <div class="card tbx-card tbx-wide" id="tbxPaymentsCard"></div>
           </div>
@@ -2329,6 +2337,16 @@
 
           <div class="admin-subsection-title">Meglévő creator kódok</div>
           <div id="creatorCodesAdminList"></div>
+        </section>
+
+        <section class="view" data-view="bundlesAdmin">
+          <h1 class="page-title">Csomagok</h1>
+          <p class="page-note">Kiegészítőkből, PP-ből és rangból összeállított csomagok. Az aktív csomag a lejáratig megjelenik a Vásárlás oldalon.</p>
+          <div class="bundle-admin-bar">
+            <button type="button" class="btn-glow" id="bundleNewBtn">Új csomag</button>
+          </div>
+          <div class="card bundle-editor hidden" id="bundleEditor"></div>
+          <div class="bundle-admin-list" id="bundleAdminList"><p class="sa-muted">Betöltés...</p></div>
         </section>
 
         <section class="view" data-view="seasonalThemesAdmin">
@@ -3300,8 +3318,9 @@
   </div>
 
   <script src="skin3d.js?v=20261014a" defer></script>
-  <script src="app.js?v=20261101a" defer></script>
+  <script src="app.js?v=20261103a" defer></script>
   <script src="media-calendar.js?v=20261101b" defer></script>
+  <script src="bundles.js?v=20261103a" defer></script>
   <script src="ui.js?v=20261014a" defer></script>
   <script src="design.js?v=20261014a" defer></script>
   <script src="season-fx.js?v=20261014a" defer></script>

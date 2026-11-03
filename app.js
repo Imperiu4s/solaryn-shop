@@ -483,7 +483,7 @@ async function doLogin() {
     if (typeof window.setButtonLoading === 'function') window.setButtonLoading(btn, false);
   }
   if (!res.ok) {
-    if (res.locked) { showLockedScreen(res.reason); return; }
+    if (res.locked) { showLockedScreen(res.reason, res); return; }
     if (res.emailNotVerified) { showEmailVerifyModal(res, 'login'); return; }
     $('#authError').textContent = res.message || 'Sikertelen bejelentkezés.';
     return;
@@ -577,10 +577,15 @@ $('#setNewPasswordSubmitBtn').addEventListener('click', async () => {
   setAuthMode('login');
 });
 
-function showLockedScreen(reason) {
+// A zárolás mellett a többi aktív szankció (kitiltás, némítás, kliens-tiltás)
+// ikonja is megjelenik, ha a backend elküldte őket.
+function showLockedScreen(reason, data) {
   $('#authScreen').classList.add('hidden');
   $('#appScreen').classList.add('hidden');
   $('#lockedReasonText').textContent = reason || 'nincs megadva';
+  const status = { activeMute: data?.activeMute || null, activeBan: data?.activeBan || null, activeCban: data?.activeCban || null, locked: true };
+  renderSanctionStatus($('#lockedSanctionStatus'), status);
+  $('#lockedSanctionsWrap').classList.toggle('hidden', !(status.activeMute || status.activeBan || status.activeCban));
   $('#lockedScreen').classList.remove('hidden');
 }
 $('#btnLogoutLocked').addEventListener('click', () => {
@@ -847,7 +852,7 @@ async function tryAutoLogin() {
     saveSession();
     enterApp(res);
   } else if (res.locked) {
-    showLockedScreen(res.reason);
+    showLockedScreen(res.reason, res);
   } else {
     session = null;
     saveSession();
@@ -1734,7 +1739,7 @@ async function switchAccount(username) {
     location.reload();
   } else if (res.locked) {
     closeAccountModal();
-    showLockedScreen(res.reason);
+    showLockedScreen(res.reason, res);
   } else {
     accounts = accounts.filter((a) => a.username !== username);
     persistAccounts();
@@ -1770,7 +1775,7 @@ $('#btnDoAddAccount').addEventListener('click', async () => {
   if (!username || !password) { errEl.textContent = 'Add meg a felhasználóneved és a jelszavad.'; return; }
   const res = await performLogin(username, password, false);
   if (!res.ok) {
-    if (res.locked) { closeAccountModal(); showLockedScreen(res.reason); return; }
+    if (res.locked) { closeAccountModal(); showLockedScreen(res.reason, res); return; }
     if (res.emailNotVerified) { showEmailVerifyModal(res, 'login'); return; }
     errEl.textContent = res.message || 'Sikertelen bejelentkezés.';
     return;
@@ -2132,6 +2137,9 @@ function switchView(view) {
   if (view === 'registeredPlayers') loadRegisteredPlayers();
   if (view === 'shopLock') loadShopLockAdmin();
   if (view === 'paymentsAdmin') loadTbxAdmin();
+  if (view === 'coin' && typeof loadBundleShelf === 'function') loadBundleShelf();
+  if (view === 'wallet' && typeof loadPpExchange === 'function') loadPpExchange();
+  if (view === 'bundlesAdmin' && typeof loadBundlesAdmin === 'function') loadBundlesAdmin();
   if (isShopView(view)) refreshShopLockBanner();
   if (view === 'discounts') { resetDiscountForm(); loadDiscountsAdmin(); }
   if (view === 'coupons') { resetCouponForm(); loadCouponsAdmin(); }
@@ -4180,7 +4188,8 @@ const LEDGER_TYPE_TONES = {
   gift_sent: 'gift', gift_received: 'gift',
   admin_adjust: 'admin',
   cosmetic_purchase: 'cosmetic', cosmetic_market_buy: 'cosmetic', cosmetic_market_sell: 'cosmetic',
-  cosmetic_trade_buy: 'cosmetic', cosmetic_trade_sell: 'cosmetic'
+  cosmetic_trade_buy: 'cosmetic', cosmetic_trade_sell: 'cosmetic',
+  pp_exchange: 'purchase'
 };
 
 function ledgerTypeChip(type) {
@@ -4201,6 +4210,7 @@ const LEDGER_TYPE_LABELS = {
   cosmetic_market_sell: 'Kiegészítő eladás (piac)',
   cosmetic_trade_buy: 'Kiegészítő (csere)',
   cosmetic_trade_sell: 'Kiegészítő eladás (csere)',
+  pp_exchange: 'Visszaváltás Egyenlegre',
   admin_set: 'Admin beállítás',
   account_deleted: 'Fiók törölve',
   migration: 'Átköltöztetés',
@@ -15675,6 +15685,7 @@ function renderTbxAdmin(data) {
 }
 
 async function loadTbxAdmin(refresh) {
+  if (typeof loadPpExchangeAdmin === 'function') loadPpExchangeAdmin();
   try {
     renderTbxAdmin(await saFetch('/api/admin/tebex' + (refresh ? '?refresh=1' : '')));
   } catch (err) {
