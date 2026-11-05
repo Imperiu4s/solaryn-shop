@@ -13680,6 +13680,8 @@ function rpServerName(serverId) {
   return s ? s.name : '?';
 }
 
+let rpCosmetics = [];
+
 async function loadRankPerksAdmin() {
   $('#rpRankGrid').innerHTML = '<div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>';
   try {
@@ -13688,6 +13690,7 @@ async function loadRankPerksAdmin() {
     if (!data.ok) throw new Error(data.message);
     rpServers = data.servers || [];
     rpRanks = data.ranks || [];
+    rpCosmetics = data.cosmetics || [];
   } catch (e) {
     rpServers = [];
     rpRanks = [];
@@ -13738,6 +13741,7 @@ function renderRpRanks() {
         <span class="nr-chip">${general.length} általános</span>
         ${specific.length ? `<span class="nr-chip">${specific.length} szerver-specifikus</span>` : ''}
         ${rank.inheritPrevious ? '<span class="nr-chip rp-chip-inherit">+ előző rangok jogai</span>' : ''}
+        ${rank.cosmeticId ? `<span class="nr-chip">Kiegészítő: ${escapeHtml(rpCosmetics.find((c) => c.id === rank.cosmeticId)?.name || '?')}</span>` : ''}
       </div>
       <ul class="rp-rank-preview">
         ${preview.length ? preview.map((p) => `<li><span>${escapeHtml(p.text)}</span>${p.serverId !== null ? `<em>${escapeHtml(rpServerName(p.serverId))}</em>` : ''}</li>`).join('') : '<li class="rp-empty">Nincs még saját joga.</li>'}
@@ -13816,7 +13820,8 @@ function openRankPerkEditor(rankId) {
   let uid = 0;
   let draft = rank.perks.map((p) => ({ uid: ++uid, text: p.text, serverId: p.serverId }));
   let inherit = !!rank.inheritPrevious;
-  const snapshot = () => JSON.stringify({ inherit, perks: draft.map((p) => [p.text.trim(), p.serverId]) });
+  let cosmeticId = rank.cosmeticId ?? null;
+  const snapshot = () => JSON.stringify({ inherit, cosmeticId, perks: draft.map((p) => [p.text.trim(), p.serverId]) });
   const initial = snapshot();
   const prev = rankIndex > 0 ? rpRanks[rankIndex - 1] : null;
 
@@ -13841,6 +13846,16 @@ function openRankPerkEditor(rankId) {
         <span class="rp-switch" aria-hidden="true"></span>
         <span><b>Előző rangok jogai</b><small>${prev ? `A(z) ${escapeHtml(prev.label)} (és az alatta lévő rangok) összes jogát is megkapja.` : 'Ez a legalacsonyabb rang, nincs előző rang.'}</small></span>
       </label>
+
+      <div class="rp-rank-cosmetic" style="margin:12px 0;">
+        <label><b>Ranghoz járó kiegészítő</b>
+          <select class="gift-modal-input" data-rp-cosmetic style="width:100%;margin-top:6px;">
+            <option value="">Nincs</option>
+            ${rpCosmetics.map((c) => `<option value="${c.id}"${c.id === cosmeticId ? ' selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
+          </select>
+        </label>
+        <p class="nr-hint" style="margin:6px 0 0;">A rang idejére jár, csak ez a rang adja: a magasabb rangok nem öröklik.</p>
+      </div>
 
       <div class="rp-add">
         <input type="text" class="gift-modal-input" data-rp-new-text placeholder="Új jog, pl. /fly jog" maxlength="${RP_PERK_MAX}" autocomplete="off" />
@@ -13887,6 +13902,10 @@ function openRankPerkEditor(rankId) {
     syncDirty();
   }
   renderGroups();
+  overlay.querySelector('[data-rp-cosmetic]').addEventListener('change', (e) => {
+    cosmeticId = e.target.value === '' ? null : Number(e.target.value);
+    syncDirty();
+  });
 
   const onKey = (e) => { if (e.key === 'Escape' && document.body.lastElementChild === overlay) close(false); };
   const close = async (force) => {
@@ -13940,7 +13959,7 @@ function openRankPerkEditor(rankId) {
       save.textContent = 'Mentés...';
       try {
         const res = await fetch(BACKEND_URL + '/api/admin/rank-perks/' + encodeURIComponent(rank.id), {
-          method: 'PUT', headers: rpHeaders(true), body: JSON.stringify({ perks, inheritPrevious: inherit })
+          method: 'PUT', headers: rpHeaders(true), body: JSON.stringify({ perks, inheritPrevious: inherit, cosmeticId })
         });
         const data = await res.json();
         if (!data.ok) throw new Error(data.message || 'Nem sikerült menteni.');
