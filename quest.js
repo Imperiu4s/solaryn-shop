@@ -401,6 +401,12 @@
     con.innerHTML = '<div class="console-log" aria-live="polite"></div><div class="console-sug" role="listbox"></div><div class="console-box"><b>/</b><input type="text" spellcheck="false" autocomplete="off" aria-label="Parancs" maxlength="120" /></div>';
     $('#appScreen').appendChild(con);
     input = $('input', con); sug = $('.console-sug', con); log = $('.console-log', con);
+    // Ha kikattintasz a parancssorból, bezárul, és az üzenetek is törlődnek, mintha /clear lett volna.
+    document.addEventListener('pointerdown', (e) => {
+      if (!con.classList.contains('open') || con.contains(e.target)) return;
+      log.innerHTML = '';
+      closeConsole();
+    });
     input.addEventListener('input', () => { sel = -1; histPos = -1; suggest(); });
     input.addEventListener('keydown', (e) => {
       e.stopPropagation();
