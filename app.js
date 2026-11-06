@@ -33,6 +33,7 @@ initPasswordToggles();
 
 (function initParticles() {
   const canvas = $('#particleCanvas');
+  if (getComputedStyle(canvas).display === 'none') return;
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     canvas.style.display = 'none';
     return;
@@ -282,7 +283,7 @@ async function apiGetMe(token) {
 
 const AUTH_HEADINGS = {
   login: ['Üdv újra!', 'Jelentkezz be a Solaryn fiókoddal - ugyanazzal, amivel a launcherbe is belépsz.'],
-  register: ['Fiók létrehozása', 'Egy fiók a szerverhez, a launcherhez és a Centerhez - pár perc az egész.']
+  register: ['Fiók létrehozása', 'Ugyanez a fiók kell a szerverhez és a launcherhez is.']
 };
 
 function setAuthMode(mode) {
@@ -1420,7 +1421,7 @@ async function spinCasino() {
   if (data.win) {
     for (let i = 0; i < 3; i++) setCasinoReel(i, casinoIconHtml(data.prizeIcon));
     $$('.slot-reel').forEach((el) => { el.classList.remove('spinning'); el.classList.add('won'); });
-    resultEl.textContent = `🎉 JACKPOT! Nyereményed: ${data.prizeName}`;
+    resultEl.textContent = `Jackpot! Nyereményed: ${data.prizeName}`;
     resultEl.className = 'redeem-result';
     setTimeout(() => $$('.slot-reel').forEach((el) => el.classList.remove('won')), 3000);
   } else {
@@ -3408,7 +3409,7 @@ function renderPkgCard(item, locked) {
   return `
     <div class="pkg-card${item.featured ? ' featured' : ''}${locked ? ' pkg-card-locked' : ''}">
       ${discountBadge}
-      <div class="pkg-icon">${ICONS[item.icon] || ICONS.coin}</div>
+      <div class="pkg-icon">${(item.type === 'sc' && window.pxCoinPile) ? window.pxCoinPile(item.short) : (ICONS[item.icon] || ICONS.coin)}</div>
       <div class="pkg-name">${item.short}</div>
       <div class="pkg-price">${priceHtml}</div>
       <button type="button" class="btn-buy" data-item-id="${item.id}"${locked || cardOff ? ' disabled' : ''}>${cardOff ? 'Kártyás fizetés hamarosan' : 'Vásárlás kártyával'}</button>
@@ -3469,15 +3470,16 @@ function formatSubscriptionDate(iso) {
 }
 
 const RANK_THEMES = {
-  helios: { c1: '#ffb347', c2: '#ff6a1a', ink: '#2b1203', tagline: 'Az első sugarak' },
-  chronovoid: { c1: '#b197fc', c2: '#5b4bdb', ink: '#ffffff', tagline: 'Az idő ura' },
-  immortal: { c1: '#ff6b86', c2: '#c8163f', ink: '#ffffff', tagline: 'Halhatatlan' },
-  young: { c1: '#5ee29a', c2: '#0fa3b8', ink: '#032a22', tagline: 'Friss energia' },
-  solaryn: { c1: '#ffe27a', c2: '#ff9d17', ink: '#2e1c02', tagline: 'A csúcs', featured: true }
+  helios: { c1: '#ffb347', c2: '#ff6a1a', ink: '#2b1203', tagline: '' },
+  chronovoid: { c1: '#b197fc', c2: '#5b4bdb', ink: '#ffffff', tagline: '' },
+  immortal: { c1: '#ff6b86', c2: '#c8163f', ink: '#ffffff', tagline: '' },
+  young: { c1: '#5ee29a', c2: '#0fa3b8', ink: '#032a22', tagline: '' },
+  solaryn: { c1: '#ffe27a', c2: '#ff9d17', ink: '#2e1c02', tagline: '', featured: true }
 };
 const RANK_THEME_FALLBACK = { c1: '#ffc42e', c2: '#ff9d17', ink: '#1a1206', tagline: '' };
 
 function rankEmblemSvg(rankId, idSuffix) {
+  if (window.pxRankBanner) return window.pxRankBanner(rankId);
   const g = `rkg-${rankId}${idSuffix ? `-${idSuffix}` : ''}`;
   const defs = `<defs>
     <linearGradient id="${g}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--rank-c1)"/><stop offset="1" style="stop-color:var(--rank-c2)"/></linearGradient>
@@ -3609,8 +3611,8 @@ function rankActionsHtml(rank) {
     </div>`;
 }
 
-const RANK_CHECK_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-const RANK_CROSS_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>';
+const RANK_CHECK_SVG = '<svg viewBox="0 0 16 16" aria-hidden="true" shape-rendering="crispEdges"><path fill="currentColor" d="M2 8h2v2h2v2h2v-2h2V8h2V6h2V4h2v2h-2v2h-2v2h-2v2H8v2H6v-2H4v-2H2z"/></svg>';
+const RANK_CROSS_SVG = '<svg viewBox="0 0 16 16" aria-hidden="true" shape-rendering="crispEdges"><path fill="currentColor" d="M5 5h2v2h2V5h2v2H9v2h2v2H9V9H7v2H5V9h2V7H5z"/></svg>';
 
 function renderRankGrid() {
   const wrap = $('#rankGrid');
@@ -3650,9 +3652,7 @@ function renderRankGrid() {
           <tr class="rank-row-emblem">
             <th class="rank-corner" rowspan="4">
               <div class="rank-corner-inner">
-                <span class="rank-corner-eyebrow">Összehasonlítás</span>
-                <span class="rank-corner-title">Válaszd ki a hozzád illő rangot</span>
-                <span class="rank-corner-balance">Egyenleged: <b>${formatPp(currentPpBalance)}</b></span>
+                <span class="rank-corner-balance">Egyenleged <b>${formatPp(currentPpBalance)}</b></span>
                 ${durationChoices.length > 1 ? `
                 <div class="rank-duration-switch" role="radiogroup" aria-label="Időtartam">
                   ${durationChoices.map((c) => `<button type="button" class="${c.days === rankDurationDays ? 'active' : ''}" data-rank-duration="${c.days}" role="radio" aria-checked="${c.days === rankDurationDays}">${c.days} nap${c.savePercent ? ` <em>-${c.savePercent}%</em>` : ''}</button>`).join('')}

@@ -62,6 +62,13 @@
 
   applyTheme(getSavedTheme());
 
+  // Bejelentkezett játékosnak ne villanjon fel a belépőlap betöltés közben.
+  try {
+    if (store.get('solarcenter_active_username') && JSON.parse(store.get('solarcenter_accounts') || '[]').length) {
+      document.documentElement.classList.add('has-session');
+    }
+  } catch {}
+
   function isNew(t) {
     if (t.mode !== 'live' || !t.activatedAt) return false;
     const at = new Date(t.activatedAt).getTime();
@@ -169,12 +176,19 @@
       if (!opt) return;
       e.stopPropagation();
       const key = opt.dataset.theme;
-      if (key === previewKey && !seasonal.some((t) => t.key === key)) {
-        applyTheme(key);
-      } else {
-        previewKey = null;
-        setTheme(key);
-      }
+      const run = () => {
+        if (key === previewKey && !seasonal.some((t) => t.key === key)) {
+          applyTheme(key);
+        } else {
+          previewKey = null;
+          setTheme(key);
+        }
+      };
+      if (document.startViewTransition && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        const vt = document.startViewTransition(run);
+        vt.ready.catch(() => {});
+        vt.finished.catch(() => {});
+      } else run();
       dropdown.classList.add('hidden');
       btn.classList.remove('open');
     });
