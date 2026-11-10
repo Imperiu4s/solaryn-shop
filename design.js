@@ -19,7 +19,7 @@
     home: 'home', skin: 'skin', cosmetics: 'cosmetic', market: 'market', trades: 'swap',
     coin: 'coin', wallet: 'wallet', transfer: 'send', redeem: 'gift', ledger: 'list',
     ranks: 'crown', sanction: 'hammer', players: 'people', casino: 'dice', mediaCalendar: 'calendar', staffApply: 'pen',
-    security: 'shield', faq: 'book', legal: 'book'
+    security: 'shield', faq: 'book', legal: 'book', staffTasks: 'list'
   };
 
   const SLOTS = [

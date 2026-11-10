@@ -194,7 +194,7 @@
   const VIEW_POS = {
     home: 0, skin: 930, cosmetics: 930, market: 300, trades: 300, coin: 300, wallet: 300, transfer: 300, redeem: 300, ledger: 300,
     ranks: 610, sanction: 1240, security: 1240, players: 1540, casino: 1540, staffApply: 1540, mediaCalendar: 1540, faq: 1810, legal: 1810,
-    playerProfile: 1540, deviceDetail: 1240
+    playerProfile: 1540, deviceDetail: 1240, staffTasks: 1240
   };
   const WORLD_LEN = 2100;
   const BLOCK_SIZE = 4;

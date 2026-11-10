@@ -40,7 +40,7 @@
   <link rel="stylesheet" href="ui.css?v=20261014a" />
   <link rel="stylesheet" href="design.css?v=20261103a" />
   <link rel="stylesheet" href="seasonal.css?v=20261014a" />
-  <link rel="stylesheet" href="block.css?v=20261106c" />
+  <link rel="stylesheet" href="block.css?v=20261110a" />
 
   <script type="application/ld+json">
   {
@@ -302,6 +302,7 @@
             <svg class="app-nav-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10l4 4 4-4"/></svg>
           </button>
           <div class="app-nav-sub">
+            <button class="app-nav-item admin-nav-item hidden" data-view="staffTasks" id="navStaffTasks"><span>Teendők</span><span class="app-nav-badge hidden" id="navStaffTasksBadge"></span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="shopLock" data-permission="global.shopLock"><span>Vásárlások leállítása</span><span class="app-nav-badge hidden" id="navShopLockBadge">Le</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="paymentsAdmin" data-permission="global.paymentsManage"><span>Fizetés (Tebex)</span><span class="app-nav-badge hidden" id="navTebexBadge">Teszt</span></button>
             <button class="app-nav-item admin-nav-item hidden" data-view="registeredPlayers" data-permission="global.playersList"><span>Regisztrált játékosok</span></button>
@@ -1208,6 +1209,65 @@
             </table>
             <p class="ledger-empty hidden" id="staffActionLogsEmptyNote">Nincs egyetlen bejegyzés sem.</p>
           </div>
+        </section>
+
+        <section class="view" data-view="staffTasks">
+          <h1 class="page-title">Teendők</h1>
+          <p class="page-note">Hibák, javaslatok és feladatok, amiket meg kell csinálni. Ezt az oldalt csak a staff látja. A lezárt bejegyzés 12 óra múlva lekerül a tábláról, az Archívumban megmarad.</p>
+
+          <div class="tk-top">
+            <button type="button" class="btn-glow" id="stNewBtn">Új bejegyzés</button>
+            <div class="tk-counts" id="stCounts" aria-live="polite"></div>
+          </div>
+
+          <form class="card tk-form hidden" id="stForm" autocomplete="off">
+            <div class="card-title" id="stFormTitle">Új bejegyzés</div>
+            <div class="tk-form-row">
+              <span class="tk-label">Típus</span>
+              <div class="tk-pills" data-field="kind" role="radiogroup" aria-label="Típus"></div>
+            </div>
+            <div class="tk-form-grid">
+              <label class="tk-field">Szerver<select id="stServer" required></select></label>
+              <label class="tk-field">Kategória<select id="stCategory" required></select></label>
+            </div>
+            <div class="tk-form-row">
+              <span class="tk-label">Sürgősség</span>
+              <div class="tk-pills" data-field="priority" role="radiogroup" aria-label="Sürgősség"></div>
+            </div>
+            <label class="tk-field">Cím<input type="text" id="stTitle" maxlength="140" placeholder="Röviden, mi a gond vagy mi az ötlet" required /></label>
+            <label class="tk-field">Leírás<textarea id="stBody" maxlength="4000" rows="4" placeholder="Hol, mikor, hogyan lehet előidézni; vagy mit javasolsz pontosan"></textarea></label>
+            <p class="redeem-result" id="stFormMsg"></p>
+            <div class="tk-form-foot">
+              <button type="button" class="btn-outline" id="stCancelBtn">Mégse</button>
+              <button type="submit" class="btn-glow" id="stSaveBtn">Mentés</button>
+            </div>
+          </form>
+
+          <div class="tk-filters">
+            <div class="tk-pills" id="stStatusPills" role="tablist" aria-label="Állapot"></div>
+            <div class="tk-pills" id="stKindPills" aria-label="Típus"></div>
+            <div class="tk-filter-grid">
+              <label class="tk-field">Szerver<select id="stFilterServer"></select></label>
+              <label class="tk-field">Kategória<select id="stFilterCategory"></select></label>
+              <label class="tk-field">Bontás<select id="stGroup">
+                <option value="server">Szerverenként</option>
+                <option value="category">Kategóriánként</option>
+                <option value="kind">Típusonként</option>
+                <option value="day">Bejegyzés napja szerint</option>
+                <option value="none">Nincs</option>
+              </select></label>
+              <label class="tk-field">Sorrend<select id="stSort">
+                <option value="new">Legújabb elöl</option>
+                <option value="old">Legrégebbi elöl</option>
+                <option value="prio">Sürgősség szerint</option>
+              </select></label>
+              <label class="tk-field tk-search">Keresés<input type="search" id="stSearch" placeholder="Cím, leírás vagy név" /></label>
+            </div>
+            <label class="tk-mine"><input type="checkbox" id="stMine" /> Csak az én bejegyzéseim</label>
+          </div>
+
+          <div class="tk-list" id="stList"></div>
+          <p class="ledger-empty hidden" id="stEmpty"></p>
         </section>
 
         <section class="view" data-view="staffStats">
@@ -3287,13 +3347,14 @@
   </div>
 
   <script src="skin3d.js?v=20261014a" defer></script>
-  <script src="app.js?v=20261105a" defer></script>
+  <script src="app.js?v=20261110a" defer></script>
   <script src="media-calendar.js?v=20261101b" defer></script>
   <script src="bundles.js?v=20261103a" defer></script>
+  <script src="staff-tasks.js?v=20261110a" defer></script>
   <script src="ui.js?v=20261014a" defer></script>
   <script src="pixel-icons.js?v=20261106a" defer></script>
-  <script src="world.js?v=20261106b" defer></script>
-  <script src="design.js?v=20261106b" defer></script>
+  <script src="world.js?v=20261110a" defer></script>
+  <script src="design.js?v=20261110a" defer></script>
   <script src="quest.js?v=20261106b" defer></script>
   <script src="season-fx.js?v=20261014a" defer></script>
 </body>

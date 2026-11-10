@@ -1564,13 +1564,16 @@ async function enterApp(meData) {
   startPpLivePoll();
   currentWalletBalanceHuf = typeof meData?.walletBalanceHuf === 'number' ? meData.walletBalanceHuf : 0;
   renderWalletBadge();
-  isOwner = typeof meData?.rank === 'string' && meData.rank.toLowerCase() === 'tulajdonos';
+  isOwner = (typeof meData?.rank === 'string' && meData.rank.toLowerCase() === 'tulajdonos') || meData?.staffRank === 'tulajdonos';
   permSet = new Set(Array.isArray(meData?.permissions) ? meData.permissions : []);
   $$('.admin-nav-item[data-permission]').forEach((el) => {
     const keys = el.dataset.permission.split(',').map((k) => k.trim());
     el.classList.toggle('hidden', !keys.some(hasPerm));
   });
   $('#navPermissionsBtn')?.classList.toggle('hidden', !isOwner);
+  // Teendők: minden staff-tag látja (a backend dönti el: staff-rang vagy global.staffTasks).
+  $('#navStaffTasks')?.classList.toggle('hidden', !meData?.staffTasks);
+  if (meData?.staffTasks && typeof refreshStaffTasksBadge === 'function') refreshStaffTasksBadge();
   // Média naptár: a média rangúaknak és akinek joga van rá (a tulajdonos mindig látja).
   const mediaRank = ['média', 'media'].includes(String(meData?.rank || '').toLowerCase());
   $('#navMediaCalendar')?.classList.toggle('hidden', !(mediaRank || hasPerm('global.mediaCalendarView') || hasPerm('global.mediaCalendarManage')));
@@ -2124,6 +2127,7 @@ function switchView(view) {
   if (view === 'purchaseLogs') loadPurchaseLogsGlobal();
   if (view === 'staffActionLogs') loadStaffActionLogsGlobal();
   if (view === 'staffStats') loadStaffStats();
+  if (view === 'staffTasks' && typeof loadStaffTasks === 'function') loadStaffTasks();
   if (view === 'analytics') loadAnalytics();
   if (view === 'revenue') loadRevenue();
   if (view === 'seasonalThemesAdmin') loadSeasonalThemesAdmin();
