@@ -584,9 +584,9 @@ function showLockedScreen(reason, data) {
   $('#authScreen').classList.add('hidden');
   $('#appScreen').classList.add('hidden');
   $('#lockedReasonText').textContent = reason || 'nincs megadva';
-  const status = { activeMute: data?.activeMute || null, activeBan: data?.activeBan || null, activeCban: data?.activeCban || null, locked: true };
+  const status = { activeMute: data?.activeMute || null, activeBan: data?.activeBan || null, activeIpBan: data?.activeIpBan || null, activeCban: data?.activeCban || null, locked: true };
   renderSanctionStatus($('#lockedSanctionStatus'), status);
-  $('#lockedSanctionsWrap').classList.toggle('hidden', !(status.activeMute || status.activeBan || status.activeCban));
+  $('#lockedSanctionsWrap').classList.toggle('hidden', !(status.activeMute || status.activeBan || status.activeIpBan || status.activeCban));
   $('#lockedScreen').classList.remove('hidden');
 }
 $('#btnLogoutLocked').addEventListener('click', () => {
@@ -616,6 +616,11 @@ function populateBirthDateSelects(yearSel, monthSel, daySel) {
 }
 populateBirthDateSelects($('#regYear'), $('#regMonth'), $('#regDay'));
 populateBirthDateSelects($('#modalRegYear'), $('#modalRegMonth'), $('#modalRegDay'));
+
+// Ha a név egy játékban (/register) létrehozott fiókhoz tartozik, a játékbeli jelszóval
+// ugyanaz a fiók lesz Solaryn-fiók (minden játékadat megmarad) - ld. backend /api/register.
+let pendingGamePassword = null;
+let pendingGameUsername = null;
 
 async function submitRegistration(ids, errEl) {
   errEl.textContent = '';
@@ -671,10 +676,23 @@ async function submitRegistration(ids, errEl) {
     creatorCode: creatorCode || null,
     termsAccepted: termsOk,
     supportsEmailVerification: true,
-    captchaToken: captchaResponse
+    captchaToken: captchaResponse,
+    gamePassword: pendingGamePassword && pendingGameUsername === username.toLowerCase() ? pendingGamePassword : undefined
   });
   resetCaptcha(ids.captcha);
   if (!res.ok) {
+    if (res.gameAccount && res.field === 'gamePassword') {
+      const hadPassword = !!pendingGamePassword;
+      pendingGamePassword = null;
+      if (hadPassword) return fail(res.message || 'Hibás játékbeli jelszó.', ids.user);
+      const gp = await textPromptModal('Játékbeli fiók véglegesítése', escapeHtml(res.message || ''), 'A játékban használt jelszó', 'Véglegesítés', 'password');
+      if (!gp) return fail('A véglegesítéshez a játékban használt jelszó kell. Ha nem a te fiókod, válassz másik nevet.', ids.user);
+      pendingGamePassword = gp;
+      pendingGameUsername = username.toLowerCase();
+      if (!(await captchaConfig()).enabled) return submitRegistration(ids, errEl);
+      mountCaptcha(ids.captcha);
+      return fail('Rendben! Oldd meg újra a robotellenőrzést, és kattints még egyszer a Regisztráció gombra.');
+    }
     if (res.field === 'captcha') {
       registerCaptcha.config = null;
       mountCaptcha(ids.captcha);
@@ -686,6 +704,8 @@ async function submitRegistration(ids, errEl) {
     errEl.textContent = res.message || 'Sikertelen regisztráció.';
     return null;
   }
+  pendingGamePassword = null;
+  pendingGameUsername = null;
   return res;
 }
 
@@ -1062,6 +1082,11 @@ const SANCTION_ICONS = {
     <line x1="8" y1="20.4" x2="16" y2="20.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
     <line x1="6.4" y1="13.4" x2="17.6" y2="7.2" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
   </svg>`,
+  ipban: `<svg viewBox="0 0 24 24" aria-hidden="true">
+    <circle cx="12" cy="12" r="8.6" fill="none" stroke="currentColor" stroke-width="2"/>
+    <path d="M3.6 12h16.8M12 3.4c2.6 2.4 3.9 5.3 3.9 8.6s-1.3 6.2-3.9 8.6c-2.6-2.4-3.9-5.3-3.9-8.6s1.3-6.2 3.9-8.6z" fill="none" stroke="currentColor" stroke-width="1.6"/>
+    <line x1="4.6" y1="19.4" x2="19.4" y2="4.6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+  </svg>`,
   lock: `<svg viewBox="0 0 24 24" aria-hidden="true">
     <rect x="4.2" y="10.2" width="15.6" height="10.6" rx="2.6" fill="none" stroke="currentColor" stroke-width="2"/>
     <path d="M8 10.2V7.8a4 4 0 0 1 8 0v2.4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -1073,6 +1098,7 @@ const SANCTION_ICONS = {
 const SANCTION_TYPES = {
   mute: { label: 'Aktív némítás', note: 'A chat használata korlátozva van.' },
   ban: { label: 'Aktív kitiltás', note: 'A szerverre való belépés korlátozva van.' },
+  ipban: { label: 'Aktív IP-tiltás', note: 'Erről az internetkapcsolatról nem lehet a szerverre lépni.' },
   cban: { label: 'Aktív kliens-tiltás', note: 'A Solaryn kliens használata korlátozva van.' },
   lock: { label: 'A fiók zárolva van', note: 'Erre a fiókra jelenleg nem lehet bejelentkezni. A zárolás indoka nem nyilvános.' }
 };
@@ -1084,6 +1110,7 @@ function renderSanctionStatus(container, data) {
   const items = [];
   if (data?.activeMute) items.push({ type: 'mute', info: data.activeMute });
   if (data?.activeBan) items.push({ type: 'ban', info: data.activeBan });
+  if (data?.activeIpBan) items.push({ type: 'ipban', info: data.activeIpBan });
   if (data?.activeCban) items.push({ type: 'cban', info: data.activeCban });
   if (data?.locked) items.push({ type: 'lock', info: null });
 
@@ -1498,7 +1525,7 @@ function applyPermVisibility(root = document) {
   });
 }
 
-let currentSanctionStatus = { activeMute: null, activeBan: null, activeCban: null };
+let currentSanctionStatus = { activeMute: null, activeBan: null, activeIpBan: null, activeCban: null };
 
 let lastRenderedPpBalance = null;
 const numberAnimGen = new WeakMap();
@@ -1555,6 +1582,7 @@ async function enterApp(meData) {
   currentSanctionStatus = {
     activeMute: meData?.activeMute || null,
     activeBan: meData?.activeBan || null,
+    activeIpBan: meData?.activeIpBan || null,
     activeCban: meData?.activeCban || null
   };
   loadShopCatalog();
@@ -2537,6 +2565,10 @@ async function openPlayerProfile(username) {
     renderStatBadges($('#playerProfileStats'), profile.ok ? formatStats(profile) : emptyStats(), { showWallet: true });
     renderSanctionStatus($('#playerProfileSanctionStatus'), profile.ok ? profile : null);
     renderNameBadges($('#playerProfileNameBadges'), profile.ok ? profile.badges : null);
+    // Játékbeli (/register) fiók jelzése a név mellett.
+    if (profile.ok && profile.gameAccount) {
+      $('#playerProfileNameBadges').insertAdjacentHTML('afterbegin', '<span class="reg-game" title="A játékban létrehozott fiók: nincs hozzá email, a Centerbe és a launcherbe nem tud belépni.">nem Solaryn-fiók</span> ');
+    }
   });
   loadProfileCosmetics(username);
 
@@ -3445,7 +3477,8 @@ async function loadShopCatalog() {
 
   const muteLocked = !currentSanctionStatus.activeMute;
   const banLocked = !currentSanctionStatus.activeBan;
-  const cbanLocked = !currentSanctionStatus.activeCban;
+  // 2026-11-13: a kliens-tiltás csökkentése az IP-tiltást is csökkenti.
+  const cbanLocked = !currentSanctionStatus.activeCban && !currentSanctionStatus.activeIpBan;
 
   $('#coinPkgGrid').innerHTML = coinItems.map((i) => renderPkgCard(i)).join('');
   $('#sanctionPkgWrap').innerHTML = `
@@ -3453,7 +3486,8 @@ async function loadShopCatalog() {
     <div class="pkg-grid">${muteItems.map((i) => renderPkgCard(i, muteLocked)).join('')}</div>
     <div class="pkg-category">Kitiltás feloldás</div>
     <div class="pkg-grid">${banItems.map((i) => renderPkgCard(i, banLocked)).join('')}</div>
-    <div class="pkg-category">Kliens-tiltás csökkentése</div>
+    <div class="pkg-category">Kliens- és IP-tiltás csökkentése</div>
+    <p class="pkg-category-note">A kliens-tiltásodat és az IP-tiltásodat is ugyanennyivel csökkenti. A fiókod kitiltását a fenti „Kitiltás feloldás” tételekkel tudod csökkenteni.</p>
     <div class="pkg-grid">${cbanItems.map((i) => renderPkgCard(i, cbanLocked)).join('')}</div>
   `;
 }
@@ -3820,7 +3854,7 @@ async function cancelSubscription(rankId, buttonEl) {
   }
 }
 
-function textPromptModal(title, message, placeholder, okLabel) {
+function textPromptModal(title, message, placeholder, okLabel, inputType) {
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -3828,7 +3862,7 @@ function textPromptModal(title, message, placeholder, okLabel) {
       <div class="modal-card">
         <h3>${title}</h3>
         <p>${message}</p>
-        <input type="text" class="gift-modal-input" maxlength="200" placeholder="${escapeHtml(placeholder || '')}" />
+        <input type="${inputType === 'password' ? 'password' : 'text'}" class="gift-modal-input" maxlength="200" placeholder="${escapeHtml(placeholder || '')}" />
         <div class="modal-actions">
           <button type="button" class="btn-outline" data-prompt-cancel>Mégse</button>
           <button type="button" class="btn-glow" data-prompt-ok style="margin-top:0;">${okLabel || 'Rendben'}</button>
@@ -3839,8 +3873,9 @@ function textPromptModal(title, message, placeholder, okLabel) {
     const input = overlay.querySelector('input');
     const finish = (result) => { overlay.remove(); resolve(result); };
     overlay.querySelector('[data-prompt-cancel]').addEventListener('click', () => finish(null));
-    overlay.querySelector('[data-prompt-ok]').addEventListener('click', () => finish(input.value.trim()));
-    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') finish(input.value.trim()); if (e.key === 'Escape') finish(null); });
+    const value = () => (inputType === 'password' ? input.value : input.value.trim());
+    overlay.querySelector('[data-prompt-ok]').addEventListener('click', () => finish(value()));
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') finish(value()); if (e.key === 'Escape') finish(null); });
     overlay.addEventListener('click', (e) => { if (e.target === overlay) finish(null); });
     setTimeout(() => input.focus(), 30);
   });
@@ -15762,7 +15797,7 @@ async function loadRegisteredPlayers() {
   $('#regTableBody').innerHTML = data.players.map((p, i) => `
     <tr>
       <td class="ledger-date">${fmt(offset + i + 1)}</td>
-      <td class="ledger-party"><button type="button" class="reg-name" data-reg-profile="${escapeHtml(p.username)}">${p.online ? '<i class="reg-online" title="Online"></i>' : ''}${escapeHtml(p.username)}</button>${p.locked ? ' <span class="reg-locked">zárolva</span>' : ''}</td>
+      <td class="ledger-party"><button type="button" class="reg-name" data-reg-profile="${escapeHtml(p.username)}">${p.online ? '<i class="reg-online" title="Online"></i>' : ''}${escapeHtml(p.username)}</button>${p.gameAccount ? ' <span class="reg-game" title="A játékban (/register) létrehozott fiók: nincs hozzá email, a Centerbe és a launcherbe nem tud belépni, de játszani és kezelni ugyanúgy lehet.">nem Solaryn-fiók</span>' : ''}${p.locked ? ' <span class="reg-locked">zárolva</span>' : ''}</td>
       <td class="ledger-date">${escapeHtml(formatLedgerDate(p.createdAt))}</td>
       <td>${p.rank ? escapeHtml(formatRankName(p.rank)) : '<span class="ledger-none">-</span>'}</td>
       <td>${p.playtimeSeconds ? escapeHtml(formatPlaytime(p.playtimeSeconds)) : '<span class="ledger-none">-</span>'}</td>

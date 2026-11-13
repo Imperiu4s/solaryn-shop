@@ -872,6 +872,7 @@ a { color: inherit; }
 
 .pkg-category { font-size: 13px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--gold); font-weight: 700; margin: 26px 0 14px; }
 .pkg-category:first-child { margin-top: 0; }
+.pkg-category-note { margin: -6px 0 14px; font-size: 13px; color: var(--muted, rgba(255,255,255,.62)); line-height: 1.5; }
 
 .pkg-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 18px; }
 .pkg-card {
