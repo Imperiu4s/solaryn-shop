@@ -346,7 +346,7 @@ $('#regPass').addEventListener('input', () => {
 $('#loginForm').addEventListener('submit', (e) => { e.preventDefault(); doLogin(); });
 
 async function performLogin(username, password, rememberMe) {
-  let res = await apiPost('/api/login', { username, password, rememberMe: rememberMe === true });
+  let res = await apiPost('/api/login', { username, password, rememberMe: rememberMe === true, app: 'center' });
   if (!res.ok) return res;
   if (res.requiresTotp) {
     const totpInput = await promptTotpModal();
@@ -1579,6 +1579,11 @@ async function enterApp(meData) {
   renderDiscordLinkBadge($('#profileDiscordLink'), meData, { mode: 'self' });
   renderSanctionStatus($('#profileSanctionStatus'), meData);
   renderNameBadges($('#profileNameBadges'), meData?.badges);
+  // Játékbeli (/register) fiók: beléphet, de jelezzük, hogy nem Solaryn-fiók.
+  if (meData?.gameAccount) {
+    $('#profileNameBadges').insertAdjacentHTML('afterbegin', '<span class="reg-game" title="A játékban (/register) létrehozott fiók: nincs hozzá email. A Centert használhatod, a launcherbe csak véglegesítés (email megadása) után léphetsz be.">nem Solaryn-fiók</span> ');
+  }
+  $('#profileGameAccountNote')?.classList.toggle('hidden', !meData?.gameAccount);
   currentSanctionStatus = {
     activeMute: meData?.activeMute || null,
     activeBan: meData?.activeBan || null,
@@ -2567,7 +2572,7 @@ async function openPlayerProfile(username) {
     renderNameBadges($('#playerProfileNameBadges'), profile.ok ? profile.badges : null);
     // Játékbeli (/register) fiók jelzése a név mellett.
     if (profile.ok && profile.gameAccount) {
-      $('#playerProfileNameBadges').insertAdjacentHTML('afterbegin', '<span class="reg-game" title="A játékban létrehozott fiók: nincs hozzá email, a Centerbe és a launcherbe nem tud belépni.">nem Solaryn-fiók</span> ');
+      $('#playerProfileNameBadges').insertAdjacentHTML('afterbegin', '<span class="reg-game" title="A játékban (/register) létrehozott fiók: nincs hozzá email. A Centert használhatja, a launcherbe csak véglegesítés (email megadása) után léphet be.">nem Solaryn-fiók</span> ');
     }
   });
   loadProfileCosmetics(username);
@@ -15797,7 +15802,7 @@ async function loadRegisteredPlayers() {
   $('#regTableBody').innerHTML = data.players.map((p, i) => `
     <tr>
       <td class="ledger-date">${fmt(offset + i + 1)}</td>
-      <td class="ledger-party"><button type="button" class="reg-name" data-reg-profile="${escapeHtml(p.username)}">${p.online ? '<i class="reg-online" title="Online"></i>' : ''}${escapeHtml(p.username)}</button>${p.gameAccount ? ' <span class="reg-game" title="A játékban (/register) létrehozott fiók: nincs hozzá email, a Centerbe és a launcherbe nem tud belépni, de játszani és kezelni ugyanúgy lehet.">nem Solaryn-fiók</span>' : ''}${p.locked ? ' <span class="reg-locked">zárolva</span>' : ''}</td>
+      <td class="ledger-party"><button type="button" class="reg-name" data-reg-profile="${escapeHtml(p.username)}">${p.online ? '<i class="reg-online" title="Online"></i>' : ''}${escapeHtml(p.username)}</button>${p.gameAccount ? ' <span class="reg-game" title="A játékban (/register) létrehozott fiók: nincs hozzá email. A Centert használhatja, a launcherbe csak véglegesítés (email megadása) után léphet be.">nem Solaryn-fiók</span>' : ''}${p.locked ? ' <span class="reg-locked">zárolva</span>' : ''}</td>
       <td class="ledger-date">${escapeHtml(formatLedgerDate(p.createdAt))}</td>
       <td>${p.rank ? escapeHtml(formatRankName(p.rank)) : '<span class="ledger-none">-</span>'}</td>
       <td>${p.playtimeSeconds ? escapeHtml(formatPlaytime(p.playtimeSeconds)) : '<span class="ledger-none">-</span>'}</td>

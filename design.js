@@ -19,7 +19,13 @@
     home: 'home', skin: 'skin', cosmetics: 'cosmetic', market: 'market', trades: 'swap',
     coin: 'coin', wallet: 'wallet', transfer: 'send', redeem: 'gift', ledger: 'list',
     ranks: 'crown', sanction: 'hammer', players: 'people', casino: 'dice', mediaCalendar: 'calendar', staffApply: 'pen',
-    security: 'shield', faq: 'book', legal: 'book', staffTasks: 'list'
+    security: 'shield', faq: 'book', legal: 'book', staffTasks: 'list',
+    // Admin menü
+    shopLock: 'lock', paymentsAdmin: 'card', registeredPlayers: 'people', purchaseLogs: 'receipt',
+    staffActionLogs: 'terminal', staffStats: 'bars', revenue: 'trend', analytics: 'eye', newsAdmin: 'megaphone',
+    badges: 'medal', defaultMediaAdmin: 'skin', nameRules: 'ban', rankPerksAdmin: 'crown', staffAppsAdmin: 'pen',
+    cosmeticsAdmin: 'cosmetic', bundlesAdmin: 'chest', mobsAdmin: 'skull', discounts: 'tag', coupons: 'ticket',
+    creatorCodes: 'star', seasonalThemesAdmin: 'flake', permissions: 'key'
   };
 
   const SLOTS = [

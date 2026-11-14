@@ -829,3 +829,15 @@ html body #authScreen .auth-form input.auth-input-icon { background-image: none 
   .tk-mark { display: none; }
   .tk-own { margin-left: 0; }
 }
+
+/* ---- Játékosok: a kereső és a találatok középen -------------------------------------------- */
+.view[data-view="players"] .player-search-panel { margin-left: auto !important; margin-right: auto !important; }
+.view[data-view="players"] .player-result-heading,
+.view[data-view="players"] .player-result-grid { max-width: 720px; margin-left: auto; margin-right: auto; }
+.view[data-view="players"] .player-result-heading { text-align: center; }
+.view[data-view="players"] .player-result-grid { grid-template-columns: repeat(auto-fit, minmax(220px, 232px)); justify-content: center; }
+
+/* ---- Játékbeli (nem Solaryn-) fiók tájékoztató a főoldalon --------------------------------- */
+.game-account-note { display: flex; flex-direction: column; gap: 4px; max-width: 520px; margin: 10px 0 4px; padding: 10px 14px; border-radius: 10px; background: rgba(20, 12, 4, .72); box-shadow: inset 0 0 0 1px rgba(255, 179, 71, .45); color: #f3e6d6; font-size: 13px; line-height: 1.45; }
+.game-account-note b { color: #ffb347; font-weight: 700; }
+.game-account-note.hidden { display: none; }
