@@ -1314,13 +1314,34 @@ const CASINO_PRIZE_ICONS = {
   autopickup: '<svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 3v13m0 0l-5-5m5 5l5-5M5 19h14"/></svg>',
   battlepass: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M7 3h10v6a5 5 0 0 1-10 0z"/><path fill="none" stroke="currentColor" stroke-width="1.8" d="M7 4H4a3 3 0 0 0 3 4M17 4h3a3 3 0 0 1-3 4"/><path fill="currentColor" d="M11 13h2v3h-2z"/><path fill="currentColor" d="M8 19a4 4 0 0 1 8 0z"/></svg>',
   afk: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9 9h2.4L9 13h2.6M14 9h1.8c1 0 1 1.4 0 1.6c1 .2 1 1.6 0 1.6h-1.8z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>',
-  rank: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 8l4 3 5-6 5 6 4-3-2 11H5z"/></svg>'
+  rank: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 8l4 3 5-6 5 6 4-3-2 11H5z"/></svg>',
+  pp: '<img src="assets/pp-coin.svg" alt="PP" />',
+  spin: '<svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M20 12a8 8 0 1 1-2.34-5.66M20 4v4h-4"/></svg>',
+  jackpot: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l2.4 6.6L21 9l-5 4.6L17.4 21 12 17.3 6.6 21 8 13.6 3 9l6.6-.4z"/></svg>',
+  none: '<svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M7 7l10 10M17 7L7 17"/></svg>'
 };
-const CASINO_ICON_KEYS = Object.keys(CASINO_PRIZE_ICONS);
-const CASINO_JACKPOT_ICON = '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2l2.4 6.6L21 9l-5 4.6L17.4 21 12 17.3 6.6 21 8 13.6 3 9l6.6-.4z"/></svg>';
+// A tekercseken pörgő ikonok (a "nincs nyeremény" nem kerül rájuk).
+const CASINO_ICON_KEYS = ['glow', 'antiqueue', 'enderchest', 'autopickup', 'battlepass', 'afk', 'rank', 'pp', 'spin', 'jackpot'];
+const CASINO_TIER_ORDER = ['legendary', 'epic', 'rare', 'uncommon', 'common'];
+const CASINO_TIER_LABELS = { none: 'Nincs nyeremény', common: 'Gyakori', uncommon: 'Nem gyakori', rare: 'Ritka', epic: 'Epikus', legendary: 'Legendás' };
 
 function casinoIconHtml(key) {
-  return CASINO_PRIZE_ICONS[key] || CASINO_JACKPOT_ICON;
+  return CASINO_PRIZE_ICONS[key] || CASINO_PRIZE_ICONS.jackpot;
+}
+
+function casinoRandomIcon() {
+  return CASINO_ICON_KEYS[Math.floor(Math.random() * CASINO_ICON_KEYS.length)];
+}
+
+// A backend 'YYYY-MM-DD HH:MM:SS' (UTC) időbélyege -> helyi, rövid alak.
+function casinoTime(utc) {
+  const d = new Date(String(utc || '').replace(' ', 'T') + 'Z');
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('hu-HU', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function casinoPct(n, digits = 1) {
+  return Number(n || 0).toLocaleString('hu-HU', { maximumFractionDigits: digits });
 }
 
 let casinoPrizes = [];
@@ -1340,10 +1361,24 @@ async function loadCasinoPrizes() {
     });
     const data = await res.json();
     casinoPrizes = data.ok && Array.isArray(data.prizes) ? data.prizes : [];
-    grid.innerHTML = casinoPrizes.map((p) => `
-      <div class="casino-prize-card">
+    const byTier = {};
+    for (const p of casinoPrizes) (byTier[p.tier] = byTier[p.tier] || []).push(p);
+    const legend = $('#casinoTierLegend');
+    if (legend) {
+      const tierChance = (t) => (byTier[t] || []).reduce((s, p) => s + p.chancePercent, 0);
+      legend.innerHTML = CASINO_TIER_ORDER.filter((t) => byTier[t]).map((t) =>
+        `<span class="casino-tier-chip tier-${t}">${CASINO_TIER_LABELS[t]} <b>${casinoPct(tierChance(t))}%</b></span>`
+      ).join('') + (typeof data.noWinChancePercent === 'number'
+        ? `<span class="casino-tier-chip tier-none">Nincs nyeremény <b>${casinoPct(data.noWinChancePercent)}%</b></span>` : '');
+    }
+    grid.innerHTML = CASINO_TIER_ORDER.flatMap((t) => byTier[t] || []).map((p) => `
+      <div class="casino-prize-card tier-${p.tier}">
         <div class="casino-prize-icon">${casinoIconHtml(p.icon)}</div>
         <div class="casino-prize-name">${escapeHtml(p.name)}</div>
+        <div class="casino-prize-meta">
+          <span class="casino-prize-tier">${escapeHtml(p.tierLabel || CASINO_TIER_LABELS[p.tier] || '')}</span>
+          <span class="casino-prize-chance">${casinoPct(p.chancePercent, 2)}%</span>
+        </div>
         ${p.server ? `<div class="casino-prize-server">${escapeHtml(p.server)}</div>` : ''}
       </div>
     `).join('');
@@ -1359,13 +1394,57 @@ function renderCasinoButtons() {
   const buyBtn = $('#casinoBuySpinBtn');
   if (!spinBtn || !buyBtn || !casinoState) return;
 
-  const canSpin = casinoState.freeSpinsAvailable > 0 || casinoState.purchasedSpinsAvailable > 0;
+  const total = casinoState.freeSpinsAvailable + casinoState.purchasedSpinsAvailable;
+  const canSpin = total > 0;
   spinBtn.disabled = casinoSpinning || !canSpin;
-  spinBtn.textContent = canSpin ? 'Pörgetés' : 'Nincs elérhető pörgetésed';
+  spinBtn.textContent = canSpin ? (total > 1 ? `Pörgetés (${total})` : 'Pörgetés') : 'Nincs elérhető pörgetésed';
 
   const canBuy = casinoState.purchasesUnlocked && casinoState.purchasesRemaining > 0 && casinoState.freeSpinsAvailable === 0;
   buyBtn.hidden = !canBuy;
   buyBtn.disabled = casinoSpinning;
+  buyBtn.textContent = `Próbálkozás vásárlása (${casinoState.purchaseCost || 200} PP) - még ${casinoState.purchasesRemaining}`;
+
+  const counts = $('#casinoSpinCounts');
+  if (counts) {
+    const parts = [];
+    if (casinoState.freeSpinsAvailable > 0) parts.push(`${casinoState.freeSpinsAvailable} ingyenes`);
+    if (casinoState.purchasedSpinsAvailable > 0) parts.push(`${casinoState.purchasedSpinsAvailable} megvásárolt`);
+    counts.textContent = parts.length ? `Elérhető: ${parts.join(', ')} pörgetés` : '';
+  }
+}
+
+function renderCasinoProgress(data) {
+  const box = $('#casinoProgress');
+  if (box) {
+    const req = data.requiredDays || 7;
+    const done = Math.min(data.dayProgress || 0, req);
+    const todayMin = Math.floor((data.todaySeconds || 0) / 60);
+    const needMin = Math.ceil((data.activeDaySeconds || 300) / 60);
+    const dots = Array.from({ length: req }, (_, i) =>
+      `<span class="casino-day-dot${i < done ? ' done' : ''}${i === done && !data.todayCounted ? ' next' : ''}">${i + 1}</span>`
+    ).join('');
+    const todayLine = data.todayCounted
+      ? '<span class="casino-today ok">A mai nap már beszámított.</span>'
+      : `<span class="casino-today">Ma: ${Math.min(todayMin, needMin)}/${needMin} perc játék - utána beszámít a mai nap.</span>`;
+    box.innerHTML = `
+      <div class="casino-progress-head"><b>${done}/${req}</b> aktív nap <span class="casino-progress-left">még ${Math.max(0, req - done)} nap a következő ingyenes pörgetésig</span></div>
+      <div class="casino-progress-bar"><span style="width:${Math.round((done / req) * 100)}%"></span></div>
+      <div class="casino-day-dots">${dots}</div>
+      <div class="casino-progress-foot">${todayLine}</div>
+    `;
+  }
+  const ladder = $('#casinoLadder');
+  if (ladder && Array.isArray(data.ladder)) {
+    ladder.innerHTML = data.ladder.map((days, i) => `
+      <div class="casino-ladder-step${i === data.level ? ' current' : ''}${i < data.level ? ' passed' : ''}">
+        <span class="casino-ladder-lvl">${i + 1}. szint</span>
+        <span class="casino-ladder-days">${days} nap</span>
+        <span class="casino-ladder-note">${i === data.ladder.length - 1 ? 'legjobb' : i === 0 ? 'kezdő' : ''}</span>
+      </div>
+    `).join('');
+  }
+  const pityText = $('#casinoPityLimitText');
+  if (pityText && data.pityLimit) pityText.textContent = String(data.pityLimit);
 }
 
 async function loadCasinoState() {
@@ -1380,15 +1459,23 @@ async function loadCasinoState() {
     casinoState = data;
 
     const items = [
-      { icon: 'time', label: 'Bejelentkezési sorozatod', html: `${data.loginStreakDays} nap` },
-      { icon: 'spin', label: 'Ingyenes pörgetéseid', html: String(data.freeSpinsAvailable) }
+      { icon: 'spin', label: 'Ingyenes pörgetéseid', html: String(data.freeSpinsAvailable) },
+      { icon: 'rank', label: 'Hűségszinted', html: `${data.level + 1}. szint <small>(${data.requiredDays} aktív naponként 1 pörgetés)</small>` },
+      { icon: 'time', label: 'Egymást követő aktív napok', html: `${data.loginStreakDays} nap <small>(még ${data.nextStreakBonusIn} nap a bónusz pörgetésig)</small>` },
+      { icon: 'spin', label: 'Garantált ritka nyeremény', html: `legkésőbb ${data.pityLeft} pörgetésen belül` }
     ];
     if (data.purchasedSpinsAvailable > 0) {
       items.push({ icon: 'spin', label: 'Megvásárolt pörgetéseid', html: String(data.purchasedSpinsAvailable) });
     }
-    if (data.purchasesUnlocked) {
-      items.push({ icon: 'spin', label: 'Még vásárolható próbálkozásaid', html: `${data.purchasesRemaining}/2 (200 PP/db)` });
+    if (data.purchaseBlockedAtMaxLevel) {
+      items.push({ icon: 'coin', label: 'Próbálkozás vásárlása', html: '<small>A legmagasabb szinten már nem vásárolható - 3 naponta ingyen pörgetsz.</small>' });
+    } else if (data.purchasesUnlocked) {
+      items.push({ icon: 'coin', label: 'Még vásárolható próbálkozásaid', html: `${data.purchasesRemaining}/${data.purchasesPerCycle} (${data.purchaseCost} PP/db)` });
     }
+    if (data.decayInDays !== null && data.decayInDays <= 3 && data.level > 0) {
+      items.push({ icon: 'time', label: 'Figyelem', html: `<small>${data.decayInDays > 0 ? `${data.decayInDays} nap múlva` : 'Holnap'} visszaesik a hűségszinted, ha nem játszol.</small>` });
+    }
+    items.push({ icon: 'rank', label: 'Összesen', html: `<small>${data.totalSpins} pörgetés, ${data.totalWins} nyeremény, ${data.totalActiveDays} aktív nap, legjobb sorozat: ${data.bestStreak} nap</small>` });
     grid.innerHTML = items.map((it) => `
       <div class="stat-badge">
         <div class="stat-badge-icon">${STAT_ICONS[it.icon]}</div>
@@ -1398,17 +1485,53 @@ async function loadCasinoState() {
         </div>
       </div>
     `).join('');
+    renderCasinoProgress(data);
     renderCasinoButtons();
   } catch {
     grid.innerHTML = '';
   }
 }
 
+async function loadCasinoFeeds() {
+  const hist = $('#casinoHistory');
+  const recent = $('#casinoRecentWins');
+  const headers = { Authorization: 'Bearer ' + session.token };
+  try {
+    const [h, r] = await Promise.all([
+      fetch(BACKEND_URL + '/api/casino/history', { headers }).then((x) => x.json()),
+      fetch(BACKEND_URL + '/api/casino/recent-wins', { headers }).then((x) => x.json())
+    ]);
+    if (hist) {
+      const spins = h.ok && Array.isArray(h.spins) ? h.spins : [];
+      hist.innerHTML = spins.length ? spins.map((s) => `
+        <div class="casino-feed-row tier-${escapeHtml(s.tier)}">
+          <span class="casino-feed-dot"></span>
+          <span class="casino-feed-name">${escapeHtml(s.tier === 'none' ? 'Nem nyert' : s.prize_name)}${s.pity ? ' <em>(garantált)</em>' : ''}</span>
+          <span class="casino-feed-time">${casinoTime(s.created_at)}</span>
+        </div>`).join('') : '<p class="page-note">Még nem pörgettél.</p>';
+    }
+    if (recent) {
+      const wins = r.ok && Array.isArray(r.wins) ? r.wins : [];
+      recent.innerHTML = wins.length ? wins.map((w) => `
+        <div class="casino-feed-row tier-${escapeHtml(w.tier)}">
+          <span class="casino-feed-dot"></span>
+          <span class="casino-feed-name"><b>${escapeHtml(w.username)}</b> - ${escapeHtml(w.prize_name)}</span>
+          <span class="casino-feed-time">${casinoTime(w.created_at)}</span>
+        </div>`).join('') : '<p class="page-note">Még senki nem nyert ritka nyereményt.</p>';
+    }
+  } catch {
+    if (hist) hist.innerHTML = '';
+    if (recent) recent.innerHTML = '';
+  }
+}
+
 function loadCasino() {
   for (let i = 0; i < 3; i++) setCasinoReel(i, casinoIconHtml(CASINO_ICON_KEYS[i % CASINO_ICON_KEYS.length]));
-  $('#casinoSpinResult').textContent = '';
+  const resultEl = $('#casinoSpinResult');
+  if (resultEl) { resultEl.innerHTML = ''; resultEl.className = 'casino-result'; }
   loadCasinoPrizes();
   loadCasinoState();
+  loadCasinoFeeds();
 }
 
 async function spinCasino() {
@@ -1418,8 +1541,9 @@ async function spinCasino() {
   casinoSpinning = true;
   renderCasinoButtons();
   const resultEl = $('#casinoSpinResult');
-  resultEl.textContent = '';
-  resultEl.className = 'redeem-result';
+  resultEl.innerHTML = '';
+  resultEl.className = 'casino-result';
+  $$('.slot-reel').forEach((el) => el.classList.remove('won', 'tier-rare', 'tier-epic', 'tier-legendary'));
   $$('.slot-reel').forEach((el) => el.classList.add('spinning'));
   $('.slot-machine-lever-track')?.classList.add('pulled');
 
@@ -1429,44 +1553,62 @@ async function spinCasino() {
   }).then((r) => r.json()).catch(() => ({ ok: false }));
 
   const cycleTimer = setInterval(() => {
-    for (let i = 0; i < 3; i++) setCasinoReel(i, casinoIconHtml(CASINO_ICON_KEYS[Math.floor(Math.random() * CASINO_ICON_KEYS.length)]));
+    for (let i = 0; i < 3; i++) {
+      const reel = $('#casinoReel' + i);
+      if (reel && reel.classList.contains('spinning')) setCasinoReel(i, casinoIconHtml(casinoRandomIcon()));
+    }
   }, 90);
 
-  const [data] = await Promise.all([spinPromise, new Promise((r) => setTimeout(r, 1400))]);
-  clearInterval(cycleTimer);
+  const [data] = await Promise.all([spinPromise, new Promise((r) => setTimeout(r, 1300))]);
   $('.slot-machine-lever-track')?.classList.remove('pulled');
 
   if (!data || !data.ok) {
+    clearInterval(cycleTimer);
     $$('.slot-reel').forEach((el) => el.classList.remove('spinning'));
-    resultEl.textContent = (data && data.reason === 'no_spin_available') ? 'Nincs elérhető pörgetésed.' : 'A pörgetés sikertelen volt, próbáld újra.';
-    resultEl.className = 'redeem-result error';
+    resultEl.textContent = (data && data.reason === 'no_spin_available') ? 'Nincs elérhető pörgetésed.' : (data && data.message) || 'A pörgetés sikertelen volt, próbáld újra.';
+    resultEl.className = 'casino-result error';
     casinoSpinning = false;
     await loadCasinoState();
     return;
   }
 
+  // A tekercsek egymás után állnak meg.
+  let finalIcons;
   if (data.win) {
-    for (let i = 0; i < 3; i++) setCasinoReel(i, casinoIconHtml(data.prizeIcon));
-    $$('.slot-reel').forEach((el) => { el.classList.remove('spinning'); el.classList.add('won'); });
-    resultEl.textContent = `Jackpot! Nyereményed: ${data.prizeName}`;
-    resultEl.className = 'redeem-result';
-    setTimeout(() => $$('.slot-reel').forEach((el) => el.classList.remove('won')), 3000);
+    finalIcons = [data.prizeIcon, data.prizeIcon, data.prizeIcon];
   } else {
-    const a = CASINO_ICON_KEYS[Math.floor(Math.random() * CASINO_ICON_KEYS.length)];
-    let b = CASINO_ICON_KEYS[Math.floor(Math.random() * CASINO_ICON_KEYS.length)];
+    const a = casinoRandomIcon();
+    let b = casinoRandomIcon();
     if (b === a) b = CASINO_ICON_KEYS[(CASINO_ICON_KEYS.indexOf(a) + 1) % CASINO_ICON_KEYS.length];
-    const c = CASINO_ICON_KEYS[(CASINO_ICON_KEYS.indexOf(b) + 2) % CASINO_ICON_KEYS.length];
-    setCasinoReel(0, casinoIconHtml(a));
-    setCasinoReel(1, casinoIconHtml(b));
-    setCasinoReel(2, casinoIconHtml(c));
-    $$('.slot-reel').forEach((el) => el.classList.remove('spinning'));
-    resultEl.textContent = 'Sajnos ezúttal nem nyertél - próbáld meg legközelebb!';
-    resultEl.className = 'redeem-result';
+    finalIcons = [a, b, CASINO_ICON_KEYS[(CASINO_ICON_KEYS.indexOf(b) + 3) % CASINO_ICON_KEYS.length]];
+  }
+  for (let i = 0; i < 3; i++) {
+    if (i > 0) await new Promise((r) => setTimeout(r, 320));
+    $('#casinoReel' + i)?.classList.remove('spinning');
+    setCasinoReel(i, casinoIconHtml(finalIcons[i]));
+  }
+  clearInterval(cycleTimer);
+
+  if (data.win) {
+    const big = ['rare', 'epic', 'legendary'].includes(data.prizeTier);
+    $$('.slot-reel').forEach((el) => { el.classList.add('won'); if (big) el.classList.add('tier-' + data.prizeTier); });
+    const where = data.prizeKind === 'pp' ? 'Jóváírtuk az egyenlegeden.'
+      : data.prizeKind === 'spin' ? 'Már pörgethetsz is vele.'
+        : 'A játékszerver pár másodpercen belül kiosztja.';
+    resultEl.innerHTML = `<span class="casino-result-tier tier-${escapeHtml(data.prizeTier)}">${escapeHtml(data.prizeTierLabel || '')}${data.pityTriggered ? ' - garantált' : ''}</span><b>${escapeHtml(data.prizeName)}</b><small>${where}</small>`;
+    resultEl.className = 'casino-result win tier-' + data.prizeTier;
+    if (typeof data.ppBalance === 'number') applyPpBalance(data.ppBalance);
+    setTimeout(() => $$('.slot-reel').forEach((el) => el.classList.remove('won')), 3500);
+  } else {
+    resultEl.innerHTML = '<b>Most nem nyertél</b><small>Közelebb kerültél a garantált ritka nyereményhez.</small>';
+    resultEl.className = 'casino-result';
   }
 
   casinoState = data;
   casinoSpinning = false;
   renderCasinoButtons();
+  loadCasinoState();
+  loadCasinoFeeds();
 }
 
 async function buyCasinoSpin() {
@@ -1481,18 +1623,18 @@ async function buyCasinoSpin() {
     const data = await res.json();
     if (!data.ok) {
       resultEl.textContent = data.message || 'Nem sikerült megvenni a próbálkozást.';
-      resultEl.className = 'redeem-result error';
+      resultEl.className = 'casino-result error';
       btn.disabled = false;
       return;
     }
     resultEl.textContent = data.message || 'Megvetted a próbálkozást.';
-    resultEl.className = 'redeem-result';
+    resultEl.className = 'casino-result';
     applyPpBalance(data.ppBalance);
     casinoState = data;
     renderCasinoButtons();
   } catch {
     resultEl.textContent = 'Nem sikerült elérni a szervert.';
-    resultEl.className = 'redeem-result error';
+    resultEl.className = 'casino-result error';
     btn.disabled = false;
   }
 }
@@ -2516,15 +2658,19 @@ $('#playerSearchBtn').addEventListener('click', doPlayerSearch);
 $('#playerSearchInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') doPlayerSearch(); });
 
 let stopPlayerPreview = null;
+let playerSearchSeq = 0;
 async function doPlayerSearch() {
   const name = $('#playerSearchInput').value.trim();
   const resultEl = $('#playerResult');
   const headingEl = $('#playerResultHeading');
+  const my = ++playerSearchSeq;
   if (!name) { resultEl.innerHTML = ''; headingEl.classList.add('hidden'); return; }
 
   headingEl.classList.remove('hidden');
   resultEl.innerHTML = '<p class="player-result-note">Keresés...</p>';
   const data = await apiSearchPlayers(name);
+  // Az Enter és a névjavaslat-választás egyszerre is indíthat keresést: csak a legutóbbi számít.
+  if (my !== playerSearchSeq) return;
   if (!data.ok || !data.players.length) {
     resultEl.innerHTML = '<p class="player-result-note">Nincs található játékos ezzel a névvel.</p>';
     return;
@@ -2546,6 +2692,11 @@ async function doPlayerSearch() {
     drawFaceForPlayer(canvas, player);
     card.addEventListener('click', () => openPlayerProfile(player.username));
   });
+
+  // Adminnak a pontosan beírt névre rögtön megnyílik a profil (az admin adatokkal együtt),
+  // nem kell a találatra is rákattintani. A lista megmarad, ha visszalép.
+  const exact = data.players.find((p) => p.username.toLowerCase() === name.toLowerCase());
+  if (exact && PLAYER_PANEL_KEYS.some(hasPerm)) openPlayerProfile(exact.username);
 }
 
 async function drawFaceForPlayer(canvas, player) {

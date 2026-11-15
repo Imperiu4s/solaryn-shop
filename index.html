@@ -40,7 +40,7 @@
   <link rel="stylesheet" href="ui.css?v=20261014a" />
   <link rel="stylesheet" href="design.css?v=20261103a" />
   <link rel="stylesheet" href="seasonal.css?v=20261014a" />
-  <link rel="stylesheet" href="block.css?v=20261114a" />
+  <link rel="stylesheet" href="block.css?v=20261115a" />
 
   <script type="application/ld+json">
   {
@@ -965,9 +965,9 @@
 
         <section class="view" data-view="casino">
           <h1 class="page-title">Casino</h1>
-          <p class="page-note">Minden 7. egymást követő napi belépésedért +1 ingyenes pörgetést kapsz. Az ingyenes pörgetésed elhasználása után még 2 próbálkozást vásárolhatsz 200 PrémiumPontért - a nyereményt a rendszer automatikusan jóváírja a fiókodhoz.</p>
+          <p class="page-note">Nem kell minden nap fellépned: minden nap, amikor legalább 5 percet játszol bármelyik szerverünkön, egy <b>aktív napnak</b> számít. Az első ingyenes pörgetéshez 7 aktív nap kell, utána egyre kevesebb (6, 5, 4), végül már <b>3 naponta</b> jár egy. A nyereményt a rendszer automatikusan jóváírja.</p>
 
-          <div class="content-grid">
+          <div class="content-grid casino-layout">
             <div>
               <div class="card casino-machine-card">
                 <div class="slot-machine">
@@ -985,16 +985,26 @@
                     <div class="slot-machine-lever-track"><div class="slot-machine-lever-knob"></div></div>
                   </div>
                 </div>
-                <p class="redeem-result" id="casinoSpinResult"></p>
+                <div class="casino-result" id="casinoSpinResult" aria-live="polite"></div>
                 <div class="casino-actions">
                   <button type="button" class="btn-glow" id="casinoSpinBtn" disabled>Pörgetés</button>
                   <button type="button" class="btn-outline" id="casinoBuySpinBtn" hidden>Próbálkozás vásárlása (200 PP)</button>
                 </div>
+                <div class="casino-spin-counts" id="casinoSpinCounts"></div>
               </div>
 
               <div class="card">
-                <div class="card-title">Nyeremények</div>
-                <p class="page-note">Ha mind a 3 tekercs ugyanazt mutatja, egyet nyersz az alábbiak közül - véletlenszerűen, viszonylag alacsony eséllyel pörgetésenként.</p>
+                <div class="card-title">Haladásod a következő pörgetésig</div>
+                <div class="casino-progress" id="casinoProgress"></div>
+                <div class="card-title casino-subtitle">Hűségszint</div>
+                <p class="page-note">Minden megszerzett pörgetés után egy nappal kevesebb kell a következőhöz. Ha 7 napig egyáltalán nem játszol, a szinted hetente eggyel visszaesik - az összegyűjtött napjaid megmaradnak.</p>
+                <div class="casino-ladder" id="casinoLadder"></div>
+              </div>
+
+              <div class="card">
+                <div class="card-title">Nyeremények és esélyek</div>
+                <p class="page-note">Minden pörgetés egymástól független. Ha <span id="casinoPityLimitText">8</span> pörgetésen át nem jön legalább <b>ritka</b> nyeremény, a következő garantáltan az lesz. A PrémiumPont azonnal jóváíródik, a jogokat és rangokat a játékszerver pár másodpercen belül kiosztja.</p>
+                <div class="casino-tier-legend" id="casinoTierLegend"></div>
                 <div class="casino-prize-grid" id="casinoPrizeGrid"></div>
               </div>
             </div>
@@ -1003,6 +1013,14 @@
               <div class="card">
                 <div class="card-title">Állapotod</div>
                 <div class="stat-badge-grid casino-stat-grid" id="casinoStatGrid"></div>
+              </div>
+              <div class="card">
+                <div class="card-title">Pörgetéseid</div>
+                <div class="casino-feed" id="casinoHistory"></div>
+              </div>
+              <div class="card">
+                <div class="card-title">Friss nagy nyeremények</div>
+                <div class="casino-feed" id="casinoRecentWins"></div>
               </div>
             </div>
           </div>
@@ -3351,7 +3369,7 @@
   </div>
 
   <script src="skin3d.js?v=20261014a" defer></script>
-  <script src="app.js?v=20261114a" defer></script>
+  <script src="app.js?v=20261115a" defer></script>
   <script src="media-calendar.js?v=20261101b" defer></script>
   <script src="bundles.js?v=20261103a" defer></script>
   <script src="staff-tasks.js?v=20261110a" defer></script>
